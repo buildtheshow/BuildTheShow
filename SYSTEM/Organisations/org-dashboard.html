@@ -3859,6 +3859,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   let orgVenues = [];
   let orgVenuesLoaded = false;
   const _venuePhotoUrlCache = new Map();
+  const VENUE_PHOTO_BUCKET = 'venue-photos';
   let _selectedVenueId = null;
   let _editingVenueId = null;
 
@@ -4037,6 +4038,13 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     ],
   };
 
+  function _venuePhotoStorageRef(venue) {
+    if (venue?.photo_path) {
+      return { bucket: VENUE_PHOTO_BUCKET, path: String(venue.photo_path).trim() };
+    }
+    return _parseVenuePhotoStorageRef(venue?.photo_url || '');
+  }
+
   function _parseVenuePhotoStorageRef(value) {
     const raw = String(value || '').trim();
     if (!raw) return null;
@@ -4059,8 +4067,21 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     }
   }
 
-  async function _resolveVenuePhotoSrc(value) {
-    const raw = String(value || '').trim();
+  async function _resolveVenuePhotoSrc(refOrValue) {
+    if (!refOrValue) return '';
+    if (typeof refOrValue === 'object' && refOrValue.bucket && refOrValue.path) {
+      const cacheKey = `bucket:${refOrValue.bucket}:${refOrValue.path}`;
+      if (_venuePhotoUrlCache.has(cacheKey)) return _venuePhotoUrlCache.get(cacheKey);
+      try {
+        const { data, error } = await sb.storage.from(refOrValue.bucket).createSignedUrl(refOrValue.path, 60 * 60 * 24);
+        if (!error && data?.signedUrl) {
+          _venuePhotoUrlCache.set(cacheKey, data.signedUrl);
+          return data.signedUrl;
+        }
+      } catch (_) {}
+      return '';
+    }
+    const raw = String(refOrValue || '').trim();
     if (!raw) return '';
     if (_venuePhotoUrlCache.has(raw)) return _venuePhotoUrlCache.get(raw);
     const ref = _parseVenuePhotoStorageRef(raw);
@@ -4082,7 +4103,8 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   async function _hydrateVenuePhotoUrls(venues) {
     const rows = Array.isArray(venues) ? venues : [];
     await Promise.all(rows.map(async (venue) => {
-      venue.photo_src = venue.photo_url ? await _resolveVenuePhotoSrc(venue.photo_url) : '';
+      const ref = _venuePhotoStorageRef(venue);
+      venue.photo_src = ref ? await _resolveVenuePhotoSrc(ref) : (venue.photo_url || '');
     }));
     return rows;
   }
@@ -4981,26 +5003,28 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     nextBtn.textContent = 'Saving…';
 
     let photo_url = _editingVenueId ? (orgVenues.find(x => x.id === _editingVenueId)?.photo_url || null) : null;
+    let photo_path = _editingVenueId ? (orgVenues.find(x => x.id === _editingVenueId)?.photo_path || null) : null;
     let photo_src = _editingVenueId ? (orgVenues.find(x => x.id === _editingVenueId)?.photo_src || null) : null;
     let photoUploadWarning = '';
     if (_vfmPendingPhoto) {
       const file = _vfmPendingPhoto;
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       const path = `${currentOrg.id}/venues/${Date.now()}_${safeName}`;
-      const { error: upErr } = await sb.storage.from('org-files').upload(path, file, { upsert: true, contentType: file.type });
+      const { error: upErr } = await sb.storage.from(VENUE_PHOTO_BUCKET).upload(path, file, { upsert: true, contentType: file.type });
       if (upErr) {
         photoUploadWarning = 'Venue saved without the photo. You can add the photo later from this venue.';
       }
       if (!upErr) {
-        photo_url = `storage://org-files/${path}`;
-        photo_src = await _resolveVenuePhotoSrc(photo_url);
+        photo_path = path;
+        photo_url = null;
+        photo_src = await _resolveVenuePhotoSrc({ bucket: VENUE_PHOTO_BUCKET, path });
       }
     }
 
     const payload = {
       name, address, website,
       contact_name: contactName, contact_phone: contactPhone, contact_email: contactEmail,
-      notes, photo_url,
+      notes, photo_url, photo_path,
       uses: uses.length ? uses : null,
       details: Object.keys(details).length ? details : null,
     };
