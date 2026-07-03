@@ -1324,6 +1324,34 @@
     .step3-event-dot {
       width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
     }
+    .cal-badge {
+      flex-shrink: 0;
+      width: 44px;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 2px 6px rgba(87,46,136,0.18);
+      border: 1.5px solid rgba(87,46,136,0.15);
+    }
+    .cal-badge-month {
+      background: #efab45;
+      text-align: center;
+      font-size: 0.55rem;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #fff;
+      padding: 0.2rem 0;
+      line-height: 1;
+    }
+    .cal-badge-day {
+      background: #fff;
+      text-align: center;
+      font-size: 1.1rem;
+      font-weight: 900;
+      color: #1a1530;
+      padding: 0.18rem 0 0.2rem;
+      line-height: 1;
+    }
     .step3-event-bottom {
       display: flex;
       align-items: center;
@@ -2594,6 +2622,14 @@ Return ONLY the JSON object, no explanation.`
 
     function _s3id() { return 's3_' + (_step3NextId++); }
 
+    const CAL_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    function calBadgeHtml(dateStr) {
+      const parts = dateStr.split('-');
+      const month = CAL_MONTHS[parseInt(parts[1], 10) - 1] || '';
+      const day   = parseInt(parts[2], 10);
+      return `<div class="cal-badge"><div class="cal-badge-month">${month}</div><div class="cal-badge-day">${day}</div></div>`;
+    }
+
     async function initStep3() {
       // Show empty state immediately - don't leave the "Loading events…" placeholder
       _refreshStep3List();
@@ -2658,9 +2694,10 @@ Return ONLY the JSON object, no explanation.`
       </div>`;
 
       return header + sorted.map(ev => {
+          const badgeHtml = ev.date ? calBadgeHtml(ev.date) : `<div class="step3-event-dot" style="background:${EVENT_COLOURS.performance};flex-shrink:0;"></div>`;
           return `<div class="step3-event-row" data-eid="${ev._id}">
             <div class="step3-event-top">
-              <div class="step3-event-dot" style="background:${EVENT_COLOURS.performance};"></div>
+              ${badgeHtml}
               <span style="flex:1;font-size:0.875rem;font-weight:600;color:#1a1530;">Performance</span>
               <button class="step3-remove-btn" onclick="step3RemoveEvent('${ev._id}')" title="Remove">
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="2" y1="2" x2="14" y2="14"/><line x1="14" y1="2" x2="2" y2="14"/></svg>
@@ -2727,12 +2764,11 @@ Return ONLY the JSON object, no explanation.`
       const ev = step3Events.find(e => e._id === id);
       if (!ev) return;
       ev[field] = value;
-      if (field === 'event_type') {
-        ev.title = EVENT_TYPE_LABELS[value] || 'Event';
-        // Update dot colour without full re-render
+      if (field === 'date' && value) {
         const row = document.querySelector(`[data-eid="${id}"]`);
-        const dot = row?.querySelector('.step3-event-dot');
-        if (dot) dot.style.background = EVENT_COLOURS[value] || '#572e88';
+        const badge = row?.querySelector('.cal-badge');
+        if (badge) badge.outerHTML = calBadgeHtml(value);
+        else _refreshStep3List();
       }
     }
 
