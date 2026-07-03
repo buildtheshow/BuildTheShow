@@ -1733,7 +1733,10 @@
     <a href="/org/dashboard">
       <img src="/ASSETS/Images/LogoBrand/logo-long-white.png" alt="Build The Show" />
     </a>
-    <a href="/org/dashboard" class="header-dash-link">Dashboard</a>
+    <div style="display:flex;align-items:center;gap:0.75rem;">
+      <button onclick="quickSaveDraft()" id="headerDraftBtn" style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.85);border-radius:6px;padding:0.35rem 0.85rem;font-size:0.85rem;font-weight:600;font-family:var(--bts-font);cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.12)'">Save Draft</button>
+      <a href="/org/dashboard" class="header-dash-link">Dashboard</a>
+    </div>
   </header>
 
   <!-- Progress bar (rendered by JS via updateProgressBar) -->
@@ -2044,6 +2047,7 @@
 
     function readStep2() {
       wizardData.title = (document.getElementById('s2_title') || {}).value || wizardData.title;
+      wizardData.slug  = (document.getElementById('s2_slug')  || {}).value || wizardData.slug;
       wizardData.production_type = (document.getElementById('s2_type') || {}).value || wizardData.production_type;
       wizardData.description = (document.getElementById('s2_desc') || {}).value || '';
     }
@@ -4134,6 +4138,24 @@ Return ONLY the JSON array, no explanation, no markdown fences.`;
         return `/${encodeURIComponent(orgSlug)}/ORG/Productions/${encodeURIComponent(productionSlug)}`;
       }
       return `/org/production?id=${encodeURIComponent(productionId)}`;
+    }
+
+    async function quickSaveDraft() {
+      readCurrentStepData();
+      const btn = document.getElementById('headerDraftBtn');
+      if (prodId) {
+        if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
+        try {
+          await sb.from('productions').update({ status: 'setup', wizard_data: buildWizardDataObj() }).eq('id', prodId);
+          if (btn) { btn.textContent = 'Saved!'; setTimeout(() => { btn.textContent = 'Save Draft'; btn.disabled = false; }, 2000); }
+        } catch(err) {
+          if (btn) { btn.textContent = 'Save Draft'; btn.disabled = false; }
+          alert('Could not save: ' + (err.message || 'Unknown error'));
+        }
+      } else {
+        saveToLocalStorage();
+        if (btn) { btn.textContent = 'Saved locally'; setTimeout(() => { btn.textContent = 'Save Draft'; }, 2000); }
+      }
     }
 
     async function saveAsDraft() {
