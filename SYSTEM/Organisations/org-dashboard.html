@@ -4421,7 +4421,8 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     vfmSetAddressStatus('Searching addresses...');
     try {
       const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=6&countrycodes=ca,us,gb`;
-      const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Address search returned ${res.status}`);
       const data = await res.json();
       _vfmAddressResults = (data || []).map(row => {
         const parts = row.address || {};
@@ -4429,9 +4430,10 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
         return { label, address: row.display_name, parts };
       });
       vfmRenderAddressResults(_vfmAddressResults);
-    } catch {
+    } catch (error) {
+      console.error('Venue address search failed', error);
       _vfmAddressResults = [];
-      vfmSetAddressStatus('Address search is not available right now.', true);
+      vfmSetAddressStatus('Address search is not available right now. You can still paste the full address below.', true);
     }
   }
 
