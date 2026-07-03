@@ -1846,6 +1846,7 @@
 
     let wizardData = {
       title: '',
+      slug: '',
       production_type: 'musical',
       description: '',
       is_public: false,
@@ -2416,6 +2417,15 @@ Return ONLY the JSON object, no explanation.`
           </div>
 
           <div class="form-group">
+            <label class="form-label" for="s2_slug">Show URL</label>
+            <div style="display:flex;align-items:center;gap:0;border:1.5px solid rgba(87,46,136,0.22);border-radius:10px;overflow:hidden;background:#fff;transition:border-color 0.2s;" id="slugFieldWrap">
+              <span id="slugPrefix" style="padding:0.7rem 0.75rem;background:#f3f0f9;color:#8b7eaa;font-size:0.78rem;white-space:nowrap;border-right:1.5px solid rgba(87,46,136,0.15);flex-shrink:0;">buildtheshow.com/${escHtml(currentOrg?.slug || 'yourorg')}/ORG/Productions/</span>
+              <input type="text" id="s2_slug" value="${escHtml(wizardData.slug || '')}" maxlength="50" placeholder="wizard-of-oz-2026" style="flex:1;min-width:0;border:none;outline:none;padding:0.7rem 0.75rem;font-size:0.875rem;color:#1a1530;background:transparent;font-family:var(--bts-font);" />
+            </div>
+            <p class="field-hint">This is your show's permanent link. It can't be changed after you launch, so make sure it looks right. Lowercase letters, numbers, and hyphens only.</p>
+          </div>
+
+          <div class="form-group">
             <label class="form-label" for="s2_type">Production Type</label>
             <select class="form-select" id="s2_type">
               ${['musical','play','workshop','concert','dance_show','other'].map(v =>
@@ -2442,7 +2452,35 @@ Return ONLY the JSON object, no explanation.`
     }
 
     function attachStep2Events() {
-      // no auto-actions on step 2 load
+      const titleInput = document.getElementById('s2_title');
+      const slugInput  = document.getElementById('s2_slug');
+      if (!titleInput || !slugInput) return;
+
+      let slugManuallyEdited = !!wizardData.slug;
+
+      titleInput.addEventListener('input', function() {
+        if (!slugManuallyEdited) {
+          slugInput.value = titleToSlug(this.value);
+        }
+      });
+
+      slugInput.addEventListener('input', function() {
+        slugManuallyEdited = this.value.length > 0;
+        this.value = this.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+      });
+
+      slugInput.addEventListener('blur', function() {
+        this.value = this.value.replace(/^-+|-+$/g, '').replace(/-{2,}/g, '-');
+      });
+
+      if (!slugInput.value && titleInput.value) {
+        slugInput.value = titleToSlug(titleInput.value);
+      }
+    }
+
+    function titleToSlug(title) {
+      const year = new Date().getFullYear();
+      return (title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') + '-' + year).replace(/-{2,}/g, '-').substring(0, 50);
     }
 
     function prodTypeLabel(v) {
@@ -2466,15 +2504,22 @@ Return ONLY the JSON object, no explanation.`
       wizardData.production_type = document.getElementById('s2_type').value;
       wizardData.description = document.getElementById('s2_desc').value.trim();
 
+      const slugField = document.getElementById('s2_slug');
+      let chosenSlug = (slugField?.value || '').trim().toLowerCase().replace(/^-+|-+$/g, '').replace(/-{2,}/g, '-');
+      if (!chosenSlug) chosenSlug = titleToSlug(title);
+      wizardData.slug = chosenSlug;
+
+      const slugValid = /^[a-z0-9]+(-[a-z0-9]+)*$/.test(chosenSlug) && chosenSlug.length >= 3 && chosenSlug.length <= 50;
+      if (!slugValid) {
+        showError('step2Error', 'Show URL can only contain lowercase letters, numbers, and hyphens, and must be 3–50 characters.');
+        return;
+      }
+
       showLoading(MSGS_SAVING);
 
       try {
         const num = await getNextProdNumber();
         const custom_id = (currentOrg.custom_id || 'ORG') + '-' + String(num).padStart(2, '0');
-
-        // Auto-generate production slug: title-year (e.g. wizard-of-oz-2026), must match ^[a-z0-9]+(-[a-z0-9]+)*$, max 50 chars
-        const prodYear     = new Date().getFullYear();
-        const prodSlugAuto = (wizardData.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') + '-' + prodYear).replace(/-{2,}/g, '-').substring(0, 50);
 
         const insertPayload = {
           organization_id: currentOrg.id,
@@ -2484,7 +2529,7 @@ Return ONLY the JSON object, no explanation.`
           production_type: wizardData.production_type,
           is_public: wizardData.is_public,
           status: 'setup',
-          slug: prodSlugAuto || null,
+          slug: chosenSlug,
         };
 
         const { data, error } = await sb.from('productions').insert(insertPayload).select('id').single();
