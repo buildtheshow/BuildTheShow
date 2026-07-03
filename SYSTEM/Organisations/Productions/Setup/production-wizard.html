@@ -1816,8 +1816,8 @@
     ];
 
     // ── Wizard mode ──
-    const STEP_LABELS = {2:'Basics',3:'Dates',11:'Functions',9:'Launch'};
-    const MODE_STEPS = { full:[2,3,11,9], handoff:[2,9] };
+    const STEP_LABELS = {1:'Image',2:'Basics',3:'Dates',11:'Functions',9:'Launch'};
+    const MODE_STEPS = { full:[1,2,3,11,9], handoff:[1,2,9] };
     const _urlParams = new URLSearchParams(window.location.search);
     const wizardMode = _urlParams.get('mode') || 'full';
     let wizardSteps = MODE_STEPS[wizardMode] || [1,2,3,11,9];
@@ -1831,7 +1831,7 @@
     }
 
     // ── State ──
-    let currentStep = 2;
+    let currentStep = 1;
     let prodId = null;
     let currentUser = null;
     let currentOrg = null;
@@ -2239,46 +2239,21 @@ Return ONLY the JSON object, no explanation.`
 
     // ── Step 1: Upload Poster / Announcement ──
     function renderStep1() {
-      const hasPreview = uploadedPreviewUrl !== null;
-      const isPdf = uploadedMediaType === 'application/pdf';
-
-      if (hasPreview) {
-        const previewContent = isPdf
-          ? `<div style="display:flex;align-items:center;gap:0.75rem;background:#f7f4fc;border:1px solid #e0d8f4;border-radius:10px;padding:1rem 1.25rem;">
-               <span style="font-size:2rem;">📄</span>
-               <div>
-                 <div style="font-weight:700;color:#2c1e42;font-size:0.9rem;">${escHtml(uploadedFile ? uploadedFile.name : 'Schedule document')}</div>
-                 <div style="font-size:0.78rem;color:#7a6e90;margin-top:0.2rem;">PDF ready for AI extraction</div>
-               </div>
-             </div>`
-          : `<img src="${escHtml(uploadedPreviewUrl)}" alt="Uploaded poster" />`;
-
+      if (uploadedPreviewUrl) {
         return `
           <div class="wizard-card">
-            <h1 class="step-title">Does this look right?</h1>
-            <p class="step-subtitle">Hit <strong>Extract Info</strong> and we'll read your ${isPdf ? 'document' : 'poster'} and fill in as much as we can, then you review everything on the next screen before anything is saved.</p>
-
+            <h1 class="step-title">Looks good?</h1>
+            <p class="step-subtitle">This image will show on your production page and audition listings. You can swap it any time after launch.</p>
             <div class="upload-preview">
-              ${previewContent}
+              <img src="${escHtml(uploadedPreviewUrl)}" alt="Show image preview" />
               <div class="upload-preview-actions">
-                <div id="aiStatus"></div>
-                <button class="btn-extract" id="btnExtract" onclick="runExtraction()">
-                  Extract Info with AI &rarr;
-                </button>
-                <button class="btn-change-image" onclick="clearUpload()">Wrong ${isPdf ? 'document' : 'image'}? Change it</button>
+                <button class="btn-change-image" onclick="clearUpload()">Change image</button>
               </div>
             </div>
-
-            <div class="step-tip" style="margin-top:1rem;">
-              <strong>What gets extracted?</strong>
-              We look for your show title, performance dates, rehearsal dates, audition dates, venue name, and a description. Nothing is locked in. You review and edit everything before it saves.
-            </div>
-
             <div class="form-error" id="step1Error"></div>
-
-            <div class="wizard-nav" style="margin-top:0.5rem;">
+            <div class="wizard-nav" style="margin-top:1rem;">
               <a href="/org/dashboard" class="back-to-dash">&larr; Back to Dashboard</a>
-              <button class="btn-continue" onclick="skipToStep2()">Skip and type it in &rarr;</button>
+              <button class="btn-continue" onclick="goNextStep()">Use this image &rarr;</button>
             </div>
           </div>
         `;
@@ -2286,24 +2261,19 @@ Return ONLY the JSON object, no explanation.`
 
       return `
         <div class="wizard-card">
-          <h1 class="step-title">Got a poster or announcement?</h1>
-          <p class="step-subtitle">Drop it here and we'll fill in your production details automatically. Takes about 10 seconds. You can always edit anything it gets wrong, or skip this entirely and type it all in.</p>
-
-          <div class="step-tip tip-gold">
-            <strong>How the AI fill works</strong>
-            Drop a poster, call sheet, or rehearsal schedule. We pass it to an AI that pulls out the show title, venue, and every date it can find, including individual rehearsal dates, times, and performance dates. You review everything before anything saves.
-          </div>
+          <h1 class="step-title">Got a poster or show image?</h1>
+          <p class="step-subtitle">Add it now so your production looks great from day one. This shows on your audition page and anywhere your show appears publicly. You can always add or change it later.</p>
 
           <div class="upload-zone" id="uploadZone">
-            <input type="file" id="posterFileInput" accept="image/jpeg,image/png,image/webp,application/pdf" />
+            <input type="file" id="posterFileInput" accept="image/jpeg,image/png,image/webp" />
             <div class="upload-zone-icon">🎭</div>
-            <div class="upload-zone-title">Drop your poster or schedule here, or click to browse</div>
-            <div class="upload-zone-sub">JPG, PNG, WebP, or PDF &middot; Max 10 MB</div>
+            <div class="upload-zone-title">Drop your poster or show image here, or click to browse</div>
+            <div class="upload-zone-sub">JPG, PNG, or WebP &middot; Max 10 MB</div>
           </div>
 
           <div class="form-error" id="step1Error"></div>
 
-          <a class="step1-skip-link" onclick="skipToStep2()">No poster yet? Skip this step and type it in &rarr;</a>
+          <a class="step1-skip-link" onclick="goNextStep()">No image yet? Skip this step &rarr;</a>
 
           <div class="wizard-nav" style="margin-top:0.5rem;">
             <a href="/org/dashboard" class="back-to-dash">&larr; Back to Dashboard</a>
@@ -2315,30 +2285,34 @@ Return ONLY the JSON object, no explanation.`
     function attachStep1Events() {
       const zone = document.getElementById('uploadZone');
       const fileInput = document.getElementById('posterFileInput');
-
       if (!zone || !fileInput) return;
 
       fileInput.addEventListener('change', function() {
-        if (this.files && this.files[0]) {
-          handleFileSelected(this.files[0]);
-        }
+        if (this.files && this.files[0]) handlePosterSelected(this.files[0]);
       });
-
-      zone.addEventListener('dragover', function(e) {
-        e.preventDefault();
-        zone.classList.add('drag-over');
-      });
-
-      zone.addEventListener('dragleave', function() {
-        zone.classList.remove('drag-over');
-      });
-
-      zone.addEventListener('drop', function(e) {
+      zone.addEventListener('click', () => fileInput.click());
+      zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+      zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+      zone.addEventListener('drop', e => {
         e.preventDefault();
         zone.classList.remove('drag-over');
-        const file = e.dataTransfer.files[0];
-        if (file) handleFileSelected(file);
+        if (e.dataTransfer.files[0]) handlePosterSelected(e.dataTransfer.files[0]);
       });
+    }
+
+    function handlePosterSelected(file) {
+      const allowed = ['image/jpeg','image/png','image/webp'];
+      if (!allowed.includes(file.type)) {
+        showError('step1Error', 'Please use a JPG, PNG, or WebP image.');
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        showError('step1Error', 'Image is over 10 MB. Please use a smaller file.');
+        return;
+      }
+      uploadedFile = file;
+      uploadedPreviewUrl = URL.createObjectURL(file);
+      renderStep();
     }
 
     async function handleFileSelected(file) {
@@ -2465,7 +2439,7 @@ Return ONLY the JSON object, no explanation.`
           <div class="form-error" id="step2Error"></div>
 
           <div class="wizard-nav">
-            <a href="/org/dashboard" class="back-to-dash">← Back to Dashboard</a>
+            <button class="btn-back" onclick="goBack()">← Back</button>
             <button class="btn-continue" onclick="submitStep2()">Continue</button>
           </div>
         </div>
@@ -2523,6 +2497,17 @@ Return ONLY the JSON object, no explanation.`
         if (error) throw error;
 
         prodId = data.id;
+
+        if (uploadedFile) {
+          const ext = uploadedFile.name.split('.').pop().toLowerCase() || 'jpg';
+          const path = `productions/${prodId}/poster.${ext}`;
+          const { error: upErr } = await sb.storage.from('production-files').upload(path, uploadedFile, { upsert: true, contentType: uploadedFile.type });
+          if (!upErr) {
+            const { data: urlData } = sb.storage.from('production-files').getPublicUrl(path);
+            await sb.from('productions').update({ poster_url: urlData.publicUrl }).eq('id', prodId);
+          }
+        }
+
         saveToLocalStorage();
         goNextStep();
       } catch(err) {
@@ -4237,7 +4222,7 @@ Return ONLY the JSON array, no explanation, no markdown fences.`;
     function resumeDraft() {
       document.getElementById('draftBanner').style.display = 'none';
       loadFromLocalStorage();
-      currentStep = prodId ? Math.max(2, currentStep) : 2;
+      currentStep = prodId ? Math.max(2, currentStep) : 1;
       renderStep();
     }
 
