@@ -4133,70 +4133,122 @@ Return ONLY the JSON array, no explanation, no markdown fences.`;
         musical: 'Musical', play: 'Play', dance: 'Dance Show', concert: 'Concert',
         opera: 'Opera', variety: 'Variety Show', workshop: 'Workshop', other: 'Other'
       };
-      function fmtDateShort(d) {
-        if (!d) return null;
-        return new Date(d + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' });
-      }
-      // ── Production card ──
+
+      // ── Image ──
       const posterHTML = wizardData.poster_url
-        ? `<img src="${escHtml(wizardData.poster_url)}" alt="Poster" style="width:60px;height:75px;border-radius:8px;object-fit:cover;object-position:top;flex-shrink:0;border:1.5px solid rgba(87,46,136,0.12);" />`
-        : `<div style="width:60px;height:75px;border-radius:8px;background:linear-gradient(160deg,#ede8f5,#d9cff0);display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;">🎭</div>`;
+        ? `<img src="${escHtml(wizardData.poster_url)}" alt="Poster" style="width:72px;height:90px;border-radius:8px;object-fit:cover;object-position:top;border:1.5px solid rgba(87,46,136,0.12);" />`
+        : `<span style="font-size:0.82rem;color:#a098b8;font-style:italic;">No image added yet. You can upload one from your workspace.</span>`;
 
-      const typeLabel = typeLabels[wizardData.production_type] || wizardData.production_type || '-';
-      const metaLine  = [typeLabel, wizardData.venue].filter(Boolean).join(' · ');
+      // ── Basics ──
+      const typeLabel = typeLabels[wizardData.production_type] || wizardData.production_type || '';
+      const orgSlug   = currentOrg?.slug || 'yourorg';
+      const showSlug  = wizardData.slug || '';
+      const publicUrl = showSlug ? `buildtheshow.com/${orgSlug}/${showSlug}` : null;
 
-      // ── Count only (calendar is rendered after DOM injection) ──
+      // ── Dates ──
       const sorted = [...step3Events].sort((a,b) => (a.date||'').localeCompare(b.date||''));
-
-      // ── Features summary ──
-      const f = wizardData.features || {};
-      const featureNames = {
-        checklists: 'Checklists', auditions: 'Auditions', roles: 'Cast List',
-        volunteers: 'Volunteers', tickets: 'Tickets', registration: 'Registration',
-        budget: 'Budget', marketing: 'Marketing',
+      const fmtTime = t => {
+        if (!t) return '';
+        const [h, m] = t.split(':').map(Number);
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        return `${h % 12 || 12}:${String(m).padStart(2,'0')} ${ampm}`;
       };
-      const enabledFeatures = Object.entries(f).filter(([,v]) => v).map(([k]) => featureNames[k] || k);
-      const featuresHTML = enabledFeatures.length
-        ? enabledFeatures.map(n => `<span style="display:inline-flex;align-items:center;background:rgba(87,46,136,0.09);color:#572e88;font-size:0.75rem;font-weight:700;border-radius:20px;padding:0.2rem 0.65rem;">${n}</span>`).join('')
-        : `<span style="font-size:0.82rem;color:#a098b8;font-style:italic;">Nothing selected - you can enable features from the workspace.</span>`;
+      const fmtDate = d => {
+        if (!d) return '';
+        const dt = new Date(d + 'T12:00:00');
+        return dt.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      };
+      const datesHTML = sorted.length
+        ? sorted.map(ev => `
+            <div style="display:flex;align-items:center;gap:0.85rem;padding:0.6rem 0;border-bottom:1px solid rgba(87,46,136,0.07);">
+              ${calBadgeHtml(ev.date)}
+              <div>
+                <div style="font-size:0.84rem;font-weight:600;color:#1a1530;">${fmtDate(ev.date)}</div>
+                <div style="font-size:0.75rem;color:#7a6a90;">${fmtTime(ev.start_time)}${ev.end_time ? ' – ' + fmtTime(ev.end_time) : ''}</div>
+              </div>
+            </div>`).join('')
+        : `<span style="font-size:0.82rem;color:#a098b8;font-style:italic;">No dates set. You can add them from your production calendar after launch.</span>`;
+
+      // ── Features ──
+      const featureMeta = {
+        auditions:    { name: 'Auditions',    colour: '#572e88' },
+        registration: { name: 'Registration', colour: '#476aaa' },
+        budget:       { name: 'Budget',       colour: '#dd8233' },
+        volunteers:   { name: 'Volunteers',   colour: '#769e7b' },
+        sponsors:     { name: 'Sponsors',     colour: '#d1523d' },
+        marketing:    { name: 'Marketing',    colour: '#ca7ea7' },
+        tickets:      { name: 'Tickets',      colour: '#74a2b4' },
+        checklists:   { name: 'Tasks',        colour: '#476aaa' },
+      };
+      const f = wizardData.features || {};
+      const enabledKeys = Object.entries(f).filter(([,v]) => v).map(([k]) => k);
+      const featuresHTML = enabledKeys.length
+        ? enabledKeys.map(k => {
+            const m = featureMeta[k] || { name: k, colour: '#572e88' };
+            return `<span style="display:inline-flex;align-items:center;background:${m.colour};color:#fff;font-size:0.75rem;font-weight:700;border-radius:20px;padding:0.25rem 0.75rem;">${m.name}</span>`;
+          }).join('')
+        : `<span style="font-size:0.82rem;color:#a098b8;font-style:italic;">No features selected.</span>`;
 
       return `
         <div class="wizard-card">
           <h1 class="step-title">Ready to launch?</h1>
-          <p class="step-subtitle">Here's what you've put together. Go back to change anything, or launch when you're ready.</p>
+          <p class="step-subtitle">Here's everything you've set up. Go back to change anything, then launch when you're ready.</p>
 
-          <!-- Production -->
+          <!-- Image -->
           <div class="review-section">
             <div class="review-section-head">
-              <span class="review-section-title" style="margin:0;padding:0;border:none;">Production</span>
+              <span class="review-section-title">Show Image</span>
+              <button class="review-edit-link" onclick="jumpToStep(1)">Edit</button>
+            </div>
+            ${posterHTML}
+          </div>
+
+          <!-- Basics -->
+          <div class="review-section">
+            <div class="review-section-head">
+              <span class="review-section-title">The Basics</span>
               <button class="review-edit-link" onclick="jumpToStep(2)">Edit</button>
             </div>
-            <div style="display:flex;gap:0.85rem;align-items:flex-start;">
-              ${posterHTML}
-              <div style="flex:1;min-width:0;">
-                <div style="font-size:1.1rem;font-weight:800;color:#1a1530;margin-bottom:0.3rem;line-height:1.25;">${escHtml(wizardData.title) || '<span style="color:#a098b8;font-style:italic;font-weight:400;">Untitled</span>'}</div>
-                <div style="font-size:0.82rem;color:#6a5a80;">${escHtml(metaLine)}</div>
-                ${wizardData.description ? `<p style="font-size:0.8rem;color:#7a6a90;line-height:1.55;margin:0.5rem 0 0;white-space:pre-line;">${escHtml(wizardData.description.slice(0,200))}${wizardData.description.length > 200 ? '…' : ''}</p>` : ''}
+            <div style="display:flex;flex-direction:column;gap:0.5rem;">
+              <div style="display:flex;gap:1rem;">
+                <div style="flex:1;">
+                  <div style="font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:0.07em;color:#b0a0cc;margin-bottom:0.2rem;">Title</div>
+                  <div style="font-size:0.9rem;font-weight:700;color:#1a1530;">${escHtml(wizardData.title) || '<span style="color:#a098b8;font-style:italic;font-weight:400;">Untitled</span>'}</div>
+                </div>
+                <div>
+                  <div style="font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:0.07em;color:#b0a0cc;margin-bottom:0.2rem;">Type</div>
+                  <div style="font-size:0.9rem;font-weight:600;color:#1a1530;">${escHtml(typeLabel) || '-'}</div>
+                </div>
               </div>
+              ${wizardData.description ? `
+              <div>
+                <div style="font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:0.07em;color:#b0a0cc;margin-bottom:0.2rem;">Description</div>
+                <div style="font-size:0.82rem;color:#5a4e70;line-height:1.55;">${escHtml(wizardData.description.slice(0,220))}${wizardData.description.length > 220 ? '…' : ''}</div>
+              </div>` : ''}
+              ${publicUrl ? `
+              <div>
+                <div style="font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:0.07em;color:#b0a0cc;margin-bottom:0.2rem;">Public URL</div>
+                <div style="font-size:0.8rem;color:#572e88;font-weight:600;">${escHtml(publicUrl)}</div>
+              </div>` : ''}
             </div>
           </div>
 
-          <!-- Calendar preview -->
+          <!-- Dates -->
           <div class="review-section">
             <div class="review-section-head">
-              <span class="review-section-title" style="margin:0;padding:0;border:none;">Calendar <span style="font-weight:400;color:#c0b8d4;font-size:0.65rem;">${sorted.length} event${sorted.length !== 1 ? 's' : ''}</span></span>
+              <span class="review-section-title">Performance Dates <span style="font-weight:400;color:#c0b8d4;font-size:0.65rem;text-transform:none;letter-spacing:0;">${sorted.length ? sorted.length + ' added' : ''}</span></span>
               <button class="review-edit-link" onclick="jumpToStep(3)">Edit</button>
             </div>
-            <div id="step9-cal-preview"></div>
+            ${datesHTML}
           </div>
 
-          <!-- Functions -->
+          <!-- Features -->
           <div class="review-section">
             <div class="review-section-head">
-              <span class="review-section-title" style="margin:0;padding:0;border:none;">Functions</span>
+              <span class="review-section-title">Features</span>
               <button class="review-edit-link" onclick="jumpToStep(11)">Edit</button>
             </div>
-            <div style="display:flex;flex-wrap:wrap;gap:0.4rem;">${featuresHTML}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:0.45rem;">${featuresHTML}</div>
           </div>
 
           <!-- Visibility -->
