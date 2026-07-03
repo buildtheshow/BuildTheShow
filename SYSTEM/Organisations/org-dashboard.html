@@ -632,8 +632,11 @@
     .v-filter-chip:hover { background: rgba(87,46,136,0.1); color: #572e88; }
     .v-filter-chip.active { background: #572e88; color: #fff; border-color: #572e88; }
     .v-row { display: grid; grid-template-columns: 2fr 2.5fr auto; gap: 0.5rem; align-items: center; padding: 0.65rem 0.7rem; border-top: 1px solid rgba(87,46,136,0.07); cursor: pointer; border-radius: 8px; transition: background 0.12s; }
-    .v-act-btn.v-primary-set { border-color: #efab45; color: #b07a1a; background: rgba(239,171,69,0.08); }
-    .v-act-btn.v-primary-set:hover { background: rgba(239,171,69,0.15); }
+    .v-thumb-wrap { position: relative; flex-shrink: 0; }
+    .v-primary-dot { position: absolute; top: 5px; right: 5px; width: 11px; height: 11px; border-radius: 50%; border: 2px solid #fff; cursor: pointer; transition: transform 0.15s; }
+    .v-primary-dot:hover { transform: scale(1.25); }
+    .v-primary-dot.is-primary { background: #efab45; box-shadow: 0 0 0 3px rgba(239,171,69,0.35), 0 0 8px 2px rgba(239,171,69,0.5); }
+    .v-primary-dot.not-primary { background: rgba(87,46,136,0.18); box-shadow: none; }
     .v-row:hover { background: rgba(87,46,136,0.04); }
     .v-row.v-row--active { background: rgba(87,46,136,0.06); }
     .v-row-venue { display: flex; align-items: center; gap: 0.65rem; min-width: 0; }
@@ -4380,10 +4383,16 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
 
   function _venueThumb(venue) {
     const photoSrc = _venueDisplayPhotoSrc(venue);
-    if (photoSrc) return `<img class="v-thumb" src="${esc(photoSrc)}" alt="" loading="lazy" />`;
-    const uses = venue.uses || [];
-    const u = uses.length ? VENUE_USES.find(x => x.value === uses[0]) : null;
-    return `<div class="v-thumb-empty" style="background:${u ? u.bg : 'rgba(87,46,136,0.1)'};"></div>`;
+    const isPrimary = currentOrg?.primary_venue_id === venue.id;
+    const dotClass = isPrimary ? 'is-primary' : 'not-primary';
+    const dotTitle = isPrimary ? 'Primary venue' : 'Set as primary venue';
+    const inner = photoSrc
+      ? `<img class="v-thumb" src="${esc(photoSrc)}" alt="" loading="lazy" />`
+      : (() => { const uses = venue.uses || []; const u = uses.length ? VENUE_USES.find(x => x.value === uses[0]) : null; return `<div class="v-thumb v-thumb-empty" style="background:${u ? u.bg : 'rgba(87,46,136,0.1)'};"></div>`; })();
+    return `<div class="v-thumb-wrap">
+      ${inner}
+      <div class="v-primary-dot ${dotClass}" title="${dotTitle}" onclick="event.stopPropagation();setPrimaryVenue('${venue.id}')"></div>
+    </div>`;
   }
 
   function _buildUsesChips(selectedUses) {
@@ -4574,7 +4583,6 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
         <div class="v-actions">
           <button class="v-act-btn" onclick="event.stopPropagation();openEditVenueModal('${v.id}')">Edit</button>
           <button class="v-act-btn" onclick="event.stopPropagation();openVenueFullDetail('${v.id}')">View all details</button>
-          <button class="v-act-btn${currentOrg?.primary_venue_id === v.id ? ' v-primary-set' : ''}" onclick="event.stopPropagation();setPrimaryVenue('${v.id}')">${currentOrg?.primary_venue_id === v.id ? 'Primary' : 'Set as primary'}</button>
           <button class="v-act-btn v-del" onclick="event.stopPropagation();deleteVenue('${v.id}')">&#x2715;</button>
         </div>
       </div>`;
