@@ -453,6 +453,17 @@
       gap: 0.75rem;
       min-width: 0;
     }
+    /* Board structure setup */
+    .board-setup-wrap { padding: 2.5rem 2.25rem; max-width: 760px; }
+    .board-setup-q { font-size: 1.4rem; font-weight: 900; color: #000; letter-spacing: -0.02em; margin-bottom: 0.35rem; }
+    .board-setup-sub { font-size: 0.85rem; color: #6a5a80; margin-bottom: 2rem; line-height: 1.6; }
+    .board-setup-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.85rem; }
+    .board-setup-opt { border: 2px solid rgba(87,46,136,0.12); border-radius: 14px; padding: 1.4rem 1.1rem 1.2rem; cursor: pointer; background: #fff; transition: border-color 0.15s, box-shadow 0.15s; text-align: left; }
+    .board-setup-opt:hover { border-color: #572e88; box-shadow: 0 4px 18px rgba(87,46,136,0.1); }
+    .board-setup-opt-icon { font-size: 1.8rem; margin-bottom: 0.65rem; display: block; }
+    .board-setup-opt-title { font-size: 0.9rem; font-weight: 900; color: #000; margin-bottom: 0.3rem; }
+    .board-setup-opt-desc { font-size: 0.75rem; color: #6a5a80; line-height: 1.5; }
+
     /* Full-page board members layout */
     #tab-members.content-section {
       padding: 0;
@@ -3576,9 +3587,45 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     return html;
   }
 
+  async function saveBoardStructure(structure) {
+    await sb.from('organizations').update({ board_structure: structure }).eq('id', currentOrg.id);
+    currentOrg = { ...currentOrg, board_structure: structure };
+    loadMembers();
+  }
+
   async function loadMembers() {
     const tbody = document.getElementById('members-tbody');
     let orgMembers = [];
+
+    if (!currentOrg?.board_structure) {
+      tbody.innerHTML = `<div class="board-setup-wrap">
+        <div class="board-setup-q">How does your organisation run?</div>
+        <p class="board-setup-sub">Choose the structure that best fits how you work. This sets up your default board roles. You can always change it later in Settings.</p>
+        <div class="board-setup-options">
+          <button class="board-setup-opt" onclick="saveBoardStructure('traditional')">
+            <span class="board-setup-opt-icon">🏛️</span>
+            <div class="board-setup-opt-title">Traditional Board</div>
+            <div class="board-setup-opt-desc">President, VP, Treasurer, Secretary, and standard committee roles.</div>
+          </button>
+          <button class="board-setup-opt" onclick="saveBoardStructure('director')">
+            <span class="board-setup-opt-icon">🎬</span>
+            <div class="board-setup-opt-title">Director-Led</div>
+            <div class="board-setup-opt-desc">An Executive Director at the helm, supported by department directors.</div>
+          </button>
+          <button class="board-setup-opt" onclick="saveBoardStructure('collective')">
+            <span class="board-setup-opt-icon">🤝</span>
+            <div class="board-setup-opt-title">Collective</div>
+            <div class="board-setup-opt-desc">No formal hierarchy. Everyone shares responsibility.</div>
+          </button>
+          <button class="board-setup-opt" onclick="saveBoardStructure('custom')">
+            <span class="board-setup-opt-icon">✏️</span>
+            <div class="board-setup-opt-title">Build My Own</div>
+            <div class="board-setup-opt-desc">Start blank and add roles as you go.</div>
+          </button>
+        </div>
+      </div>`;
+      return;
+    }
 
     // Load accepted members
     try {
