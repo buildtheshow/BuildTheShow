@@ -1403,11 +1403,6 @@
       font-size: 0.875rem; font-weight: 600; color: #1a1530;
       flex: 1; min-width: 80px;
     }
-    /* hidden date input sits behind the badge */
-    .step3-date-hidden {
-      position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px;
-    }
-    .cal-badge { cursor: pointer; }
     /* time field group */
     .step3-time-group {
       display: flex; flex-direction: column; gap: 0.2rem; min-width: 100px;
@@ -2757,9 +2752,13 @@ Return ONLY the JSON object, no explanation.`
       const rows = sorted.map(ev => {
         const badgeHtml = ev.date ? calBadgeHtml(ev.date) : `<div style="width:42px;height:52px;border-radius:5px;background:#efefef;flex-shrink:0;"></div>`;
         return `<div class="step3-event-row" data-eid="${ev._id}" style="position:relative;">
-          <input type="date" class="step3-date-hidden" value="${ev.date || ''}" onchange="step3UpdateField('${ev._id}','date',this.value)" />
-          <div onclick="this.previousElementSibling.showPicker ? this.previousElementSibling.showPicker() : this.previousElementSibling.click()">${badgeHtml}</div>
-          <span class="step3-event-name">Performance</span>
+          ${badgeHtml}
+          <div class="step3-time-group" style="flex:2;min-width:120px;">
+            <span class="step3-time-label">Performance</span>
+            <div class="step3-time-wrap">
+              <input type="date" class="step3-time-input" style="width:100%;" value="${ev.date || ''}" onchange="step3UpdateField('${ev._id}','date',this.value)" />
+            </div>
+          </div>
           <div class="step3-time-group">
             <span class="step3-time-label">Start Time</span>
             <div class="step3-time-wrap">
@@ -2840,12 +2839,15 @@ Return ONLY the JSON object, no explanation.`
       const ev = step3Events.find(e => e._id === id);
       if (!ev) return;
       ev[field] = value;
-      if (field === 'date' && value) {
+      if (field === 'date') {
         const row = document.querySelector(`[data-eid="${id}"]`);
-        // Update the badge (it's the second child div after the hidden input)
-        const badgeWrap = row?.querySelector('.cal-badge')?.parentElement;
-        if (badgeWrap) badgeWrap.innerHTML = calBadgeHtml(value);
-        else _refreshStep3List();
+        const badge = row?.querySelector('.cal-badge');
+        if (badge && value) {
+          badge.outerHTML = calBadgeHtml(value);
+        } else if (!value) {
+          const badgePlaceholder = row?.querySelector('[style*="background:#efefef"]');
+          if (!badgePlaceholder) _refreshStep3List();
+        }
       }
     }
 
