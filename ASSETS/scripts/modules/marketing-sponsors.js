@@ -1236,7 +1236,7 @@
       if (a.artwork_url) {
         artworkPreview = '<div class="spn-crm-card-artwork"><a href="' + esc(a.artwork_url) + '" target="_blank"><img src="' + esc(a.artwork_url) + '" alt="Artwork" /></a></div>';
       } else {
-        artworkPreview = '<div class="spn-crm-card-artwork spn-crm-card-artwork--empty"><img src="/ASSETS/Images/Icons/Upload - Poster.svg" alt="" /><span>No artwork uploaded</span></div>';
+        artworkPreview = '<div class="spn-crm-card-artwork spn-crm-card-artwork--empty"><img src="/ASSETS/Images/Icons/Placeholder - Poster or document.svg?v=20260703a" alt="" /><span>No artwork uploaded</span></div>';
       }
 
       bookingsHtml += '<div class="spn-crm-card">' +
@@ -1435,7 +1435,7 @@
             '<div class="spn-crm-section-head"><img src="/ASSETS/Images/Icons/Files.svg" alt="" /><span>Files</span><span class="spn-crm-file-count">' + allFiles.length + ' file' + (allFiles.length !== 1 ? 's' : '') + '</span></div>' +
             '<div class="spn-crm-file-grid">' +
               (filesHtml || '<div class="spn-crm-empty-section">No files uploaded yet</div>') +
-              '<button class="spn-crm-upload-btn" onclick="MarketingSponsorsModule.uploadCrmFile(\'' + biz.id + '\')"><img src="/ASSETS/Images/Icons/Upload - Document.svg" alt="" /> Upload File</button>' +
+              '<button class="spn-crm-upload-btn" onclick="MarketingSponsorsModule.uploadCrmFile(\'' + biz.id + '\')"><img src="/ASSETS/Images/Icons/Upload - Document.svg?v=20260703a" alt="" /> Upload File</button>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -1490,7 +1490,7 @@
     for (var m = 0; m < bizAds.length; m++) {
       var a = bizAds[m];
       if (a.artwork_status === 'missing') {
-        return { html: '<button class="spn-crm-action-btn spn-crm-action-btn--artwork" onclick="MarketingSponsorsModule.crmArtworkRequestPopup(\'' + a.id + '\')"><img src="/ASSETS/Images/Icons/Upload - Poster.svg" alt="" /> Request Artwork</button>' };
+        return { html: '<button class="spn-crm-action-btn spn-crm-action-btn--artwork" onclick="MarketingSponsorsModule.crmArtworkRequestPopup(\'' + a.id + '\')"><img src="/ASSETS/Images/Icons/Upload - Poster or document.svg?v=20260703a" alt="" /> Request Artwork</button>' };
       }
     }
     for (var n = 0; n < bizAds.length; n++) {
@@ -2291,13 +2291,13 @@
   };
 
   var PUBLIC_SECTION_META = {
-    hero: { description: 'Big headline, poster, and calls to action.', icon: 'Placeholder - Poster.svg', color: '#572e88' },
+    hero: { description: 'Big headline, poster, and calls to action.', icon: 'Placeholder - Poster.svg?v=20260703a', color: '#572e88' },
     info: { description: 'Explain the programme, introduce your organisation, and compare options.', icon: 'programme-8.5x11.svg', color: '#74a2b4' },
     keyDates: { description: 'Show important dates for sponsors and performances.', icon: 'navproductioncalendar.svg', color: '#476aaa' },
     stats: { description: 'Show audience impact and local reach.', icon: 'organisation-members.svg', color: '#769e7b' },
     sponsorships: { description: 'Show the sponsor packages and pricing.', icon: 'sponsorship-packages.svg', color: '#dd8233' },
     programmeAds: { description: 'Show programme ad sizes and pricing.', icon: 'programme-8.5x11Folded-11x17.svg', color: '#476aaa' },
-    pastPosters: { description: 'Show a strip or collage of previous production posters.', icon: 'Placeholder - Poster.svg', color: '#572e88' },
+    pastPosters: { description: 'Show a strip or collage of previous production posters.', icon: 'Placeholder - Poster.svg?v=20260703a', color: '#572e88' },
     ways: { description: 'Help visitors choose sponsorship or advertising.', icon: 'Volunteers.svg', color: '#ca7ea7' },
     steps: { description: 'Explain how booking and artwork work.', icon: 'Production Checklist.svg', color: '#d1523d' },
     footer: { description: 'Add contact details and a final call to action.', icon: 'Profiles.svg', color: '#1a1530' },
@@ -2339,7 +2339,7 @@
 
   var PUBLIC_FIELD_GROUPS = {
     hero: [
-      { id:'poster',   img:'Placeholder - Poster.svg', title:'Poster',          subtitle:'Upload or change the poster image.',             type:'poster' },
+      { id:'poster',   img:'Placeholder - Poster.svg?v=20260703a', title:'Poster',          subtitle:'Upload or change the poster image.',             type:'poster' },
       { id:'logo', img:'organisation-members.svg', title:'Organisation Logo', subtitle:'Choose which logo to display on the hero.', type:'logoPicker' },
       { id:'headline', svg:ESVG.T,                      title:'Headline',         subtitle:'Edit the main headline for this section.',       fields:[
         { key:'heroTitle',  label:'Line 1' },
@@ -2409,8 +2409,8 @@
       ]},
     ],
     pastPosters: [
-      { id:'currentPoster',   img:'Placeholder - Poster.svg', title:'Current Poster',    subtitle:'The production poster shown in the centre of the fan. Uses the production poster by default.',  type:'currentPosterFan' },
-      { id:'pastPostersList', img:'Placeholder - Poster.svg', title:'Past Posters',       subtitle:'Upload individual past show posters. Up to 10 fanned out around the current poster.',           type:'pastPostersList' },
+      { id:'currentPoster',   img:'Placeholder - Poster.svg?v=20260703a', title:'Current Poster',    subtitle:'The production poster shown in the centre of the fan. Uses the production poster by default.',  type:'currentPosterFan' },
+      { id:'pastPostersList', img:'Placeholder - Poster.svg?v=20260703a', title:'Past Posters',       subtitle:'Upload individual past show posters. Up to 10 fanned out around the current poster.',           type:'pastPostersList' },
       { id:'text',            svg:ESVG.T,                     title:'Section Text',       subtitle:'Edit the heading and description.',                                                               fields:[
         { key:'pastPostersKicker', label:'Eyebrow' }, { key:'pastPostersTitle', label:'Heading' }, { key:'pastPostersBody', label:'Body', type:'textarea' },
       ]},
