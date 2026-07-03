@@ -2052,6 +2052,7 @@
       localStorage.setItem('bts_wizard_state', JSON.stringify(wizardData));
       if (prodId) localStorage.setItem('bts_wizard_prod_id', prodId);
       localStorage.setItem('bts_wizard_step', String(currentStep));
+      if (step3Events.length) localStorage.setItem('bts_wizard_events', JSON.stringify(step3Events));
     }
 
     function loadFromLocalStorage() {
@@ -2065,12 +2066,17 @@
       prodId = localStorage.getItem('bts_wizard_prod_id') || null;
       const savedStep = parseInt(localStorage.getItem('bts_wizard_step') || '1', 10);
       if (wizardSteps.includes(savedStep)) currentStep = savedStep;
+      const savedEvents = localStorage.getItem('bts_wizard_events');
+      if (savedEvents) {
+        try { step3Events = JSON.parse(savedEvents); } catch(e) {}
+      }
     }
 
     function clearLocalStorage() {
       localStorage.removeItem('bts_wizard_state');
       localStorage.removeItem('bts_wizard_prod_id');
       localStorage.removeItem('bts_wizard_step');
+      localStorage.removeItem('bts_wizard_events');
     }
 
     function buildWizardDataObj() {
@@ -2235,7 +2241,27 @@
         case 5: container.innerHTML = renderStep5HTML(); break;
         case 7: container.innerHTML = renderStep7HTML(); attachStep7Events(); break;
         case 8: container.innerHTML = renderStep8HTML(); attachStep8Events(); break;
-        case 9: _s9CalYear = null; _s9CalMonth = null; container.innerHTML = renderStep9HTML(); renderStep9Calendar(); break;
+        case 9:
+          _s9CalYear = null; _s9CalMonth = null;
+          if (!step3Events.length && prodId) {
+            sb.from('production_events').select('*').eq('production_id', prodId).order('start_time').then(({ data }) => {
+              if (data && data.length) {
+                step3Events = data.map(e => ({
+                  _id: _s3id(), db_id: e.id,
+                  title: e.title || EVENT_TYPE_LABELS[e.event_type] || 'Event',
+                  event_type: e.event_type || 'rehearsal',
+                  date: e.start_time ? e.start_time.slice(0,10) : '',
+                  start_time: e.start_time ? e.start_time.slice(11,16) : '',
+                  end_time:   e.end_time   ? e.end_time.slice(11,16)   : '',
+                }));
+                localStorage.setItem('bts_wizard_events', JSON.stringify(step3Events));
+              }
+              container.innerHTML = renderStep9HTML();
+            });
+          } else {
+            container.innerHTML = renderStep9HTML();
+          }
+          break;
       }
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
