@@ -4111,8 +4111,17 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     return rows;
   }
 
+  function _venueDisplayPhotoSrc(venue) {
+    if (!venue) return '';
+    if (venue.photo_src) return venue.photo_src;
+    const raw = String(venue.photo_url || '').trim();
+    if (!raw) return '';
+    return _parseVenuePhotoStorageRef(raw) ? '' : raw;
+  }
+
   function _venueThumb(venue) {
-    if (venue.photo_src || venue.photo_url) return `<img class="v-thumb" src="${esc(venue.photo_src || venue.photo_url)}" alt="" loading="lazy" />`;
+    const photoSrc = _venueDisplayPhotoSrc(venue);
+    if (photoSrc) return `<img class="v-thumb" src="${esc(photoSrc)}" alt="" loading="lazy" />`;
     const uses = venue.uses || [];
     const u = uses.length ? VENUE_USES.find(x => x.value === uses[0]) : null;
     return `<div class="v-thumb-empty" style="background:${u ? u.bg : 'rgba(87,46,136,0.1)'};"></div>`;
@@ -4281,8 +4290,9 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     const uses = v.uses || [];
     const details = v.details || {};
     const firstU = uses.length ? VENUE_USES.find(x => x.value === uses[0]) : null;
-    const photoPart = (v.photo_src || v.photo_url)
-      ? `<img class="vd-photo" src="${esc(v.photo_src || v.photo_url)}" alt="${esc(v.name)}" />`
+    const venuePhotoSrc = _venueDisplayPhotoSrc(v);
+    const photoPart = venuePhotoSrc
+      ? `<img class="vd-photo" src="${esc(venuePhotoSrc)}" alt="${esc(v.name)}" />`
       : `<div class="vd-photo-empty" style="background:${firstU ? firstU.bg : 'rgba(87,46,136,0.07)'};"></div>`;
     const usesPart = uses.length
       ? `<div class="vd-field"><div class="vd-lbl">Used for</div><div class="v-uses" style="margin-top:0.25rem;">${
@@ -4961,8 +4971,9 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     _vfmAddressResults = [];
     vfmHideAddressDropdown();
     vfmSetManualFieldsOpen(Boolean(v.details?.city || v.details?.province || v.details?.postal));
-    if (v.photo_src || v.photo_url) {
-      document.getElementById('vfm-photo-preview-img').src = v.photo_src || v.photo_url;
+    const photoSrc = _venueDisplayPhotoSrc(v);
+    if (photoSrc) {
+      document.getElementById('vfm-photo-preview-img').src = photoSrc;
       document.getElementById('vfm-photo-name').textContent = 'Current photo';
       document.getElementById('vfm-photo-preview').style.display = 'block';
       document.getElementById('vfm-photo-prompt').style.display = 'none';
