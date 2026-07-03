@@ -5018,20 +5018,25 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     let photo_url = _editingVenueId ? (orgVenues.find(x => x.id === _editingVenueId)?.photo_url || null) : null;
     let photo_path = _editingVenueId ? (orgVenues.find(x => x.id === _editingVenueId)?.photo_path || null) : null;
     let photo_src = _editingVenueId ? (orgVenues.find(x => x.id === _editingVenueId)?.photo_src || null) : null;
-    let photoUploadWarning = '';
     if (_vfmPendingPhoto) {
       const file = _vfmPendingPhoto;
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       const path = `${currentOrg.id}/venues/${Date.now()}_${safeName}`;
-      const { error: upErr } = await sb.storage.from(VENUE_PHOTO_BUCKET).upload(path, file, { upsert: true, contentType: file.type });
+      const { data: uploadData, error: upErr } = await sb.storage.from(VENUE_PHOTO_BUCKET).upload(path, file, {
+        upsert: false,
+        contentType: file.type || 'application/octet-stream',
+      });
       if (upErr) {
-        photoUploadWarning = 'Venue saved without the photo. You can add the photo later from this venue.';
+        console.error('[BTS venues] photo upload failed', upErr);
+        errEl.textContent = upErr.message || 'Venue photo upload failed.';
+        errEl.classList.add('visible');
+        nextBtn.disabled = false;
+        nextBtn.textContent = 'Save venue';
+        return;
       }
-      if (!upErr) {
-        photo_path = path;
-        photo_url = null;
-        photo_src = await _resolveVenuePhotoSrc({ bucket: VENUE_PHOTO_BUCKET, path });
-      }
+      photo_path = uploadData?.path || path;
+      photo_url = null;
+      photo_src = await _resolveVenuePhotoSrc({ bucket: VENUE_PHOTO_BUCKET, path: photo_path });
     }
 
     const payload = {
@@ -5058,7 +5063,6 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     closeVenueModal();
     renderVenuesTable();
     if (savedId) selectVenue(savedId);
-    if (photoUploadWarning) showToast(photoUploadWarning, false, 4500);
   }
 
   async function deleteVenue(id) {
