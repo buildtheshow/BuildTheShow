@@ -638,9 +638,9 @@
     .v-thumb-wrap { position: relative; flex-shrink: 0; }
     .v-primary-heart { position: absolute; top: 7px; right: 9px; font-size: 1rem; line-height: 1; cursor: pointer; transition: transform 0.15s; z-index: 2; user-select: none; }
     .v-primary-heart:hover { transform: scale(1.25); }
-    .v-primary-heart.is-primary { color: #efab45; filter: drop-shadow(0 0 4px rgba(239,171,69,0.7)); }
-    .v-primary-heart.not-primary { color: rgba(87,46,136,0.2); }
-    .v-primary-heart.not-primary:hover { color: rgba(239,171,69,0.6); }
+    .v-primary-heart.is-fav { color: #efab45; filter: drop-shadow(0 0 5px rgba(239,171,69,0.75)); }
+    .v-primary-heart.not-fav { color: rgba(87,46,136,0.18); }
+    .v-primary-heart.not-fav:hover { color: rgba(239,171,69,0.55); }
     .v-row-venue { display: flex; align-items: center; gap: 0.65rem; min-width: 0; }
     .v-thumb { width: 96px; height: 68px; border-radius: 8px; object-fit: cover; flex-shrink: 0; display: block; }
     .v-thumb-empty { width: 96px; height: 68px; border-radius: 8px; flex-shrink: 0; }
@@ -4499,11 +4499,10 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     orgVenues = data || [];
     await _hydrateVenuePhotoUrls(orgVenues);
     orgVenuesLoaded = true;
-    _sortVenuesWithPrimary();
+    _sortVenuesWithFavourites();
     renderVenuesTable();
-    // Auto-select primary venue (or first) on load
-    const pid = currentOrg?.primary_venue_id;
-    const autoSelect = (pid && orgVenues.find(v => v.id === pid)) || orgVenues[0];
+    // Auto-select first favourite (or first venue) on load
+    const autoSelect = orgVenues.find(v => v.is_favourite) || orgVenues[0];
     if (autoSelect && !_selectedVenueId) {
       _selectedVenueId = autoSelect.id;
       renderVenueDetail(autoSelect);
@@ -4564,9 +4563,8 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
         const u = VENUE_USES.find(x => x.value === use);
         return u ? `<span class="v-use-chip" style="background:${u.bg};color:${u.color};">${esc(use)}</span>` : '';
       }).join('') + (extra > 0 ? `<span class="v-use-more">+${extra} more</span>` : '');
-      const isPrimary = currentOrg?.primary_venue_id === v.id;
       return `<div class="v-row-wrap${_selectedVenueId === v.id ? ' v-row--active' : ''}" id="v-row-${v.id}">
-        <div class="v-primary-heart ${isPrimary ? 'is-primary' : 'not-primary'}" title="${isPrimary ? 'Primary venue' : 'Mark as primary'}" onclick="event.stopPropagation();setPrimaryVenue('${v.id}')">&#9829;</div>
+        <div class="v-primary-heart ${v.is_favourite ? 'is-fav' : 'not-fav'}" title="${v.is_favourite ? 'Remove from favourites' : 'Add to favourites'}" onclick="event.stopPropagation();toggleVenueFavourite('${v.id}')">&#9829;</div>
         <div class="v-row" onclick="selectVenue('${v.id}')">
         <div class="v-row-venue">
           ${_venueThumb(v)}
@@ -4596,26 +4594,23 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     if (v) renderVenueDetail(v);
   }
 
-  async function setPrimaryVenue(id) {
-    if (!currentOrg) return;
-    const { error } = await sb.from('organizations').update({ primary_venue_id: id }).eq('id', currentOrg.id);
-    if (error) { showToast('Could not save primary venue.', true); return; }
-    currentOrg = { ...currentOrg, primary_venue_id: id };
-    // Sort primary to top
-    orgVenues.sort((a, b) => {
-      if (a.id === id) return -1;
-      if (b.id === id) return 1;
-      return a.name.localeCompare(b.name);
-    });
-    selectVenue(id);
-    showToast('Primary venue set.');
+  async function toggleVenueFavourite(id) {
+    const venue = orgVenues.find(v => v.id === id);
+    if (!venue) return;
+    const newVal = !venue.is_favourite;
+    const { error } = await sb.from('venues').update({ is_favourite: newVal }).eq('id', id);
+    if (error) { showToast('Could not update favourite.', true); return; }
+    venue.is_favourite = newVal;
+    _sortVenuesWithFavourites();
+    renderVenuesTable();
+    const still = orgVenues.find(v => v.id === _selectedVenueId);
+    if (still) renderVenueDetail(still);
   }
 
-  function _sortVenuesWithPrimary() {
-    const pid = currentOrg?.primary_venue_id;
+  function _sortVenuesWithFavourites() {
     orgVenues.sort((a, b) => {
-      if (a.id === pid) return -1;
-      if (b.id === pid) return 1;
+      if (a.is_favourite && !b.is_favourite) return -1;
+      if (!a.is_favourite && b.is_favourite) return 1;
       return a.name.localeCompare(b.name);
     });
   }
