@@ -3858,6 +3858,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   // ── Venues ────────────────────────────────────────────
   let orgVenues = [];
   let orgVenuesLoaded = false;
+  const _venuePhotoUrlCache = new Map();
   let _selectedVenueId = null;
   let _editingVenueId = null;
 
@@ -4036,8 +4037,58 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     ],
   };
 
+  function _parseVenuePhotoStorageRef(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+    if (raw.startsWith('storage://')) {
+      const rest = raw.slice('storage://'.length);
+      const slashIdx = rest.indexOf('/');
+      if (slashIdx <= 0) return null;
+      return { bucket: rest.slice(0, slashIdx), path: rest.slice(slashIdx + 1) };
+    }
+    try {
+      const url = new URL(raw, window.location.origin);
+      const match = url.pathname.match(/\/storage\/v1\/object(?:\/public|\/sign)?\/([^/]+)\/(.+)$/);
+      if (!match) return null;
+      return {
+        bucket: decodeURIComponent(match[1]),
+        path: decodeURIComponent(match[2]),
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function _resolveVenuePhotoSrc(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (_venuePhotoUrlCache.has(raw)) return _venuePhotoUrlCache.get(raw);
+    const ref = _parseVenuePhotoStorageRef(raw);
+    if (!ref) {
+      _venuePhotoUrlCache.set(raw, raw);
+      return raw;
+    }
+    try {
+      const { data, error } = await sb.storage.from(ref.bucket).createSignedUrl(ref.path, 60 * 60 * 24);
+      if (!error && data?.signedUrl) {
+        _venuePhotoUrlCache.set(raw, data.signedUrl);
+        return data.signedUrl;
+      }
+    } catch (_) {}
+    _venuePhotoUrlCache.set(raw, raw);
+    return raw;
+  }
+
+  async function _hydrateVenuePhotoUrls(venues) {
+    const rows = Array.isArray(venues) ? venues : [];
+    await Promise.all(rows.map(async (venue) => {
+      venue.photo_src = venue.photo_url ? await _resolveVenuePhotoSrc(venue.photo_url) : '';
+    }));
+    return rows;
+  }
+
   function _venueThumb(venue) {
-    if (venue.photo_url) return `<img class="v-thumb" src="${esc(venue.photo_url)}" alt="" loading="lazy" />`;
+    if (venue.photo_src || venue.photo_url) return `<img class="v-thumb" src="${esc(venue.photo_src || venue.photo_url)}" alt="" loading="lazy" />`;
     const uses = venue.uses || [];
     const u = uses.length ? VENUE_USES.find(x => x.value === uses[0]) : null;
     return `<div class="v-thumb-empty" style="background:${u ? u.bg : 'rgba(87,46,136,0.1)'};"></div>`;
@@ -4141,6 +4192,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
       .eq('org_id', currentOrg.id)
       .order('name', { ascending: true });
     orgVenues = data || [];
+    await _hydrateVenuePhotoUrls(orgVenues);
     orgVenuesLoaded = true;
     renderVenuesTable();
     if (_selectedVenueId) {
@@ -4205,8 +4257,8 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     const uses = v.uses || [];
     const details = v.details || {};
     const firstU = uses.length ? VENUE_USES.find(x => x.value === uses[0]) : null;
-    const photoPart = v.photo_url
-      ? `<img class="vd-photo" src="${esc(v.photo_url)}" alt="${esc(v.name)}" />`
+    const photoPart = (v.photo_src || v.photo_url)
+      ? `<img class="vd-photo" src="${esc(v.photo_src || v.photo_url)}" alt="${esc(v.name)}" />`
       : `<div class="vd-photo-empty" style="background:${firstU ? firstU.bg : 'rgba(87,46,136,0.07)'};"></div>`;
     const usesPart = uses.length
       ? `<div class="vd-field"><div class="vd-lbl">Used for</div><div class="v-uses" style="margin-top:0.25rem;">${
@@ -4885,8 +4937,8 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     _vfmAddressResults = [];
     vfmHideAddressDropdown();
     vfmSetManualFieldsOpen(Boolean(v.details?.city || v.details?.province || v.details?.postal));
-    if (v.photo_url) {
-      document.getElementById('vfm-photo-preview-img').src = v.photo_url;
+    if (v.photo_src || v.photo_url) {
+      document.getElementById('vfm-photo-preview-img').src = v.photo_src || v.photo_url;
       document.getElementById('vfm-photo-name').textContent = 'Current photo';
       document.getElementById('vfm-photo-preview').style.display = 'block';
       document.getElementById('vfm-photo-prompt').style.display = 'none';
@@ -4929,6 +4981,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     nextBtn.textContent = 'Saving…';
 
     let photo_url = _editingVenueId ? (orgVenues.find(x => x.id === _editingVenueId)?.photo_url || null) : null;
+    let photo_src = _editingVenueId ? (orgVenues.find(x => x.id === _editingVenueId)?.photo_src || null) : null;
     let photoUploadWarning = '';
     if (_vfmPendingPhoto) {
       const file = _vfmPendingPhoto;
@@ -4939,8 +4992,8 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
         photoUploadWarning = 'Venue saved without the photo. You can add the photo later from this venue.';
       }
       if (!upErr) {
-        const { data: urlData } = sb.storage.from('org-files').getPublicUrl(path);
-        photo_url = urlData.publicUrl;
+        photo_url = `storage://org-files/${path}`;
+        photo_src = await _resolveVenuePhotoSrc(photo_url);
       }
     }
 
@@ -4955,11 +5008,11 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
       const { error } = await sb.from('venues').update(payload).eq('id', _editingVenueId);
       if (error) { errEl.textContent = error.message; errEl.classList.add('visible'); nextBtn.disabled = false; return; }
       const idx = orgVenues.findIndex(x => x.id === _editingVenueId);
-      if (idx !== -1) orgVenues[idx] = { ...orgVenues[idx], ...payload };
+      if (idx !== -1) orgVenues[idx] = { ...orgVenues[idx], ...payload, photo_src };
     } else {
       const { data: ins, error } = await sb.from('venues').insert({ ...payload, org_id: currentOrg.id }).select().single();
       if (error) { errEl.textContent = error.message; errEl.classList.add('visible'); nextBtn.disabled = false; return; }
-      if (ins) orgVenues.push(ins);
+      if (ins) orgVenues.push({ ...ins, photo_src });
       orgVenues.sort((a, b) => a.name.localeCompare(b.name));
     }
     nextBtn.disabled = false;
