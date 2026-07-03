@@ -694,6 +694,57 @@
     .vfm-field:last-child { margin-bottom: 0; }
     .vfm-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
     .vfm-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+    .vfm-address-wrap { position: relative; }
+    .vfm-address-dropdown {
+      position: absolute;
+      top: calc(100% - 1px);
+      left: 0;
+      right: 0;
+      z-index: 40;
+      display: none;
+      background: #fff;
+      border: 1.5px solid rgba(87,46,136,0.18);
+      border-top: none;
+      border-radius: 0 0 10px 10px;
+      box-shadow: 0 14px 30px rgba(26,21,48,0.14);
+      max-height: 240px;
+      overflow-y: auto;
+    }
+    .vfm-address-dropdown.visible { display: block; }
+    .vfm-address-option {
+      width: 100%;
+      border: none;
+      background: transparent;
+      text-align: left;
+      padding: 0.7rem 0.85rem;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(87,46,136,0.06);
+      font-family: var(--bts-font);
+    }
+    .vfm-address-option:last-child { border-bottom: none; }
+    .vfm-address-option:hover,
+    .vfm-address-option:focus-visible {
+      background: rgba(87,46,136,0.05);
+      outline: none;
+    }
+    .vfm-address-option-name {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #1a1530;
+      line-height: 1.35;
+    }
+    .vfm-address-option-meta {
+      margin-top: 0.14rem;
+      font-size: 0.72rem;
+      color: #8d7aa8;
+      line-height: 1.45;
+    }
+    .vfm-address-status {
+      padding: 0.62rem 0.85rem;
+      font-size: 0.76rem;
+      color: #8d7aa8;
+      line-height: 1.45;
+    }
     .vfm-manual-toggle {
       background: none;
       border: none;
@@ -2367,7 +2418,10 @@
             </div>
             <div class="vfm-field" style="margin-bottom:0.3rem;">
               <label class="vfm-lbl">Address <span style="color:#d1523d;">*</span></label>
-              <input class="vfm-input" id="vfm-address" type="text" placeholder="Paste the full address from Google" />
+              <div class="vfm-address-wrap">
+                <input class="vfm-input" id="vfm-address" type="text" placeholder="Search for an address" autocomplete="off" />
+                <div class="vfm-address-dropdown" id="vfm-address-dropdown"></div>
+              </div>
               <button type="button" class="vfm-manual-toggle" id="vfm-manual-toggle" onclick="vfmToggleManual()">
                 <span>Need to tweak city, province, or postal code?</span>
                 <span class="vfm-manual-toggle-arrow">&#9662;</span>
@@ -4211,6 +4265,203 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   let _vfmStep = 1;
   let _vfmPendingPhoto = null;
   let _vfmDetails = {};
+  let _vfmAddressTimer = null;
+  let _vfmAddressResults = [];
+  let _vfmAddressAutocompleteReady = false;
+
+  const VFM_REGION_CODES = {
+    alberta: 'AB',
+    'british columbia': 'BC',
+    manitoba: 'MB',
+    'new brunswick': 'NB',
+    'newfoundland and labrador': 'NL',
+    'northwest territories': 'NT',
+    'nova scotia': 'NS',
+    nunavut: 'NU',
+    ontario: 'ON',
+    'prince edward island': 'PE',
+    quebec: 'QC',
+    saskatchewan: 'SK',
+    yukon: 'YT',
+    alabama: 'AL',
+    alaska: 'AK',
+    arizona: 'AZ',
+    arkansas: 'AR',
+    california: 'CA',
+    colorado: 'CO',
+    connecticut: 'CT',
+    delaware: 'DE',
+    florida: 'FL',
+    georgia: 'GA',
+    hawaii: 'HI',
+    idaho: 'ID',
+    illinois: 'IL',
+    indiana: 'IN',
+    iowa: 'IA',
+    kansas: 'KS',
+    kentucky: 'KY',
+    louisiana: 'LA',
+    maine: 'ME',
+    maryland: 'MD',
+    massachusetts: 'MA',
+    michigan: 'MI',
+    minnesota: 'MN',
+    mississippi: 'MS',
+    missouri: 'MO',
+    montana: 'MT',
+    nebraska: 'NE',
+    nevada: 'NV',
+    'new hampshire': 'NH',
+    'new jersey': 'NJ',
+    'new mexico': 'NM',
+    'new york': 'NY',
+    'north carolina': 'NC',
+    'north dakota': 'ND',
+    ohio: 'OH',
+    oklahoma: 'OK',
+    oregon: 'OR',
+    pennsylvania: 'PA',
+    'rhode island': 'RI',
+    'south carolina': 'SC',
+    'south dakota': 'SD',
+    tennessee: 'TN',
+    texas: 'TX',
+    utah: 'UT',
+    vermont: 'VT',
+    virginia: 'VA',
+    washington: 'WA',
+    'west virginia': 'WV',
+    wisconsin: 'WI',
+    wyoming: 'WY',
+    'district of columbia': 'DC',
+  };
+
+  function vfmEsc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function vfmAddressDropdown() {
+    return document.getElementById('vfm-address-dropdown');
+  }
+
+  function vfmHideAddressDropdown() {
+    const dropdown = vfmAddressDropdown();
+    if (dropdown) dropdown.classList.remove('visible');
+  }
+
+  function vfmSetAddressStatus(message, isError = false) {
+    const dropdown = vfmAddressDropdown();
+    if (!dropdown) return;
+    dropdown.innerHTML = `<div class="vfm-address-status"${isError ? ' style="color:#d1523d;"' : ''}>${vfmEsc(message)}</div>`;
+    dropdown.classList.add('visible');
+  }
+
+  function vfmNormalizeRegion(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const upper = raw.toUpperCase();
+    if (upper.length === 2) return upper;
+    return VFM_REGION_CODES[raw.toLowerCase()] || '';
+  }
+
+  function vfmBuildAddressLine(address) {
+    if (!address) return '';
+    const line = [address.house_number || '', address.road || address.street || address.pedestrian || address.residential || '']
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    return line || address.amenity || address.building || address.attraction || address.shop || '';
+  }
+
+  function vfmPickCity(address) {
+    if (!address) return '';
+    return address.city || address.town || address.village || address.hamlet || address.municipality || address.city_district || address.suburb || '';
+  }
+
+  function vfmFillAddressParts(address) {
+    const cityEl = document.getElementById('vfm-city');
+    const provinceEl = document.getElementById('vfm-province');
+    const postalEl = document.getElementById('vfm-postal');
+    if (cityEl) cityEl.value = vfmPickCity(address);
+    if (provinceEl) provinceEl.value = vfmNormalizeRegion(address?.state || address?.province || address?.region || '');
+    if (postalEl) postalEl.value = address?.postcode || '';
+  }
+
+  function vfmSelectAddressSuggestion(index) {
+    const choice = _vfmAddressResults[index];
+    const input = document.getElementById('vfm-address');
+    if (!choice || !input) return;
+    input.value = choice.address || choice.label || '';
+    vfmFillAddressParts(choice.parts || {});
+    vfmHideAddressDropdown();
+  }
+
+  function vfmRenderAddressResults(results) {
+    const dropdown = vfmAddressDropdown();
+    if (!dropdown) return;
+    if (!results.length) {
+      vfmSetAddressStatus('No address matches found.');
+      return;
+    }
+    dropdown.innerHTML = results.map((item, index) => `
+      <button type="button" class="vfm-address-option" onclick="vfmSelectAddressSuggestion(${index})">
+        <div class="vfm-address-option-name">${vfmEsc(item.label)}</div>
+        <div class="vfm-address-option-meta">${vfmEsc(item.address)}</div>
+      </button>
+    `).join('');
+    dropdown.classList.add('visible');
+  }
+
+  async function vfmFetchAddressSuggestions(query) {
+    if (!query || query.length < 3) {
+      _vfmAddressResults = [];
+      vfmHideAddressDropdown();
+      return;
+    }
+    vfmSetAddressStatus('Searching addresses...');
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=6&countrycodes=ca,us,gb`;
+      const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+      const data = await res.json();
+      _vfmAddressResults = (data || []).map(row => {
+        const parts = row.address || {};
+        const label = row.name || parts.amenity || parts.building || vfmBuildAddressLine(parts) || row.display_name.split(',')[0];
+        return { label, address: row.display_name, parts };
+      });
+      vfmRenderAddressResults(_vfmAddressResults);
+    } catch {
+      _vfmAddressResults = [];
+      vfmSetAddressStatus('Address search is not available right now.', true);
+    }
+  }
+
+  function vfmInitAddressAutocomplete() {
+    if (_vfmAddressAutocompleteReady) return;
+    const input = document.getElementById('vfm-address');
+    if (!input) return;
+    _vfmAddressAutocompleteReady = true;
+
+    input.addEventListener('input', () => {
+      clearTimeout(_vfmAddressTimer);
+      const query = input.value.trim();
+      if (query.length < 3) {
+        _vfmAddressResults = [];
+        vfmHideAddressDropdown();
+        return;
+      }
+      _vfmAddressTimer = setTimeout(() => vfmFetchAddressSuggestions(query), 280);
+    });
+
+    input.addEventListener('focus', () => {
+      if (_vfmAddressResults.length) {
+        vfmAddressDropdown()?.classList.add('visible');
+      }
+    });
+
+    document.addEventListener('click', event => {
+      if (!event.target.closest('.vfm-address-wrap')) vfmHideAddressDropdown();
+    });
+  }
 
   // ── Use card grid ─────────────────────────────────────────
   function _buildUseCards(selectedUses) {
@@ -4480,6 +4731,9 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     const errEl = document.getElementById('vfm-error');
     if (errEl) errEl.classList.remove('visible');
     vfmClearPhoto();
+    vfmInitAddressAutocomplete();
+    _vfmAddressResults = [];
+    vfmHideAddressDropdown();
     vfmSetManualFieldsOpen(false);
     vfmGoToStep(1);
     document.getElementById('venue-form-modal').style.display = 'flex';
@@ -4505,6 +4759,9 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     const errEl = document.getElementById('vfm-error');
     if (errEl) errEl.classList.remove('visible');
     vfmClearPhoto();
+    vfmInitAddressAutocomplete();
+    _vfmAddressResults = [];
+    vfmHideAddressDropdown();
     vfmSetManualFieldsOpen(Boolean(v.details?.city || v.details?.province || v.details?.postal));
     if (v.photo_url) {
       document.getElementById('vfm-photo-preview-img').src = v.photo_url;
@@ -4519,6 +4776,8 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   function closeVenueModal() {
     document.getElementById('venue-form-modal').style.display = 'none';
     _editingVenueId = null;
+    _vfmAddressResults = [];
+    vfmHideAddressDropdown();
     vfmClearPhoto();
   }
 
