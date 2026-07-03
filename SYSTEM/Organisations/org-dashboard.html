@@ -627,6 +627,10 @@
     .v-layout { display: grid; grid-template-columns: 1fr 280px; gap: 1.25rem; align-items: start; }
     .v-table-header { display: grid; grid-template-columns: 2fr 2.5fr 80px; gap: 0.5rem; padding: 0.3rem 0.7rem; }
     .v-table-header span { font-size: 0.62rem; font-weight: 800; color: #b8a8d4; text-transform: uppercase; letter-spacing: 0.08em; }
+    .v-filter-bar { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0.65rem 0.9rem; border-bottom: 1px solid rgba(87,46,136,0.07); }
+    .v-filter-chip { padding: 0.22rem 0.7rem; border-radius: 99px; font-size: 0.7rem; font-weight: 700; cursor: pointer; border: 1.5px solid transparent; background: rgba(87,46,136,0.06); color: #6a5a80; font-family: var(--bts-font); transition: all 0.12s; white-space: nowrap; }
+    .v-filter-chip:hover { background: rgba(87,46,136,0.1); color: #572e88; }
+    .v-filter-chip.active { background: #572e88; color: #fff; border-color: #572e88; }
     .v-row { display: grid; grid-template-columns: 2fr 2.5fr 80px; gap: 0.5rem; align-items: center; padding: 0.65rem 0.7rem; border-top: 1px solid rgba(87,46,136,0.07); cursor: pointer; border-radius: 8px; transition: background 0.12s; }
     .v-row:hover { background: rgba(87,46,136,0.04); }
     .v-row.v-row--active { background: rgba(87,46,136,0.06); }
@@ -1827,6 +1831,7 @@
       <div class="v-layout" style="margin-top:1.5rem;">
         <div>
           <div class="section-card" style="padding:0.9rem 0.9rem 0.7rem;">
+            <div id="v-filter-bar" class="v-filter-bar" style="display:none;padding-left:0;padding-right:0;margin-bottom:0.4rem;border-bottom:none;"></div>
             <div class="v-table-header">
               <span>VENUE</span><span>USED FOR</span><span></span>
             </div>
@@ -3964,6 +3969,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   // ── Venues ────────────────────────────────────────────
   let orgVenues = [];
   let orgVenuesLoaded = false;
+  let _venueFilter = null; // null = All
   const _venuePhotoUrlCache = new Map();
   const VENUE_PHOTO_BUCKET = 'venue-photos';
   let _selectedVenueId = null;
@@ -4461,10 +4467,34 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     }
   }
 
+  function setVenueFilter(use) {
+    _venueFilter = (_venueFilter === use) ? null : use;
+    renderVenuesTable();
+  }
+
   function renderVenuesTable() {
-    const list = document.getElementById('venues-list');
-    const countEl = document.getElementById('v-count-label');
+    const list     = document.getElementById('venues-list');
+    const countEl  = document.getElementById('v-count-label');
+    const filterEl = document.getElementById('v-filter-bar');
     if (!list) return;
+
+    // Build filter chip bar from all unique uses present
+    if (filterEl) {
+      const allUses = [...new Set(orgVenues.flatMap(v => v.uses || []))].sort();
+      if (allUses.length > 1) {
+        filterEl.style.display = 'flex';
+        filterEl.innerHTML = [null, ...allUses].map(use => {
+          const label  = use || 'All';
+          const active = _venueFilter === use;
+          const u      = use ? VENUE_USES.find(x => x.value === use) : null;
+          const style  = active && u ? `background:${u.color};border-color:${u.color};color:#fff;` : (active ? '' : '');
+          return `<button class="v-filter-chip${active ? ' active' : ''}" style="${style}" onclick="setVenueFilter(${use ? `'${use}'` : 'null'})">${esc(label)}</button>`;
+        }).join('');
+      } else {
+        filterEl.style.display = 'none';
+      }
+    }
+
     if (!orgVenues.length) {
       list.innerHTML = `<div class="venues-empty-state">
         <div style="margin-bottom:0.75rem;"><img src="/ASSETS/Images/Icons/Location2.svg" alt="" style="width:2.5rem;height:2.5rem;opacity:0.3;filter:brightness(0) saturate(100%) invert(28%) sepia(20%) saturate(800%) hue-rotate(230deg) brightness(80%);" onerror="this.style.display='none'" /></div>
@@ -4475,8 +4505,10 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
       if (countEl) countEl.textContent = '';
       return;
     }
-    if (countEl) countEl.textContent = `Showing ${orgVenues.length} of ${orgVenues.length} venue${orgVenues.length !== 1 ? 's' : ''}`;
-    list.innerHTML = orgVenues.map(v => {
+
+    const filtered = _venueFilter ? orgVenues.filter(v => (v.uses || []).includes(_venueFilter)) : orgVenues;
+    if (countEl) countEl.textContent = `Showing ${filtered.length} of ${orgVenues.length} venue${orgVenues.length !== 1 ? 's' : ''}`;
+    list.innerHTML = filtered.length ? filtered.map(v => {
       const uses = v.uses || [];
       const MAX = 3;
       const visible = uses.slice(0, MAX);
@@ -4499,7 +4531,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
           <button class="v-act-btn v-del" onclick="event.stopPropagation();deleteVenue('${v.id}')" title="Remove">&#x2715;</button>
         </div>
       </div>`;
-    }).join('');
+    }).join('') : `<div style="padding:1.5rem;text-align:center;font-size:0.8rem;color:#b8a8d4;">No venues match this filter.</div>`;
   }
 
   function selectVenue(id) {
