@@ -4153,49 +4153,13 @@ Return ONLY the JSON array, no explanation, no markdown fences.`;
       }
     }
 
-    // ── Step 9: Launch (includes inline review) ──
+    // ── Step 9: Launch review ──
     function renderStep9HTML() {
-      const typeLabels = {
+      const TYPE_LABELS = {
         musical: 'Musical', play: 'Play', dance: 'Dance Show', concert: 'Concert',
-        opera: 'Opera', variety: 'Variety Show', workshop: 'Workshop', other: 'Other'
+        opera: 'Opera', variety: 'Variety Show', workshop: 'Workshop', other: 'Other',
       };
-
-      // ── Image ──
-      const posterSrc = wizardData.poster_url;
-
-      // ── Basics ──
-      const typeLabel = typeLabels[wizardData.production_type] || wizardData.production_type || '';
-      const orgSlug   = currentOrg?.slug || 'yourorg';
-      const showSlug  = wizardData.slug || '';
-      const publicUrl = showSlug ? `buildtheshow.com/${orgSlug}/${showSlug}` : null;
-      const visLabel  = wizardData.is_public === true ? 'Public' : 'Unlisted';
-
-      // ── Dates ──
-      const sorted = [...step3Events].sort((a,b) => (a.date||'').localeCompare(b.date||''));
-      const fmtTime = t => {
-        if (!t) return '';
-        const [h, m] = t.split(':').map(Number);
-        const ampm = h >= 12 ? 'PM' : 'AM';
-        return `${h % 12 || 12}:${String(m).padStart(2,'0')} ${ampm}`;
-      };
-      const fmtDate = d => {
-        if (!d) return '';
-        const dt = new Date(d + 'T12:00:00');
-        return dt.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-      };
-      const datesHTML = sorted.length
-        ? sorted.map(ev => `
-            <div style="display:flex;align-items:center;gap:0.85rem;padding:0.65rem 0;border-bottom:1px solid rgba(87,46,136,0.07);">
-              ${calBadgeHtml(ev.date)}
-              <div>
-                <div style="font-size:0.88rem;font-weight:600;color:#1a1530;">${fmtDate(ev.date)}</div>
-                <div style="font-size:0.78rem;color:#7a6a90;margin-top:0.1rem;">${fmtTime(ev.start_time)}${ev.end_time ? ' – ' + fmtTime(ev.end_time) : ev.start_time ? '' : '<span style="font-style:italic;color:#b0a0cc;">No time set</span>'}</div>
-              </div>
-            </div>`).join('')
-        : `<div style="padding:0.75rem 0;font-size:0.82rem;color:#b0a0cc;font-style:italic;">No dates set. You can add them from your production calendar after launch.</div>`;
-
-      // ── Features — show ALL, on and off ──
-      const allFeatures = [
+      const FEATURES = [
         { key: 'auditions',    name: 'Auditions',    colour: '#572e88', live: true  },
         { key: 'registration', name: 'Registration', colour: '#476aaa', live: true  },
         { key: 'budget',       name: 'Budget',       colour: '#dd8233', live: true  },
@@ -4204,163 +4168,167 @@ Return ONLY the JSON array, no explanation, no markdown fences.`;
         { key: 'marketing',    name: 'Marketing',    colour: '#ca7ea7', live: false },
         { key: 'tickets',      name: 'Tickets',      colour: '#74a2b4', live: false },
       ];
-      const f = wizardData.features || {};
-      const featuresHTML = allFeatures.map(feat => {
-        const isOn = !!f[feat.key];
-        if (!feat.live) {
-          return `<div style="display:flex;align-items:center;gap:0.35rem;padding:0.4rem 0.55rem;border-radius:7px;background:#f0eef6;border:1.5px dashed rgba(87,46,136,0.15);">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#c8c0dc" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
-            <span style="font-size:0.7rem;font-weight:700;color:#c0b4d4;">${feat.name}</span>
-          </div>`;
-        }
-        if (isOn) {
-          return `<div style="display:flex;align-items:center;gap:0.35rem;padding:0.4rem 0.55rem;border-radius:7px;background:${feat.colour};">
-            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1.5,6.5 4.5,9.5 10.5,3.5"/></svg>
-            <span style="font-size:0.7rem;font-weight:700;color:#fff;">${feat.name}</span>
-          </div>`;
-        }
-        return `<div style="display:flex;align-items:center;gap:0.35rem;padding:0.4rem 0.55rem;border-radius:7px;background:#f0eef6;border:1.5px solid rgba(87,46,136,0.1);">
-          <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#c8c0dc" stroke-width="2" stroke-linecap="round"><line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/></svg>
-          <span style="font-size:0.7rem;font-weight:600;color:#c0b4d4;">${feat.name}</span>
-        </div>`;
-      }).join('');
 
-      // ── Date tiles for top card ──
+      const fmtTime = t => {
+        if (!t) return '';
+        const [h, m] = t.split(':').map(Number);
+        return `${h % 12 || 12}:${String(m).padStart(2,'0')} ${h >= 12 ? 'PM' : 'AM'}`;
+      };
+      const fmtDate = d => {
+        if (!d) return '';
+        return new Date(d + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      };
+
+      // Shared edit button — pencil icon + label, no repeated SVG blobs
+      const editBtn = (step) =>
+        `<button class="review-edit-link" onclick="jumpToStep(${step})">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Edit
+        </button>`;
+
+      // Helpers
+      const sectionLabel = text => `<span style="font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:#b0a0cc;">${text}</span>`;
+      const card = (content, extraStyle = '') =>
+        `<div style="background:#fff;border:1.5px solid rgba(87,46,136,0.1);border-radius:14px;padding:1rem 1.1rem;box-shadow:0 2px 8px rgba(87,46,136,0.05);${extraStyle}">${content}</div>`;
+      const cardHead = (label, step) =>
+        `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.65rem;">${sectionLabel(label)}${editBtn(step)}</div>`;
+
+      // Sorted performance dates
+      const sorted = [...step3Events].sort((a,b) => (a.date||'').localeCompare(b.date||''));
+
+      // Date tiles — flex-wrap so no horizontal scroll
       const dateTilesHTML = sorted.length
-        ? `<div style="display:flex;flex-wrap:wrap;gap:0;">
+        ? `<div style="display:flex;flex-wrap:wrap;gap:0.5rem 0;">
             ${sorted.map((ev, i) => `
-              <div style="display:flex;align-items:center;gap:0.7rem;padding:0.6rem 1rem 0.6rem ${i===0?'0':'1rem'};${i < sorted.length-1 ? 'border-right:1px solid rgba(87,46,136,0.1);' : ''}flex-shrink:0;">
+              <div style="display:flex;align-items:center;gap:0.65rem;padding:0.5rem ${i === sorted.length-1 ? '0' : '1rem'} 0.5rem 0;${i < sorted.length-1 ? 'border-right:1px solid rgba(87,46,136,0.1);' : ''}">
                 ${calBadgeHtml(ev.date)}
                 <div>
-                  <div style="font-size:0.78rem;font-weight:700;color:#1a1530;">${fmtDate(ev.date).split(',')[0]}</div>
-                  <div style="font-size:0.72rem;color:#5a4e70;font-weight:500;">${fmtDate(ev.date).split(',').slice(1).join(',').trim()}</div>
-                  <div style="font-size:0.7rem;color:#8878a8;margin-top:0.1rem;">${fmtTime(ev.start_time)}${ev.end_time ? ' – ' + fmtTime(ev.end_time) : ''}</div>
+                  <div style="font-size:0.75rem;font-weight:700;color:#1a1530;">${fmtDate(ev.date).split(',')[0]}</div>
+                  <div style="font-size:0.7rem;color:#5a4e70;">${fmtDate(ev.date).split(',').slice(1).join(',').trim()}</div>
+                  <div style="font-size:0.68rem;color:#8878a8;margin-top:0.1rem;">${fmtTime(ev.start_time)}${ev.end_time ? ' – ' + fmtTime(ev.end_time) : ''}</div>
                 </div>
               </div>`).join('')}
           </div>`
-        : `<span style="font-size:0.8rem;color:#b0a0cc;font-style:italic;">No dates added yet.</span>`;
+        : `<span style="font-size:0.78rem;color:#b0a0cc;font-style:italic;">No dates added yet.</span>`;
+
+      // Feature chips — enabled (colour fill), disabled (faint), coming soon (dashed)
+      const featuresHTML = FEATURES.map(feat => {
+        const on = !!(wizardData.features || {})[feat.key];
+        if (!feat.live) return `
+          <div style="display:flex;align-items:center;gap:0.35rem;padding:0.38rem 0.5rem;border-radius:7px;background:#f0eef6;border:1.5px dashed rgba(87,46,136,0.15);">
+            <span style="font-size:0.68rem;font-weight:700;color:#c0b4d4;">${feat.name}</span>
+            <span style="font-size:0.58rem;background:#ddd9ea;color:#9888b8;border-radius:10px;padding:0.05rem 0.35rem;font-weight:700;">Soon</span>
+          </div>`;
+        if (on) return `
+          <div style="display:flex;align-items:center;gap:0.35rem;padding:0.38rem 0.5rem;border-radius:7px;background:${feat.colour};">
+            <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1.5,6.5 4.5,9.5 10.5,3.5"/></svg>
+            <span style="font-size:0.68rem;font-weight:700;color:#fff;">${feat.name}</span>
+          </div>`;
+        return `
+          <div style="display:flex;align-items:center;gap:0.35rem;padding:0.38rem 0.5rem;border-radius:7px;background:#f0eef6;border:1.5px solid rgba(87,46,136,0.08);">
+            <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#d0c8e0" stroke-width="2" stroke-linecap="round"><line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/></svg>
+            <span style="font-size:0.68rem;font-weight:600;color:#c0b4d4;">${feat.name}</span>
+          </div>`;
+      }).join('');
+
+      const isPublic   = wizardData.is_public === true;
+      const typeLabel  = TYPE_LABELS[wizardData.production_type] || wizardData.production_type || '';
+      const orgSlug    = currentOrg?.slug || 'yourorg';
+      const showSlug   = wizardData.slug || '';
+      const publicUrl  = showSlug ? `buildtheshow.com/${orgSlug}/${showSlug}` : null;
 
       return `
         <div class="wizard-card" style="max-width:900px;">
           <h1 class="step-title">Ready to launch?</h1>
           <p class="step-subtitle">Here's everything you've set up. Go back to change anything, then launch when you're ready.</p>
 
-          <!-- Top card: poster + title + dates -->
-          <div style="background:#fff;border:1.5px solid rgba(87,46,136,0.1);border-radius:14px;box-shadow:0 2px 10px rgba(87,46,136,0.06);overflow:hidden;margin-bottom:0.85rem;">
-            <div style="display:flex;gap:0;align-items:stretch;">
+          <!-- Top card: poster + basics + dates -->
+          <div style="background:#fff;border:1.5px solid rgba(87,46,136,0.1);border-radius:14px;box-shadow:0 2px 8px rgba(87,46,136,0.05);overflow:hidden;margin-bottom:0.75rem;">
+            <div style="display:flex;align-items:flex-start;">
 
-              <!-- Poster — locked 2:3 -->
-              <div style="position:relative;flex-shrink:0;width:160px;aspect-ratio:2/3;overflow:hidden;">
-                ${posterSrc
-                  ? `<img src="${escHtml(posterSrc)}" alt="Poster" style="width:100%;height:100%;object-fit:cover;object-position:top;display:block;" />`
-                  : `<div style="width:100%;height:100%;background:#f0eef7;display:flex;align-items:center;justify-content:center;"><span style="font-size:0.72rem;color:#b0a0cc;font-style:italic;text-align:center;padding:1rem;line-height:1.5;">No image yet</span></div>`}
-                <button class="review-edit-link" onclick="jumpToStep(1)" style="position:absolute;bottom:0.6rem;left:50%;transform:translateX(-50%);white-space:nowrap;background:rgba(255,255,255,0.92);backdrop-filter:blur(4px);">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                  Edit
-                </button>
+              <!-- Poster — 2:3 locked -->
+              <div style="position:relative;flex-shrink:0;width:160px;aspect-ratio:2/3;overflow:hidden;align-self:stretch;">
+                ${wizardData.poster_url
+                  ? `<img src="${escHtml(wizardData.poster_url)}" alt="Poster" style="width:100%;height:100%;object-fit:cover;object-position:top;display:block;" />`
+                  : `<div style="width:100%;height:100%;min-height:240px;background:#f0eef7;display:flex;align-items:center;justify-content:center;"><span style="font-size:0.7rem;color:#c0b0d8;font-style:italic;text-align:center;padding:1rem;line-height:1.5;">No image yet</span></div>`}
+                <div style="position:absolute;bottom:0.6rem;left:0;right:0;display:flex;justify-content:center;">
+                  ${editBtn(1).replace('class="review-edit-link"', 'class="review-edit-link" style="background:rgba(255,255,255,0.92);backdrop-filter:blur(4px);white-space:nowrap;"')}
+                </div>
               </div>
 
-              <!-- Right: title + meta + dates -->
-              <div style="flex:1;min-width:0;padding:1.25rem 1.25rem 1rem;display:flex;flex-direction:column;gap:0.75rem;">
+              <!-- Basics + dates -->
+              <div style="flex:1;min-width:0;padding:1.1rem 1.2rem 1rem;display:flex;flex-direction:column;gap:0.85rem;">
 
-                <!-- Title + Edit -->
+                <!-- Title row -->
                 <div style="display:flex;align-items:flex-start;gap:0.75rem;">
                   <div style="flex:1;min-width:0;">
-                    <h2 style="font-size:1.35rem;font-weight:900;color:#1a1530;margin:0 0 0.5rem;line-height:1.2;">${escHtml(wizardData.title) || '<span style="color:#b0a0cc;font-style:italic;font-weight:400;font-size:1rem;">Untitled</span>'}</h2>
-                    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:0.4rem;">
-                      ${typeLabel ? `<span style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.72rem;font-weight:600;color:#5a4e70;background:#f0eef7;border-radius:20px;padding:0.2rem 0.6rem;">${escHtml(typeLabel)}</span>` : ''}
-                      <span style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.72rem;font-weight:600;color:#5a4e70;background:#f0eef7;border-radius:20px;padding:0.2rem 0.6rem;">${visLabel}</span>
-                      ${publicUrl ? `<span style="font-size:0.72rem;color:#572e88;font-weight:600;word-break:break-all;">${escHtml(publicUrl)}</span>` : ''}
+                    <h2 style="font-size:1.3rem;font-weight:900;color:#1a1530;margin:0 0 0.45rem;line-height:1.2;">${escHtml(wizardData.title) || '<span style="color:#c0b0d8;font-style:italic;font-weight:400;font-size:1rem;">Untitled</span>'}</h2>
+                    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:0.35rem;">
+                      ${typeLabel ? `<span style="font-size:0.7rem;font-weight:600;color:#5a4e70;background:#f0eef7;border-radius:20px;padding:0.18rem 0.55rem;">${escHtml(typeLabel)}</span>` : ''}
+                      <span style="font-size:0.7rem;font-weight:600;color:#5a4e70;background:#f0eef7;border-radius:20px;padding:0.18rem 0.55rem;">${isPublic ? 'Public' : 'Unlisted'}</span>
+                      ${publicUrl ? `<span style="font-size:0.7rem;color:#572e88;font-weight:600;word-break:break-all;">${escHtml(publicUrl)}</span>` : ''}
                     </div>
                   </div>
-                  <button class="review-edit-link" onclick="jumpToStep(2)" style="flex-shrink:0;">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                    Edit
-                  </button>
+                  ${editBtn(2)}
                 </div>
 
-                <!-- Dates -->
+                <!-- Performance dates -->
                 <div>
-                  <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">
-                    <span style="font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:#b0a0cc;">Performance Dates</span>
-                    ${sorted.length ? `<span style="font-size:0.6rem;font-weight:700;color:#efab45;background:rgba(239,171,69,0.12);border-radius:20px;padding:0.1rem 0.45rem;">${sorted.length} added</span>` : ''}
-                    <button class="review-edit-link" onclick="jumpToStep(3)" style="margin-left:auto;">
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                      Edit
-                    </button>
+                  <div style="display:flex;align-items:center;gap:0.45rem;margin-bottom:0.5rem;">
+                    ${sectionLabel('Performance Dates')}
+                    ${sorted.length ? `<span style="font-size:0.6rem;font-weight:700;color:#efab45;background:rgba(239,171,69,0.12);border-radius:20px;padding:0.08rem 0.4rem;">${sorted.length} added</span>` : ''}
+                    <span style="margin-left:auto;">${editBtn(3)}</span>
                   </div>
-                  <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">${dateTilesHTML}</div>
+                  ${dateTilesHTML}
                 </div>
 
               </div>
             </div>
           </div>
 
-          <!-- Bottom 4-column row -->
-          <div style="display:grid;grid-template-columns:2fr 1.5fr 1.5fr 1.3fr;gap:0.7rem;align-items:start;">
+          <!-- Bottom row: description | features | visibility | launch -->
+          <div style="display:grid;grid-template-columns:2fr 1.4fr 1.4fr 1.2fr;gap:0.65rem;align-items:start;">
 
-            <!-- Description -->
-            <div style="background:#fff;border:1.5px solid rgba(87,46,136,0.1);border-radius:14px;padding:1rem 1.1rem;box-shadow:0 2px 10px rgba(87,46,136,0.06);">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem;">
-                <span style="font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:#b0a0cc;">Description</span>
-                <button class="review-edit-link" onclick="jumpToStep(2)">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                  Edit
-                </button>
-              </div>
+            ${card(`
+              ${cardHead('Description', 2)}
               ${wizardData.description
                 ? `<div style="font-size:0.78rem;color:#5a4e70;line-height:1.65;white-space:pre-line;">${escHtml(wizardData.description)}</div>`
-                : `<span style="font-size:0.78rem;color:#b0a0cc;font-style:italic;">No description added.</span>`}
-            </div>
+                : `<span style="font-size:0.78rem;color:#c0b0d8;font-style:italic;">No description added.</span>`}
+            `)}
 
-            <!-- Features -->
-            <div style="background:#fff;border:1.5px solid rgba(87,46,136,0.1);border-radius:14px;padding:1rem 1.1rem;box-shadow:0 2px 10px rgba(87,46,136,0.06);">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.7rem;">
-                <span style="font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:#b0a0cc;">Features</span>
-                <button class="review-edit-link" onclick="jumpToStep(11)">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                  Edit
-                </button>
-              </div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;">${featuresHTML}</div>
-            </div>
+            ${card(`
+              ${cardHead('Features', 11)}
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.35rem;">${featuresHTML}</div>
+            `)}
 
-            <!-- Visibility -->
-            <div style="background:#fff;border:1.5px solid rgba(87,46,136,0.1);border-radius:14px;padding:1rem 1.1rem;box-shadow:0 2px 10px rgba(87,46,136,0.06);">
-              <div style="font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:#b0a0cc;margin-bottom:0.7rem;">Who can see this production?</div>
-              <div style="display:flex;flex-direction:column;gap:0.5rem;">
-                <label style="display:flex;align-items:flex-start;gap:0.6rem;padding:0.65rem 0.75rem;border-radius:10px;border:1.5px solid ${wizardData.is_public === true ? '#572e88' : 'rgba(87,46,136,0.12)'};background:${wizardData.is_public === true ? 'rgba(87,46,136,0.04)' : '#fff'};cursor:pointer;">
-                  <input type="radio" name="vis_launch" id="vis_launch_public" value="public" ${wizardData.is_public === true ? 'checked' : ''} style="margin-top:0.15rem;accent-color:#572e88;" />
+            ${card(`
+              ${sectionLabel('Visibility')}
+              <div style="display:flex;flex-direction:column;gap:0.45rem;margin-top:0.65rem;">
+                <label style="display:flex;align-items:flex-start;gap:0.55rem;padding:0.6rem 0.7rem;border-radius:10px;border:1.5px solid ${isPublic ? '#572e88' : 'rgba(87,46,136,0.12)'};background:${isPublic ? 'rgba(87,46,136,0.04)' : '#fff'};cursor:pointer;">
+                  <input type="radio" name="vis_launch" id="vis_launch_public" value="public" ${isPublic ? 'checked' : ''} style="margin-top:0.15rem;accent-color:#572e88;flex-shrink:0;" />
                   <div>
-                    <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;font-weight:700;color:#1a1530;">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-                      Public
-                    </div>
-                    <div style="font-size:0.7rem;color:#8878a8;margin-top:0.15rem;line-height:1.4;">Shows up in search and on the Browse page.</div>
+                    <div style="font-size:0.8rem;font-weight:700;color:#1a1530;margin-bottom:0.15rem;">Public</div>
+                    <div style="font-size:0.68rem;color:#8878a8;line-height:1.4;">Shows up in search and Browse.</div>
                   </div>
                 </label>
-                <label style="display:flex;align-items:flex-start;gap:0.6rem;padding:0.65rem 0.75rem;border-radius:10px;border:1.5px solid ${wizardData.is_public !== true ? '#572e88' : 'rgba(87,46,136,0.12)'};background:${wizardData.is_public !== true ? 'rgba(87,46,136,0.04)' : '#fff'};cursor:pointer;">
-                  <input type="radio" name="vis_launch" id="vis_launch_unlisted" value="unlisted" ${wizardData.is_public !== true ? 'checked' : ''} style="margin-top:0.15rem;accent-color:#572e88;" />
+                <label style="display:flex;align-items:flex-start;gap:0.55rem;padding:0.6rem 0.7rem;border-radius:10px;border:1.5px solid ${!isPublic ? '#572e88' : 'rgba(87,46,136,0.12)'};background:${!isPublic ? 'rgba(87,46,136,0.04)' : '#fff'};cursor:pointer;">
+                  <input type="radio" name="vis_launch" id="vis_launch_unlisted" value="unlisted" ${!isPublic ? 'checked' : ''} style="margin-top:0.15rem;accent-color:#572e88;flex-shrink:0;" />
                   <div>
-                    <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;font-weight:700;color:#1a1530;">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M1 1l22 22"/></svg>
-                      Unlisted
-                    </div>
-                    <div style="font-size:0.7rem;color:#8878a8;margin-top:0.15rem;line-height:1.4;">Only accessible with the direct link.</div>
+                    <div style="font-size:0.8rem;font-weight:700;color:#1a1530;margin-bottom:0.15rem;">Unlisted</div>
+                    <div style="font-size:0.68rem;color:#8878a8;line-height:1.4;">Only via direct link.</div>
                   </div>
                 </label>
               </div>
-            </div>
+            `)}
 
-            <!-- Launch -->
             <div style="display:flex;flex-direction:column;gap:0.5rem;">
               <div class="form-error" id="step9Error"></div>
               <button class="btn-launch" onclick="launchProduction()" style="width:100%;">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
                 Launch Production
               </button>
               <button class="btn-draft" onclick="saveAsDraft()" style="width:100%;">Save as Draft</button>
-              <p style="font-size:0.68rem;color:#b0a0cc;line-height:1.5;margin:0.25rem 0 0;text-align:center;">You can edit everything from the workspace after launching. Nothing is permanent.</p>
+              <p style="font-size:0.67rem;color:#b0a0cc;line-height:1.5;margin:0.2rem 0 0;text-align:center;">Everything can be edited from the workspace. Nothing is permanent.</p>
             </div>
 
           </div>
