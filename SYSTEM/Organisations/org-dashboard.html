@@ -787,6 +787,9 @@
     .vfm-detail-group-title { font-size: 0.6rem; font-weight: 800; color: #572e88; text-transform: uppercase; letter-spacing: 0.09em; margin-bottom: 0.75rem; }
     .vfm-detail-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem 1rem; margin-bottom: 0.75rem; }
     .vfm-detail-fields:last-child { margin-bottom: 0; }
+    .vfm-select-label-row { display: flex; align-items: center; gap: 0.4rem; }
+    .vfm-select-label-icon { width: 18px; height: 18px; object-fit: contain; opacity: 0.82; flex-shrink: 0; }
+    .vfm-select-help { margin-top: 0.32rem; min-height: 1.05rem; font-size: 0.72rem; color: #8d7aa8; line-height: 1.45; }
     .vfm-detail-bool-list { border: 1.5px solid rgba(87,46,136,0.1); border-radius: 10px; overflow: hidden; }
     .vfm-detail-bool-row { display: flex; align-items: center; justify-content: space-between; padding: 0.48rem 0.85rem; border-bottom: 1px solid rgba(87,46,136,0.07); gap: 1rem; }
     .vfm-detail-bool-row:last-child { border-bottom: none; }
@@ -4568,6 +4571,95 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     });
   }
 
+  function vfmSelectMeta(fieldKey) {
+    const meta = {
+      perf_stage_type: {
+        icon: 'page-production-department.svg',
+        help: {
+          'Proscenium': 'Traditional stage with the audience facing the front.',
+          'Thrust': 'Stage reaches into the audience with seating on three sides.',
+          'Black Box': 'Flexible room that can be set up in different ways.',
+          'In-the-round': 'Audience sits all around the performance space.',
+          'Flexible': 'Layout can shift depending on the show.',
+          'Outdoor': 'Open-air or outdoor performance space.',
+        },
+      },
+      perf_orch_pit: {
+        icon: 'Production.svg',
+        help: {
+          'None': 'No orchestra pit at this venue.',
+          'Fixed': 'Built-in pit that stays in place.',
+          'Removable cover': 'Pit can be covered and used as extra stage or seating.',
+        },
+      },
+      perf_lighting: {
+        icon: 'volunteer-lighting-designer-technician.svg',
+        help: {
+          'None': 'No dedicated lighting control space.',
+          'Shared': 'Lighting shares a booth or control area.',
+          'Separate': 'Lighting has its own dedicated booth or desk area.',
+        },
+      },
+      perf_sound_booth: {
+        icon: 'volunteer-sound-audio-technician.svg',
+        help: {
+          'None': 'No dedicated sound control space.',
+          'Shared': 'Sound shares a booth or control area.',
+          'Separate': 'Sound has its own dedicated booth or desk area.',
+        },
+      },
+      reh_piano: {
+        icon: 'ProductionTeam-sound.svg',
+        help: {
+          'None': 'No piano in the room.',
+          'Upright': 'Standard upright piano.',
+          'Baby Grand': 'Smaller grand piano.',
+          'Grand': 'Full grand piano.',
+          'Digital': 'Digital piano or keyboard.',
+        },
+      },
+      aud_piano: {
+        icon: 'ProductionTeam-sound.svg',
+        help: {
+          'None': 'No piano in the audition room.',
+          'Upright': 'Standard upright piano.',
+          'Baby Grand': 'Smaller grand piano.',
+          'Grand': 'Full grand piano.',
+          'Digital': 'Digital piano or keyboard.',
+        },
+      },
+      cls_piano: {
+        icon: 'ProductionTeam-sound.svg',
+        help: {
+          'None': 'No piano in the room.',
+          'Upright': 'Standard upright piano.',
+          'Baby Grand': 'Smaller grand piano.',
+          'Grand': 'Full grand piano.',
+          'Digital': 'Digital piano or keyboard.',
+        },
+      },
+    };
+    return meta[fieldKey] || { icon: 'Information.svg', help: {} };
+  }
+
+  function vfmUpdateSelectHelp(selectEl) {
+    if (!selectEl) return;
+    const key = selectEl.id.replace('vfd-', '');
+    const meta = vfmSelectMeta(key);
+    const helpEl = selectEl.parentElement?.querySelector('.vfm-select-help');
+    if (!helpEl) return;
+    helpEl.textContent = meta.help[selectEl.value || ''] || 'Pick the option that best matches this space.';
+  }
+
+  function vfmBindDetailSelectHelpers() {
+    document.querySelectorAll('.vfm-detail-fields select.vfm-input').forEach(selectEl => {
+      if (selectEl.dataset.helpBound === '1') return;
+      selectEl.dataset.helpBound = '1';
+      selectEl.addEventListener('change', () => vfmUpdateSelectHelp(selectEl));
+      vfmUpdateSelectHelp(selectEl);
+    });
+  }
+
   function _renderUseSection(use) {
     const groups = VENUE_SECTIONS[use];
     if (!groups) return '';
@@ -4581,12 +4673,25 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
           ${nonBool.length ? `<div class="vfm-detail-fields">${nonBool.map(f => {
             let input;
             if (f.type === 'select') {
+              const meta = vfmSelectMeta(f.key);
+              const helpText = meta.help[_vfmDetails[f.key] || ''] || 'Pick the option that best matches this space.';
               const opts = (f.opts || []).map(o => `<option${_vfmDetails[f.key] === o ? ' selected' : ''}>${esc(o)}</option>`).join('');
-              input = `<select class="vfm-input" id="vfd-${f.key}"><option value="">Select...</option>${opts}</select>`;
+              input = `
+                <label class="vfm-lbl" for="vfd-${f.key}">
+                  <span class="vfm-select-label-row">
+                    <img class="vfm-select-label-icon" src="/ASSETS/Images/Icons/${meta.icon}" alt="" />
+                    <span>${esc(f.label)}</span>
+                  </span>
+                </label>
+                <select class="vfm-input" id="vfd-${f.key}">
+                  <option value="">Select...</option>
+                  ${opts}
+                </select>
+                <div class="vfm-select-help">${esc(helpText)}</div>`;
             } else {
-              input = `<input class="vfm-input" type="number" id="vfd-${f.key}" placeholder="${esc(f.placeholder||'')}" value="${_vfmDetails[f.key]||''}" />`;
+              input = `<label class="vfm-lbl" for="vfd-${f.key}">${esc(f.label)}</label><input class="vfm-input" type="number" id="vfd-${f.key}" placeholder="${esc(f.placeholder||'')}" value="${_vfmDetails[f.key]||''}" />`;
             }
-            return `<div class="vfm-field"><label class="vfm-lbl">${esc(f.label)}</label>${input}</div>`;
+            return `<div class="vfm-field">${input}</div>`;
           }).join('')}</div>` : ''}
           ${bools.length ? `<div class="vfm-detail-bool-list">${bools.map(f =>
             `<div class="vfm-detail-bool-row">
@@ -4612,6 +4717,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
       <p class="vfm-page-title">A few more details.</p>
       <p class="vfm-page-desc">All optional. Fill in what you know and leave the rest blank.</p>
       ${usesWithSections.map(use => _renderUseSection(use)).join('')}`;
+    vfmBindDetailSelectHelpers();
   }
 
   // ── Step navigation ───────────────────────────────────────
