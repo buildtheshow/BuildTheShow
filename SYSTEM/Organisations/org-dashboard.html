@@ -4548,21 +4548,19 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     nextBtn.textContent = 'Saving…';
 
     let photo_url = _editingVenueId ? (orgVenues.find(x => x.id === _editingVenueId)?.photo_url || null) : null;
+    let photoUploadWarning = '';
     if (_vfmPendingPhoto) {
       const file = _vfmPendingPhoto;
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       const path = `${currentOrg.id}/venues/${Date.now()}_${safeName}`;
       const { error: upErr } = await sb.storage.from('org-files').upload(path, file, { upsert: true, contentType: file.type });
       if (upErr) {
-        errEl.textContent = 'Photo upload failed: ' + upErr.message;
-        errEl.classList.add('visible');
-        nextBtn.disabled = false;
-        nextBtn.innerHTML = 'Save venue';
-        nextBtn.onclick = saveVenueForm;
-        return;
+        photoUploadWarning = 'Venue saved without the photo. You can add the photo later from this venue.';
       }
-      const { data: urlData } = sb.storage.from('org-files').getPublicUrl(path);
-      photo_url = urlData.publicUrl;
+      if (!upErr) {
+        const { data: urlData } = sb.storage.from('org-files').getPublicUrl(path);
+        photo_url = urlData.publicUrl;
+      }
     }
 
     const payload = {
@@ -4589,6 +4587,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     closeVenueModal();
     renderVenuesTable();
     if (savedId) selectVenue(savedId);
+    if (photoUploadWarning) showToast(photoUploadWarning, false, 4500);
   }
 
   async function deleteVenue(id) {
