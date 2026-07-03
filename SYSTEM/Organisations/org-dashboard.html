@@ -625,13 +625,15 @@
     @media (max-width: 900px) { .sp-layout { grid-template-columns: 1fr; } }
     /* Venues table layout */
     .v-layout { display: grid; grid-template-columns: 1fr 280px; gap: 1.25rem; align-items: start; }
-    .v-table-header { display: grid; grid-template-columns: 2fr 2.5fr 80px; gap: 0.5rem; padding: 0.3rem 0.7rem; }
+    .v-table-header { display: grid; grid-template-columns: 2fr 2.5fr auto; gap: 0.5rem; padding: 0.3rem 0.7rem; }
     .v-table-header span { font-size: 0.62rem; font-weight: 800; color: #b8a8d4; text-transform: uppercase; letter-spacing: 0.08em; }
     .v-filter-bar { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0.65rem 0.9rem; border-bottom: 1px solid rgba(87,46,136,0.07); }
     .v-filter-chip { padding: 0.22rem 0.7rem; border-radius: 99px; font-size: 0.7rem; font-weight: 700; cursor: pointer; border: 1.5px solid transparent; background: rgba(87,46,136,0.06); color: #6a5a80; font-family: var(--bts-font); transition: all 0.12s; white-space: nowrap; }
     .v-filter-chip:hover { background: rgba(87,46,136,0.1); color: #572e88; }
     .v-filter-chip.active { background: #572e88; color: #fff; border-color: #572e88; }
-    .v-row { display: grid; grid-template-columns: 2fr 2.5fr 80px; gap: 0.5rem; align-items: center; padding: 0.65rem 0.7rem; border-top: 1px solid rgba(87,46,136,0.07); cursor: pointer; border-radius: 8px; transition: background 0.12s; }
+    .v-row { display: grid; grid-template-columns: 2fr 2.5fr auto; gap: 0.5rem; align-items: center; padding: 0.65rem 0.7rem; border-top: 1px solid rgba(87,46,136,0.07); cursor: pointer; border-radius: 8px; transition: background 0.12s; }
+    .v-act-btn.v-primary-set { border-color: #efab45; color: #b07a1a; background: rgba(239,171,69,0.08); }
+    .v-act-btn.v-primary-set:hover { background: rgba(239,171,69,0.15); }
     .v-row:hover { background: rgba(87,46,136,0.04); }
     .v-row.v-row--active { background: rgba(87,46,136,0.06); }
     .v-row-venue { display: flex; align-items: center; gap: 0.65rem; min-width: 0; }
@@ -4460,8 +4462,16 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     orgVenues = data || [];
     await _hydrateVenuePhotoUrls(orgVenues);
     orgVenuesLoaded = true;
+    _sortVenuesWithPrimary();
     renderVenuesTable();
-    if (_selectedVenueId) {
+    // Auto-select primary venue (or first) on load
+    const pid = currentOrg?.primary_venue_id;
+    const autoSelect = (pid && orgVenues.find(v => v.id === pid)) || orgVenues[0];
+    if (autoSelect && !_selectedVenueId) {
+      _selectedVenueId = autoSelect.id;
+      renderVenueDetail(autoSelect);
+      renderVenuesTable();
+    } else if (_selectedVenueId) {
       const still = orgVenues.find(v => v.id === _selectedVenueId);
       if (still) renderVenueDetail(still);
     }
@@ -4530,8 +4540,10 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
         </div>
         <div><div class="v-uses">${usesHtml || '<span style="font-size:0.68rem;color:#b8a8d4;">Not set</span>'}</div></div>
         <div class="v-actions">
-          <button class="v-act-btn" onclick="event.stopPropagation();openEditVenueModal('${v.id}')" title="Edit">Edit</button>
-          <button class="v-act-btn v-del" onclick="event.stopPropagation();deleteVenue('${v.id}')" title="Remove">&#x2715;</button>
+          <button class="v-act-btn" onclick="event.stopPropagation();openEditVenueModal('${v.id}')">Edit</button>
+          <button class="v-act-btn" onclick="event.stopPropagation();openVenueFullDetail('${v.id}')">View all info</button>
+          <button class="v-act-btn${currentOrg?.primary_venue_id === v.id ? ' v-primary-set' : ''}" onclick="event.stopPropagation();setPrimaryVenue('${v.id}')">${currentOrg?.primary_venue_id === v.id ? 'Primary' : 'Set as primary'}</button>
+          <button class="v-act-btn v-del" onclick="event.stopPropagation();deleteVenue('${v.id}')">&#x2715;</button>
         </div>
       </div>`;
     }).join('') : `<div style="padding:1.5rem;text-align:center;font-size:0.8rem;color:#b8a8d4;">No venues match this filter.</div>`;
@@ -4542,6 +4554,30 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     renderVenuesTable();
     const v = orgVenues.find(x => x.id === id);
     if (v) renderVenueDetail(v);
+  }
+
+  async function setPrimaryVenue(id) {
+    if (!currentOrg) return;
+    const { error } = await sb.from('organizations').update({ primary_venue_id: id }).eq('id', currentOrg.id);
+    if (error) { showToast('Could not save primary venue.', true); return; }
+    currentOrg = { ...currentOrg, primary_venue_id: id };
+    // Sort primary to top
+    orgVenues.sort((a, b) => {
+      if (a.id === id) return -1;
+      if (b.id === id) return 1;
+      return a.name.localeCompare(b.name);
+    });
+    selectVenue(id);
+    showToast('Primary venue set.');
+  }
+
+  function _sortVenuesWithPrimary() {
+    const pid = currentOrg?.primary_venue_id;
+    orgVenues.sort((a, b) => {
+      if (a.id === pid) return -1;
+      if (b.id === pid) return 1;
+      return a.name.localeCompare(b.name);
+    });
   }
 
   // Migrate old prefixed detail keys → new unified keys (one-way, non-destructive)
