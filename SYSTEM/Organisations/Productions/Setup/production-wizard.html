@@ -2685,14 +2685,30 @@ Return ONLY the JSON object, no explanation.`
     }
 
     function step3AddEvent() {
+      // Sync any unsaved DOM input values into step3Events first
+      document.querySelectorAll('[data-eid]').forEach(row => {
+        const id = row.dataset.eid;
+        const dateEl = row.querySelector('input[type="date"]');
+        const startEl = row.querySelector('input.step3-time:first-of-type');
+        const endEl = row.querySelector('input.step3-time:last-of-type');
+        const ev = step3Events.find(e => e._id === id);
+        if (ev) {
+          if (dateEl) ev.date = dateEl.value;
+          if (startEl) ev.start_time = startEl.value;
+          if (endEl) ev.end_time = endEl.value;
+        }
+      });
+
       const sorted = [...step3Events].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
       const last = sorted.length ? sorted[sorted.length - 1] : null;
+
       let nextDate = new Date().toISOString().slice(0, 10);
       if (last?.date) {
-        const d = new Date(last.date + 'T12:00:00');
-        d.setDate(d.getDate() + 1);
-        nextDate = d.toISOString().slice(0, 10);
+        const parts = last.date.split('-').map(Number);
+        const d = new Date(parts[0], parts[1] - 1, parts[2] + 1);
+        nextDate = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
       }
+
       step3Events.push({
         _id: _s3id(), db_id: null, title: 'Performance', event_type: 'performance',
         date:       nextDate,
