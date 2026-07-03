@@ -3126,17 +3126,31 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   let currentUser = null;
   let allProds    = [];
   let orgBoardMembersCollapsed = false;
-  const ORG_BOARD_MEMBER_ROLES = [
-    'President',
-    'Vice President',
-    'Treasurer',
-    'Recording Secretary',
-    'Marketing & Communications Director',
-    'Fundraising Chair',
-    'Volunteer Coordinator',
-    'Youth Member(s)',
-    'Member at Large',
-  ];
+  const ORG_BOARD_ROLES_BY_STRUCTURE = {
+    community: [
+      'President', 'Vice President', 'Treasurer', 'Secretary',
+      'Board Member', 'Executive Director', 'Artistic Director',
+      'General Manager', 'Administrator',
+    ],
+    professional: [
+      'Board Chair', 'Trustee', 'Executive Director', 'Artistic Director',
+      'Managing Director', 'General Manager', 'Director of Development',
+      'Director of Marketing', 'Director of Education', 'Finance Manager',
+    ],
+    school: [
+      'Principal', 'Vice Principal', 'Department Head',
+      'Drama Teacher', 'Music Teacher', 'Administrator',
+    ],
+    studio: [
+      'Owner', 'Studio Director', 'Artistic Director',
+      'Administrator', 'Office Manager',
+    ],
+    custom: [],
+  };
+  function getOrgBoardRoles() {
+    return ORG_BOARD_ROLES_BY_STRUCTURE[currentOrg?.board_structure] || ORG_BOARD_ROLES_BY_STRUCTURE.community;
+  }
+  const ORG_BOARD_MEMBER_ROLES = getOrgBoardRoles();
   const pendingBrandingFiles = {
     logo: null,
     whiteLogo: null,
@@ -3538,7 +3552,8 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
 
     const filledCards = [];
     const openCards = [];
-    ORG_BOARD_MEMBER_ROLES.forEach(role => {
+    const activeRoles = getOrgBoardRoles();
+    activeRoles.forEach(role => {
       const matched = members.filter(member => normalizeOrgRole(member.title) === normalizeOrgRole(role));
       matched.forEach(member => assignedMemberIds.add(String(member.id || '')));
       if (matched.length) {
@@ -3554,7 +3569,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
       filledCards.push(renderCard(member.title || 'Board Member', member));
     });
 
-    const countLabel = `${filledRoleCount}/${ORG_BOARD_MEMBER_ROLES.length} roles filled`;
+    const countLabel = `${filledRoleCount}/${activeRoles.length} roles filled`;
     const sectionClass = orgBoardMembersCollapsed ? 'team-department-section is-collapsed' : 'team-department-section';
     const html = `<div class="team-department-sections">
       <section class="${sectionClass}">
@@ -3602,25 +3617,25 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
         <div class="board-setup-q">How does your organisation run?</div>
         <p class="board-setup-sub">Choose the structure that best fits how you work. This sets up your default board roles. You can always change it later in Settings.</p>
         <div class="board-setup-options">
-          <button class="board-setup-opt" onclick="saveBoardStructure('traditional')">
-            <span class="board-setup-opt-icon">🏛️</span>
-            <div class="board-setup-opt-title">Traditional Board</div>
-            <div class="board-setup-opt-desc">President, VP, Treasurer, Secretary, and standard committee roles.</div>
+          <button class="board-setup-opt" onclick="saveBoardStructure('community')">
+            <div class="board-setup-opt-title">Community Theatre</div>
+            <div class="board-setup-opt-desc">President, VP, Treasurer, Secretary, Artistic Director, and more.</div>
           </button>
-          <button class="board-setup-opt" onclick="saveBoardStructure('director')">
-            <span class="board-setup-opt-icon">🎬</span>
-            <div class="board-setup-opt-title">Director-Led</div>
-            <div class="board-setup-opt-desc">An Executive Director at the helm, supported by department directors.</div>
+          <button class="board-setup-opt" onclick="saveBoardStructure('professional')">
+            <div class="board-setup-opt-title">Professional Theatre</div>
+            <div class="board-setup-opt-desc">Board Chair, Trustees, Executive and Artistic Directors, department leads.</div>
           </button>
-          <button class="board-setup-opt" onclick="saveBoardStructure('collective')">
-            <span class="board-setup-opt-icon">🤝</span>
-            <div class="board-setup-opt-title">Collective</div>
-            <div class="board-setup-opt-desc">No formal hierarchy. Everyone shares responsibility.</div>
+          <button class="board-setup-opt" onclick="saveBoardStructure('school')">
+            <div class="board-setup-opt-title">School</div>
+            <div class="board-setup-opt-desc">Principal, Department Head, Drama Teacher, Music Teacher, and Administrator.</div>
+          </button>
+          <button class="board-setup-opt" onclick="saveBoardStructure('studio')">
+            <div class="board-setup-opt-title">Studio</div>
+            <div class="board-setup-opt-desc">Owner, Studio Director, Artistic Director, and office roles.</div>
           </button>
           <button class="board-setup-opt" onclick="saveBoardStructure('custom')">
-            <span class="board-setup-opt-icon">✏️</span>
             <div class="board-setup-opt-title">Build My Own</div>
-            <div class="board-setup-opt-desc">Start blank and add roles as you go.</div>
+            <div class="board-setup-opt-desc">Start blank and add your own roles as you go.</div>
           </button>
         </div>
       </div>`;
