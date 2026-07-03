@@ -666,6 +666,19 @@
     .vd-chip-row { display: flex; flex-wrap: wrap; gap: 0.25rem; }
     .vd-chip { font-size: 0.64rem; font-weight: 700; padding: 0.18rem 0.5rem; border-radius: 99px; background: rgba(87,46,136,0.07); color: #572e88; white-space: nowrap; }
     .vd-notes-text { font-size: 0.74rem; color: #6a5a80; line-height: 1.55; }
+    /* Venue full-detail popup */
+    .vd-full-popup-bg { position: fixed; inset: 0; z-index: 9999; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); }
+    .vd-full-popup-bg.visible { display: flex; }
+    .vd-full-popup { background: #fff; border-radius: 16px; width: calc(100% - 2rem); max-width: 540px; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 12px 48px rgba(0,0,0,0.22); }
+    .vd-full-popup-hdr { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 1.4rem 1.75rem 1rem; flex-shrink: 0; border-bottom: 1px solid rgba(87,46,136,0.09); }
+    .vd-full-popup-title { font-size: 1.25rem; font-weight: 900; color: #000; letter-spacing: -0.02em; line-height: 1.2; }
+    .vd-full-popup-sub { font-size: 0.72rem; color: #9a90b0; margin-top: 0.25rem; line-height: 1.5; }
+    .vd-full-popup-body { overflow-y: auto; padding: 0.5rem 1.75rem 1.75rem; flex: 1; min-height: 0; }
+    .vd-full-popup-close { background: none; border: none; font-size: 1.1rem; color: #9a90b0; cursor: pointer; padding: 0.1rem 0.3rem; line-height: 1; flex-shrink: 0; }
+    .vd-full-popup-close:hover { color: #000; }
+    .vd-view-all-btn { display: block; width: 100%; margin-top: 1rem; padding: 0.65rem; background: transparent; border: 1.5px solid rgba(87,46,136,0.18); border-radius: 10px; font-size: 0.8rem; font-weight: 700; color: #572e88; cursor: pointer; font-family: var(--bts-font); transition: background 0.12s, border-color 0.12s; text-align: center; }
+    .vd-view-all-btn:hover { background: rgba(87,46,136,0.05); border-color: #572e88; }
+    .vd-updated { font-size: 0.65rem; color: #c0b4d8; margin-top: 1.25rem; padding-top: 0.85rem; border-top: 1px solid rgba(87,46,136,0.07); margin-bottom: 0; }
     /* Legacy compat */
     .vd-field { margin-bottom: 0.95rem; }
     .vd-lbl { font-size: 0.78rem; font-weight: 700; color: #6a5a80; margin-bottom: 0.18rem; }
@@ -2607,6 +2620,20 @@
   </div>
 </div>
 
+<!-- Venue full-detail popup -->
+<div class="vd-full-popup-bg" id="vd-full-popup" onclick="if(event.target===this)closeVenueFullDetail()">
+  <div class="vd-full-popup">
+    <div class="vd-full-popup-hdr">
+      <div style="min-width:0;">
+        <div class="vd-full-popup-title" id="vd-full-popup-name"></div>
+        <div class="vd-full-popup-sub" id="vd-full-popup-sub"></div>
+      </div>
+      <button class="vd-full-popup-close" onclick="closeVenueFullDetail()" aria-label="Close">&#x2715;</button>
+    </div>
+    <div class="vd-full-popup-body" id="vd-full-popup-body"></div>
+  </div>
+</div>
+
 <!-- ── Start a New Production Modal ── -->
 <div class="modal-overlay" id="start-prod-modal">
   <div class="modal">
@@ -4534,8 +4561,75 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     return d;
   }
 
+  const _VD_STAT_KEYS     = new Set(['seating_cap','standing_cap','room_cap','dressing_rooms','makeup_stations',
+                                      'hourly_rate','half_day_rate','full_day_rate','deposit_amount']);
+  const _VD_CURRENCY_KEYS = new Set(['hourly_rate','half_day_rate','full_day_rate','deposit_amount']);
+  const _VD_SKIP_VAL      = new Set(['None','']);
+
+  function _renderVenueSection(section, details, opts) {
+    opts = opts || {};
+    const allFields  = section.fields || [];
+    const statFields = allFields.filter(f => f.type === 'number' && _VD_STAT_KEYS.has(f.key) && details[f.key] != null && details[f.key] !== '');
+    const kvFields   = allFields.filter(f => {
+      const v2 = details[f.key];
+      if (v2 == null || _VD_SKIP_VAL.has(String(v2))) return false;
+      return f.type !== 'bool' && !(f.type === 'number' && _VD_STAT_KEYS.has(f.key));
+    });
+    const boolFields = allFields.filter(f => f.type === 'bool' && details[f.key] === true);
+    const hasNotes   = section.notes && details[section.notes.key];
+    if (!statFields.length && !kvFields.length && !boolFields.length && !hasNotes) return '';
+
+    let h = `<div class="vd-sect"><div class="vd-sect-hdr">
+      <img class="vd-sect-icon" src="/ASSETS/Images/Icons/${section.icon}" alt="" />
+      <span class="vd-sect-title">${esc(section.title)}</span>
+    </div>`;
+    if (statFields.length) {
+      h += `<div class="vd-stats-row">`;
+      for (const f of statFields) {
+        const raw = Number(details[f.key]);
+        const display = _VD_CURRENCY_KEYS.has(f.key)
+          ? '$' + raw.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          : raw.toLocaleString();
+        h += `<div class="vd-stat-block"><div class="vd-stat-k">${esc(f.label)}</div><div class="vd-stat-v">${display}</div></div>`;
+      }
+      h += `</div>`;
+    }
+    if (kvFields.length) {
+      h += `<div class="vd-kv-grid"${statFields.length ? ' style="margin-top:0.5rem;"' : ''}>`;
+      for (const f of kvFields) {
+        const raw  = details[f.key];
+        const disp = f.type === 'number'
+          ? Number(raw).toLocaleString() + (f.placeholder === 'ft' ? ' ft' : '')
+          : esc(String(raw));
+        h += `<div class="vd-kv-pair"><div class="vd-kv-k">${esc(f.label)}</div><div class="vd-kv-v">${disp}</div></div>`;
+      }
+      h += `</div>`;
+    }
+    if (boolFields.length) {
+      const mt = (statFields.length || kvFields.length) ? ' style="margin-top:0.5rem;"' : '';
+      h += `<div class="vd-chip-row"${mt}>${boolFields.map(f => `<span class="vd-chip">${esc(f.label)}</span>`).join('')}</div>`;
+    }
+    if (hasNotes) {
+      const mt = (statFields.length || kvFields.length || boolFields.length) ? ' style="margin-top:0.5rem;"' : '';
+      h += `<p class="vd-notes-text"${mt}>${esc(String(details[section.notes.key]))}</p>`;
+    }
+    h += `</div>`;
+    return h;
+  }
+
+  function _formatVenueUpdated(isoStr) {
+    if (!isoStr) return '';
+    const d    = new Date(isoStr);
+    const diff = Math.floor((Date.now() - d) / 86400000);
+    if (diff === 0) return 'Updated today';
+    if (diff === 1) return 'Updated yesterday';
+    if (diff < 7)  return `Updated ${diff} days ago`;
+    if (diff < 30) return `Updated ${Math.floor(diff / 7)} week${Math.floor(diff / 7) === 1 ? '' : 's'} ago`;
+    return 'Updated ' + d.toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' });
+  }
+
   function renderVenueDetail(v) {
-    const body = document.getElementById('venue-detail-body');
+    const body    = document.getElementById('venue-detail-body');
     const editBtn = document.getElementById('vd-edit-btn');
     if (!body) return;
     if (editBtn) editBtn.style.display = '';
@@ -4544,65 +4638,22 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     const details = _migrateVenueDetails(v.details);
     const firstU  = uses.length ? VENUE_USES.find(x => x.value === uses[0]) : null;
     const photo   = _venueDisplayPhotoSrc(v);
-
-    const STAT_KEYS     = new Set(['seating_cap','standing_cap','room_cap','dressing_rooms','makeup_stations',
-                                   'hourly_rate','half_day_rate','full_day_rate','deposit_amount']);
-    const CURRENCY_KEYS = new Set(['hourly_rate','half_day_rate','full_day_rate','deposit_amount']);
-    const SKIP_VAL      = new Set(['None','']);
-
-    function renderSection(section) {
-      const allFields = section.fields || [];
-      const statFields  = allFields.filter(f => f.type === 'number' && STAT_KEYS.has(f.key) && details[f.key] != null && details[f.key] !== '');
-      const kvFields    = allFields.filter(f => {
-        const v2 = details[f.key];
-        if (v2 == null || SKIP_VAL.has(String(v2))) return false;
-        return f.type !== 'bool' && !(f.type === 'number' && STAT_KEYS.has(f.key));
-      });
-      const boolFields  = allFields.filter(f => f.type === 'bool' && details[f.key] === true);
-      const hasNotes    = section.notes && details[section.notes.key];
-      if (!statFields.length && !kvFields.length && !boolFields.length && !hasNotes) return '';
-
-      let h = `<div class="vd-sect"><div class="vd-sect-hdr">
-        <img class="vd-sect-icon" src="/ASSETS/Images/Icons/${section.icon}" alt="" />
-        <span class="vd-sect-title">${esc(section.title)}</span>
-      </div>`;
-
-      if (statFields.length) {
-        h += `<div class="vd-stats-row">`;
-        for (const f of statFields) {
-          const raw = Number(details[f.key]);
-          const display = CURRENCY_KEYS.has(f.key)
-            ? '$' + raw.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-            : raw.toLocaleString();
-          h += `<div class="vd-stat-block"><div class="vd-stat-k">${esc(f.label)}</div><div class="vd-stat-v">${display}</div></div>`;
-        }
-        h += `</div>`;
-      }
-      if (kvFields.length) {
-        h += `<div class="vd-kv-grid"${statFields.length ? ' style="margin-top:0.5rem;"' : ''}>`;
-        for (const f of kvFields) {
-          const raw = details[f.key];
-          const disp = f.type === 'number'
-            ? Number(raw).toLocaleString() + (f.placeholder === 'ft' ? ' ft' : '')
-            : esc(String(raw));
-          h += `<div class="vd-kv-pair"><div class="vd-kv-k">${esc(f.label)}</div><div class="vd-kv-v">${disp}</div></div>`;
-        }
-        h += `</div>`;
-      }
-      if (boolFields.length) {
-        const mt = (statFields.length || kvFields.length) ? ' style="margin-top:0.5rem;"' : '';
-        h += `<div class="vd-chip-row"${mt}>${boolFields.map(f => `<span class="vd-chip">${esc(f.label)}</span>`).join('')}</div>`;
-      }
-      if (hasNotes) {
-        const mt = (statFields.length || kvFields.length || boolFields.length) ? ' style="margin-top:0.5rem;"' : '';
-        h += `<p class="vd-notes-text"${mt}>${esc(String(details[section.notes.key]))}</p>`;
-      }
-      h += `</div>`;
-      return h;
-    }
-
-    // Build contact line
     const contactParts = [v.contact_name, v.contact_phone, v.contact_email].filter(Boolean);
+
+    // Snippet stats: first 3 stat fields with data across all sections
+    const snippetStats = ACCORDION_SECTIONS.flatMap(s => (s.fields || []).filter(
+      f => f.type === 'number' && _VD_STAT_KEYS.has(f.key) && details[f.key] != null && details[f.key] !== ''
+    )).slice(0, 3);
+
+    // Snippet bools: first 5 true bool fields
+    const allBools   = ACCORDION_SECTIONS.flatMap(s => (s.fields || []).filter(f => f.type === 'bool' && details[f.key] === true));
+    const boolsShown = allBools.slice(0, 5);
+    const boolsExtra = allBools.length - boolsShown.length;
+
+    const useChips = uses.length ? uses.map(use => {
+      const u = VENUE_USES.find(x => x.value === use);
+      return u ? `<span class="v-use-chip" style="background:${u.bg};color:${u.color};font-size:0.7rem;font-weight:700;padding:0.2rem 0.55rem;">${esc(use)}</span>` : '';
+    }).join('') : '';
 
     body.innerHTML = `
       ${photo
@@ -4611,19 +4662,68 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
       <div class="vd-meta-block">
         <div class="vd-name">${esc(v.name)}</div>
         ${v.address ? `<div class="vd-addr">${esc(v.address)}</div>` : ''}
-        ${v.website  ? `<div class="vd-addr"><a href="${esc(v.website)}" target="_blank" rel="noopener" style="color:#572e88;">${esc(v.website)}</a></div>` : ''}
+        ${v.website ? `<div class="vd-addr"><a href="${esc(v.website)}" target="_blank" rel="noopener" style="color:#572e88;">${esc(v.website)}</a></div>` : ''}
         ${contactParts.length ? `<div class="vd-contact-row">${contactParts.map(esc).join(' &middot; ')}</div>` : ''}
       </div>
-      ${uses.length ? `<div class="vd-sect" style="margin-top:0;padding-top:0;border-top:none;">
+      ${useChips ? `<div class="vd-sect" style="margin-top:0;padding-top:0;border-top:none;">
         <div class="vd-sect-hdr"><span class="vd-sect-title">Used for</span></div>
-        <div class="vd-chip-row">${uses.map(use => {
-          const u = VENUE_USES.find(x => x.value === use);
-          return u ? `<span class="v-use-chip" style="background:${u.bg};color:${u.color};font-size:0.7rem;font-weight:700;padding:0.2rem 0.55rem;">${esc(use)}</span>` : '';
+        <div class="vd-chip-row">${useChips}</div>
+      </div>` : ''}
+      ${snippetStats.length ? `<div class="vd-sect">
+        <div class="vd-stats-row">${snippetStats.map(f => {
+          const raw = Number(details[f.key]);
+          const display = _VD_CURRENCY_KEYS.has(f.key)
+            ? '$' + raw.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : raw.toLocaleString();
+          return `<div class="vd-stat-block"><div class="vd-stat-k">${esc(f.label)}</div><div class="vd-stat-v">${display}</div></div>`;
         }).join('')}</div>
       </div>` : ''}
-      ${ACCORDION_SECTIONS.map(s => renderSection(s)).join('')}
-      ${v.notes ? `<div class="vd-sect"><div class="vd-sect-hdr"><span class="vd-sect-title">Notes</span></div><p class="vd-notes-text">${esc(v.notes)}</p></div>` : ''}
+      ${boolsShown.length ? `<div class="vd-sect">
+        <div class="vd-chip-row">
+          ${boolsShown.map(f => `<span class="vd-chip">${esc(f.label)}</span>`).join('')}
+          ${boolsExtra > 0 ? `<span class="vd-chip" style="background:rgba(87,46,136,0.04);color:#b8a8d4;">+${boolsExtra} more</span>` : ''}
+        </div>
+      </div>` : ''}
+      <button class="vd-view-all-btn" onclick="openVenueFullDetail('${v.id}')">View all details</button>
     `;
+  }
+
+  function openVenueFullDetail(id) {
+    const v = orgVenues.find(x => x.id === id);
+    if (!v) return;
+    const details      = _migrateVenueDetails(v.details);
+    const uses         = v.uses || [];
+    const contactParts = [v.contact_name, v.contact_phone, v.contact_email].filter(Boolean);
+    const photo        = _venueDisplayPhotoSrc(v);
+    const firstU       = uses.length ? VENUE_USES.find(x => x.value === uses[0]) : null;
+    const useChips     = uses.map(use => {
+      const u = VENUE_USES.find(x => x.value === use);
+      return u ? `<span class="v-use-chip" style="background:${u.bg};color:${u.color};font-size:0.72rem;font-weight:700;padding:0.22rem 0.6rem;">${esc(use)}</span>` : '';
+    }).join('');
+
+    document.getElementById('vd-full-popup-name').textContent = v.name;
+    document.getElementById('vd-full-popup-sub').innerHTML = [
+      v.address ? `<span>${esc(v.address)}</span>` : '',
+      contactParts.length ? `<span>${contactParts.map(esc).join(' &middot; ')}</span>` : '',
+    ].filter(Boolean).join('<br>');
+
+    document.getElementById('vd-full-popup-body').innerHTML = `
+      ${photo
+        ? `<img src="${esc(photo)}" alt="${esc(v.name)}" style="width:100%;height:180px;object-fit:cover;border-radius:10px;display:block;margin-bottom:1rem;" />`
+        : `<div style="width:100%;height:60px;border-radius:10px;margin-bottom:1rem;background:${firstU ? firstU.bg : 'rgba(87,46,136,0.07)'};"></div>`}
+      ${useChips ? `<div class="vd-sect" style="border-top:none;padding-top:0;margin-top:0;">
+        <div class="vd-sect-hdr"><span class="vd-sect-title">Used for</span></div>
+        <div class="vd-chip-row">${useChips}</div>
+      </div>` : ''}
+      ${ACCORDION_SECTIONS.map(s => _renderVenueSection(s, details)).join('')}
+      ${v.notes ? `<div class="vd-sect"><div class="vd-sect-hdr"><span class="vd-sect-title">Notes</span></div><p class="vd-notes-text">${esc(v.notes)}</p></div>` : ''}
+      ${v.updated_at ? `<p class="vd-updated">${esc(_formatVenueUpdated(v.updated_at))}</p>` : ''}
+    `;
+    document.getElementById('vd-full-popup').classList.add('visible');
+  }
+
+  function closeVenueFullDetail() {
+    document.getElementById('vd-full-popup').classList.remove('visible');
   }
 
   let _vfmStep = 1;
