@@ -797,6 +797,23 @@
     .vfm-detail-bool-row:last-child { border-bottom: none; }
     .vfm-detail-bool-lbl { font-size: 0.82rem; color: #1a1530; }
     .vfm-detail-bool-chk { width: 16px; height: 16px; accent-color: #572e88; cursor: pointer; flex-shrink: 0; }
+    /* Accordion (Details step) */
+    .vfm-accordion { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.25rem; }
+    .vfm-acc-card { border: 1.5px solid rgba(87,46,136,0.12); border-radius: 12px; overflow: hidden; }
+    .vfm-acc-header { display: flex; align-items: center; gap: 0.75rem; padding: 0.9rem 1.1rem; cursor: pointer; user-select: none; background: #faf9fd; transition: background 0.15s; }
+    .vfm-acc-header:hover { background: #f3effc; }
+    .vfm-acc-card.acc-open .vfm-acc-header { background: #fff; border-bottom: 1.5px solid rgba(87,46,136,0.09); }
+    .vfm-acc-icon { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; opacity: 0.65; }
+    .vfm-acc-titles { flex: 1; min-width: 0; }
+    .vfm-acc-title { font-size: 0.84rem; font-weight: 800; color: #1a1a1a; line-height: 1.2; }
+    .vfm-acc-desc { font-size: 0.73rem; color: #9a90b0; margin-top: 0.1rem; }
+    .vfm-acc-chevron { width: 16px; height: 16px; flex-shrink: 0; color: #9a90b0; transition: transform 0.2s; }
+    .vfm-acc-card.acc-open .vfm-acc-chevron { transform: rotate(180deg); }
+    .vfm-acc-body { display: none; padding: 0.9rem 1.1rem 1.1rem; }
+    .vfm-acc-card.acc-open .vfm-acc-body { display: block; }
+    .vfm-acc-empty { font-size: 0.78rem; color: #bbb; padding: 0.5rem 0; margin: 0; }
+    .vfm-acc-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem 1rem; margin-bottom: 0.75rem; }
+    .vfm-acc-fields:last-child { margin-bottom: 0; }
 
     /* Payments panel */
     .pay-layout { display: grid; grid-template-columns: 1fr 310px; gap: 1.25rem; align-items: start; }
@@ -2523,9 +2540,12 @@
         <button type="button" class="sp-btn-cancel" id="vfm-back-btn" onclick="vfmBack()" style="display:none;">&#8592; Back</button>
       </div>
       <div class="vfm-dots" id="vfm-dots"></div>
-      <button type="button" class="btn-primary" id="vfm-next-btn" onclick="vfmNext()" style="padding:0.6rem 1.4rem;display:inline-flex;align-items:center;gap:0.5rem;font-size:0.88rem;">
-        Next <span>&#8594;</span>
-      </button>
+      <div style="display:flex;gap:0.65rem;align-items:center;">
+        <button type="button" class="sp-btn-cancel" id="vfm-save-close-btn" onclick="saveVenueForm()">Save</button>
+        <button type="button" class="btn-primary" id="vfm-next-btn" onclick="vfmNext()" style="padding:0.6rem 1.4rem;display:inline-flex;align-items:center;gap:0.5rem;font-size:0.88rem;">
+          Next <span>&#8594;</span>
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -4040,6 +4060,129 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     ],
   };
 
+  const ACCORDION_SECTIONS = [
+    {
+      id: 'spaces',
+      icon: 'Location2.svg',
+      title: 'Spaces',
+      desc: 'Stage and room dimensions',
+      fields: [
+        { key: 'stage_type',       label: 'Stage type',          type: 'select', opts: ['Proscenium','Thrust','Black Box','In-the-round','Flexible','Outdoor'] },
+        { key: 'stage_width_ft',   label: 'Stage width (ft)',    type: 'number', placeholder: 'ft' },
+        { key: 'stage_depth_ft',   label: 'Stage depth (ft)',    type: 'number', placeholder: 'ft' },
+        { key: 'wing_height_ft',   label: 'Wing height (ft)',    type: 'number', placeholder: 'ft' },
+        { key: 'room_width_ft',    label: 'Room width (ft)',     type: 'number', placeholder: 'ft' },
+        { key: 'room_depth_ft',    label: 'Room depth (ft)',     type: 'number', placeholder: 'ft' },
+        { key: 'ceiling_height_ft',label: 'Ceiling height (ft)', type: 'number', placeholder: 'ft' },
+      ],
+    },
+    {
+      id: 'technical',
+      icon: 'Department-technical-crew.svg',
+      title: 'Technical Information',
+      desc: 'Equipment, systems, and technical features',
+      fields: [
+        { key: 'orch_pit',      label: 'Orchestra pit',       type: 'select', opts: ['None','Fixed','Removable cover'] },
+        { key: 'lighting_booth',label: 'Lighting booth',      type: 'select', opts: ['None','Shared','Separate'] },
+        { key: 'sound_booth',   label: 'Sound booth',         type: 'select', opts: ['None','Shared','Separate'] },
+        { key: 'piano',         label: 'Piano',               type: 'select', opts: ['None','Upright','Baby Grand','Grand','Digital'] },
+        { key: 'fly_system',    label: 'Fly system',          type: 'bool' },
+        { key: 'wings',         label: 'Wings',               type: 'bool' },
+        { key: 'crossover',     label: 'Crossover',           type: 'bool' },
+        { key: 'marley_floor',  label: 'Marley floor',        type: 'bool' },
+        { key: 'follow_spot',   label: 'Follow spot',         type: 'bool' },
+        { key: 'house_sound',   label: 'House sound system',  type: 'bool' },
+        { key: 'sound_system',  label: 'Sound system',        type: 'bool' },
+        { key: 'mirrors',       label: 'Mirrors',             type: 'bool' },
+        { key: 'ballet_barres', label: 'Ballet barres',       type: 'bool' },
+        { key: 'tv_projector',  label: 'TV / Projector',      type: 'bool' },
+        { key: 'whiteboard',    label: 'Whiteboard',          type: 'bool' },
+        { key: 'wifi',          label: 'Wi-Fi',               type: 'bool' },
+        { key: 'heavy_power',   label: 'Heavy-duty power (220V)', type: 'bool' },
+        { key: 'ventilation',   label: 'Ventilation',         type: 'bool' },
+      ],
+    },
+    {
+      id: 'seating',
+      icon: 'seats.svg',
+      title: 'Seating',
+      desc: 'Capacity and seating arrangements',
+      fields: [
+        { key: 'seating_cap',  label: 'Seating capacity',  type: 'number', placeholder: 'seats' },
+        { key: 'standing_cap', label: 'Standing capacity', type: 'number', placeholder: 'people' },
+        { key: 'room_cap',     label: 'Room capacity',     type: 'number', placeholder: 'people' },
+        { key: 'chairs',       label: 'Chairs available',  type: 'bool' },
+        { key: 'tables',       label: 'Tables available',  type: 'bool' },
+      ],
+    },
+    {
+      id: 'backstage',
+      icon: 'Department-production-and-rehearsal-support.svg',
+      title: 'Backstage & Facilities',
+      desc: 'Support spaces, amenities, and access',
+      fields: [
+        { key: 'dressing_rooms',  label: 'Dressing rooms',   type: 'number', placeholder: '# rooms' },
+        { key: 'makeup_stations', label: 'Makeup stations',  type: 'number', placeholder: '# stations' },
+        { key: 'green_room',          label: 'Green room',               type: 'bool' },
+        { key: 'waiting_area',        label: 'Waiting area',             type: 'bool' },
+        { key: 'checkin_space',       label: 'Check-in space',           type: 'bool' },
+        { key: 'holding_room',        label: 'Holding room',             type: 'bool' },
+        { key: 'lobby',               label: 'Lobby',                    type: 'bool' },
+        { key: 'concession',          label: 'Concession area',          type: 'bool' },
+        { key: 'ticket_desk',         label: 'Ticket desk',              type: 'bool' },
+        { key: 'coat_check',          label: 'Coat check',               type: 'bool' },
+        { key: 'merchandise_space',   label: 'Merchandise space',        type: 'bool' },
+        { key: 'box_office',          label: 'Box office',               type: 'bool' },
+        { key: 'clothing_racks',      label: 'Clothing racks',           type: 'bool' },
+        { key: 'laundry',             label: 'Laundry on-site',          type: 'bool' },
+        { key: 'washrooms',           label: 'Washrooms nearby',         type: 'bool' },
+        { key: 'kitchen',             label: 'Kitchen access',           type: 'bool' },
+        { key: 'workshop_space',      label: 'Workshop space',           type: 'bool' },
+        { key: 'loading_dock',        label: 'Loading dock',             type: 'bool' },
+        { key: 'large_doors',         label: 'Large doors / roll-up',    type: 'bool' },
+        { key: 'storage',             label: 'On-site storage',          type: 'bool' },
+        { key: 'storage_shelving',    label: 'Storage shelving',         type: 'bool' },
+        { key: 'storage_climate',     label: 'Climate-controlled storage', type: 'bool' },
+        { key: 'storage_secure',      label: 'Secure storage access',    type: 'bool' },
+        { key: 'storage_vehicle',     label: 'Vehicle access to storage',type: 'bool' },
+        { key: 'accessible',          label: 'Accessible entrance',      type: 'bool' },
+        { key: 'parking',             label: 'Parking available',        type: 'bool' },
+      ],
+    },
+    {
+      id: 'pricing',
+      icon: 'Finance - Final.svg',
+      title: 'Pricing & Payment',
+      desc: 'Rates, deposits, and payment details',
+      fields: [
+        { key: 'hourly_rate',    label: 'Hourly rate ($)',     type: 'number', placeholder: '0.00' },
+        { key: 'half_day_rate',  label: 'Half-day rate ($)',   type: 'number', placeholder: '0.00' },
+        { key: 'full_day_rate',  label: 'Full-day rate ($)',   type: 'number', placeholder: '0.00' },
+        { key: 'deposit_amount', label: 'Deposit amount ($)',  type: 'number', placeholder: '0.00' },
+        { key: 'deposit_required', label: 'Deposit required', type: 'bool' },
+      ],
+      notes: { key: 'payment_notes', label: 'Payment notes', placeholder: 'e.g. Cheque or e-transfer only, invoice required...' },
+    },
+    {
+      id: 'booking',
+      icon: 'navproductioncalendar.svg',
+      title: 'Booking Information',
+      desc: 'How and when this venue can be booked',
+      fields: [
+        { key: 'min_booking_hrs',      label: 'Minimum booking (hours)',        type: 'number', placeholder: 'hours' },
+        { key: 'advance_notice_days',  label: 'Advance notice required (days)', type: 'number', placeholder: 'days' },
+      ],
+      notes: { key: 'booking_notes', label: 'Booking notes', placeholder: 'e.g. Available Mon-Sat 8am-10pm. Contact coordinator at least 2 weeks ahead...' },
+    },
+    {
+      id: 'documents',
+      icon: 'Files.svg',
+      title: 'Documents',
+      desc: 'Contracts, tech riders, and key files',
+      notes: { key: 'document_notes', label: 'Document notes', placeholder: 'e.g. Signed venue contract on file. Tech rider available on request...' },
+    },
+  ];
+
   function _venuePhotoStorageRef(venue) {
     if (venue?.photo_path) {
       return { bucket: VENUE_PHOTO_BUCKET, path: String(venue.photo_path).trim() };
@@ -4628,11 +4771,25 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
       const numCls = active ? 'vfm-step-num vfm-active' : done ? 'vfm-step-num vfm-done' : 'vfm-step-num';
       const titleCls = active ? 'vfm-step-title vfm-active' : 'vfm-step-title';
       const mb = i === steps.length - 1 ? 'margin-bottom:0;' : '';
-      return `<div class="vfm-step" style="${mb}">
+      return `<div class="vfm-step" style="${mb}cursor:pointer;" onclick="vfmJumpToStep(${n})">
         <div class="${numCls}">${done ? '<span style="font-size:0.75rem;">&#10003;</span>' : n}</div>
         <div><div class="${titleCls}">${esc(step.label)}</div><div class="vfm-step-sdesc">${esc(step.desc)}</div></div>
       </div>`;
     }).join('');
+  }
+
+  function vfmJumpToStep(n) {
+    if (n === _vfmStep) return;
+    if (n > 1) {
+      const name  = (document.getElementById('vfm-name').value || '').trim();
+      const errEl = document.getElementById('vfm-error');
+      if (!name) {
+        vfmGoToStep(1);
+        if (errEl) { errEl.textContent = 'Venue name is required before moving on.'; errEl.classList.add('visible'); }
+        return;
+      }
+    }
+    vfmGoToStep(n, _vfmStep);
   }
 
   function vfmRenderDots(steps, currentIdx) {
@@ -4651,7 +4808,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
         if (el.checked) _vfmDetails[key] = true; else delete _vfmDetails[key];
       } else {
         const val = el.value.trim();
-        if (val) _vfmDetails[key] = el.type === 'number' ? (parseInt(val, 10) || val) : val;
+        if (val) _vfmDetails[key] = el.type === 'number' ? (Number(val) || val) : val;
         else delete _vfmDetails[key];
       }
     });
@@ -4793,17 +4950,75 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   function vfmRenderDetailPage() {
     const page = document.getElementById('vfm-page-detail');
     if (!page) return;
-    const selectedUses = [...document.querySelectorAll('.vfm-use-card.vfm-use-selected')].map(el => el.dataset.use);
-    const usesWithSections = selectedUses.filter(u => VENUE_SECTIONS[u]);
-    if (!usesWithSections.length) {
-      page.innerHTML = `<p class="vfm-page-title">Details</p><p class="vfm-page-desc" style="margin-top:2rem;text-align:center;color:#b8a8d4;">No detail questions for your selected uses. Click Next to review and save.</p>`;
-      return;
+
+    function renderAccBody(section) {
+      const nonBools = (section.fields || []).filter(f => f.type !== 'bool');
+      const bools    = (section.fields || []).filter(f => f.type === 'bool');
+      let h = '';
+      if (nonBools.length) {
+        h += `<div class="vfm-acc-fields">`;
+        for (const f of nonBools) {
+          h += `<div class="vfm-field">`;
+          if (f.type === 'select') {
+            const opts = (f.opts || []).map(o => `<option${_vfmDetails[f.key] === o ? ' selected' : ''}>${esc(o)}</option>`).join('');
+            h += `<label class="vfm-lbl" for="vfd-${f.key}">${esc(f.label)}</label>
+              <select class="vfm-input" id="vfd-${f.key}"><option value="">Select...</option>${opts}</select>`;
+          } else {
+            h += `<label class="vfm-lbl" for="vfd-${f.key}">${esc(f.label)}</label>
+              <input class="vfm-input" type="number" id="vfd-${f.key}" placeholder="${esc(f.placeholder||'')}" value="${esc(String(_vfmDetails[f.key]??''))}" />`;
+          }
+          h += `</div>`;
+        }
+        h += `</div>`;
+      }
+      if (bools.length) {
+        h += `<div class="vfm-detail-bool-list"${nonBools.length ? ' style="margin-top:0.75rem;"' : ''}>`;
+        for (const f of bools) {
+          h += `<div class="vfm-detail-bool-row">
+            <span class="vfm-detail-bool-lbl">${esc(f.label)}</span>
+            <input type="checkbox" class="vfm-detail-bool-chk" id="vfd-${f.key}" ${_vfmDetails[f.key] ? 'checked' : ''} />
+          </div>`;
+        }
+        h += `</div>`;
+      }
+      if (section.notes) {
+        const n = section.notes;
+        h += `<div class="vfm-field" style="margin-top:0.75rem;">
+          <label class="vfm-lbl" for="vfd-${n.key}">${esc(n.label)} <span class="opt">(optional)</span></label>
+          <textarea class="vfm-input" id="vfd-${n.key}" placeholder="${esc(n.placeholder||'')}" rows="3" style="resize:vertical;">${esc(String(_vfmDetails[n.key]??''))}</textarea>
+        </div>`;
+      }
+      if (!nonBools.length && !bools.length && !section.notes) {
+        h += `<p class="vfm-acc-empty">Nothing to configure here yet.</p>`;
+      }
+      return h;
     }
+
+    const chevronSvg = `<svg class="vfm-acc-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
+
     page.innerHTML = `
-      <p class="vfm-page-title">A few more details.</p>
-      <p class="vfm-page-desc">All optional. Fill in what you know and leave the rest blank.</p>
-      ${usesWithSections.map(use => _renderUseSection(use)).join('')}`;
-    vfmBindDetailSelectHelpers();
+      <p class="vfm-page-title">Details.</p>
+      <p class="vfm-page-desc">All optional — fill in what you know.</p>
+      <div class="vfm-accordion">
+        ${ACCORDION_SECTIONS.map((section, i) => `
+          <div class="vfm-acc-card${i === 0 ? ' acc-open' : ''}" id="vacc-${section.id}">
+            <div class="vfm-acc-header" onclick="vfmToggleAccordion('${section.id}')">
+              <img class="vfm-acc-icon" src="/ASSETS/Images/Icons/${section.icon}" alt="" />
+              <div class="vfm-acc-titles">
+                <div class="vfm-acc-title">${esc(section.title)}</div>
+                <div class="vfm-acc-desc">${esc(section.desc)}</div>
+              </div>
+              ${chevronSvg}
+            </div>
+            <div class="vfm-acc-body">${renderAccBody(section)}</div>
+          </div>`).join('')}
+      </div>`;
+  }
+
+  function vfmToggleAccordion(id) {
+    const card = document.getElementById('vacc-' + id);
+    if (!card) return;
+    card.classList.toggle('acc-open');
   }
 
   // ── Step navigation ───────────────────────────────────────
@@ -4820,17 +5035,20 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     if (step.id === 'details') vfmRenderDetailPage();
     vfmRenderSidebarSteps(steps, _vfmStep);
     vfmRenderDots(steps, _vfmStep);
-    const backBtn = document.getElementById('vfm-back-btn');
-    const nextBtn = document.getElementById('vfm-next-btn');
+    const backBtn     = document.getElementById('vfm-back-btn');
+    const nextBtn     = document.getElementById('vfm-next-btn');
+    const saveCloseBtn = document.getElementById('vfm-save-close-btn');
     backBtn.style.display = _vfmStep > 1 ? 'inline-block' : 'none';
     const isLast = _vfmStep === steps.length;
     if (isLast) {
       nextBtn.textContent = 'Save venue';
       nextBtn.onclick = saveVenueForm;
+      if (saveCloseBtn) saveCloseBtn.style.display = 'none';
       vfmBuildReview();
     } else {
       nextBtn.innerHTML = 'Next <span>&#8594;</span>';
       nextBtn.onclick = vfmNext;
+      if (saveCloseBtn) saveCloseBtn.style.display = 'inline-block';
     }
   }
 
@@ -4991,6 +5209,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   }
 
   async function saveVenueForm() {
+    vfmSaveDetailValues();
     const errEl = document.getElementById('vfm-save-error') || document.getElementById('vfm-error');
     errEl.classList.remove('visible');
     const name = (document.getElementById('vfm-name').value || '').trim();
