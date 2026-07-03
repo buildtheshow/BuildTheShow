@@ -4203,30 +4203,16 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
       const groups = VENUE_SECTIONS[use];
       if (groups) groups.forEach(g => g.fields.forEach(f => delete _vfmDetails[f.key]));
     }
-    const steps = vfmGetStepList();
-    vfmRenderSidebarSteps(steps, _vfmStep);
-    vfmRenderDots(steps, _vfmStep);
-    const nextBtn = document.getElementById('vfm-next-btn');
-    const isLast = _vfmStep === steps.length;
-    if (isLast) { nextBtn.textContent = 'Save venue'; nextBtn.onclick = saveVenueForm; }
-    else { nextBtn.innerHTML = 'Next <span>&#8594;</span>'; nextBtn.onclick = vfmNext; }
   }
 
   // ── Dynamic step list ─────────────────────────────────────
   function vfmGetStepList() {
-    const selectedUses = [...document.querySelectorAll('.vfm-use-card.vfm-use-selected')].map(el => el.dataset.use);
-    const steps = [
-      { id: 'basics', label: 'Basics',        desc: 'Essential information about this venue', page: 'vfm-page-1' },
-      { id: 'uses',   label: 'How you use it', desc: 'Activities at this venue',              page: 'vfm-page-2' },
+    return [
+      { id: 'basics',  label: 'Basics',        desc: 'Essential information about this venue', page: 'vfm-page-1' },
+      { id: 'uses',    label: 'How you use it', desc: 'Activities at this venue',              page: 'vfm-page-2' },
+      { id: 'details', label: 'Details',        desc: 'Additional details for each use',       page: 'vfm-page-detail' },
+      { id: 'review',  label: 'Review',         desc: 'Review and save your venue',            page: 'vfm-page-3' },
     ];
-    selectedUses.forEach(use => {
-      if (VENUE_SECTIONS[use]) {
-        const u = VENUE_USES.find(x => x.value === use);
-        steps.push({ id: `detail-${use}`, label: use, desc: u?.stepDesc || 'Additional details', page: 'vfm-page-detail', use });
-      }
-    });
-    steps.push({ id: 'review', label: 'Review', desc: 'Review and save your venue', page: 'vfm-page-3' });
-    return steps;
   }
 
   function vfmRenderSidebarSteps(steps, currentIdx) {
@@ -4255,29 +4241,24 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   }
 
   // ── Detail page ───────────────────────────────────────────
-  function vfmSaveDetailValues(use) {
-    const groups = VENUE_SECTIONS[use];
-    if (!groups) return;
-    groups.forEach(g => g.fields.forEach(f => {
-      const el = document.getElementById(`vfd-${f.key}`);
-      if (!el) return;
-      if (f.type === 'bool') {
-        if (el.checked) _vfmDetails[f.key] = true; else delete _vfmDetails[f.key];
+  function vfmSaveDetailValues() {
+    document.querySelectorAll('[id^="vfd-"]').forEach(el => {
+      const key = el.id.replace('vfd-', '');
+      if (el.type === 'checkbox') {
+        if (el.checked) _vfmDetails[key] = true; else delete _vfmDetails[key];
       } else {
         const val = el.value.trim();
-        if (val) _vfmDetails[f.key] = f.type === 'number' ? (parseInt(val, 10) || val) : val;
-        else delete _vfmDetails[f.key];
+        if (val) _vfmDetails[key] = el.type === 'number' ? (parseInt(val, 10) || val) : val;
+        else delete _vfmDetails[key];
       }
-    }));
+    });
   }
 
-  function vfmRenderDetailPage(use) {
+  function _renderUseSection(use) {
     const groups = VENUE_SECTIONS[use];
-    const page = document.getElementById('vfm-page-detail');
-    if (!page || !groups) return;
-    page.innerHTML = `
-      <p class="vfm-page-title">${esc(use)}</p>
-      <p class="vfm-page-desc">These details are optional. Fill in what you know and skip the rest.</p>
+    if (!groups) return '';
+    return `<div style="margin-bottom:2rem;">
+      <div style="font-size:0.78rem;font-weight:800;color:#572e88;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:1rem;padding-bottom:0.5rem;border-bottom:1.5px solid rgba(87,46,136,0.1);">${esc(use)}</div>
       ${groups.map(g => {
         const nonBool = g.fields.filter(f => f.type !== 'bool');
         const bools   = g.fields.filter(f => f.type === 'bool');
@@ -4300,16 +4281,29 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
             </div>`
           ).join('')}</div>` : ''}
         </div>`;
-      }).join('')}`;
+      }).join('')}
+    </div>`;
+  }
+
+  function vfmRenderDetailPage() {
+    const page = document.getElementById('vfm-page-detail');
+    if (!page) return;
+    const selectedUses = [...document.querySelectorAll('.vfm-use-card.vfm-use-selected')].map(el => el.dataset.use);
+    const usesWithSections = selectedUses.filter(u => VENUE_SECTIONS[u]);
+    if (!usesWithSections.length) {
+      page.innerHTML = `<p class="vfm-page-title">Details</p><p class="vfm-page-desc" style="margin-top:2rem;text-align:center;color:#b8a8d4;">No detail questions for your selected uses. Click Next to review and save.</p>`;
+      return;
+    }
+    page.innerHTML = `
+      <p class="vfm-page-title">A few more details.</p>
+      <p class="vfm-page-desc">All optional. Fill in what you know and leave the rest blank.</p>
+      ${usesWithSections.map(use => _renderUseSection(use)).join('')}`;
   }
 
   // ── Step navigation ───────────────────────────────────────
   function vfmGoToStep(n, prevStepIdx) {
     const steps = vfmGetStepList();
-    if (prevStepIdx != null) {
-      const prev = steps[prevStepIdx - 1];
-      if (prev?.use) vfmSaveDetailValues(prev.use);
-    }
+    if (prevStepIdx === 3) vfmSaveDetailValues();
     _vfmStep = Math.max(1, Math.min(n, steps.length));
     const step = steps[_vfmStep - 1];
     const allPages = ['vfm-page-1','vfm-page-2','vfm-page-3','vfm-page-detail'];
@@ -4317,7 +4311,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
       const p = document.getElementById(pid);
       if (p) p.className = 'vfm-page' + (pid === step.page ? ' vfm-page-active' : '');
     });
-    if (step.use) vfmRenderDetailPage(step.use);
+    if (step.id === 'details') vfmRenderDetailPage();
     vfmRenderSidebarSteps(steps, _vfmStep);
     vfmRenderDots(steps, _vfmStep);
     const backBtn = document.getElementById('vfm-back-btn');
