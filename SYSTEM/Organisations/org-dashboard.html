@@ -338,7 +338,6 @@
     .production-card-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 0.6rem; }
     .production-card-title { font-size: 0.975rem; font-weight: 700; color: #1a1530; }
     .production-card-sub { font-size: 0.78rem; color: #6a5a80; margin-top: 0.1rem; }
-    .production-card-id { font-size: 0.63rem; font-weight: 600; letter-spacing: 0.09em; color: #9a90b0; margin-bottom: 0.5rem; }
     .production-card-meta { font-size: 0.78rem; color: #6a5a80; margin-bottom: 0.85rem; display: flex; flex-direction: column; gap: 0.18rem; }
     .production-card-footer { display: flex; gap: 0.5rem; }
 
@@ -3494,6 +3493,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   function prodCardHTML(p) {
     const labels = { setup: 'In Planning', auditions: 'Auditions', rehearsals: 'Rehearsals', performances: 'Performances', wrapped: 'Wrapped' };
     const status = p.status || 'setup';
+    const isDraftSetup = status === 'setup' && !!p.id;
     const dateStr = p.start_date && p.end_date
       ? fmtDate(p.start_date) + ' – ' + fmtDate(p.end_date)
       : p.start_date ? 'From ' + fmtDate(p.start_date) : 'Dates TBD';
@@ -3511,13 +3511,12 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
             </div>
             <span class="status-badge s-${status}">${labels[status] || 'Setup'}</span>
           </div>
-          <div class="production-card-id">${p.custom_id || '-'}</div>
           <div class="production-card-meta">
             ${p.venue ? `<span>📍 ${esc(p.venue)}</span>` : ''}
             <span>📅 ${dateStr}</span>
           </div>
           <div class="production-card-footer">
-            <button class="btn-primary" onclick="openProduction('${p.id}')" style="font-size:0.78rem;padding:0.42rem 1rem;">Open</button>
+            <button class="btn-primary" onclick="${isDraftSetup ? `resumeProductionWizard('${p.id}')` : `openProduction('${p.id}')`}" style="font-size:0.78rem;padding:0.42rem 1rem;">${isDraftSetup ? 'Continue Wizard' : 'Open'}</button>
             <button class="btn-delete-prod" onclick="openDeleteModal('${p.id}')" title="Delete production">🗑</button>
           </div>
         </div>
@@ -4243,6 +4242,24 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   function openProduction(id) {
     const prod = allProds.find(p => String(p.id) === String(id));
     window.location.href = productionWorkspaceUrl(prod || { id });
+  }
+
+  function resumeProductionWizard(id) {
+    const prod = allProds.find(p => String(p.id) === String(id));
+    if (!prod) return;
+    const wizardState = Object.assign({
+      title: prod.title || '',
+      slug: prod.slug || '',
+      production_type: prod.production_type || 'musical',
+      description: prod.description || '',
+      is_public: !!prod.is_public,
+      poster_url: prod.poster_url || '',
+    }, prod.wizard_data || {});
+    try {
+      localStorage.setItem('bts_wizard_state', JSON.stringify(wizardState));
+      localStorage.setItem('bts_wizard_prod_id', String(prod.id));
+    } catch (_) {}
+    window.location.href = productionWizardUrl('full');
   }
 
   function productionWorkspaceUrl(production) {
