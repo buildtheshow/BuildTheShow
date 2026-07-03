@@ -5018,6 +5018,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     let photo_url = _editingVenueId ? (orgVenues.find(x => x.id === _editingVenueId)?.photo_url || null) : null;
     let photo_path = _editingVenueId ? (orgVenues.find(x => x.id === _editingVenueId)?.photo_path || null) : null;
     let photo_src = _editingVenueId ? (orgVenues.find(x => x.id === _editingVenueId)?.photo_src || null) : null;
+    let photoSkipped = false;
     if (_vfmPendingPhoto) {
       const file = _vfmPendingPhoto;
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -5027,16 +5028,13 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
         contentType: file.type || 'application/octet-stream',
       });
       if (upErr) {
-        console.error('[BTS venues] photo upload failed', upErr);
-        errEl.textContent = upErr.message || 'Venue photo upload failed.';
-        errEl.classList.add('visible');
-        nextBtn.disabled = false;
-        nextBtn.textContent = 'Save venue';
-        return;
+        console.warn('[BTS venues] photo upload failed, saving without photo', upErr);
+        photoSkipped = true;
+      } else {
+        photo_path = uploadData?.path || path;
+        photo_url = null;
+        photo_src = await _resolveVenuePhotoSrc({ bucket: VENUE_PHOTO_BUCKET, path: photo_path });
       }
-      photo_path = uploadData?.path || path;
-      photo_url = null;
-      photo_src = await _resolveVenuePhotoSrc({ bucket: VENUE_PHOTO_BUCKET, path: photo_path });
     }
 
     const payload = {
@@ -5063,6 +5061,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     closeVenueModal();
     renderVenuesTable();
     if (savedId) selectVenue(savedId);
+    if (photoSkipped) showToast('Venue saved without the photo. You can add the photo later from this venue.', true);
   }
 
   async function deleteVenue(id) {
