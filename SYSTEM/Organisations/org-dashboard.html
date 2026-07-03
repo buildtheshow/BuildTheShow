@@ -4396,6 +4396,36 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     vfmHideAddressDropdown();
   }
 
+  function vfmBuildSearchQueries(query) {
+    const raw = String(query || '').trim();
+    if (!raw) return [];
+    const lower = raw.toLowerCase();
+    const queries = [raw];
+
+    if (lower.includes('secondary') && !lower.includes('school')) {
+      queries.push(`${raw} school`);
+      queries.push(`${raw} secondary school`);
+    }
+    if (lower.includes('vanier') && !lower.includes('canada')) {
+      queries.push(`${raw} canada`);
+      queries.push(`${raw} british columbia canada`);
+    }
+    if (!/\b(canada|united states|usa|uk|united kingdom|england|scotland|wales|northern ireland)\b/i.test(raw)) {
+      queries.push(`${raw} canada`);
+      queries.push(`${raw} usa`);
+      queries.push(`${raw} uk`);
+    }
+
+    return [...new Set(queries)].slice(0, 6);
+  }
+
+  async function vfmFetchAddressBatch(searchText) {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchText)}&format=json&addressdetails=1&limit=6&countrycodes=ca,us,gb`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Address search returned ${res.status}`);
+    return await res.json();
+  }
+
   function vfmRenderAddressResults(results) {
     const dropdown = vfmAddressDropdown();
     if (!dropdown) return;
@@ -4420,15 +4450,17 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     }
     vfmSetAddressStatus('Searching addresses...');
     try {
-      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=6&countrycodes=ca,us,gb`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`Address search returned ${res.status}`);
-      const data = await res.json();
-      _vfmAddressResults = (data || []).map(row => {
+      const batches = await Promise.all(vfmBuildSearchQueries(query).map(vfmFetchAddressBatch));
+      const dedupe = new Map();
+      batches.flat().forEach(row => {
+        const key = String(row.place_id || row.osm_type + ':' + row.osm_id || row.display_name);
+        if (!dedupe.has(key)) dedupe.set(key, row);
+      });
+      _vfmAddressResults = [...dedupe.values()].map(row => {
         const parts = row.address || {};
         const label = row.name || parts.amenity || parts.building || vfmBuildAddressLine(parts) || row.display_name.split(',')[0];
         return { label, address: row.display_name, parts };
-      });
+      }).slice(0, 8);
       vfmRenderAddressResults(_vfmAddressResults);
     } catch (error) {
       console.error('Venue address search failed', error);
