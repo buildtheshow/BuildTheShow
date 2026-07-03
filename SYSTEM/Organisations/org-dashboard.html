@@ -2392,10 +2392,21 @@
           </div>
           <div class="vfm-section-heading">Photos <span style="font-weight:500;color:#c8bce0;text-transform:none;letter-spacing:0;font-size:0.72rem;">(optional)</span></div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-            <div class="vfm-photo-drop" onclick="document.getElementById('vfm-photos-input').click()">
-              <img src="/ASSETS/Images/Icons/Upload.svg" alt="" style="width:26px;height:26px;opacity:0.4;" onerror="this.style.display='none'" />
-              <span>Drag and drop photos here<br>or click to browse</span>
-              <input type="file" id="vfm-photos-input" accept="image/*" multiple style="display:none;" />
+            <div class="vfm-photo-drop" id="vfm-photo-drop"
+              onclick="document.getElementById('vfm-photos-input').click()"
+              ondragover="event.preventDefault();this.style.borderColor='#572e88';this.style.background='#f3effc';"
+              ondragleave="this.style.borderColor='';this.style.background='';"
+              ondrop="event.preventDefault();this.style.borderColor='';this.style.background='';vfmHandlePhotoDrop(event);">
+              <div id="vfm-photo-preview" style="display:none;width:100%;position:relative;">
+                <img id="vfm-photo-preview-img" src="" alt="" style="width:100%;height:110px;object-fit:cover;border-radius:7px;display:block;" />
+                <button type="button" onclick="event.stopPropagation();vfmClearPhoto()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.55);border:none;border-radius:50%;width:22px;height:22px;color:#fff;cursor:pointer;font-size:0.75rem;line-height:1;display:flex;align-items:center;justify-content:center;">&#x2715;</button>
+                <p id="vfm-photo-name" style="font-size:0.72rem;color:#6a5a80;margin:0.4rem 0 0;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></p>
+              </div>
+              <div id="vfm-photo-prompt">
+                <img src="/ASSETS/Images/Icons/Upload.svg" alt="" style="width:26px;height:26px;opacity:0.4;" onerror="this.style.display='none'" />
+                <span>Drag and drop a photo here<br>or click to browse</span>
+              </div>
+              <input type="file" id="vfm-photos-input" accept="image/*" style="display:none;" onchange="vfmHandlePhotoSelect(this)" />
             </div>
             <div class="vfm-info-callout">
               <div class="vfm-info-callout-icon">
@@ -4150,6 +4161,40 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   }
 
   let _vfmStep = 1;
+  let _vfmPendingPhoto = null;
+
+  function vfmHandlePhotoSelect(input) {
+    const file = input.files[0];
+    input.value = '';
+    if (!file) return;
+    _vfmPendingPhoto = file;
+    vfmShowPhotoPreview(file);
+  }
+
+  function vfmHandlePhotoDrop(event) {
+    const file = event.dataTransfer.files[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    _vfmPendingPhoto = file;
+    vfmShowPhotoPreview(file);
+  }
+
+  function vfmShowPhotoPreview(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.getElementById('vfm-photo-preview-img').src = e.target.result;
+      document.getElementById('vfm-photo-name').textContent = file.name;
+      document.getElementById('vfm-photo-preview').style.display = 'block';
+      document.getElementById('vfm-photo-prompt').style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function vfmClearPhoto() {
+    _vfmPendingPhoto = null;
+    document.getElementById('vfm-photo-preview').style.display = 'none';
+    document.getElementById('vfm-photo-prompt').style.display = '';
+    document.getElementById('vfm-photo-preview-img').src = '';
+  }
 
   function vfmGoToStep(n) {
     _vfmStep = n;
@@ -4238,6 +4283,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     document.getElementById('vfm-sections-body').innerHTML = _renderVenueSectionsForm({});
     const errEl = document.getElementById('vfm-error');
     if (errEl) errEl.classList.remove('visible');
+    vfmClearPhoto();
     vfmGoToStep(1);
     document.getElementById('venue-form-modal').style.display = 'flex';
   }
@@ -4262,6 +4308,13 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     _updateVenueDetailSections();
     const errEl = document.getElementById('vfm-error');
     if (errEl) errEl.classList.remove('visible');
+    vfmClearPhoto();
+    if (v.photo_url) {
+      document.getElementById('vfm-photo-preview-img').src = v.photo_url;
+      document.getElementById('vfm-photo-name').textContent = 'Current photo';
+      document.getElementById('vfm-photo-preview').style.display = 'block';
+      document.getElementById('vfm-photo-prompt').style.display = 'none';
+    }
     vfmGoToStep(1);
     document.getElementById('venue-form-modal').style.display = 'flex';
   }
@@ -4269,6 +4322,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   function closeVenueModal() {
     document.getElementById('venue-form-modal').style.display = 'none';
     _editingVenueId = null;
+    vfmClearPhoto();
   }
 
   async function saveVenueForm() {
@@ -4306,15 +4360,35 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
         if (t) details[el.dataset.key] = t;
       });
     });
+    const nextBtn = document.getElementById('vfm-next-btn');
+    nextBtn.disabled = true;
+    nextBtn.textContent = 'Saving…';
+
+    let photo_url = _editingVenueId ? (orgVenues.find(x => x.id === _editingVenueId)?.photo_url || null) : null;
+    if (_vfmPendingPhoto) {
+      const file = _vfmPendingPhoto;
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `${currentOrg.id}/venues/${Date.now()}_${safeName}`;
+      const { error: upErr } = await sb.storage.from('org-files').upload(path, file, { upsert: true, contentType: file.type });
+      if (upErr) {
+        errEl.textContent = 'Photo upload failed: ' + upErr.message;
+        errEl.classList.add('visible');
+        nextBtn.disabled = false;
+        nextBtn.innerHTML = 'Save venue';
+        nextBtn.onclick = saveVenueForm;
+        return;
+      }
+      const { data: urlData } = sb.storage.from('org-files').getPublicUrl(path);
+      photo_url = urlData.publicUrl;
+    }
+
     const payload = {
       name, address, website,
       contact_name: contactName, contact_phone: contactPhone, contact_email: contactEmail,
-      notes,
+      notes, photo_url,
       uses: uses.length ? uses : null,
       details: Object.keys(details).length ? details : null,
     };
-    const nextBtn = document.getElementById('vfm-next-btn');
-    nextBtn.disabled = true;
     if (_editingVenueId) {
       const { error } = await sb.from('venues').update(payload).eq('id', _editingVenueId);
       if (error) { errEl.textContent = error.message; errEl.classList.add('visible'); nextBtn.disabled = false; return; }
@@ -4327,6 +4401,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
       orgVenues.sort((a, b) => a.name.localeCompare(b.name));
     }
     nextBtn.disabled = false;
+    nextBtn.textContent = 'Save venue';
     const savedId = _editingVenueId || orgVenues.find(vv => vv.name === name)?.id;
     closeVenueModal();
     renderVenuesTable();
