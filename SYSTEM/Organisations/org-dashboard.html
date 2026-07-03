@@ -140,7 +140,7 @@
     .sidebar-logout:hover { color: #fff; }
 
     /* ── Main ── */
-    .main-content { margin-left: 220px; flex: 1; min-height: 100vh; position: relative; }
+    .main-content { margin-left: 220px; flex: 1; min-height: 100vh; position: relative; display: flex; flex-direction: column; }
     .main-content::before {
       content: '';
       position: fixed;
@@ -154,8 +154,8 @@
       pointer-events: none;
       z-index: 0;
     }
-    .content-section { display: none; padding: 2.25rem; position: relative; z-index: 1; }
-    .content-section.active { display: block; }
+    .content-section { display: none; padding: 2.25rem; position: relative; z-index: 1; flex: 1; flex-direction: column; }
+    .content-section.active { display: flex; }
 
     .page-header {
       display: flex;
@@ -675,6 +675,15 @@
     /* Venue full-detail popup */
     .vd-full-popup-bg { position: fixed; inset: 0; z-index: 9999; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); }
     .vd-full-popup-bg.visible { display: flex; }
+    .v-del-confirm-bg { position: fixed; inset: 0; z-index: 10000; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.5); }
+    .v-del-confirm-bg.visible { display: flex; }
+    .v-del-confirm-box { background: #fff; border-radius: 16px; width: calc(100% - 2rem); max-width: 400px; padding: 2rem 1.75rem 1.5rem; box-shadow: 0 16px 56px rgba(0,0,0,0.28); text-align: center; }
+    .v-del-confirm-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+    .v-del-confirm-title { font-size: 1.1rem; font-weight: 900; color: #000; margin-bottom: 0.6rem; letter-spacing: -0.02em; }
+    .v-del-confirm-msg { font-size: 0.83rem; color: #6a5a80; line-height: 1.6; margin-bottom: 1.5rem; }
+    .v-del-confirm-btns { display: flex; gap: 0.65rem; justify-content: center; }
+    .v-del-cancel-btn { padding: 0.65rem 1.4rem; border-radius: 10px; font-size: 0.85rem; font-weight: 700; border: 1.5px solid rgba(87,46,136,0.2); background: transparent; color: #572e88; cursor: pointer; }
+    .v-del-go-btn { padding: 0.65rem 1.4rem; border-radius: 10px; font-size: 0.85rem; font-weight: 700; border: none; background: #d1523d; color: #fff; cursor: pointer; }
     .vd-full-popup { background: #fff; border-radius: 16px; width: calc(100% - 2rem); max-width: 540px; max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 12px 48px rgba(0,0,0,0.22); }
     .vd-full-popup-hdr { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 1.4rem 1.75rem 1rem; flex-shrink: 0; border-bottom: 1px solid rgba(87,46,136,0.09); }
     .vd-full-popup-title { font-size: 1.25rem; font-weight: 900; color: #000; letter-spacing: -0.02em; line-height: 1.2; }
@@ -2627,6 +2636,19 @@
   </div>
 </div>
 
+<!-- Venue delete confirmation -->
+<div class="v-del-confirm-bg" id="venue-delete-confirm-bg" onclick="if(event.target===this)this.classList.remove('visible')">
+  <div class="v-del-confirm-box">
+    <div class="v-del-confirm-icon">?</div>
+    <div class="v-del-confirm-title">Remove this venue?</div>
+    <div class="v-del-confirm-msg" id="venue-delete-confirm-msg">Are you sure you want to remove this venue? This cannot be undone.</div>
+    <div class="v-del-confirm-btns">
+      <button class="v-del-cancel-btn" onclick="document.getElementById('venue-delete-confirm-bg').classList.remove('visible')">Cancel</button>
+      <button class="v-del-go-btn" onclick="_confirmDeleteVenue()">Yes, remove it</button>
+    </div>
+  </div>
+</div>
+
 <!-- Venue full-detail popup -->
 <div class="vd-full-popup-bg" id="vd-full-popup" onclick="if(event.target===this)closeVenueFullDetail()">
   <div class="vd-full-popup">
@@ -4533,7 +4555,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
           <div style="min-width:0;">
             <div style="display:flex;align-items:baseline;gap:0.5rem;flex-wrap:wrap;">
               <div class="v-row-name">${esc(v.name)}</div>
-              ${v.updated_at ? `<div style="font-size:0.62rem;color:#c0b4d8;white-space:nowrap;">Last updated: ${new Date(v.updated_at).toLocaleDateString('en-CA', {month:'short',day:'numeric',year:'numeric'})}</div>` : ''}
+              ${v.updated_at ? `<div style="font-size:0.62rem;color:#c0b4d8;white-space:nowrap;">Last updated: ${(() => { try { return new Date(v.updated_at).toLocaleDateString('en-CA', {month:'short',day:'numeric',year:'numeric'}); } catch(_) { return new Date(v.updated_at).toDateString(); } })()}</div>` : ''}
             </div>
             ${v.address ? `<div class="v-row-addr">${esc(v.address)}</div>` : ''}
           </div>
@@ -5599,9 +5621,26 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     if (photoSkipped) showToast('Venue saved without the photo. You can add the photo later from this venue.', true);
   }
 
-  async function deleteVenue(id) {
-    if (!confirm('Remove this venue from your organisation?')) return;
-    await sb.from('venues').delete().eq('id', id);
+  function deleteVenue(id) {
+    const venue = orgVenues.find(v => v.id === id);
+    const name = venue ? venue.name : 'this venue';
+    const bg = document.getElementById('venue-delete-confirm-bg');
+    const msgEl = document.getElementById('venue-delete-confirm-msg');
+    if (msgEl) msgEl.textContent = `Are you sure you want to remove "${name}"? This cannot be undone.`;
+    if (bg) {
+      bg.dataset.deleteId = id;
+      bg.classList.add('visible');
+    }
+  }
+
+  async function _confirmDeleteVenue() {
+    const bg = document.getElementById('venue-delete-confirm-bg');
+    if (!bg) return;
+    const id = bg.dataset.deleteId;
+    bg.classList.remove('visible');
+    if (!id) return;
+    const { error } = await sb.from('venues').delete().eq('id', id);
+    if (error) { showToast('Could not delete venue.', true); return; }
     orgVenues = orgVenues.filter(v => v.id !== id);
     if (_selectedVenueId === id) {
       _selectedVenueId = null;
@@ -5611,6 +5650,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
       if (editBtn) editBtn.style.display = 'none';
     }
     renderVenuesTable();
+    showToast('Venue removed.');
   }
 
   // ── Save org settings ─────────────────────────────────
