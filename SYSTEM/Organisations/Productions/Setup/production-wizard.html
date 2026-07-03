@@ -2428,7 +2428,7 @@ Return ONLY the JSON object, no explanation.`
               <span style="padding:0.7rem 0.75rem;background:#f3f0f9;color:#8b7eaa;font-size:0.78rem;white-space:nowrap;border-right:1.5px solid rgba(87,46,136,0.15);flex-shrink:0;">buildtheshow.com/${escHtml(currentOrg?.slug || 'yourorg')}/</span>
               <input type="text" id="s2_slug" value="${escHtml(wizardData.slug || '')}" maxlength="50" placeholder="wizard-of-oz-2026" style="flex:1;min-width:0;border:none;outline:none;padding:0.7rem 0.75rem;font-size:0.875rem;color:#1a1530;background:transparent;font-family:var(--bts-font);" />
             </div>
-            <p class="field-hint">This appears in all your public links — auditions, tickets, sponsorships, and more. It can't be changed after you launch. Lowercase letters and numbers only.</p>
+            <p class="field-hint">This appears in all your public links: auditions, tickets, sponsorships, and more. It can't be changed after you launch. Lowercase letters, numbers, and hyphens only.</p>
           </div>
 
           <div class="form-group">
@@ -2462,8 +2462,8 @@ Return ONLY the JSON object, no explanation.`
       const slugInput  = document.getElementById('s2_slug');
       if (!titleInput || !slugInput) return;
 
-      // Strip hyphens and year suffix from any previously auto-generated slug
-      if (wizardData.slug) wizardData.slug = wizardData.slug.replace(/-/g, '').replace(/\d{4}$/, '');
+      // Strip year suffix from any previously auto-generated slug (e.g. wizard-of-oz-2026 -> wizard-of-oz)
+      if (wizardData.slug) wizardData.slug = wizardData.slug.replace(/-\d{4}$/, '');
       let slugManuallyEdited = !!wizardData.slug;
 
       titleInput.addEventListener('input', function() {
@@ -2474,7 +2474,11 @@ Return ONLY the JSON object, no explanation.`
 
       slugInput.addEventListener('input', function() {
         slugManuallyEdited = this.value.length > 0;
-        this.value = this.value.toLowerCase().replace(/[^a-z0-9]/g, '');
+        this.value = this.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+      });
+
+      slugInput.addEventListener('blur', function() {
+        this.value = this.value.replace(/^-+|-+$/g, '').replace(/-{2,}/g, '-');
       });
 
       if (!slugInput.value && titleInput.value) {
@@ -2483,7 +2487,7 @@ Return ONLY the JSON object, no explanation.`
     }
 
     function titleToSlug(title) {
-      return title.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 50);
+      return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/-{2,}/g, '-').substring(0, 50);
     }
 
     function prodTypeLabel(v) {
@@ -2508,13 +2512,13 @@ Return ONLY the JSON object, no explanation.`
       wizardData.description = document.getElementById('s2_desc').value.trim();
 
       const slugField = document.getElementById('s2_slug');
-      let chosenSlug = (slugField?.value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      let chosenSlug = (slugField?.value || '').trim().toLowerCase().replace(/^-+|-+$/g, '').replace(/-{2,}/g, '-');
       if (!chosenSlug) chosenSlug = titleToSlug(title);
       wizardData.slug = chosenSlug;
 
-      const slugValid = /^[a-z0-9]+$/.test(chosenSlug) && chosenSlug.length >= 3 && chosenSlug.length <= 50;
+      const slugValid = /^[a-z0-9]+(-[a-z0-9]+)*$/.test(chosenSlug) && chosenSlug.length >= 3 && chosenSlug.length <= 50;
       if (!slugValid) {
-        showError('step2Error', 'Show URL can only contain lowercase letters and numbers, and must be 3–50 characters.');
+        showError('step2Error', 'Show URL can only contain lowercase letters, numbers, and hyphens, and must be 3-50 characters.');
         return;
       }
 
