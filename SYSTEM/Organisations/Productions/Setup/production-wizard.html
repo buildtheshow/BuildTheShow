@@ -2553,33 +2553,41 @@ Return ONLY the JSON object, no explanation.`
       showLoading(MSGS_SAVING);
 
       try {
-        const num = await getNextProdNumber();
-        const custom_id = (currentOrg.custom_id || 'ORG') + '-' + String(num).padStart(2, '0');
+        if (prodId) {
+          // Resuming an existing draft — update, don't insert
+          const { error } = await sb.from('productions').update({
+            title: wizardData.title,
+            description: wizardData.description || null,
+            production_type: wizardData.production_type,
+            slug: chosenSlug,
+          }).eq('id', prodId);
+          if (error) throw error;
+        } else {
+          const num = await getNextProdNumber();
+          const custom_id = (currentOrg.custom_id || 'ORG') + '-' + String(num).padStart(2, '0');
 
-        const insertPayload = {
-          organization_id: currentOrg.id,
-          custom_id,
-          title: wizardData.title,
-          description: wizardData.description || null,
-          production_type: wizardData.production_type,
-          is_public: wizardData.is_public,
-          status: 'setup',
-          slug: chosenSlug,
-        };
+          const { data, error } = await sb.from('productions').insert({
+            organization_id: currentOrg.id,
+            custom_id,
+            title: wizardData.title,
+            description: wizardData.description || null,
+            production_type: wizardData.production_type,
+            is_public: wizardData.is_public,
+            status: 'setup',
+            slug: chosenSlug,
+          }).select('id').single();
 
-        const { data, error } = await sb.from('productions').insert(insertPayload).select('id').single();
+          if (error) throw error;
+          prodId = data.id;
 
-        if (error) throw error;
-
-        prodId = data.id;
-
-        if (uploadedFile) {
-          const ext = uploadedFile.name.split('.').pop().toLowerCase() || 'jpg';
-          const path = `productions/${prodId}/poster.${ext}`;
-          const { error: upErr } = await sb.storage.from('production-files').upload(path, uploadedFile, { upsert: true, contentType: uploadedFile.type });
-          if (!upErr) {
-            const { data: urlData } = sb.storage.from('production-files').getPublicUrl(path);
-            await sb.from('productions').update({ poster_url: urlData.publicUrl }).eq('id', prodId);
+          if (uploadedFile) {
+            const ext = uploadedFile.name.split('.').pop().toLowerCase() || 'jpg';
+            const path = `productions/${prodId}/poster.${ext}`;
+            const { error: upErr } = await sb.storage.from('production-files').upload(path, uploadedFile, { upsert: true, contentType: uploadedFile.type });
+            if (!upErr) {
+              const { data: urlData } = sb.storage.from('production-files').getPublicUrl(path);
+              await sb.from('productions').update({ poster_url: urlData.publicUrl }).eq('id', prodId);
+            }
           }
         }
 
