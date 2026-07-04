@@ -4419,13 +4419,13 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   document.querySelectorAll('.nav-item[data-tab]').forEach(el => el.addEventListener('click', () => switchTab(el.dataset.tab)));
 
   // ── Settings sub-tabs ─────────────────────────────────
+  function switchSettingsPanel(panelKey) {
+    document.querySelectorAll('.settings-tab').forEach(t => t.classList.toggle('active', t.dataset.panel === panelKey));
+    document.querySelectorAll('.settings-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + panelKey));
+  }
+
   document.querySelectorAll('.settings-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.settings-panel').forEach(p => p.classList.remove('active'));
-      tab.classList.add('active');
-      document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
-    });
+    tab.addEventListener('click', () => switchSettingsPanel(tab.dataset.panel));
   });
 
   // ── Start production modal ────────────────────────────
@@ -6285,57 +6285,65 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     logo: {
       column: 'logo_url',
       pathName: 'logo',
-      preview: 'logo-preview',
-      label: 'logo-upload-label',
+      preview: 'branding-logo-preview',
+      label: 'branding-logo-file',
       dotPreview: null,
       dotLetter: null,
-      savedLabel: 'Change logo',
+      savedLabel: 'Current logo ready',
     },
     whiteLogo: {
       column: 'logo_white_url',
       pathName: 'logo-white',
-      preview: null,
-      label: null,
-      dotPreview: 'sp-white-preview',
-      dotLetter: 'sp-white-letter',
-      savedLabel: 'Change white logo',
+      preview: 'branding-whiteLogo-preview',
+      label: 'branding-whiteLogo-file',
+      dotPreview: null,
+      dotLetter: null,
+      savedLabel: 'Current logo ready',
     },
     blackLogo: {
       column: 'logo_black_url',
       pathName: 'logo-black',
-      preview: null,
-      label: null,
-      dotPreview: 'sp-black-preview',
-      dotLetter: 'sp-black-letter',
-      savedLabel: 'Change black logo',
+      preview: 'branding-blackLogo-preview',
+      label: 'branding-blackLogo-file',
+      dotPreview: null,
+      dotLetter: null,
+      savedLabel: 'Current logo ready',
     },
     alternativeLogo: {
       column: 'logo_alternative_url',
       pathName: 'logo-alternative',
-      preview: null,
-      label: null,
-      dotPreview: 'sp-alt-preview',
-      dotLetter: 'sp-alt-letter',
-      savedLabel: 'Change alternative logo',
+      preview: 'branding-alternativeLogo-preview',
+      label: 'branding-alternativeLogo-file',
+      dotPreview: null,
+      dotLetter: null,
+      savedLabel: 'Current logo ready',
     },
   };
 
   function setBrandingPreview(type, src, labelText) {
     const cfg = BRANDING_FIELDS[type];
     if (!cfg) return;
-    if (cfg.preview) {
-      const preview = document.getElementById(cfg.preview);
-      if (preview && src) { preview.src = src; preview.style.display = 'block'; }
+    const preview = cfg.preview ? document.getElementById(cfg.preview) : null;
+    const label = cfg.label ? document.getElementById(cfg.label) : null;
+    const dropzone = document.getElementById(`branding-${type}-dropzone`);
+    const icon = document.getElementById(`branding-${type}-icon`);
+    if (preview) {
+      if (src) {
+        preview.src = src;
+        preview.style.display = 'block';
+      } else {
+        preview.removeAttribute('src');
+        preview.style.display = 'none';
+      }
     }
-    if (cfg.label && labelText) {
-      const label = document.getElementById(cfg.label);
-      if (label) label.innerHTML = `<span style="font-size:0.75rem;color:#572e88;font-weight:600;">${esc(labelText)}</span>`;
+    if (label) {
+      label.textContent = labelText || '';
     }
-    if (cfg.dotPreview && src) {
-      const dp = document.getElementById(cfg.dotPreview);
-      const dl = cfg.dotLetter ? document.getElementById(cfg.dotLetter) : null;
-      if (dp) { dp.src = src; dp.style.display = 'block'; dp.style.position = 'absolute'; dp.style.inset = '0'; dp.style.width = '100%'; dp.style.height = '100%'; dp.style.borderRadius = '50%'; dp.style.objectFit = 'contain'; }
-      if (dl) dl.style.display = 'none';
+    if (dropzone) {
+      dropzone.classList.toggle('is-filled', !!src);
+    }
+    if (icon) {
+      icon.style.display = src ? 'none' : 'block';
     }
   }
 
@@ -6378,6 +6386,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
 
   async function saveBranding() {
     const btn = document.getElementById('save-branding-btn');
+    if (!btn) return false;
     btn.disabled = true; btn.textContent = 'Saving...';
     const patch = {};
     for (const [type, cfg] of Object.entries(BRANDING_FIELDS)) {
@@ -6389,9 +6398,9 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
         const { error: upErr } = await sb.storage.from('org-logos').upload(path, file, { upsert: true, contentType: file.type });
         if (upErr) {
           btn.disabled = false;
-          btn.textContent = 'Save Branding';
+          btn.textContent = 'Save changes';
           showToast('Upload failed: ' + upErr.message, true);
-          return;
+          return false;
         }
         const { data: urlData } = sb.storage.from('org-logos').getPublicUrl(path);
         url = urlData.publicUrl;
@@ -6407,8 +6416,8 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
         pendingBrandingFiles.logo = null;
         renderOrgInfo();
         showToast('Primary logo saved. Run the branding assets migration to save white, black, and alternative logos.', true);
-        btn.disabled = false; btn.textContent = 'Save Branding';
-        return;
+        btn.disabled = false; btn.textContent = 'Save changes';
+        return false;
       }
       error = retry.error;
     }
@@ -6420,7 +6429,13 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     } else {
       showToast(error.message, true);
     }
-    btn.disabled = false; btn.textContent = 'Save Branding';
+    btn.disabled = false; btn.textContent = 'Save changes';
+    return !error;
+  }
+
+  async function saveBrandingAndContinue() {
+    const ok = await saveBranding();
+    if (ok) switchSettingsPanel('permissions');
   }
 
   // ── Payments ─────────────────────────────────────────
