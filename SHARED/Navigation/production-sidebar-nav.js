@@ -392,13 +392,15 @@
       requestAnimationFrame(function () { markCurrentPageActive(activePage); });
       // Apply currency-specific financials icon if currency is already known
       applyFinancialsIcon();
+      // Apply feature-based group visibility if prod data already arrived
+      if (_pendingModules) applyModuleVisibility(_pendingModules);
       // Apply team portal sidebar restriction if a team session is active
       window.applyTeamSidebarRestriction();
     }
 
     if (cached) applyAndInit(cached);
 
-    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v62-20260630')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v63-20260703')
       .then(function (res) { return res.text(); })
       .then(function (html) {
         sessionStorage.setItem(key, html);
@@ -501,6 +503,8 @@
     wrapup:      'group-wrapup',
   };
 
+  var _pendingModules = null;
+
   function applyModuleVisibility(enabledModules) {
     if (!enabledModules || typeof enabledModules !== 'object') return;
     Object.keys(MODULE_GROUPS).forEach(function (key) {
@@ -509,6 +513,12 @@
       groupEl.style.display = enabledModules[key] === false ? 'none' : '';
     });
   }
+
+  // Called by any page (workspace or standalone) once production data is available
+  window.applyNavModuleVisibility = function (enabledModules) {
+    _pendingModules = enabledModules;
+    applyModuleVisibility(enabledModules);
+  };
 
 
   function addActiveDot(el) {
