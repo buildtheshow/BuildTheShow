@@ -6515,6 +6515,13 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   async function saveBranding() {
     const btn = document.getElementById('save-branding-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+    if (!currentOrg?.id) {
+      showToast('Organisation not loaded yet. Try again in a moment.', true);
+      if (btn) { btn.disabled = false; btn.textContent = 'Save logos'; }
+      return false;
+    }
+
     const patch = {};
     for (const [type, cfg] of Object.entries(BRANDING_FIELDS)) {
       let url = currentOrg[cfg.column] || null;
@@ -6524,39 +6531,33 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
         const path = `${currentOrg.id}/${cfg.pathName}.${ext}`;
         const { error: upErr } = await sb.storage.from('org-logos').upload(path, file, { upsert: true, contentType: file.type });
         if (upErr) {
+          console.error('[BTS] Logo upload failed:', upErr);
           if (btn) { btn.disabled = false; btn.textContent = 'Save logos'; }
           showToast('Upload failed: ' + upErr.message, true);
           return false;
         }
         const { data: urlData } = sb.storage.from('org-logos').getPublicUrl(path);
         url = urlData.publicUrl;
+        console.log('[BTS] Logo uploaded:', type, url);
       }
       patch[cfg.column] = url || null;
     }
-    let { error } = await sb.from('organizations').update(patch).eq('id', currentOrg.id);
-    if (error && /logo_white_url|logo_black_url|logo_alternative_url|column/i.test(error.message || '')) {
-      const legacyPatch = { logo_url: patch.logo_url || null };
-      const retry = await sb.from('organizations').update(legacyPatch).eq('id', currentOrg.id);
-      if (!retry.error) {
-        currentOrg = { ...currentOrg, ...legacyPatch };
-        pendingBrandingFiles.logo = null;
-        renderOrgInfo();
-        showToast('Primary logo saved. Run the SQL migration to enable white, black, and alternative logos.', true);
-        if (btn) { btn.disabled = false; btn.textContent = 'Save logos'; }
-        return false;
-      }
-      error = retry.error;
+
+    console.log('[BTS] Saving logo patch:', patch);
+    const { error } = await sb.from('organizations').update(patch).eq('id', currentOrg.id);
+    if (error) {
+      console.error('[BTS] Logo DB update failed:', error);
+      showToast('Could not save: ' + error.message, true);
+      if (btn) { btn.disabled = false; btn.textContent = 'Save logos'; }
+      return false;
     }
-    if (!error) {
-      currentOrg = { ...currentOrg, ...patch };
-      Object.keys(pendingBrandingFiles).forEach(key => { pendingBrandingFiles[key] = null; });
-      renderOrgInfo();
-      showToast('Saved!');
-    } else {
-      showToast(error.message, true);
-    }
+
+    currentOrg = { ...currentOrg, ...patch };
+    Object.keys(pendingBrandingFiles).forEach(key => { pendingBrandingFiles[key] = null; });
+    renderOrgInfo();
+    showToast('Saved!');
     if (btn) { btn.disabled = false; btn.textContent = 'Save logos'; }
-    return !error;
+    return true;
   }
 
   async function saveBrandingAndContinue() {
