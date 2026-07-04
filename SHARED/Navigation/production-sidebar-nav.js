@@ -224,6 +224,11 @@
   };
 
   window.navigateToVolunteers = function (sub) {
+    if (sub === 'settings') {
+      var id = new URLSearchParams(location.search).get('id') || '';
+      location.href = '/SYSTEM/Organisations/Productions/Workspace/volunteer-settings.html' + (id ? '?id=' + encodeURIComponent(id) : '');
+      return;
+    }
     location.href = workspaceUrl('volunteers', sub);
   };
 
