@@ -1944,6 +1944,7 @@
     let prodId = null;
     let currentUser = null;
     let currentOrg = null;
+    let _dbResumeProd = null; // DB row fetched on resume, applied after localStorage merge
 
     // Step 1 image state
     let uploadedFile = null;
@@ -4621,6 +4622,14 @@ Return ONLY the JSON array, no explanation, no markdown fences.`;
     function resumeDraft() {
       document.getElementById('draftBanner').style.display = 'none';
       loadFromLocalStorage();
+      // Re-apply DB fields — localStorage may have stale/empty values that
+      // would otherwise win the merge and blank out the poster or title.
+      if (_dbResumeProd) {
+        if (_dbResumeProd.poster_url) wizardData.poster_url = _dbResumeProd.poster_url;
+        if (_dbResumeProd.title && !wizardData.title) wizardData.title = _dbResumeProd.title;
+        if (_dbResumeProd.description && !wizardData.description) wizardData.description = _dbResumeProd.description;
+        if (_dbResumeProd.production_type && !wizardData.production_type) wizardData.production_type = _dbResumeProd.production_type;
+      }
       if (wizardData.poster_url && !uploadedPreviewUrl) {
         uploadedPreviewUrl = wizardData.poster_url;
       }
@@ -4702,9 +4711,13 @@ Return ONLY the JSON array, no explanation, no markdown fences.`;
         try { localStorage.removeItem('bts_wizard_auto_resume'); } catch(_) {}
 
         if (savedProdId && savedState) {
-          // Pre-fetch poster_url so it's ready on resume
-          const { data: prodRow } = await sb.from('productions').select('poster_url').eq('id', savedProdId).maybeSingle();
-          if (prodRow?.poster_url) wizardData.poster_url = prodRow.poster_url;
+          // Fetch DB fields that localStorage may have stale/empty values for.
+          // Stored in _dbResumeProd so resumeDraft() can apply them AFTER
+          // loadFromLocalStorage() — otherwise localStorage overwrites them.
+          const { data: prodRow } = await sb.from('productions')
+            .select('poster_url, title, description, production_type, wizard_data')
+            .eq('id', savedProdId).maybeSingle();
+          _dbResumeProd = prodRow || null;
 
           if (autoResume) {
             resumeDraft();
