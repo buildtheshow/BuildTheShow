@@ -6494,6 +6494,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     if (file.size > 5 * 1024 * 1024) { showToast('Logo must be under 5MB', true); return; }
     setBrandingPreview(type, URL.createObjectURL(file), file.name);
     if (pendingBrandingFiles[type] !== undefined) pendingBrandingFiles[type] = file;
+    saveBranding();
   }
 
   function handleBrandingDrag(event) {
@@ -6522,8 +6523,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
 
   async function saveBranding() {
     const btn = document.getElementById('save-branding-btn');
-    if (!btn) return false;
-    btn.disabled = true; btn.textContent = 'Saving...';
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
     const patch = {};
     for (const [type, cfg] of Object.entries(BRANDING_FIELDS)) {
       let url = currentOrg[cfg.column] || null;
@@ -6533,8 +6533,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
         const path = `${currentOrg.id}/${cfg.pathName}.${ext}`;
         const { error: upErr } = await sb.storage.from('org-logos').upload(path, file, { upsert: true, contentType: file.type });
         if (upErr) {
-          btn.disabled = false;
-          btn.textContent = 'Save changes';
+          if (btn) { btn.disabled = false; btn.textContent = 'Save logos'; }
           showToast('Upload failed: ' + upErr.message, true);
           return false;
         }
@@ -6551,8 +6550,8 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
         currentOrg = { ...currentOrg, ...legacyPatch };
         pendingBrandingFiles.logo = null;
         renderOrgInfo();
-        showToast('Primary logo saved. Run the branding assets migration to save white, black, and alternative logos.', true);
-        btn.disabled = false; btn.textContent = 'Save changes';
+        showToast('Primary logo saved. Run the SQL migration to enable white, black, and alternative logos.', true);
+        if (btn) { btn.disabled = false; btn.textContent = 'Save logos'; }
         return false;
       }
       error = retry.error;
@@ -6561,11 +6560,11 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
       currentOrg = { ...currentOrg, ...patch };
       Object.keys(pendingBrandingFiles).forEach(key => { pendingBrandingFiles[key] = null; });
       renderOrgInfo();
-      showToast('Branding saved.');
+      showToast('Saved!');
     } else {
       showToast(error.message, true);
     }
-    btn.disabled = false; btn.textContent = 'Save changes';
+    if (btn) { btn.disabled = false; btn.textContent = 'Save logos'; }
     return !error;
   }
 
