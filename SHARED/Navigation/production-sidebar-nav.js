@@ -374,7 +374,7 @@
   };
 
   window.loadProductionSidebar = function (activeGroup, activePage) {
-    const key = 'bts-prod-sidebar-v39';
+    const key = 'bts-prod-sidebar-v40';
     const cached = sessionStorage.getItem(key);
     const host = document.getElementById('prod-sidebar-host');
     if (!host) return;
@@ -517,6 +517,10 @@
       if (!groupEl) return;
       groupEl.style.display = enabledModules[key] === false ? 'none' : '';
     });
+    var timelineEl = document.getElementById('nav-producer-timeline');
+    if (timelineEl) {
+      timelineEl.style.display = enabledModules.producer_timeline === false ? 'none' : '';
+    }
   }
 
   // Called by any page (workspace or standalone) once production data is available
