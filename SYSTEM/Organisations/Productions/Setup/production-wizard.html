@@ -2684,15 +2684,21 @@ Return ONLY the JSON object, no explanation.`
           if (error) throw error;
           prodId = data.id;
 
-          if (uploadedFile) {
-            const ext = uploadedFile.name.split('.').pop().toLowerCase() || 'jpg';
-            const path = `productions/${prodId}/poster.${ext}`;
-            const { error: upErr } = await sb.storage.from('production-files').upload(path, uploadedFile, { upsert: true, contentType: uploadedFile.type });
-            if (!upErr) {
-              const { data: urlData } = sb.storage.from('production-files').getPublicUrl(path);
-              wizardData.poster_url = urlData.publicUrl;
-              await sb.from('productions').update({ poster_url: urlData.publicUrl }).eq('id', prodId);
-            }
+        }
+
+        // Upload poster regardless of new vs resume — runs whenever user selected a file
+        if (uploadedFile && prodId) {
+          const ext = uploadedFile.name.split('.').pop().toLowerCase() || 'jpg';
+          const path = `productions/${prodId}/poster.${ext}`;
+          const { error: upErr } = await sb.storage.from('production-files').upload(path, uploadedFile, { upsert: true, contentType: uploadedFile.type });
+          if (!upErr) {
+            const { data: urlData } = sb.storage.from('production-files').getPublicUrl(path);
+            wizardData.poster_url = urlData.publicUrl;
+            await sb.from('productions').update({ poster_url: urlData.publicUrl }).eq('id', prodId);
+          } else {
+            console.error('Poster upload failed:', upErr);
+            showError('step2Error', 'Poster upload failed: ' + (upErr.message || 'Storage error. Make sure the production-files bucket exists in Supabase.'));
+            return;
           }
         }
 
@@ -3331,8 +3337,9 @@ Return ONLY the JSON array, no explanation, no markdown fences.`;
       }
 
       // Production section
-      const posterHTML = wizardData.poster_url
-        ? `<img src="${escHtml(wizardData.poster_url)}" alt="Poster" style="width:72px;height:90px;border-radius:8px;object-fit:cover;object-position:top;flex-shrink:0;border:1.5px solid rgba(87,46,136,0.12);" />`
+      const _posterSrc = wizardData.poster_url || uploadedPreviewUrl;
+      const posterHTML = _posterSrc
+        ? `<img src="${escHtml(_posterSrc)}" alt="Poster" style="width:72px;height:90px;border-radius:8px;object-fit:cover;object-position:top;flex-shrink:0;border:1.5px solid rgba(87,46,136,0.12);" />`
         : `<div style="width:72px;height:90px;border-radius:8px;background:linear-gradient(160deg,#ede8f5,#d9cff0);display:flex;align-items:center;justify-content:center;font-size:1.8rem;flex-shrink:0;">🎭</div>`;
 
       const metaFields = [
@@ -4249,8 +4256,8 @@ Return ONLY the JSON array, no explanation, no markdown fences.`;
               <!-- Poster — 160×240 hard-locked, floating with shadow -->
               <div style="flex-shrink:0;padding:1.25rem 0 1.25rem 1.25rem;display:flex;flex-direction:column;align-items:center;gap:0.55rem;">
                 <div style="position:relative;width:160px;min-width:160px;max-width:160px;height:207px;min-height:207px;max-height:207px;overflow:hidden;border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,0.45);">
-                  ${wizardData.poster_url
-                    ? `<img src="${escHtml(wizardData.poster_url)}" alt="Poster" style="width:100%;height:100%;object-fit:cover;object-position:top;display:block;" />`
+                  ${(wizardData.poster_url || uploadedPreviewUrl)
+                    ? `<img src="${escHtml(wizardData.poster_url || uploadedPreviewUrl)}" alt="Poster" style="width:100%;height:100%;object-fit:cover;object-position:top;display:block;" />`
                     : `<div style="width:100%;height:100%;background:rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;"><span style="font-size:0.7rem;color:rgba(255,255,255,0.5);text-align:center;padding:1rem;line-height:1.5;">No image yet</span></div>`}
                 </div>
                 ${editBtn(1, true)}
