@@ -23,6 +23,7 @@
     proposalFolderId: '',
     attachmentsByProposal: {},
     filterStatus: 'all',
+    queryIntentHandled: false,
   };
 
   function esc(value) {
@@ -79,6 +80,17 @@
 
   function proposalRoot() {
     return document.getElementById('production-proposals-root');
+  }
+
+  function proposalIntentFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('proposal') || '';
+  }
+
+  function clearProposalIntentFromUrl() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('proposal');
+    window.history.replaceState({}, '', url.toString());
   }
 
   function proposalStatusLabel(status) {
@@ -349,6 +361,21 @@
       }
       if (state.selectedProposalId) await loadProposalAttachments(state.selectedProposalId);
       renderProposalsTab();
+      if (!state.queryIntentHandled) {
+        const proposalIntent = proposalIntentFromUrl();
+        if (proposalIntent) {
+          state.queryIntentHandled = true;
+          if (proposalIntent === 'new') {
+            openProposalModal();
+          } else if (proposalById(proposalIntent)) {
+            state.selectedProposalId = proposalIntent;
+            if (!state.attachmentsByProposal[proposalIntent]) await loadProposalAttachments(proposalIntent);
+            renderProposalsTab();
+            openProposalModal(proposalIntent);
+          }
+          clearProposalIntentFromUrl();
+        }
+      }
       state.loaded = true;
     } catch (error) {
       console.error('[BTS] load proposals failed', error);
@@ -378,7 +405,7 @@
           </div>
           <div style="display:flex;gap:0.55rem;flex-wrap:wrap;">
             <button class="btn-secondary" onclick="refreshProductionProposals()">Refresh</button>
-            <button class="btn-primary" onclick="openProposalModal()">+ New Proposal</button>
+            <button class="btn-primary" onclick="openNewProposalTab()">+ New Proposal</button>
           </div>
         </div>
         <div class="opp-filter-row">
@@ -683,6 +710,13 @@
 
   function closeProposalModal() {
     document.getElementById('proposal-form-modal')?.classList.remove('open');
+  }
+
+  function openNewProposalTab() {
+    const url = new URL(window.location.href);
+    url.searchParams.set('openTab', 'proposals');
+    url.searchParams.set('proposal', 'new');
+    window.open(url.toString(), '_blank', 'noopener');
   }
 
   async function saveProposalForm(mode) {
@@ -1047,6 +1081,7 @@
   window.loadProductionProposalsTab = loadProductionProposalsTab;
   window.openProposalModal = openProposalModal;
   window.closeProposalModal = closeProposalModal;
+  window.openNewProposalTab = openNewProposalTab;
   window.saveProposalForm = saveProposalForm;
   window.selectProductionProposal = selectProductionProposal;
   window.toggleProposalCompare = toggleProposalCompare;
