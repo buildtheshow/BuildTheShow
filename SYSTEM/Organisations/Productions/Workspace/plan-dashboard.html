@@ -355,63 +355,55 @@
       }
     }
 
-    // ── Sections config (shared by chips + tiles) ─────────
-    const PLAN_SECTIONS = [
-      {
-        label:  'Team',
-        desc:   'Your creative leads',
-        file:   'plan-team.html',
-        icon:   '/ASSETS/Images/Icons/Creative Team.svg?v=20260704',
-        colour: '#d1523d',
-      },
-      {
-        label:  'Calendar',
-        desc:   'Rehearsals & key dates',
-        file:   'plan-calendar.html',
-        icon:   '/ASSETS/Images/Icons/navproductioncalendar.svg?v=20260704',
-        colour: '#efab45',
-      },
-      {
-        label:  'Script',
-        desc:   'Scenes, characters, cues',
-        file:   'plan-script.html',
-        icon:   '/ASSETS/Images/Icons/script-script.svg?v=20260704',
-        colour: '#dd8233',
-      },
-      {
-        label:  'Files',
-        desc:   'Shared production documents',
-        file:   'plan-files.html',
-        icon:   '/ASSETS/Images/Icons/Files.svg?v=20260704',
-        colour: '#476aaa',
-      },
-      {
-        label:  'Production Setup',
-        desc:   'Dates, venue, season details',
-        file:   'production-settings.html',
-        icon:   '/ASSETS/Images/Icons/navsettings.svg?v=20260704e',
-        colour: '#769e7b',
-      },
-    ];
+    // ── Per-file metadata: icon, description, colour ──────
+    // Source of truth for ORDER + LABELS is the sidebar nav DOM.
+    // This map only enriches — add a new row when a new plan page is added to the sidebar.
+    const CHIP_META = {
+      'plan-timeline.html':    { icon: '/ASSETS/Images/Icons/Producers To-do list.svg?v=20260704c', desc: 'Tasks, milestones, deadlines',  colour: '#78bbd4' },
+      'plan-team.html':        { icon: '/ASSETS/Images/Icons/Creative Team.svg?v=20260704',          desc: 'Your creative leads',            colour: '#d1523d' },
+      'plan-calendar.html':    { icon: '/ASSETS/Images/Icons/navproductioncalendar.svg?v=20260704',  desc: 'Rehearsals & key dates',         colour: '#efab45' },
+      'script-breakdown.html': { icon: '/ASSETS/Images/Icons/script-script.svg?v=20260704',          desc: 'Scenes, characters, cues',       colour: '#dd8233' },
+      'plan-files.html':       { icon: '/ASSETS/Images/Icons/Files.svg?v=20260704',                  desc: 'Shared production documents',    colour: '#476aaa' },
+      'plan-setup.html':       { icon: '/ASSETS/Images/Icons/navsettings.svg?v=20260704e',           desc: 'Dates, venue, season details',   colour: '#769e7b' },
+    };
+    const FALLBACK_META = { icon: '/ASSETS/Images/Icons/navsettings.svg?v=20260704e', desc: '', colour: '#ca7ea7' };
+
+    // ── Read Plan tabs from the rendered sidebar DOM ───────
+    // Skips plan-dashboard.html (this page) and any hidden items (feature-gated).
+    function readNavSections() {
+      const groupEl = document.getElementById('group-plan-items');
+      if (!groupEl) return [];
+      return Array.from(groupEl.querySelectorAll('.prod-tab')).filter(el => {
+        if (el.style.display === 'none') return false;
+        const match = (el.getAttribute('onclick') || '').match(/btsProdNav\(['"]([^'"]+)['"]\)/);
+        const file  = match?.[1] || '';
+        return file && file !== 'plan-dashboard.html';
+      }).map(el => {
+        const match = (el.getAttribute('onclick') || '').match(/btsProdNav\(['"]([^'"]+)['"]\)/);
+        const file  = match?.[1] || '';
+        const meta  = CHIP_META[file] || FALLBACK_META;
+        return { label: el.textContent.trim(), file, ...meta };
+      });
+    }
 
     // ── Render nav chips ──────────────────────────────────
-    function renderChips() {
-      document.getElementById('plan-nav-chips').innerHTML = PLAN_SECTIONS.map(s => `
+    function renderChips(sections) {
+      document.getElementById('plan-nav-chips').innerHTML = sections.map(s => `
         <a class="plan-nav-chip" href="${nav(s.file)}" style="--chip-colour:${s.colour};">
           <img class="plan-nav-chip-icon" src="${s.icon}" alt="" aria-hidden="true" />
           <div class="plan-nav-chip-text">
-            <div class="plan-nav-chip-label">${s.label}</div>
-            <div class="plan-nav-chip-desc">${s.desc}</div>
+            <div class="plan-nav-chip-label">${esc(s.label)}</div>
+            <div class="plan-nav-chip-desc">${esc(s.desc)}</div>
           </div>
         </a>`).join('');
     }
 
     // ── Render section tiles ──────────────────────────────
-    function renderTiles() {
-      document.getElementById('plan-tiles').innerHTML = PLAN_SECTIONS.map(t => `
+    function renderTiles(sections) {
+      document.getElementById('plan-tiles').innerHTML = sections.map(t => `
         <a class="plan-section-tile" href="${nav(t.file)}">
           <span class="plan-section-tile-dot" style="background:${t.colour};"></span>
-          <span class="plan-section-tile-label">${t.label}</span>
+          <span class="plan-section-tile-label">${esc(t.label)}</span>
           <span class="plan-section-tile-arrow">›</span>
         </a>`).join('');
     }
@@ -419,8 +411,19 @@
     // ── Init ──────────────────────────────────────────────
     async function init() {
       document.getElementById('manage-team-link').href = nav('plan-team.html');
-      renderChips();
-      renderTiles();
+      // Sidebar is rendered synchronously from cache before this script runs.
+      // If it somehow isn't ready yet, retry once on next frame.
+      let sections = readNavSections();
+      if (!sections.length) {
+        requestAnimationFrame(() => {
+          sections = readNavSections();
+          renderChips(sections);
+          renderTiles(sections);
+        });
+      } else {
+        renderChips(sections);
+        renderTiles(sections);
+      }
 
       if (!prodId) {
         document.getElementById('team-credits-large').innerHTML = '<div class="plan-empty">No production selected.</div>';
