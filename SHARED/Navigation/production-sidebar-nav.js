@@ -374,7 +374,7 @@
   };
 
   window.loadProductionSidebar = function (activeGroup, activePage) {
-    const key = 'bts-prod-sidebar-v40';
+    const key = 'bts-prod-sidebar-v41';
     const cached = sessionStorage.getItem(key);
     const host = document.getElementById('prod-sidebar-host');
     if (!host) return;
@@ -521,6 +521,10 @@
     if (timelineEl) {
       timelineEl.style.display = enabledModules.producer_timeline === false ? 'none' : '';
     }
+    var audWrap = document.getElementById('auditions-wrap');
+    if (audWrap) audWrap.style.display = enabledModules.auditions === false ? 'none' : '';
+    var regWrap = document.getElementById('registration-wrap');
+    if (regWrap) regWrap.style.display = enabledModules.registration === false ? 'none' : '';
   }
 
   // Called by any page (workspace or standalone) once production data is available
