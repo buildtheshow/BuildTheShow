@@ -37,19 +37,6 @@
   }
 
   window.btsProdNav = function (file) {
-    const workspaceRedirects = {
-      'plan-dashboard.html': ['overview', ''],
-      'plan-timeline.html': ['checklist', ''],
-      'plan-team.html': ['team', ''],
-      'plan-calendar.html': ['calendar', ''],
-      'plan-files.html': ['files', ''],
-      'plan-setup.html': ['settings', ''],
-    };
-    if (workspaceRedirects[file]) {
-      const target = workspaceRedirects[file];
-      location.href = workspaceUrl(target[0], target[1]);
-      return;
-    }
     location.href = pageUrl(file);
   };
 
