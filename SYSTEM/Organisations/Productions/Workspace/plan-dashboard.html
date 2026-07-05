@@ -26,20 +26,91 @@
     .plan-team-cards {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.7rem;
+      gap: 0.9rem;
       align-items: flex-start;
     }
-    /* Render at natural 304px so rem-based text fits, then scale down uniformly */
+    /* Render at natural 304px so cqw/rem text sizes work, then scale down */
     .plan-team-cards .production-team-card-wrap {
       zoom: 0.55;
       flex: 0 0 auto;
     }
-    /* Allow contact values to wrap rather than truncate with ellipsis */
-    .plan-team-cards .volunteer-card-back-contact strong {
-      white-space: normal;
+
+    /* ── Custom small-card back face ── */
+    .plan-ptcard-back {
+      position: absolute;
+      inset: 0;
+      background: #fff;
+      border-radius: 4px;
+      border-top: 0.52rem solid var(--pt-card-color, #572e88);
+      display: flex;
+      flex-direction: column;
+      padding: 0.85rem 1rem 0.9rem;
+      box-sizing: border-box;
+      box-shadow: 0 6px 16px rgba(15,23,42,0.12);
+      gap: 0.7rem;
+      overflow: hidden;
+    }
+    .plan-ptcard-back-header {
+      display: flex;
+      flex-direction: column;
+      gap: 0.18rem;
+      padding-bottom: 0.65rem;
+      border-bottom: 1px solid rgba(0,0,0,0.07);
+    }
+    .plan-ptcard-back-role {
+      font-size: 0.68rem;
+      font-weight: 950;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--pt-card-color, #572e88);
+      line-height: 1;
       overflow-wrap: anywhere;
-      overflow: visible;
-      text-overflow: unset;
+    }
+    .plan-ptcard-back-name {
+      font-size: 1.08rem;
+      font-weight: 800;
+      color: #1a1530;
+      line-height: 1.1;
+      overflow-wrap: anywhere;
+    }
+    .plan-ptcard-back-details {
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      flex: 1;
+      min-height: 0;
+    }
+    .plan-ptcard-detail {
+      display: flex;
+      flex-direction: column;
+      gap: 0.12rem;
+      text-decoration: none;
+      color: inherit;
+    }
+    .plan-ptcard-detail-label {
+      font-size: 0.6rem;
+      font-weight: 950;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--pt-card-color, #572e88);
+      line-height: 1;
+    }
+    .plan-ptcard-detail-value {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #1a1530;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+      word-break: break-all;
+    }
+    .plan-ptcard-back-bio {
+      font-size: 0.75rem;
+      color: rgba(26,21,48,0.5);
+      line-height: 1.4;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
     }
 
     /* ── Open roles compact list ── */
@@ -229,6 +300,35 @@
       return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
+    // ── Custom back face for small plan-dashboard cards ──
+    function renderPlanCardBack(m) {
+      const color = esc(m.note_color || '#572e88');
+      const role  = esc(m.role  || 'Team Member');
+      const name  = esc(m.name  || '');
+      const phone = esc(m.phone || '');
+      const email = esc(m.email || '');
+      const bio   = esc(m.bio   || '');
+      return `
+        <div class="plan-ptcard-back" style="--pt-card-color:${color};">
+          <div class="plan-ptcard-back-header">
+            <span class="plan-ptcard-back-role">${role}</span>
+            <span class="plan-ptcard-back-name">${name}</span>
+          </div>
+          <div class="plan-ptcard-back-details">
+            ${phone ? `<a class="plan-ptcard-detail" href="tel:${phone}" onclick="event.stopPropagation();">
+              <span class="plan-ptcard-detail-label">Phone</span>
+              <span class="plan-ptcard-detail-value">${phone}</span>
+            </a>` : ''}
+            ${email ? `<a class="plan-ptcard-detail" href="mailto:${email}" onclick="event.stopPropagation();">
+              <span class="plan-ptcard-detail-label">Email</span>
+              <span class="plan-ptcard-detail-value">${email}</span>
+            </a>` : ''}
+            ${!phone && !email ? `<span style="font-size:0.78rem;color:rgba(26,21,48,0.35);font-style:italic;">No contact info saved.</span>` : ''}
+          </div>
+          ${bio ? `<div class="plan-ptcard-back-bio">${bio}</div>` : ''}
+        </div>`;
+    }
+
     // ── Render creative team flip cards ──────────────────
     function renderTeamCards(members) {
       const cardsEl  = document.getElementById('team-cards');
@@ -242,9 +342,27 @@
         cardsEl.innerHTML = '<div class="plan-empty">No team members added yet.</div>';
       } else {
         const T = window.BTSProductionTeamTemplates;
-        cardsEl.innerHTML = members.map(m =>
-          T.renderProductionTeamCard(m, { showManagement: false })
-        ).join('');
+        cardsEl.innerHTML = members.map(m => {
+          const color = esc(m.note_color || '#572e88');
+          const name  = esc(m.name || '');
+          return `
+            <div class="production-team-card-wrap production-team-card-wrap--volunteer" style="--pt-card-color:${color};--volunteer-card-color:${color};">
+              <div class="production-team-card production-team-card--volunteer"
+                   role="button" tabindex="0"
+                   aria-label="Flip ${name} card"
+                   onclick="flipProductionTeamCard(this)"
+                   onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();flipProductionTeamCard(this);}">
+                <div class="production-team-card-inner">
+                  <div class="production-team-card-face production-team-card-volunteer-face">
+                    ${T.renderVolunteerCard(m)}
+                  </div>
+                  <div class="production-team-card-face production-team-card-volunteer-face production-team-card-volunteer-back-face">
+                    ${renderPlanCardBack(m)}
+                  </div>
+                </div>
+              </div>
+            </div>`;
+        }).join('');
         requestAnimationFrame(() => requestAnimationFrame(() => {
           T.fitVolunteerRoleIdentifiers(cardsEl);
         }));
