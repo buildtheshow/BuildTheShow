@@ -471,6 +471,10 @@
     document.querySelectorAll('#sidebar-org-back, #sidebar-mobile-org-back').forEach(function (link) {
       link.href = orgHref;
     });
+    document.querySelectorAll('[data-org-calendar-link="true"]').forEach(function (link) {
+      link.href = orgHref + '?openTab=cronus';
+      link.hidden = false;
+    });
 
     if (prod.poster_url) {
       ['sidebar-poster-wrap', 'sidebar-mobile-poster-wrap'].forEach(function (id) {
