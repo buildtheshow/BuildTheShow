@@ -312,8 +312,18 @@
     };
     const DEFAULT_COLOUR = { dot: '#769e7b', halo: 'rgba(118,158,123,0.18)' };
 
-    // Standard creative roles — shown even if unfilled
-    const STANDARD_ROLES = ['Producer', 'Director', 'Choreographer', 'Vocal Director'];
+    // Suggested roles by production type
+    const ROLES_BY_TYPE = {
+      musical:    ['Producer', 'Director', 'Musical Director', 'Choreographer', 'Vocal Director'],
+      play:       ['Producer', 'Director'],
+      workshop:   ['Producer', 'Director'],
+      concert:    ['Producer', 'Musical Director'],
+      dance_show: ['Producer', 'Director', 'Choreographer'],
+      other:      ['Producer', 'Director'],
+    };
+    function suggestedRoles(productionType) {
+      return ROLES_BY_TYPE[productionType] || ROLES_BY_TYPE.other;
+    }
 
     function roleStyle(role) {
       const c = ROLE_COLOURS[String(role || '').toLowerCase().trim()] || DEFAULT_COLOUR;
@@ -384,13 +394,13 @@
     }
 
     // ── Render creative team flip cards ──────────────────
-    function renderTeamCards(members) {
+    function renderTeamCards(members, productionType) {
       const cardsEl  = document.getElementById('team-cards');
       const openEl   = document.getElementById('team-credits-open');
       const openBlock = document.getElementById('open-roles-block');
 
       const filledRoles = new Set(members.map(m => String(m.role || '').toLowerCase().trim()));
-      const unfilledStandard = STANDARD_ROLES.filter(r => !filledRoles.has(r.toLowerCase()));
+      const unfilledStandard = suggestedRoles(productionType).filter(r => !filledRoles.has(r.toLowerCase()));
 
       if (!members.length) {
         cardsEl.innerHTML = '<div class="plan-empty">No team members added yet.</div>';
@@ -500,12 +510,12 @@
       }
 
       const [prodRes, membersRes] = await Promise.all([
-        sb.from('productions').select('title').eq('id', prodId).single(),
+        sb.from('productions').select('title,production_type').eq('id', prodId).single(),
         sb.from('production_team_members').select('id,name,role,department,note_color,is_active,headshot_url,email,phone,bio,passcode').eq('production_id', prodId).eq('is_active', true).order('created_at', { ascending: true }),
       ]);
 
       const members = (membersRes.data || []).filter(isCreative);
-      renderTeamCards(members);
+      renderTeamCards(members, prodRes.data?.production_type || 'other');
     }
 
     init();
