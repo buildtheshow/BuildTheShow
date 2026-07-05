@@ -501,22 +501,23 @@
 
   var _pendingModules = null;
 
+  function isDisabled(enabledModules, key) {
+    return enabledModules && typeof enabledModules === 'object' && enabledModules[key] === false;
+  }
+
   function applyModuleVisibility(enabledModules) {
     window.enabledModules = enabledModules || {};
-    if (!enabledModules || typeof enabledModules !== 'object') return;
     Object.keys(MODULE_GROUPS).forEach(function (key) {
       var groupEl = document.getElementById(MODULE_GROUPS[key]);
       if (!groupEl) return;
-      groupEl.style.display = enabledModules[key] === false ? 'none' : '';
+      groupEl.style.display = isDisabled(enabledModules, key) ? 'none' : '';
     });
     var timelineEl = document.getElementById('nav-producer-timeline');
-    if (timelineEl) {
-      timelineEl.style.display = enabledModules.producer_timeline === false ? 'none' : '';
-    }
+    if (timelineEl) timelineEl.style.display = isDisabled(enabledModules, 'producer_timeline') ? 'none' : '';
     var audWrap = document.getElementById('auditions-wrap');
-    if (audWrap) audWrap.style.display = enabledModules.auditions === false ? 'none' : '';
+    if (audWrap) audWrap.style.display = isDisabled(enabledModules, 'auditions') ? 'none' : '';
     var regWrap = document.getElementById('registration-wrap');
-    if (regWrap) regWrap.style.display = enabledModules.registration === false ? 'none' : '';
+    if (regWrap) regWrap.style.display = isDisabled(enabledModules, 'registration') ? 'none' : '';
   }
 
   // Called by any page (workspace or standalone) once production data is available
