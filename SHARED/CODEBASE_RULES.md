@@ -1278,4 +1278,49 @@ Before adding a field, label, or helper, ask:
 4. Can this logic live in one helper instead of three places?
 5. If the user edits it in the godsheet, will everything downstream follow it?
 
+---
+
+## Page Header Template — LOCKED July 2026
+
+Every production workspace page uses this exact header structure and style. Do not invent alternatives.
+
+### HTML structure (copy verbatim, change only the text content)
+
+```html
+<div class="aud-visual-hero">
+  <div class="aud-visual-hero-content">
+    <div>
+      <div class="aud-visual-kicker">
+        <span class="aud-visual-kicker-dot" aria-hidden="true"></span>
+        <span class="page-hierarchy">
+          <span class="page-hierarchy-page">SECTION NAME</span>
+        </span>
+      </div>
+      <h1 class="aud-visual-title">Page Title</h1>
+      <p class="aud-visual-copy">One-line description of what this page does.</p>
+    </div>
+  </div>
+</div>
+```
+
+- `page-hierarchy-page` = the sidebar group name (e.g. PLAN, CAST, SETTINGS)
+- `aud-visual-title` = the specific page name (e.g. Dashboard, Team, Features)
+- `aud-visual-copy` = one plain-language sentence, no em dashes, Canadian English
+
+### CSS values (defined in `production-sidebar.css` — do not override per-page)
+
+```css
+.aud-visual-hero        { padding: 0.75rem 1.5rem; }
+.aud-visual-kicker      { margin-bottom: 0.1rem; }
+.aud-visual-title       { font-size: clamp(2rem, 3.75vw, 3rem); margin: 0.1rem 0 0; }
+.aud-visual-copy        { font-size: 0.8rem; margin: 0.2rem 0 0; }
+```
+
+### Rules
+
+- Never add per-page padding, font-size, or margin overrides on these classes
+- Never add extra wrappers, badges, or decorative elements inside the hero unless a specific feature requires it (e.g. a totals block on the right)
+- The hero background is always `#572e88` (production purple) — no exceptions for workspace pages
+- `margin-bottom` on `.aud-visual-hero` may be overridden per-page only when the page has sub-navigation chips immediately below the header (use `0.4rem` in that case)
+
 If the answer to those is not clear, clean that up before adding more layers.
