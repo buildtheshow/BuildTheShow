@@ -8,6 +8,7 @@
   <title>Plan - Build The Show</title>
   <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260421-2025" />
   <link rel="stylesheet" href="/ASSETS/styles/production-sidebar.css?v=sidebar-v51-20260704" />
+  <link rel="stylesheet" href="/ASSETS/styles/production-team-card.css?v=volunteer-left-text-20260511" />
   <style>
     * { box-sizing: border-box; }
     html { width: 100%; max-width: 100%; overflow-x: hidden; }
@@ -21,74 +22,62 @@
       .prod-main::before { inset: 0; }
     }
 
-    /* ── Creative Team template — copied verbatim from template-test.html ── */
+    /* ── Team cards grid ── */
+    .plan-team-cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.9rem;
+    }
+    .plan-team-cards .production-team-card-wrap {
+      width: 160px;
+      flex: 0 0 160px;
+    }
+
+    /* ── Open roles compact list ── */
     .creative-team-template-list {
       display: grid;
-      gap: 1.2rem;
-    }
-    .creative-team-template-list.compact {
       gap: 0.72rem;
     }
     .creative-team-template-member {
       display: grid;
       grid-template-columns: auto minmax(0, 1fr);
-      column-gap: 0.82rem;
+      column-gap: 0.58rem;
       align-items: start;
       min-width: 0;
     }
-    .creative-team-template-list.compact .creative-team-template-member {
-      column-gap: 0.58rem;
-    }
     .creative-team-template-dot {
-      width: 1.25rem;
-      height: 1.25rem;
-      margin-top: 0.1rem;
-      border-radius: 999px;
-      background: var(--ctm-dot-colour, #572e88);
-      box-shadow: 0 0 0 0.26rem var(--ctm-dot-halo, rgba(87,46,136,0.18));
-      flex: 0 0 auto;
-    }
-    .creative-team-template-list.compact .creative-team-template-dot {
       width: 0.82rem;
       height: 0.82rem;
       margin-top: 0.05rem;
+      border-radius: 999px;
+      background: var(--ctm-dot-colour, #572e88);
       box-shadow: 0 0 0 0.18rem var(--ctm-dot-halo, rgba(87,46,136,0.18));
+      flex: 0 0 auto;
     }
     .creative-team-template-copy { min-width: 0; }
     .creative-team-template-role {
       color: #111;
-      font-size: clamp(2.4rem, 5vw, 4.2rem);
+      font-size: 1.18rem;
       font-weight: 950;
       letter-spacing: 0;
-      line-height: 0.95;
+      line-height: 1;
       text-transform: uppercase;
       overflow-wrap: anywhere;
     }
-    .creative-team-template-list.compact .creative-team-template-role {
-      font-size: 1.18rem;
-      line-height: 1;
-    }
     .creative-team-template-name {
-      margin-top: 0.42rem;
+      margin-top: 0.22rem;
       color: #202020;
-      font-size: clamp(1.35rem, 3vw, 2.25rem);
+      font-size: 0.98rem;
       font-weight: 450;
       letter-spacing: 0;
       line-height: 1.1;
       text-transform: uppercase;
       overflow-wrap: anywhere;
     }
-    .creative-team-template-list.compact .creative-team-template-name {
-      margin-top: 0.22rem;
-      font-size: 0.98rem;
-    }
-    /* Open role — muted style */
     .creative-team-template-name.is-open {
       color: rgba(26,21,48,0.28);
       font-style: italic;
       text-transform: none;
-    }
-    .creative-team-template-list.compact .creative-team-template-name.is-open {
       font-size: 0.88rem;
     }
 
@@ -188,10 +177,10 @@
 
       <div class="plan-dash-body">
 
-        <!-- Left: Creative Team credits -->
+        <!-- Left: Creative Team flip cards -->
         <div>
           <div class="plan-section-label">Creative Team</div>
-          <div id="team-credits-large" class="creative-team-template-list"></div>
+          <div id="team-cards" class="plan-team-cards"></div>
           <button class="plan-manage-link" onclick="btsProdNav('plan-team.html')">Manage Team &rarr;</button>
         </div>
 
@@ -202,7 +191,7 @@
 
           <div id="open-roles-block" style="display:none;margin-top:2rem;">
             <div class="plan-section-label">Still needed</div>
-            <div class="creative-team-template-list compact" id="team-credits-open"></div>
+            <div class="creative-team-template-list" id="team-credits-open"></div>
           </div>
         </div>
 
@@ -212,6 +201,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/ASSETS/scripts/production-team-card.js?v=volunteer-modal-template-20260511"></script>
   <script src="/SHARED/Navigation/production-sidebar-nav.js?v=68-20260704"></script>
   <script>
     window.initProductionPage('plan');
@@ -256,48 +246,27 @@
       return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
-    // ── Render credits ────────────────────────────────────
-    function renderCredits(members) {
-      // Build a map of role → [names]
-      const filled = {};
-      members.forEach(m => {
-        const role = m.role || 'Team Member';
-        if (!filled[role]) filled[role] = [];
-        filled[role].push(m.name);
-      });
-
-      // Large credits — filled roles first, then standard unfilled
-      const largeEl = document.getElementById('team-credits-large');
-      const openEl  = document.getElementById('team-credits-open');
+    // ── Render creative team flip cards ──────────────────
+    function renderTeamCards(members) {
+      const cardsEl  = document.getElementById('team-cards');
+      const openEl   = document.getElementById('team-credits-open');
       const openBlock = document.getElementById('open-roles-block');
 
-      // Collect display order: filled members (in DB order) + unfilled standard roles
-      const filledRoles = new Set(Object.keys(filled).map(r => r.toLowerCase().trim()));
+      const filledRoles = new Set(members.map(m => String(m.role || '').toLowerCase().trim()));
       const unfilledStandard = STANDARD_ROLES.filter(r => !filledRoles.has(r.toLowerCase()));
 
-      if (!members.length && !unfilledStandard.length) {
-        largeEl.innerHTML = '<div class="plan-empty">No team members added yet.</div>';
-        return;
-      }
-
-      // Large: all filled members
-      largeEl.innerHTML = members.map(m => {
-        const style = roleStyle(m.role);
-        return `
-          <div class="creative-team-template-member" style="${style}">
-            <span class="creative-team-template-dot" aria-hidden="true"></span>
-            <div class="creative-team-template-copy">
-              <div class="creative-team-template-role">${esc(m.role || 'Team Member')}</div>
-              <div class="creative-team-template-name">${esc(m.name)}</div>
-            </div>
-          </div>`;
-      }).join('');
-
       if (!members.length) {
-        largeEl.innerHTML = '<div class="plan-empty">No team members added yet.</div>';
+        cardsEl.innerHTML = '<div class="plan-empty">No team members added yet.</div>';
+      } else {
+        const T = window.BTSProductionTeamTemplates;
+        cardsEl.innerHTML = members.map(m =>
+          T.renderProductionTeamCard(m, { showManagement: false })
+        ).join('');
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          T.fitVolunteerRoleIdentifiers(cardsEl);
+        }));
       }
 
-      // Compact right column: unfilled standard roles
       if (unfilledStandard.length) {
         openEl.innerHTML = unfilledStandard.map(role => {
           const style = roleStyle(role);
@@ -389,11 +358,11 @@
 
       const [prodRes, membersRes] = await Promise.all([
         sb.from('productions').select('title').eq('id', prodId).single(),
-        sb.from('production_team_members').select('id,name,role,department,note_color,is_active').eq('production_id', prodId).eq('is_active', true).order('created_at', { ascending: true }),
+        sb.from('production_team_members').select('id,name,role,department,note_color,is_active,headshot_url,email,phone,bio').eq('production_id', prodId).eq('is_active', true).order('created_at', { ascending: true }),
       ]);
 
       const members = (membersRes.data || []).filter(isCreative);
-      renderCredits(members);
+      renderTeamCards(members);
     }
 
     init();
