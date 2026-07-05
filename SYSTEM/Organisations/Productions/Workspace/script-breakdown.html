@@ -5521,7 +5521,7 @@
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="/SHARED/Navigation/production-sidebar-nav.js?v=70-20260705"></script>
+  <script src="/SHARED/Navigation/production-sidebar-nav.js?v=71-20260705"></script>
   <script>
     'use strict';
 
@@ -10116,6 +10116,187 @@
       return productionChars.find(char => normalizeLoose(char.name) === normalized)
         || productionChars.find(char => normalizeLoose(char.name).includes(normalized) || normalized.includes(normalizeLoose(char.name)));
     }
+
+    // ── Tab switching ─────────────────────────────────────
+    window.switchSbTab = function(tab) {
+      const isBreakdown = tab === 'breakdown';
+      document.getElementById('sb-tab-panel-breakdown').style.display = isBreakdown ? '' : 'none';
+      document.getElementById('sb-tab-panel-scripts').style.display   = isBreakdown ? 'none' : '';
+      document.getElementById('tab-btn-breakdown').classList.toggle('active', isBreakdown);
+      document.getElementById('tab-btn-scripts').classList.toggle('active', !isBreakdown);
+      document.getElementById('tab-btn-breakdown').setAttribute('aria-selected', isBreakdown);
+      document.getElementById('tab-btn-scripts').setAttribute('aria-selected', !isBreakdown);
+      // Hide/show the scene left panel — only relevant on breakdown tab
+      const leftPanel = document.querySelector('.sb-left');
+      if (leftPanel) leftPanel.style.display = isBreakdown ? '' : 'none';
+      if (!isBreakdown && !scriptsState.loaded) initScriptsTab();
+    };
+
+    // ── Scripts & Scores tab ─────────────────────────────
+    const SCRIPTS_FOLDER_NAME = 'Plan Files';
+    const SCRIPTS_FOLDER_COLOR = '#6f4aa6';
+    const SCRIPTS_FILE_BUCKET = 'production-files';
+    const SCRIPTS_SLOT_DEFS = [
+      {
+        key: 'directors-script',
+        label: "Director's Script",
+        badge: 'Creative Copy',
+        description: 'Keep the annotated director version here so the team always knows which working copy is current.',
+      },
+      {
+        key: 'piano-vocal-score',
+        label: 'Piano/Vocal Score',
+        badge: 'Music Copy',
+        description: 'Store the current rehearsal score or vocal reference packet in one reliable place.',
+      },
+    ];
+    const scriptsState = { files: [], folder: null, busyKey: '', loaded: false };
+
+    function scriptsSlotFiles(key) {
+      return scriptsState.files
+        .filter(f => String(f.document_type || '').trim() === key || (Array.isArray(f.tags) && f.tags.includes(key)))
+        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    }
+
+    function scriptsCurrentFile(key) { return scriptsSlotFiles(key)[0] || null; }
+
+    function scriptsFileSizeLabel(n) {
+      const b = Number(n || 0);
+      if (!b) return '';
+      if (b < 1024) return b + ' B';
+      if (b < 1048576) return (b/1024).toFixed(1).replace(/\.0$/,'') + ' KB';
+      return (b/1048576).toFixed(1).replace(/\.0$/,'') + ' MB';
+    }
+
+    function scriptsFileDateLabel(v) {
+      if (!v) return '';
+      const d = new Date(v);
+      return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    function renderScriptsSlotCard(slot) {
+      const file = scriptsCurrentFile(slot.key);
+      const has = !!file;
+      const busy = scriptsState.busyKey === slot.key;
+      const meta = [
+        file && file.file_type ? esc(file.file_type) : '',
+        file && file.file_size ? esc(scriptsFileSizeLabel(file.file_size)) : '',
+        file && file.created_at ? esc(scriptsFileDateLabel(file.created_at)) : '',
+      ].filter(Boolean).join(' · ');
+      return `
+        <article class="sb-file-slot">
+          <div class="sb-file-slot-head">
+            <div>
+              <span class="sb-file-slot-badge">${esc(slot.badge)}</span>
+              <h2 class="sb-file-slot-title">${esc(slot.label)}</h2>
+              <p class="sb-file-slot-copy">${esc(slot.description)}</p>
+            </div>
+          </div>
+          <div class="sb-file-current${has ? '' : ' empty'}">
+            <p class="sb-file-current-label">${has ? 'Current file' : 'Waiting for upload'}</p>
+            ${has
+              ? `<p class="sb-file-current-name">${esc(file.name || 'Untitled file')}</p>
+                 <p class="sb-file-current-meta">${meta}</p>`
+              : `<p class="sb-file-current-note">No file yet. Upload a PDF or document.</p>`}
+          </div>
+          <div class="sb-file-actions">
+            <button type="button" class="sb-file-btn primary" onclick="scriptsFilePick('${esc(slot.key)}')" ${busy ? 'disabled' : ''}>
+              ${busy ? 'Uploading…' : has ? 'Replace' : 'Upload File'}
+            </button>
+            <input class="sb-file-hidden-input" type="file" id="scripts-input-${esc(slot.key)}" accept=".pdf,.doc,.docx,.rtf,.txt,.musicxml,.xml,.mxl" onchange="scriptsFileSelected('${esc(slot.key)}', this)" />
+            ${has ? `<a class="sb-file-btn secondary" href="${esc(file.file_url || '#')}" target="_blank" rel="noopener">Open</a>` : ''}
+            ${has ? `<button type="button" class="sb-file-btn ghost" onclick="scriptsFileRemove('${esc(slot.key)}')" ${busy ? 'disabled' : ''}>Remove</button>` : ''}
+          </div>
+        </article>`;
+    }
+
+    function renderScriptsTab() {
+      const grid = document.getElementById('sb-scripts-grid');
+      if (grid) grid.innerHTML = SCRIPTS_SLOT_DEFS.map(renderScriptsSlotCard).join('');
+    }
+
+    async function initScriptsTab() {
+      if (!sb || !prodId) return;
+      scriptsState.loaded = true;
+      try {
+        const { data: found } = await sb.from('production_folders').select('*')
+          .eq('production_id', prodId).ilike('name', SCRIPTS_FOLDER_NAME).limit(1);
+        if (found && found[0]) {
+          scriptsState.folder = found[0];
+        } else {
+          const { data: created } = await sb.from('production_folders').insert({
+            production_id: prodId, name: SCRIPTS_FOLDER_NAME,
+            color: SCRIPTS_FOLDER_COLOR, is_default: false, sort_order: 999
+          }).select().single();
+          scriptsState.folder = created;
+        }
+        if (!scriptsState.folder) { renderScriptsTab(); return; }
+        await loadScriptsFiles();
+      } catch(e) { console.error('[BTS] scripts tab init failed', e); }
+      renderScriptsTab();
+    }
+
+    async function loadScriptsFiles() {
+      if (!scriptsState.folder) return;
+      const { data } = await sb.from('production_files').select('*')
+        .eq('production_id', prodId).eq('folder_id', scriptsState.folder.id)
+        .contains('tags', ['plan-files']).order('created_at', { ascending: false });
+      scriptsState.files = Array.isArray(data) ? data : [];
+    }
+
+    window.scriptsFilePick = function(key) {
+      const input = document.getElementById('scripts-input-' + key);
+      if (input) input.click();
+    };
+
+    window.scriptsFileSelected = async function(key, input) {
+      const file = input && input.files && input.files[0];
+      if (input) input.value = '';
+      if (!file || !scriptsState.folder) return;
+      const slot = SCRIPTS_SLOT_DEFS.find(s => s.key === key);
+      if (!slot) return;
+      scriptsState.busyKey = key;
+      renderScriptsTab();
+      try {
+        const existing = scriptsSlotFiles(key);
+        for (const row of existing) {
+          if (row.file_path) await sb.storage.from(SCRIPTS_FILE_BUCKET).remove([row.file_path]).catch(() => {});
+          await sb.from('production_files').delete().eq('id', row.id);
+        }
+        const safeName = String(file.name).trim().replace(/\s+/g,'_').replace(/[^a-zA-Z0-9._-]/g,'_');
+        const path = `${prodId}/${scriptsState.folder.id}/plan-files/${key}/${Date.now()}_${safeName}`;
+        const { error: upErr } = await sb.storage.from(SCRIPTS_FILE_BUCKET).upload(path, file, { upsert: false, contentType: file.type || 'application/octet-stream' });
+        if (upErr) throw upErr;
+        const { data: urlData } = sb.storage.from(SCRIPTS_FILE_BUCKET).getPublicUrl(path);
+        await sb.from('production_files').insert({
+          production_id: prodId, folder_id: scriptsState.folder.id,
+          name: file.name, file_url: urlData && urlData.publicUrl || '',
+          file_path: path, file_type: file.type || null, file_size: file.size || null,
+          document_type: key, tags: ['plan-files', key, slot.label]
+        });
+        await loadScriptsFiles();
+      } catch(e) { console.error('[BTS] scripts upload failed', e); }
+      scriptsState.busyKey = '';
+      renderScriptsTab();
+    };
+
+    window.scriptsFileRemove = async function(key) {
+      const slot = SCRIPTS_SLOT_DEFS.find(s => s.key === key);
+      const files = scriptsSlotFiles(key);
+      if (!slot || !files.length) return;
+      if (!confirm('Remove the current ' + slot.label + '? This will delete it from storage.')) return;
+      scriptsState.busyKey = key;
+      renderScriptsTab();
+      try {
+        for (const row of files) {
+          if (row.file_path) await sb.storage.from(SCRIPTS_FILE_BUCKET).remove([row.file_path]).catch(() => {});
+          await sb.from('production_files').delete().eq('id', row.id);
+        }
+        await loadScriptsFiles();
+      } catch(e) { console.error('[BTS] scripts remove failed', e); }
+      scriptsState.busyKey = '';
+      renderScriptsTab();
+    };
 
     document.addEventListener('DOMContentLoaded', init);
   </script>
