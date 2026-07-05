@@ -808,6 +808,7 @@
     const {
       esc,
       kicker = 'Auditions',
+      kickerHtml = null,
       title = 'Auditions at a glance.',
       copy = '',
       stats = [],
@@ -830,7 +831,7 @@
     return `<div class="aud-visual-hero">
       <div class="aud-visual-hero-content">
         <div>
-          <div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span>${esc(kicker)}</div>
+          <div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span>${kickerHtml !== null ? kickerHtml : esc(kicker)}</div>
           <h2 class="aud-visual-title">${esc(title)}</h2>
           ${copy ? `<p class="aud-visual-copy">${esc(copy)}</p>` : ''}
         </div>
