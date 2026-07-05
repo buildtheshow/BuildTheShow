@@ -392,7 +392,7 @@
 
     if (cached) applyAndInit(cached);
 
-    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v66-20260704')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v67-20260704')
       .then(function (res) { return res.text(); })
       .then(function (html) {
         sessionStorage.setItem(key, html);
@@ -498,6 +498,7 @@
   var _pendingModules = null;
 
   function applyModuleVisibility(enabledModules) {
+    window.enabledModules = enabledModules || {};
     if (!enabledModules || typeof enabledModules !== 'object') return;
     Object.keys(MODULE_GROUPS).forEach(function (key) {
       var groupEl = document.getElementById(MODULE_GROUPS[key]);
