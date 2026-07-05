@@ -405,6 +405,7 @@
           </div>
           <div style="display:flex;gap:0.55rem;flex-wrap:wrap;">
             <button class="btn-secondary" onclick="refreshProductionProposals()">Refresh</button>
+            <button class="btn-secondary" onclick="copyProposalShareLink()">Copy Proposal Link</button>
             <button class="btn-primary" onclick="openNewProposalTab()">+ New Proposal</button>
           </div>
         </div>
@@ -530,12 +531,15 @@
         <div class="opp-actions">
           <button class="btn-secondary" onclick="openProposalModal('${proposal.id}')">Edit Proposal</button>
           <button class="btn-secondary" onclick="exportProposalPdf('${proposal.id}')">Download / Export PDF</button>
+          <button class="btn-secondary" onclick="copyProposalShareLink()">Copy Proposal Link</button>
           <button class="btn-secondary" onclick="archiveProposal('${proposal.id}')">Archive Proposal</button>
           <button class="btn-primary" onclick="approveAndBuildProposal('${proposal.id}')">Approve &amp; Build</button>
         </div>
         <div class="opp-section-grid">
           <div class="opp-kv"><div class="opp-kv-label">Submitted By</div><div class="opp-kv-value">${esc(proposal.pitch_submitted_by || '—')}</div></div>
+          <div class="opp-kv"><div class="opp-kv-label">Submitter Email</div><div class="opp-kv-value">${esc(proposal.submitter_email || '—')}</div></div>
           <div class="opp-kv"><div class="opp-kv-label">Date Submitted</div><div class="opp-kv-value">${esc(fmtDateTime(proposal.submitted_at || proposal.created_at))}</div></div>
+          <div class="opp-kv"><div class="opp-kv-label">Submitter Phone</div><div class="opp-kv-value">${esc(proposal.submitter_phone || '—')}</div></div>
           <div class="opp-kv"><div class="opp-kv-label">Licensing Company</div><div class="opp-kv-value">${esc(proposal.licensing_company || '—')}</div></div>
           <div class="opp-kv"><div class="opp-kv-label">Estimated Licensing Fee</div><div class="opp-kv-value">${esc(fmtCurrency(proposal.estimated_licensing_fee))}</div></div>
           <div class="opp-kv"><div class="opp-kv-label">Runtime</div><div class="opp-kv-value">${esc(fmtRuntime(proposal.runtime_minutes))}</div></div>
@@ -712,11 +716,82 @@
     document.getElementById('proposal-form-modal')?.classList.remove('open');
   }
 
-  function openNewProposalTab() {
-    const url = new URL(window.location.href);
-    url.searchParams.set('openTab', 'proposals');
-    url.searchParams.set('proposal', 'new');
-    window.open(url.toString(), '_blank', 'noopener');
+  async function getProposalShareConfig() {
+    const org = currentOrg();
+    if (!org?.id) return null;
+    if (org.proposal_submission_token && (org.slug || org.abbreviation || org.id)) {
+      return {
+        id: org.id,
+        slug: org.slug || '',
+        abbreviation: org.abbreviation || '',
+        proposal_submission_token: org.proposal_submission_token,
+      };
+    }
+    const { data, error } = await sb().from('organizations')
+      .select('id, slug, abbreviation, proposal_submission_token')
+      .eq('id', org.id)
+      .single();
+    if (error) throw error;
+    return data || null;
+  }
+
+  function buildProposalShareUrl(config) {
+    const orgKey = config?.slug || config?.abbreviation || config?.id || '';
+    const token = config?.proposal_submission_token || '';
+    if (!orgKey || !token) return '';
+    const url = new URL('/SYSTEM/Public/production-proposal.html', window.location.origin);
+    url.searchParams.set('org', orgKey);
+    url.searchParams.set('token', token);
+    return url.toString();
+  }
+
+  async function openNewProposalTab() {
+    const draftTab = window.open('', '_blank');
+    if (draftTab) draftTab.opener = null;
+    try {
+      const config = await getProposalShareConfig();
+      const url = buildProposalShareUrl(config);
+      if (!url) throw new Error('Proposal sharing is not ready yet. Run the SQL, then refresh this page.');
+      if (draftTab) {
+        draftTab.location.href = url;
+      } else {
+        window.open(url, '_blank', 'noopener');
+      }
+    } catch (error) {
+      if (draftTab) draftTab.close();
+      console.error('[BTS] open proposal share page failed', error);
+      showToast(error.message || 'Could not open the proposal page.', true);
+    }
+  }
+
+  function fallbackCopyText(value) {
+    const input = document.createElement('textarea');
+    input.value = value;
+    input.setAttribute('readonly', 'readonly');
+    input.style.position = 'fixed';
+    input.style.opacity = '0';
+    input.style.pointerEvents = 'none';
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand('copy');
+    document.body.removeChild(input);
+  }
+
+  async function copyProposalShareLink() {
+    try {
+      const config = await getProposalShareConfig();
+      const url = buildProposalShareUrl(config);
+      if (!url) throw new Error('Proposal sharing is not ready yet. Run the SQL, then refresh this page.');
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        fallbackCopyText(url);
+      }
+      showToast('Proposal link copied.');
+    } catch (error) {
+      console.error('[BTS] copy proposal share link failed', error);
+      showToast(error.message || 'Could not copy the proposal link.', true);
+    }
   }
 
   async function saveProposalForm(mode) {
@@ -1082,6 +1157,7 @@
   window.openProposalModal = openProposalModal;
   window.closeProposalModal = closeProposalModal;
   window.openNewProposalTab = openNewProposalTab;
+  window.copyProposalShareLink = copyProposalShareLink;
   window.saveProposalForm = saveProposalForm;
   window.selectProductionProposal = selectProductionProposal;
   window.toggleProposalCompare = toggleProposalCompare;
