@@ -207,8 +207,38 @@
     // ── State ─────────────────────────────────────────────
     let members = [];
     let prodName = '';
+    let prodCountry = 'CA';
     let _editId = null;
     let _toastTimer;
+
+    // ── Phone formatting ──────────────────────────────────
+    const NANP_COUNTRIES = new Set(['CA','US','PR','VI','GU','AS','MP','DO','JM','TT','BB','LC','VC','GD','AG','DM','KN','BS','TC','AI','MS','KY','BM','VG','IM']);
+
+    function formatPhone(raw, country) {
+      const digits = String(raw || '').replace(/\D/g, '');
+      if (!digits) return '';
+      const isNANP = NANP_COUNTRIES.has(String(country || 'CA').toUpperCase());
+      if (isNANP) {
+        // Strip leading 1 if present
+        const d = digits.startsWith('1') && digits.length > 10 ? digits.slice(1) : digits;
+        if (d.length <= 3)  return d;
+        if (d.length <= 6)  return `(${d.slice(0,3)}) ${d.slice(3)}`;
+        return `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6,10)}`;
+      }
+      // International: group as +XX XXX XXX XXXX (rough spacing)
+      if (digits.length <= 2)  return '+' + digits;
+      if (digits.length <= 5)  return '+' + digits.slice(0,2) + ' ' + digits.slice(2);
+      if (digits.length <= 9)  return '+' + digits.slice(0,2) + ' ' + digits.slice(2,5) + ' ' + digits.slice(5);
+      return '+' + digits.slice(0,2) + ' ' + digits.slice(2,5) + ' ' + digits.slice(5,8) + ' ' + digits.slice(8,12);
+    }
+
+    function onPhoneInput(e) {
+      const input = e.target;
+      const cursorAtEnd = input.selectionStart === input.value.length;
+      const formatted = formatPhone(input.value, prodCountry);
+      input.value = formatted;
+      if (cursorAtEnd) input.setSelectionRange(formatted.length, formatted.length);
+    }
 
     // ── Toast ─────────────────────────────────────────────
     function showToast(msg, isError = false) {
@@ -229,11 +259,12 @@
       if (!prodId) { renderEmpty('No production selected.'); return; }
 
       const [prodRes, membersRes] = await Promise.all([
-        sb.from('productions').select('title, subtitle').eq('id', prodId).single(),
+        sb.from('productions').select('title, subtitle, holiday_country').eq('id', prodId).single(),
         sb.from('production_team_members').select('*').eq('production_id', prodId).eq('is_active', true).order('created_at', { ascending: true }),
       ]);
 
       prodName = prodRes.data?.title || 'Your Production';
+      prodCountry = prodRes.data?.holiday_country || 'CA';
       members = (membersRes.data || []).filter(isCreative);
       render();
     }
@@ -422,7 +453,7 @@
       customEl.value = isStandard ? '' : (m.role || '');
       document.getElementById('ctm-f-name').value = m.name || '';
       document.getElementById('ctm-f-email').value = m.email || '';
-      document.getElementById('ctm-f-phone').value = m.phone || '';
+      document.getElementById('ctm-f-phone').value = formatPhone(m.phone || '', prodCountry);
       document.getElementById('ctm-modal-error').textContent = '';
       document.getElementById('ctm-modal-overlay').classList.remove('hidden');
     }
@@ -437,6 +468,8 @@
       customEl.style.display = this.value === '__custom__' ? 'block' : 'none';
       if (this.value === '__custom__') customEl.focus();
     });
+
+    document.getElementById('ctm-f-phone').addEventListener('input', onPhoneInput);
 
     async function saveModal() {
       const errEl = document.getElementById('ctm-modal-error');
