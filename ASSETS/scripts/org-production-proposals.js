@@ -504,7 +504,7 @@
           <button class="btn-secondary" onclick="openProposalModal('${proposal.id}')">Edit Proposal</button>
           <button class="btn-secondary" onclick="exportProposalPdf('${proposal.id}')">Download / Export PDF</button>
           <button class="btn-secondary" onclick="archiveProposal('${proposal.id}')">Archive Proposal</button>
-          <button class="btn-primary" onclick="createProductionFromProposal('${proposal.id}')">Create Production</button>
+          <button class="btn-primary" onclick="approveAndBuildProposal('${proposal.id}')">Approve &amp; Build</button>
         </div>
         <div class="opp-section-grid">
           <div class="opp-kv"><div class="opp-kv-label">Submitted By</div><div class="opp-kv-value">${esc(proposal.pitch_submitted_by || '—')}</div></div>
@@ -936,11 +936,6 @@
       showToast('This proposal already created a production.', true);
       return;
     }
-    if (proposal.status !== 'selected') {
-      showToast('Change the proposal to Selected before creating a production.', true);
-      return;
-    }
-    if (!window.confirm(`Create a draft production from "${proposal.proposed_show_title}"?`)) return;
     try {
       const prodType = mapProposalTypeToProductionType(proposal.genre_type);
       const slug = await ensureUniqueProductionSlug(proposal.proposed_show_title || 'production');
@@ -1025,6 +1020,30 @@
     }
   }
 
+  async function approveAndBuildProposal(proposalId) {
+    const proposal = proposalById(proposalId);
+    if (!proposal) return;
+    if (proposal.selected_production_id) {
+      showToast('This proposal already created a production.', true);
+      return;
+    }
+    if (!window.confirm(`Approve "${proposal.proposed_show_title}" and build a production from it?`)) return;
+    try {
+      if (proposal.status !== 'selected') {
+        const { data, error } = await sb().from('production_proposals').update({
+          status: 'selected',
+          selected_at: new Date().toISOString(),
+        }).eq('id', proposal.id).select().single();
+        if (error) throw error;
+        state.proposals = state.proposals.map(item => item.id === proposal.id ? data : item).sort(proposalSort);
+      }
+      await createProductionFromProposal(proposalId);
+    } catch (error) {
+      console.error('[BTS] approve and build failed', error);
+      showToast(error.message || 'Could not approve and build this proposal.', true);
+    }
+  }
+
   window.loadProductionProposalsTab = loadProductionProposalsTab;
   window.openProposalModal = openProposalModal;
   window.closeProposalModal = closeProposalModal;
@@ -1040,4 +1059,5 @@
   window.exportProposalPdf = exportProposalPdf;
   window.deleteProposalAttachment = function (fileId) { deleteProposalAttachment(fileId).catch(err => showToast(err.message || 'Could not remove attachment.', true)); };
   window.createProductionFromProposal = createProductionFromProposal;
+  window.approveAndBuildProposal = approveAndBuildProposal;
 }());
