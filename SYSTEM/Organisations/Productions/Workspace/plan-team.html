@@ -65,15 +65,50 @@
       color: rgba(26,21,48,0.35);
       margin-bottom: 1rem;
     }
-    /* Open role cards — muted, dashed border, cursor prompt */
+    /* ── Open role cards ── */
+    .ctm-open-role-wrap { position: relative; }
     .ctm-open-role-card {
       opacity: 0.6;
-      transition: opacity 0.15s, box-shadow 0.15s;
+      transition: opacity 0.15s;
     }
     .ctm-open-role-card:hover { opacity: 1; }
-    .ctm-open-role-card .production-team-card-face {
-      border-style: dashed !important;
+    .ctm-open-role-card .production-team-card-face { border-style: dashed !important; }
+    .ctm-remove-role-btn {
+      position: absolute;
+      top: 0.4rem;
+      right: 0.4rem;
+      z-index: 10;
+      width: 1.6rem;
+      height: 1.6rem;
+      border-radius: 50%;
+      border: 1.5px solid rgba(209,82,61,0.3);
+      background: #fff;
+      color: #d1523d;
+      font-size: 0.9rem;
+      font-weight: 900;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      opacity: 0;
+      transition: opacity 0.15s, background 0.15s, border-color 0.15s;
+      font-family: var(--bts-font);
     }
+    .ctm-open-role-wrap:hover .ctm-remove-role-btn { opacity: 1; }
+    .ctm-remove-role-btn:hover { background: #d1523d; color: #fff; border-color: #d1523d; }
+
+    /* ── Remove role confirmation modal ── */
+    .ctm-confirm-modal { background: #fff; border-radius: 16px; padding: 1.75rem 2rem; width: 100%; max-width: 420px; box-shadow: 0 20px 60px rgba(0,0,0,0.22); }
+    .ctm-confirm-step { display: none; }
+    .ctm-confirm-step.active { display: block; }
+    .ctm-confirm-title { font-size: 1.1rem; font-weight: 900; color: #1a1530; margin-bottom: 0.5rem; }
+    .ctm-confirm-body { font-size: 0.82rem; color: rgba(26,21,48,0.6); line-height: 1.6; margin-bottom: 1.5rem; }
+    .ctm-confirm-body strong { color: #1a1530; }
+    .ctm-confirm-actions { display: flex; gap: 0.65rem; justify-content: flex-end; }
+    .ctm-confirm-back { background: transparent; border: 1.5px solid rgba(87,46,136,0.2); border-radius: 9px; padding: 0.6rem 1.2rem; font-size: 0.82rem; font-weight: 700; color: rgba(26,21,48,0.5); cursor: pointer; font-family: var(--bts-font); }
+    .ctm-confirm-agree { background: #d1523d; color: #fff; border: none; border-radius: 9px; padding: 0.6rem 1.4rem; font-size: 0.82rem; font-weight: 800; cursor: pointer; font-family: var(--bts-font); transition: filter 0.15s; }
+    .ctm-confirm-agree:hover { filter: brightness(0.88); }
 
     /* ── Toast ── */
     .ctm-toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: #efab45; color: #1a1530; padding: 0.65rem 1.2rem; border-radius: 9px; font-size: 0.82rem; font-weight: 800; box-shadow: 0 4px 16px rgba(0,0,0,0.15); opacity: 0; transform: translateY(6px); transition: opacity 0.2s, transform 0.2s; pointer-events: none; z-index: 9999; }
@@ -146,6 +181,33 @@
 
   <div class="ctm-toast" id="ctm-toast"></div>
 
+  <!-- Remove role confirmation (2-step) -->
+  <div class="ctm-modal-overlay hidden" id="ctm-confirm-overlay">
+    <div class="ctm-confirm-modal">
+      <div class="ctm-confirm-step active" id="ctm-confirm-step-1">
+        <div class="ctm-confirm-title">Remove <span id="ctm-confirm-role-name-1"></span> from your team?</div>
+        <div class="ctm-confirm-body">
+          This will remove <strong><span id="ctm-confirm-role-name-2"></span></strong> from the list of roles you need to fill. It won't affect anyone already assigned.<br><br>
+          You can always add a <strong><span id="ctm-confirm-role-name-3"></span></strong> manually from the Add Team Member button if you change your mind.
+        </div>
+        <div class="ctm-confirm-actions">
+          <button class="ctm-confirm-back" onclick="closeConfirm()">Cancel</button>
+          <button class="ctm-confirm-agree" onclick="confirmStep2()">I agree, remove it</button>
+        </div>
+      </div>
+      <div class="ctm-confirm-step" id="ctm-confirm-step-2">
+        <div class="ctm-confirm-title">Are you sure?</div>
+        <div class="ctm-confirm-body">
+          Just to confirm — you want to permanently hide <strong><span id="ctm-confirm-role-name-4"></span></strong> from your Still Needed list for this production?
+        </div>
+        <div class="ctm-confirm-actions">
+          <button class="ctm-confirm-back" onclick="confirmBack()">Go back</button>
+          <button class="ctm-confirm-agree" id="ctm-confirm-final-btn" onclick="confirmFinal()">Yes, I agree</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/ASSETS/scripts/production-team-card.js?v=mgmt-20260511b"></script>
   <script src="/SHARED/Navigation/production-sidebar-nav.js?v=67-20260704"></script>
@@ -198,7 +260,9 @@
     let prodName = '';
     let prodCountry = 'CA';
     let prodType = 'other';
+    let dismissedRoles = [];
     let _editId = null;
+    let _confirmRole = null;
     let _toastTimer;
 
     // ── Phone formatting ──────────────────────────────────
@@ -247,14 +311,15 @@
       if (!prodId) { renderEmpty('No production selected.'); return; }
 
       const [prodRes, membersRes] = await Promise.all([
-        sb.from('productions').select('title, subtitle, holiday_country, production_type').eq('id', prodId).single(),
+        sb.from('productions').select('title, subtitle, holiday_country, production_type, dismissed_team_roles').eq('id', prodId).single(),
         sb.from('production_team_members').select('*').eq('production_id', prodId).eq('is_active', true).order('created_at', { ascending: true }),
       ]);
 
-      prodName    = prodRes.data?.title || 'Your Production';
-      prodCountry = prodRes.data?.holiday_country || 'CA';
-      prodType    = prodRes.data?.production_type || 'other';
-      members     = (membersRes.data || []).filter(isCreative);
+      prodName       = prodRes.data?.title || 'Your Production';
+      prodCountry    = prodRes.data?.holiday_country || 'CA';
+      prodType       = prodRes.data?.production_type || 'other';
+      dismissedRoles = (prodRes.data?.dismissed_team_roles || []).map(r => String(r).toLowerCase().trim());
+      members        = (membersRes.data || []).filter(isCreative);
       render();
     }
 
@@ -263,18 +328,23 @@
       const m = { role, name: '', card_state: 'open', note_color: colour };
       const safeRole = role.replace(/'/g, '\\\'');
       return `
-        <div class="production-team-card-wrap production-team-card-wrap--volunteer" style="--pt-card-color:${esc(colour)};--volunteer-card-color:${esc(colour)};">
-          <div class="production-team-card production-team-card--volunteer ctm-open-role-card"
-               role="button" tabindex="0"
-               aria-label="Assign ${esc(role)}"
-               onclick="openAddModal('${safeRole}')"
-               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openAddModal('${safeRole}');}">
-            <div class="production-team-card-inner">
-              <div class="production-team-card-face production-team-card-volunteer-face">
-                ${renderVolunteerCard(m)}
+        <div class="ctm-open-role-wrap">
+          <div class="production-team-card-wrap production-team-card-wrap--volunteer" style="--pt-card-color:${esc(colour)};--volunteer-card-color:${esc(colour)};">
+            <div class="production-team-card production-team-card--volunteer ctm-open-role-card"
+                 role="button" tabindex="0"
+                 aria-label="Assign ${esc(role)}"
+                 onclick="openAddModal('${safeRole}')"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openAddModal('${safeRole}');}">
+              <div class="production-team-card-inner">
+                <div class="production-team-card-face production-team-card-volunteer-face">
+                  ${renderVolunteerCard(m)}
+                </div>
               </div>
             </div>
           </div>
+          <button class="ctm-remove-role-btn" title="Remove this role suggestion"
+                  onclick="event.stopPropagation();openConfirm('${safeRole}')"
+                  aria-label="Remove ${esc(role)} suggestion">&#x2715;</button>
         </div>`;
     }
 
@@ -283,7 +353,9 @@
       const wrap = document.getElementById('ctm-grid-wrap');
 
       const filledRoles = new Set(members.map(m => String(m.role || '').toLowerCase().trim()));
-      const unfilled = suggestedRoles(prodType).filter(r => !filledRoles.has(r.toLowerCase()));
+      const unfilled = suggestedRoles(prodType).filter(r =>
+        !filledRoles.has(r.toLowerCase()) && !dismissedRoles.includes(r.toLowerCase())
+      );
 
       let html = '';
 
@@ -539,6 +611,56 @@
 
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape') closeModal();
+    });
+
+    // ── Remove role confirmation ──────────────────────────
+    function openConfirm(role) {
+      _confirmRole = role;
+      ['ctm-confirm-role-name-1','ctm-confirm-role-name-2','ctm-confirm-role-name-3','ctm-confirm-role-name-4']
+        .forEach(id => { document.getElementById(id).textContent = role; });
+      document.getElementById('ctm-confirm-step-1').classList.add('active');
+      document.getElementById('ctm-confirm-step-2').classList.remove('active');
+      document.getElementById('ctm-confirm-overlay').classList.remove('hidden');
+    }
+
+    function confirmStep2() {
+      document.getElementById('ctm-confirm-step-1').classList.remove('active');
+      document.getElementById('ctm-confirm-step-2').classList.add('active');
+    }
+
+    function confirmBack() {
+      document.getElementById('ctm-confirm-step-1').classList.add('active');
+      document.getElementById('ctm-confirm-step-2').classList.remove('active');
+    }
+
+    async function confirmFinal() {
+      if (!_confirmRole) return;
+      const btn = document.getElementById('ctm-confirm-final-btn');
+      btn.disabled = true;
+      btn.textContent = 'Removing...';
+
+      const newDismissed = [...new Set([...dismissedRoles, _confirmRole.toLowerCase().trim()])];
+      const { error } = await sb.from('productions')
+        .update({ dismissed_team_roles: newDismissed })
+        .eq('id', prodId);
+
+      btn.disabled = false;
+      btn.textContent = 'Yes, I agree';
+      closeConfirm();
+
+      if (error) { showToast('Could not save. Try again.', true); return; }
+      dismissedRoles = newDismissed;
+      showToast(`${_confirmRole} removed from Still Needed.`);
+      _confirmRole = null;
+      render();
+    }
+
+    function closeConfirm() {
+      document.getElementById('ctm-confirm-overlay').classList.add('hidden');
+    }
+
+    document.getElementById('ctm-confirm-overlay').addEventListener('click', function(e) {
+      if (e.target === this) closeConfirm();
     });
 
     // ── Init ──────────────────────────────────────────────
