@@ -29462,6 +29462,19 @@
   let _rehearsalStartDateCache = '';
   let _rehearsalStartDateLoaded = false;
   let _rehearsalStartDatePromise = null;
+  let _zeusEventCount = null;
+
+  async function getZeusEventCount() {
+    if (_zeusEventCount !== null) return _zeusEventCount;
+    try {
+      const { count } = await sb.from('production_events')
+        .select('id', { count: 'exact', head: true })
+        .eq('production_id', prodId)
+        .in('event_type', ['rehearsal', 'performance', 'music_rehearsal', 'choreography', 'callback', 'tech_rehearsal', 'dress_rehearsal', 'audition']);
+      _zeusEventCount = count || 0;
+    } catch { _zeusEventCount = 0; }
+    return _zeusEventCount;
+  }
 
   function rehearsalStartDateFallback() {
     return prod?.rehearsal_start_date || prod?.rehearsal_start || '';
@@ -64549,20 +64562,20 @@ See you soon!
     }).join('');
   }
 
-  function loadAudDashboard() {
-    const host = document.getElementById('aud-visual-dashboard');
+  async function loadAudDashboard() {
+    const host = document.getElementById(‘aud-visual-dashboard’);
     if (!host) return;
-    if (!isWorkspaceDataReady('auditionSessions') || !isWorkspaceDataReady('applicants')) {
-      host.innerHTML = '<div class="loading">Building your audition dashboard...</div>';
-      btsRouteLog('route dependency pending', { view: 'audition dashboard', dependencies: ['auditionSessions', 'applicants'] });
-      ensureWorkspaceData(['auditionSessions', 'applicants'])
+    if (!isWorkspaceDataReady(‘auditionSessions’) || !isWorkspaceDataReady(‘applicants’)) {
+      host.innerHTML = ‘<div class="loading">Building your audition dashboard...</div>’;
+      btsRouteLog(‘route dependency pending’, { view: ‘audition dashboard’, dependencies: [‘auditionSessions’, ‘applicants’] });
+      ensureWorkspaceData([‘auditionSessions’, ‘applicants’])
         .then(() => {
-          btsRouteLog('route dependency resolved', { view: 'audition dashboard', dependencies: ['auditionSessions', 'applicants'] });
+          btsRouteLog(‘route dependency resolved’, { view: ‘audition dashboard’, dependencies: [‘auditionSessions’, ‘applicants’] });
           loadAudDashboard();
         })
         .catch((error) => {
-          console.error('[BTS] audition dashboard load failed', error);
-          btsRouteLog('route dependency failed', { view: 'audition dashboard', message: error?.message || String(error || '') });
+          console.error(‘[BTS] audition dashboard load failed’, error);
+          btsRouteLog(‘route dependency failed’, { view: ‘audition dashboard’, message: error?.message || String(error || ‘’) });
           host.innerHTML = `
             <div style="background:#fff;border:1px solid rgba(185,28,28,0.18);border-radius:12px;padding:1.25rem;color:#1a1530;max-width:560px;margin:2rem auto;">
               <div style="font-weight:800;color:#b91c1c;margin-bottom:0.35rem;">Couldn’t load the audition dashboard.</div>
@@ -64576,13 +64589,66 @@ See you soon!
       const totalSessions = (audSessions || []).length;
       const nextSession = [...(audSessions || [])]
         .filter(session => session.date)
-        .sort((a, b) => `${a.date || '9999'} ${a.start_time || ''}`.localeCompare(`${b.date || '9999'} ${b.start_time || ''}`))
+        .sort((a, b) => `${a.date || ‘9999’} ${a.start_time || ‘’}`.localeCompare(`${b.date || ‘9999’} ${b.start_time || ‘’}`))
         .find(session => {
-          const dateTime = new Date(`${session.date}T${String(session.start_time || '00:00').slice(0, 5)}:00`);
+          const dateTime = new Date(`${session.date}T${String(session.start_time || ‘00:00’).slice(0, 5)}:00`);
           return Number.isNaN(dateTime.getTime()) ? session.date >= new Date().toISOString().slice(0, 10) : dateTime >= new Date();
         });
 
       if (!totalSessions) {
+        const zeusCount = await getZeusEventCount();
+        if (!zeusCount && !teamAccessMode) {
+          const ONBOARD_STEPS = [
+            { label: ‘Build your production schedule’, sub: ‘Est. 5-10 min’, active: true },
+            { label: ‘Set up audition sessions’, active: false },
+            { label: ‘Open auditions to performers’, active: false },
+            { label: ‘Hold auditions’, active: false },
+            { label: ‘Cast your show’, active: false },
+          ];
+          const stepsHtml = ONBOARD_STEPS.map((s, i, arr) => `
+            <div style="display:flex;align-items:flex-start;flex:1;min-width:0;">
+              <div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:0;text-align:center;padding:0 0.25rem;">
+                <div style="width:2rem;height:2rem;border-radius:50%;border:2px solid ${s.active ? ‘#572e88’ : ‘#d4cce8’};display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:900;color:${s.active ? ‘#572e88’ : ‘rgba(26,21,48,0.3)’};flex-shrink:0;">${i + 1}</div>
+                <div style="font-size:0.72rem;font-weight:${s.active ? ‘800’ : ‘500’};color:${s.active ? ‘#572e88’ : ‘rgba(26,21,48,0.4)’};margin-top:0.45rem;line-height:1.3;">${s.label}</div>
+                ${s.sub ? `<div style="font-size:0.65rem;color:rgba(26,21,48,0.35);margin-top:0.2rem;">${s.sub}</div>` : ‘’}
+              </div>
+              ${i < arr.length - 1 ? `<div style="flex-shrink:0;width:2rem;height:2px;background:#efefef;margin-top:1rem;"></div>` : ‘’}
+            </div>`).join(‘’);
+          host.innerHTML = `
+            <div class="aud-visual-hero">
+              <div class="aud-visual-hero-content">
+                <div>
+                  <div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span><span class="page-hierarchy"><span class="page-hierarchy-page">Cast</span><span class="page-hierarchy-sep">·</span><span class="page-hierarchy-sub">Auditions</span></span></div>
+                  <h2 class="aud-visual-title">Dashboard</h2>
+                  <p class="aud-visual-copy">Start on the calendar. Your audition dashboard will come to life once your production schedule is in place.</p>
+                </div>
+              </div>
+            </div>
+            <div style="background:#fff;border:1.5px solid rgba(87,46,136,0.1);border-radius:16px;padding:2rem 2rem 1.75rem;margin-top:1rem;">
+              <div style="display:grid;grid-template-columns:auto 1fr;gap:2rem;align-items:center;">
+                <img src="/ASSETS/Images/Icons/navproductioncalendar.svg?v=20260705" style="width:80px;height:80px;opacity:0.18;flex-shrink:0;" alt="" aria-hidden="true" />
+                <div>
+                  <div style="display:inline-flex;align-items:center;background:#efab45;color:#000;border-radius:20px;padding:0.22rem 0.7rem;font-size:0.7rem;font-weight:900;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem;">Start here</div>
+                  <h3 style="font-size:1.5rem;font-weight:950;color:#000;margin:0 0 0.55rem;line-height:1.1;">Build your production schedule first</h3>
+                  <p style="font-size:0.86rem;color:rgba(26,21,48,0.6);line-height:1.6;margin:0 0 0.4rem;">Before you can schedule auditions, Build The Show needs to know when your production happens.</p>
+                  <p style="font-size:0.86rem;color:rgba(26,21,48,0.6);line-height:1.6;margin:0 0 1.25rem;">Your rehearsal schedule, performances, callbacks, and auditions all work together. Once your production calendar is built, scheduling slots becomes much easier.</p>
+                  <div style="font-size:0.7rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#572e88;margin-bottom:0.3rem;">Step 1 of 5</div>
+                  <div style="height:4px;background:#efefef;border-radius:999px;margin-bottom:1.1rem;overflow:hidden;"><div style="width:20%;height:100%;background:#572e88;border-radius:999px;"></div></div>
+                  <button onclick="btsProdNav(‘plan-calendar.html’)" style="display:inline-flex;align-items:center;gap:0.55rem;background:#572e88;color:#fff;border:none;border-radius:10px;padding:0.8rem 1.4rem;font-size:0.9rem;font-weight:850;font-family:var(--bts-font);cursor:pointer;margin-bottom:0.6rem;">
+                    <img src="/ASSETS/Images/Icons/navproductioncalendar.svg?v=20260705" style="width:16px;height:16px;filter:brightness(0)invert(1);" alt="" aria-hidden="true" />
+                    Build Production Schedule &rarr;
+                  </button>
+                  <div style="font-size:0.74rem;color:rgba(26,21,48,0.4);">Estimated time: 5&ndash;10 minutes</div>
+                </div>
+              </div>
+              <div style="margin-top:1.75rem;border-top:1px solid rgba(87,46,136,0.08);padding-top:1.25rem;">
+                <div style="font-size:0.88rem;font-weight:850;color:#000;margin-bottom:1rem;">What’s next?</div>
+                <div style="display:flex;align-items:flex-start;">${stepsHtml}</div>
+              </div>
+            </div>`;
+          return;
+        }
+
         host.innerHTML = `
           <div class="aud-visual-hero">
             <div class="aud-visual-hero-content">
@@ -64591,7 +64657,7 @@ See you soon!
                 <h2 class="aud-visual-title">Dashboard</h2>
                 <p class="aud-visual-copy">Set up auditions first. Once performers start signing up, this page becomes your live overview.</p>
               </div>
-              ${teamAccessMode ? '' : '<button type="button" onclick="openAuditionsSubTab(\'setup\')" style="background:#efab45;color:#000;border:none;border-radius:8px;padding:0.55rem 1.1rem;font-weight:850;font-size:0.82rem;font-family:var(--bts-font);cursor:pointer;flex-shrink:0;">Set Up Auditions</button>'}
+              ${teamAccessMode ? ‘’ : ‘<button type="button" onclick="openAuditionsSubTab(\’setup\’)" style="background:#efab45;color:#000;border:none;border-radius:8px;padding:0.55rem 1.1rem;font-weight:850;font-size:0.82rem;font-family:var(--bts-font);cursor:pointer;flex-shrink:0;">Set Up Auditions</button>’}
             </div>
           </div>`;
         return;
