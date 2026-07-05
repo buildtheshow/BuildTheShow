@@ -409,6 +409,7 @@
         folder: null,
         files: [],
         busyKey: '',
+        supportsDocumentType: false,
       };
 
       const bannerEl = document.getElementById('files-banner');
@@ -452,7 +453,10 @@
 
       function slotFiles(slotKey) {
         return state.files
-          .filter(file => Array.isArray(file.tags) && file.tags.includes(slotKey))
+          .filter(file => (
+            String(file?.document_type || '').trim() === slotKey
+            || (Array.isArray(file.tags) && file.tags.includes(slotKey))
+          ))
           .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
       }
 
@@ -499,7 +503,7 @@
           <section class="files-footer">
             <div>
               <h2>What this page is doing</h2>
-              <p>Each upload is stored in the existing production file bucket, grouped into a dedicated <strong>${escapeHtml(PLAN_FOLDER_NAME)}</strong> folder, and tagged by document type so this page can keep each slot tidy.</p>
+              <p>Each upload is stored in the existing production file bucket, grouped into a dedicated <strong>${escapeHtml(PLAN_FOLDER_NAME)}</strong> folder, and marked with an explicit document type so we can reliably use these files later.</p>
             </div>
             <div class="files-tips">
               <div class="files-tip">
@@ -511,8 +515,8 @@
                 <span>Uploading a new version removes the old one for that slot so no one grabs the wrong file.</span>
               </div>
               <div class="files-tip">
-                <strong>Shared structure</strong>
-                <span>This uses the same Supabase storage and the <code>production_files</code> table the rest of the workspace already uses.</span>
+                <strong>Structured type</strong>
+                <span>These uploads can carry a dedicated <code>document_type</code> value like <code>actors-script</code> instead of relying on random filenames.</span>
               </div>
             </div>
           </section>
@@ -642,6 +646,14 @@
         state.folder = created;
       }
 
+      async function detectDocumentTypeSupport() {
+        const { error } = await state.sb
+          .from('production_files')
+          .select('document_type')
+          .limit(1);
+        state.supportsDocumentType = !error;
+      }
+
       async function loadFiles() {
         const { data, error } = await state.sb
           .from('production_files')
@@ -694,6 +706,7 @@
             file_size: file.size || null,
             tags: ['plan-files', slotKey, slot.label]
           };
+          if (state.supportsDocumentType) payload.document_type = slot.key;
           const { data: saved, error: saveError } = await state.sb.from('production_files').insert(payload).select().single();
           if (saveError || !saved) throw saveError || new Error('The uploaded file could not be saved.');
           await loadFiles();
@@ -756,6 +769,7 @@
           await loadProduction();
           setPageState('Preparing file slots…');
           await ensureFolder();
+          await detectDocumentTypeSupport();
           await loadFiles();
           render();
         } catch (error) {
