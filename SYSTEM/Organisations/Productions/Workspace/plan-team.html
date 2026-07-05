@@ -51,6 +51,30 @@
     .ctm-modal-save:disabled { opacity: 0.5; cursor: default; filter: none; }
     .ctm-modal-error { font-size: 0.75rem; color: #d1523d; margin-top: 0.5rem; min-height: 1rem; }
 
+    /* ── Still Needed section ── */
+    .ctm-section-divider {
+      margin: 2.5rem 0 1.5rem;
+      border: none;
+      border-top: 1.5px solid rgba(87,46,136,0.1);
+    }
+    .ctm-section-heading {
+      font-size: 0.65rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: rgba(26,21,48,0.35);
+      margin-bottom: 1rem;
+    }
+    /* Open role cards — muted, dashed border, cursor prompt */
+    .ctm-open-role-card {
+      opacity: 0.6;
+      transition: opacity 0.15s, box-shadow 0.15s;
+    }
+    .ctm-open-role-card:hover { opacity: 1; }
+    .ctm-open-role-card .production-team-card-face {
+      border-style: dashed !important;
+    }
+
     /* ── Toast ── */
     .ctm-toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: #efab45; color: #1a1530; padding: 0.65rem 1.2rem; border-radius: 9px; font-size: 0.82rem; font-weight: 800; box-shadow: 0 4px 16px rgba(0,0,0,0.15); opacity: 0; transform: translateY(6px); transition: opacity 0.2s, transform 0.2s; pointer-events: none; z-index: 9999; }
     .ctm-toast.visible { opacity: 1; transform: translateY(0); }
@@ -156,10 +180,24 @@
       return CREATIVE_ROLE_KEYS.has(r) || d === 'creative team';
     }
 
+    // ── Suggested roles by production type ───────────────
+    const ROLES_BY_TYPE = {
+      musical:    ['Producer', 'Director', 'Music Director', 'Choreographer', 'Vocal Director'],
+      play:       ['Producer', 'Director'],
+      workshop:   ['Producer', 'Director'],
+      concert:    ['Producer', 'Music Director'],
+      dance_show: ['Producer', 'Director', 'Choreographer'],
+      other:      ['Producer', 'Director'],
+    };
+    function suggestedRoles(type) {
+      return ROLES_BY_TYPE[type] || ROLES_BY_TYPE.other;
+    }
+
     // ── State ─────────────────────────────────────────────
     let members = [];
     let prodName = '';
     let prodCountry = 'CA';
+    let prodType = 'other';
     let _editId = null;
     let _toastTimer;
 
@@ -209,38 +247,69 @@
       if (!prodId) { renderEmpty('No production selected.'); return; }
 
       const [prodRes, membersRes] = await Promise.all([
-        sb.from('productions').select('title, subtitle, holiday_country').eq('id', prodId).single(),
+        sb.from('productions').select('title, subtitle, holiday_country, production_type').eq('id', prodId).single(),
         sb.from('production_team_members').select('*').eq('production_id', prodId).eq('is_active', true).order('created_at', { ascending: true }),
       ]);
 
       prodName    = prodRes.data?.title || 'Your Production';
       prodCountry = prodRes.data?.holiday_country || 'CA';
+      prodType    = prodRes.data?.production_type || 'other';
       members     = (membersRes.data || []).filter(isCreative);
       render();
+    }
+
+    // ── Open role card (no flip — click opens Add modal) ──
+    function renderOpenRoleCard(role, colour) {
+      const m = { role, name: '', card_state: 'open', note_color: colour };
+      const safeRole = role.replace(/'/g, '\\\'');
+      return `
+        <div class="production-team-card-wrap production-team-card-wrap--volunteer" style="--pt-card-color:${esc(colour)};--volunteer-card-color:${esc(colour)};">
+          <div class="production-team-card production-team-card--volunteer ctm-open-role-card"
+               role="button" tabindex="0"
+               aria-label="Assign ${esc(role)}"
+               onclick="openAddModal('${safeRole}')"
+               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openAddModal('${safeRole}');}">
+            <div class="production-team-card-inner">
+              <div class="production-team-card-face production-team-card-volunteer-face">
+                ${renderVolunteerCard(m)}
+              </div>
+            </div>
+          </div>
+        </div>`;
     }
 
     // ── Render ────────────────────────────────────────────
     function render() {
       const wrap = document.getElementById('ctm-grid-wrap');
-      if (!members.length) {
-        wrap.innerHTML = `
+
+      const filledRoles = new Set(members.map(m => String(m.role || '').toLowerCase().trim()));
+      const unfilled = suggestedRoles(prodType).filter(r => !filledRoles.has(r.toLowerCase()));
+
+      let html = '';
+
+      if (members.length) {
+        const cardsHtml = members.map(m => {
+          if (!m.note_color) m.note_color = roleColour(m.role);
+          return renderProductionTeamCard(m, { showManagement: true });
+        }).join('');
+        html += `<div class="ctm-grid">${cardsHtml}</div>`;
+      } else {
+        html += `
           <div class="ctm-empty">
             <div class="ctm-empty-title">No creative team members yet</div>
             <div class="ctm-empty-sub">Add your Producer, Director, Choreographer, and other creative leads here.<br>Send their portal access when you're ready.</div>
           </div>`;
-        return;
       }
 
-      // Use the existing renderProductionTeamCard template verbatim
-      const cardsHtml = members.map(m => {
-        // Map our colour onto note_color so the template reads it correctly
-        if (!m.note_color) m.note_color = roleColour(m.role);
-        return renderProductionTeamCard(m, { showManagement: true });
-      }).join('');
+      if (unfilled.length) {
+        html += `<hr class="ctm-section-divider"><div class="ctm-section-heading">Still Needed</div>`;
+        html += `<div class="ctm-grid">`;
+        html += unfilled.map(role => renderOpenRoleCard(role, roleColour(role))).join('');
+        html += `</div>`;
+      }
 
-      wrap.innerHTML = `<div class="ctm-grid">${cardsHtml}</div>`;
+      wrap.innerHTML = html;
 
-      // Run fit hooks for role identifier text sizing
       requestAnimationFrame(() => requestAnimationFrame(() => {
         if (typeof fitVolunteerRoleIdentifiers === 'function') fitVolunteerRoleIdentifiers();
       }));
@@ -336,13 +405,32 @@
     }
 
     // ── Modal ─────────────────────────────────────────────
-    function openAddModal() {
+    function openAddModal(prefillRole) {
       _editId = null;
       document.getElementById('ctm-modal-title').textContent = 'Add Team Member';
       document.getElementById('ctm-modal-sub').textContent = "Add someone to the creative team. Send their portal invite when you're ready.";
       document.getElementById('ctm-modal-save-btn').textContent = 'Add Member';
-      document.getElementById('ctm-f-role').value = 'producer';
-      document.getElementById('ctm-f-role-custom').style.display = 'none';
+
+      const roleEl = document.getElementById('ctm-f-role');
+      const customEl = document.getElementById('ctm-f-role-custom');
+      if (prefillRole) {
+        const normalised = String(prefillRole).toLowerCase().trim();
+        const hasOption = Array.from(roleEl.options).some(o => o.value === normalised);
+        if (hasOption) {
+          roleEl.value = normalised;
+          customEl.style.display = 'none';
+          customEl.value = '';
+        } else {
+          roleEl.value = '__custom__';
+          customEl.style.display = 'block';
+          customEl.value = prefillRole;
+        }
+      } else {
+        roleEl.value = 'producer';
+        customEl.style.display = 'none';
+        customEl.value = '';
+      }
+
       document.getElementById('ctm-f-name').value = '';
       document.getElementById('ctm-f-email').value = '';
       document.getElementById('ctm-f-phone').value = '';
