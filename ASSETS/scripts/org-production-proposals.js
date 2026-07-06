@@ -13,12 +13,19 @@
   };
   const LEVELS = ['low', 'medium', 'high'];
   const PROPOSAL_TAG = 'proposal-attachment';
+  const INTAKE_STATUS_META = {
+    open: { label: 'Open', color: '#3a6646', bg: 'rgba(118,158,123,0.2)' },
+    closed: { label: 'Closed', color: '#5a6370', bg: 'rgba(90,99,112,0.12)' },
+    expired: { label: 'Expired', color: '#b85e00', bg: 'rgba(239,171,69,0.22)' },
+  };
 
   const state = {
     loaded: false,
     loading: false,
     proposals: [],
+    intakes: [],
     selectedProposalId: '',
+    selectedIntakeId: 'all',
     compareIds: new Set(),
     proposalFolderId: '',
     attachmentsByProposal: {},
@@ -146,6 +153,22 @@
       .pp-toolbar-divider { width:1px; height:22px; background:rgba(87,46,136,0.12); flex-shrink:0; }
       .pp-filter-select { font-family:var(--bts-font); font-size:0.82rem; color:#1a1530; border:1.5px solid rgba(87,46,136,0.2); border-radius:8px; background:#fff; padding:0.42rem 0.75rem; cursor:pointer; }
       .pp-filter-btn { font-family:var(--bts-font); font-size:0.82rem; font-weight:700; color:#572e88; border:1.5px solid rgba(87,46,136,0.2); border-radius:8px; background:#fff; padding:0.42rem 0.85rem; cursor:pointer; display:flex; align-items:center; gap:0.35rem; }
+      .pp-intake-panel { background:#fff; border:1px solid rgba(87,46,136,0.1); border-radius:14px; padding:1rem; display:grid; gap:0.9rem; }
+      .pp-intake-head { display:flex; gap:0.75rem; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; }
+      .pp-intake-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0.85rem; }
+      .pp-intake-card { border:1px solid rgba(87,46,136,0.1); border-radius:14px; padding:0.95rem; background:linear-gradient(180deg,#fff,#fbf9ff); display:grid; gap:0.7rem; }
+      .pp-intake-card.active { border-color:#572e88; box-shadow:0 10px 24px rgba(87,46,136,0.12); }
+      .pp-intake-top { display:flex; gap:0.75rem; align-items:flex-start; justify-content:space-between; }
+      .pp-intake-title { font-size:0.92rem; font-weight:900; color:#1a1530; line-height:1.25; }
+      .pp-intake-sub { font-size:0.76rem; color:#7d6f97; margin-top:0.15rem; }
+      .pp-intake-code { border-radius:10px; background:rgba(87,46,136,0.05); border:1px dashed rgba(87,46,136,0.18); padding:0.6rem 0.7rem; }
+      .pp-intake-code strong { display:block; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; color:#9a90b0; margin-bottom:0.18rem; }
+      .pp-intake-code span { font-size:0.88rem; font-weight:900; color:#1a1530; letter-spacing:0.04em; }
+      .pp-intake-meta { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.45rem 0.7rem; }
+      .pp-intake-meta-item { font-size:0.76rem; color:#5b4d74; }
+      .pp-intake-meta-item strong { display:block; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.05em; color:#9a90b0; margin-bottom:0.12rem; }
+      .pp-intake-actions { display:flex; gap:0.45rem; flex-wrap:wrap; }
+      .pp-intake-empty { border-radius:14px; padding:1.5rem; text-align:center; border:1px dashed rgba(87,46,136,0.18); color:#8f84a5; background:rgba(87,46,136,0.03); }
 
       /* ---- table ---- */
       .pp-table-wrap { background:#fff; border:1px solid rgba(87,46,136,0.1); border-radius:14px; overflow:hidden; }
@@ -206,6 +229,7 @@
       .opp-modal-overlay { display:none; position:fixed; inset:0; background:rgba(26,21,48,0.55); z-index:3200; padding:1rem; align-items:center; justify-content:center; }
       .opp-modal-overlay.open { display:flex; }
       .opp-modal { width:min(1080px,100%); max-height:92vh; overflow:auto; background:#fff; border-radius:18px; box-shadow:0 30px 80px rgba(26,21,48,0.28); }
+      .opp-modal.intake-modal-shell { width:min(560px,100%); }
       .opp-modal-head { padding:1rem 1.15rem; border-bottom:1px solid rgba(87,46,136,0.08); display:flex; align-items:center; justify-content:space-between; gap:0.75rem; position:sticky; top:0; background:#fff; z-index:2; }
       .opp-modal-body { padding:1rem 1.15rem 1.2rem; display:grid; gap:1rem; }
       .opp-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.8rem; }
@@ -235,6 +259,7 @@
       .opp-attachment-item a { color:#572e88; font-weight:800; text-decoration:none; }
       @media (max-width:900px) {
         .pp-stat-row { grid-template-columns:repeat(2,1fr); }
+        .pp-intake-grid { grid-template-columns:1fr; }
         .pp-about-card { grid-template-columns:1fr; }
         .pp-table thead th:nth-child(n+5):nth-child(-n+8) { display:none; }
         .pp-table tbody td:nth-child(n+5):nth-child(-n+8) { display:none; }
@@ -248,103 +273,144 @@
   }
 
   function ensureModalShell() {
-    if (document.getElementById('proposal-form-modal')) return;
-    const wrap = document.createElement('div');
-    wrap.innerHTML = `
-      <div class="opp-modal-overlay" id="proposal-form-modal">
-        <div class="opp-modal">
-          <div class="opp-modal-head">
-            <div>
-              <div class="opp-panel-title" id="proposal-modal-title">New Production Proposal</div>
-              <div class="opp-panel-copy">A readable board-packet style pitch before a production exists.</div>
-            </div>
-            <button type="button" class="btn-secondary" onclick="closeProposalModal()">Close</button>
-          </div>
-          <div class="opp-modal-body">
-            <div id="proposal-form-error" class="form-error-msg"></div>
-            <div class="opp-form-section">
-              <h3>Show Information</h3>
-              <div class="opp-form-grid">
-                <div class="form-group"><label class="form-label">Proposed Show Title</label><input class="form-input" id="pp-title" type="text" /></div>
-                <div class="form-group"><label class="form-label">Show Version</label><input class="form-input" id="pp-version" type="text" /></div>
-                <div class="form-group"><label class="form-label">Licensing Company</label><input class="form-input" id="pp-licensing" type="text" /></div>
-                <div class="form-group"><label class="form-label">Estimated Licensing Fee</label><input class="form-input" id="pp-fee" type="number" min="0" step="0.01" /></div>
-                <div class="form-group"><label class="form-label">Pitch Submitted By</label><input class="form-input" id="pp-submitted-by" type="text" /></div>
-                <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="pp-status">${Object.entries(STATUS_META).map(([key, meta]) => `<option value="${key}">${esc(meta.label)}</option>`).join('')}</select></div>
+    if (!document.getElementById('proposal-form-modal')) {
+      const wrap = document.createElement('div');
+      wrap.innerHTML = `
+        <div class="opp-modal-overlay" id="proposal-form-modal">
+          <div class="opp-modal">
+            <div class="opp-modal-head">
+              <div>
+                <div class="opp-panel-title" id="proposal-modal-title">New Production Proposal</div>
+                <div class="opp-panel-copy">A readable board-packet style pitch before a production exists.</div>
               </div>
+              <button type="button" class="btn-secondary" onclick="closeProposalModal()">Close</button>
             </div>
-            <div class="opp-form-section">
-              <h3>Show at a Glance</h3>
-              <div class="opp-form-grid three">
-                <div class="form-group"><label class="form-label">Runtime (minutes)</label><input class="form-input" id="pp-runtime" type="number" min="0" /></div>
-                <div class="form-group"><label class="form-label">Number of Songs</label><input class="form-input" id="pp-songs" type="number" min="0" /></div>
-                <div class="form-group"><label class="form-label">Named Roles</label><input class="form-input" id="pp-roles" type="number" min="0" /></div>
-                <div class="form-group"><label class="form-label">Intermission</label><select class="form-select" id="pp-intermission"><option value="yes">Yes</option><option value="no">No</option></select></div>
-                <div class="form-group opp-form-span-2"><label class="form-label">Genre / Type</label><input class="form-input" id="pp-genre" type="text" placeholder="Musical, play, concert, etc." /></div>
+            <div class="opp-modal-body">
+              <div id="proposal-form-error" class="form-error-msg"></div>
+              <div class="opp-form-section">
+                <h3>Show Information</h3>
+                <div class="opp-form-grid">
+                  <div class="form-group"><label class="form-label">Season Pitch</label><select class="form-select" id="pp-intake"></select></div>
+                  <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="pp-status">${Object.entries(STATUS_META).map(([key, meta]) => `<option value="${key}">${esc(meta.label)}</option>`).join('')}</select></div>
+                  <div class="form-group"><label class="form-label">Proposed Show Title</label><input class="form-input" id="pp-title" type="text" /></div>
+                  <div class="form-group"><label class="form-label">Show Version</label><input class="form-input" id="pp-version" type="text" /></div>
+                  <div class="form-group"><label class="form-label">Licensing Company</label><input class="form-input" id="pp-licensing" type="text" /></div>
+                  <div class="form-group"><label class="form-label">Estimated Licensing Fee</label><input class="form-input" id="pp-fee" type="number" min="0" step="0.01" /></div>
+                  <div class="form-group"><label class="form-label">Pitch Submitted By</label><input class="form-input" id="pp-submitted-by" type="text" /></div>
+                </div>
               </div>
-            </div>
-            <div class="opp-form-section">
-              <h3>Story</h3>
-              <div class="opp-form-grid">
-                <div class="form-group opp-form-span-2"><label class="form-label">Short Synopsis</label><textarea class="form-textarea" id="pp-synopsis"></textarea></div>
-                <div class="form-group opp-form-span-2"><label class="form-label">Why is this a good fit for our organization?</label><textarea class="form-textarea" id="pp-fit"></textarea></div>
+              <div class="opp-form-section">
+                <h3>Show at a Glance</h3>
+                <div class="opp-form-grid three">
+                  <div class="form-group"><label class="form-label">Runtime (minutes)</label><input class="form-input" id="pp-runtime" type="number" min="0" /></div>
+                  <div class="form-group"><label class="form-label">Number of Songs</label><input class="form-input" id="pp-songs" type="number" min="0" /></div>
+                  <div class="form-group"><label class="form-label">Named Roles</label><input class="form-input" id="pp-roles" type="number" min="0" /></div>
+                  <div class="form-group"><label class="form-label">Intermission</label><select class="form-select" id="pp-intermission"><option value="yes">Yes</option><option value="no">No</option></select></div>
+                  <div class="form-group opp-form-span-2"><label class="form-label">Genre / Type</label><input class="form-input" id="pp-genre" type="text" placeholder="Musical, play, concert, etc." /></div>
+                </div>
               </div>
-            </div>
-            <div class="opp-form-section">
-              <h3>Cast</h3>
-              <div class="opp-form-grid">
-                <div class="form-group opp-form-span-2"><label class="form-label">Character List</label><textarea class="form-textarea" id="pp-character-list"></textarea></div>
-                <div class="form-group"><label class="form-label">Ensemble Opportunities</label><textarea class="form-textarea" id="pp-ensemble"></textarea></div>
-                <div class="form-group"><label class="form-label">Gender Flexibility</label><textarea class="form-textarea" id="pp-gender-flex"></textarea></div>
+              <div class="opp-form-section">
+                <h3>Story</h3>
+                <div class="opp-form-grid">
+                  <div class="form-group opp-form-span-2"><label class="form-label">Short Synopsis</label><textarea class="form-textarea" id="pp-synopsis"></textarea></div>
+                  <div class="form-group opp-form-span-2"><label class="form-label">Why is this a good fit for our organization?</label><textarea class="form-textarea" id="pp-fit"></textarea></div>
+                </div>
               </div>
-            </div>
-            <div class="opp-form-section">
-              <h3>Production</h3>
-              <div class="opp-form-grid three">
-                <div class="form-group"><label class="form-label">Sets</label><select class="form-select" id="pp-sets">${levelOptions()}</select></div>
-                <div class="form-group"><label class="form-label">Costumes</label><select class="form-select" id="pp-costumes">${levelOptions()}</select></div>
-                <div class="form-group"><label class="form-label">Choreography</label><select class="form-select" id="pp-choreo">${levelOptions()}</select></div>
-                <div class="form-group"><label class="form-label">Music</label><select class="form-select" id="pp-music">${levelOptions()}</select></div>
-                <div class="form-group"><label class="form-label">Technical Requirements</label><select class="form-select" id="pp-tech">${levelOptions()}</select></div>
+              <div class="opp-form-section">
+                <h3>Cast</h3>
+                <div class="opp-form-grid">
+                  <div class="form-group opp-form-span-2"><label class="form-label">Character List</label><textarea class="form-textarea" id="pp-character-list"></textarea></div>
+                  <div class="form-group"><label class="form-label">Ensemble Opportunities</label><textarea class="form-textarea" id="pp-ensemble"></textarea></div>
+                  <div class="form-group"><label class="form-label">Gender Flexibility</label><textarea class="form-textarea" id="pp-gender-flex"></textarea></div>
+                </div>
               </div>
-            </div>
-            <div class="opp-form-section">
-              <h3>Considerations</h3>
-              <div class="opp-form-grid">
-                <div class="form-group"><label class="form-label">Content Warnings</label><textarea class="form-textarea" id="pp-content"></textarea></div>
-                <div class="form-group"><label class="form-label">Special Requirements</label><textarea class="form-textarea" id="pp-special"></textarea></div>
-                <div class="form-group opp-form-span-2"><label class="form-label">Biggest Challenge</label><textarea class="form-textarea" id="pp-challenge"></textarea></div>
+              <div class="opp-form-section">
+                <h3>Production</h3>
+                <div class="opp-form-grid three">
+                  <div class="form-group"><label class="form-label">Sets</label><select class="form-select" id="pp-sets">${levelOptions()}</select></div>
+                  <div class="form-group"><label class="form-label">Costumes</label><select class="form-select" id="pp-costumes">${levelOptions()}</select></div>
+                  <div class="form-group"><label class="form-label">Choreography</label><select class="form-select" id="pp-choreo">${levelOptions()}</select></div>
+                  <div class="form-group"><label class="form-label">Music</label><select class="form-select" id="pp-music">${levelOptions()}</select></div>
+                  <div class="form-group"><label class="form-label">Technical Requirements</label><select class="form-select" id="pp-tech">${levelOptions()}</select></div>
+                </div>
               </div>
-            </div>
-            <div class="opp-form-section">
-              <h3>Attachments</h3>
-              <div class="opp-form-grid">
-                <div class="form-group"><label class="form-label">Character List Upload</label><input class="form-input" id="pp-character-file" type="file" /></div>
-                <div class="form-group"><label class="form-label">Song List Upload</label><input class="form-input" id="pp-song-file" type="file" /></div>
-                <div class="form-group opp-form-span-2"><label class="form-label">Other Supporting Documents</label><input class="form-input" id="pp-support-files" type="file" multiple /></div>
+              <div class="opp-form-section">
+                <h3>Considerations</h3>
+                <div class="opp-form-grid">
+                  <div class="form-group"><label class="form-label">Content Warnings</label><textarea class="form-textarea" id="pp-content"></textarea></div>
+                  <div class="form-group"><label class="form-label">Special Requirements</label><textarea class="form-textarea" id="pp-special"></textarea></div>
+                  <div class="form-group opp-form-span-2"><label class="form-label">Biggest Challenge</label><textarea class="form-textarea" id="pp-challenge"></textarea></div>
+                </div>
               </div>
-              <div id="proposal-existing-files" class="opp-attachment-list" style="margin-top:0.8rem;"></div>
-            </div>
-            <div class="opp-form-section">
-              <h3>Additional Notes</h3>
-              <div class="opp-form-grid">
-                <div class="form-group opp-form-span-2"><label class="form-label">Proposal Notes</label><textarea class="form-textarea" id="pp-additional-notes"></textarea></div>
-                <div class="form-group opp-form-span-2"><label class="form-label">Internal Notes</label><textarea class="form-textarea" id="pp-internal-notes"></textarea></div>
+              <div class="opp-form-section">
+                <h3>Attachments</h3>
+                <div class="opp-form-grid">
+                  <div class="form-group"><label class="form-label">Character List Upload</label><input class="form-input" id="pp-character-file" type="file" /></div>
+                  <div class="form-group"><label class="form-label">Song List Upload</label><input class="form-input" id="pp-song-file" type="file" /></div>
+                  <div class="form-group opp-form-span-2"><label class="form-label">Other Supporting Documents</label><input class="form-input" id="pp-support-files" type="file" multiple /></div>
+                </div>
+                <div id="proposal-existing-files" class="opp-attachment-list" style="margin-top:0.8rem;"></div>
               </div>
-            </div>
-            <div class="opp-form-actions">
-              <button type="button" class="btn-secondary" onclick="closeProposalModal()">Cancel</button>
-              <button type="button" class="btn-secondary" id="proposal-save-draft-btn" onclick="saveProposalForm('draft')">Save Draft</button>
-              <button type="button" class="btn-primary" id="proposal-submit-btn" onclick="saveProposalForm('submit')">Submit Proposal</button>
+              <div class="opp-form-section">
+                <h3>Additional Notes</h3>
+                <div class="opp-form-grid">
+                  <div class="form-group opp-form-span-2"><label class="form-label">Proposal Notes</label><textarea class="form-textarea" id="pp-additional-notes"></textarea></div>
+                  <div class="form-group opp-form-span-2"><label class="form-label">Internal Notes</label><textarea class="form-textarea" id="pp-internal-notes"></textarea></div>
+                </div>
+              </div>
+              <div class="opp-form-actions">
+                <button type="button" class="btn-secondary" onclick="closeProposalModal()">Cancel</button>
+                <button type="button" class="btn-secondary" id="proposal-save-draft-btn" onclick="saveProposalForm('draft')">Save Draft</button>
+                <button type="button" class="btn-primary" id="proposal-submit-btn" onclick="saveProposalForm('submit')">Submit Proposal</button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    `;
-    document.body.appendChild(wrap.firstElementChild);
-    document.getElementById('proposal-form-modal').addEventListener('click', function (event) {
-      if (event.target === event.currentTarget) closeProposalModal();
-    });
+      `;
+      document.body.appendChild(wrap.firstElementChild);
+      document.getElementById('proposal-form-modal').addEventListener('click', function (event) {
+        if (event.target === event.currentTarget) closeProposalModal();
+      });
+    }
+
+    if (!document.getElementById('proposal-intake-modal')) {
+      const intakeWrap = document.createElement('div');
+      intakeWrap.innerHTML = `
+        <div class="opp-modal-overlay" id="proposal-intake-modal">
+          <div class="opp-modal intake-modal-shell">
+            <div class="opp-modal-head">
+              <div>
+                <div class="opp-panel-title" id="proposal-intake-modal-title">New Season Pitch</div>
+                <div class="opp-panel-copy">Create a specific intake with its own share link and passcode.</div>
+              </div>
+              <button type="button" class="btn-secondary" onclick="closeProposalIntakeModal()">Close</button>
+            </div>
+            <div class="opp-modal-body">
+              <div id="proposal-intake-form-error" class="form-error-msg"></div>
+              <div class="opp-form-section">
+                <h3>Season Pitch</h3>
+                <div class="opp-form-grid">
+                  <div class="form-group"><label class="form-label">Pitch Title</label><input class="form-input" id="ppi-title" type="text" /></div>
+                  <div class="form-group"><label class="form-label">Season Label</label><input class="form-input" id="ppi-season-label" type="text" placeholder="2027 Mainstage Season" /></div>
+                  <div class="form-group opp-form-span-2"><label class="form-label">Description</label><textarea class="form-textarea" id="ppi-description"></textarea></div>
+                  <div class="form-group"><label class="form-label">Passcode</label><input class="form-input" id="ppi-access-code" type="text" /></div>
+                  <div class="form-group"><label class="form-label">Closes At</label><input class="form-input" id="ppi-closes-at" type="datetime-local" /></div>
+                  <div class="form-group"><label class="form-label">Open For Submissions</label><select class="form-select" id="ppi-is-open"><option value="yes">Yes</option><option value="no">No</option></select></div>
+                </div>
+              </div>
+              <div class="opp-form-actions">
+                <button type="button" class="btn-secondary" onclick="closeProposalIntakeModal()">Cancel</button>
+                <button type="button" class="btn-primary" onclick="saveProposalIntakeForm()">Save Season Pitch</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(intakeWrap.firstElementChild);
+      document.getElementById('proposal-intake-modal').addEventListener('click', function (event) {
+        if (event.target === event.currentTarget) closeProposalIntakeModal();
+      });
+    }
   }
 
   function levelOptions() {
@@ -401,6 +467,47 @@
     return attachmentsForProposal(proposalId).filter(file => Array.isArray(file.tags) && file.tags.includes(proposalKindTag(kind)));
   }
 
+  function proposalIntakeById(id) {
+    return state.intakes.find(item => item.id === id) || null;
+  }
+
+  function proposalIntakeStatus(intake) {
+    if (!intake) return 'closed';
+    if (!intake.is_open) return 'closed';
+    if (intake.closes_at && new Date(intake.closes_at) < new Date()) return 'expired';
+    return 'open';
+  }
+
+  function proposalIntakeStatusPill(intake) {
+    const key = proposalIntakeStatus(intake);
+    const meta = INTAKE_STATUS_META[key] || INTAKE_STATUS_META.closed;
+    return `<span class="opp-status-pill" style="color:${meta.color};background:${meta.bg};">${esc(meta.label)}</span>`;
+  }
+
+  function fmtDateTimeInput(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+  }
+
+  function generateAccessCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let out = 'BTS-';
+    for (let i = 0; i < 6; i += 1) out += chars[Math.floor(Math.random() * chars.length)];
+    return out;
+  }
+
+  async function loadProductionProposalIntakes() {
+    const { data, error } = await sb().from('production_proposal_intakes')
+      .select('*')
+      .eq('organization_id', currentOrg().id)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    state.intakes = data || [];
+    if (state.selectedIntakeId !== 'all' && !proposalIntakeById(state.selectedIntakeId)) state.selectedIntakeId = 'all';
+  }
+
   async function loadProductionProposalsTab() {
     if (state.loading || !currentOrg()) return;
     state.loading = true;
@@ -408,8 +515,9 @@
     ensureModalShell();
     try {
       await ensureProposalFolder();
+      await loadProductionProposalIntakes();
       const { data, error } = await sb().from('production_proposals')
-        .select('*')
+        .select('*, production_proposal_intakes(id, title, season_label, is_open, closes_at)')
         .eq('organization_id', currentOrg().id)
         .order('updated_at', { ascending: false });
       if (error) throw error;
@@ -446,13 +554,15 @@
 
   function filteredProposals() {
     let list = [...state.proposals];
+    if (state.selectedIntakeId !== 'all') list = list.filter(item => item.intake_id === state.selectedIntakeId);
     if (state.filterStatus !== 'all') list = list.filter(item => item.status === state.filterStatus);
     if (state.searchQuery) {
       const q = state.searchQuery.toLowerCase();
       list = list.filter(item =>
         (item.proposed_show_title || '').toLowerCase().includes(q) ||
         (item.licensing_company || '').toLowerCase().includes(q) ||
-        (item.pitch_submitted_by || '').toLowerCase().includes(q)
+        (item.pitch_submitted_by || '').toLowerCase().includes(q) ||
+        (proposalIntakeById(item.intake_id)?.title || item.production_proposal_intakes?.title || '').toLowerCase().includes(q)
       );
     }
     return list;
@@ -493,8 +603,10 @@
     const letter = (proposal.proposed_show_title || 'P')[0].toUpperCase();
     const submitterInitials = initialsOf(proposal.pitch_submitted_by);
     const licensor = proposal.licensing_company || proposal.show_version || '';
+    const intake = proposalIntakeById(proposal.intake_id) || proposal.production_proposal_intakes || null;
     return `
       <tr onclick="openProposalModal('${proposal.id}')">
+        <td>${intake ? `<div class="pp-show-name" style="font-size:0.8rem;">${esc(intake.title || 'Season Pitch')}</div><div class="pp-show-sub">${esc(intake.season_label || '')}</div>` : '<span style="color:rgba(26,21,48,0.4);">—</span>'}</td>
         <td>
           <div class="pp-show-cell">
             <div class="pp-show-thumb" style="background:${thumb};">${esc(letter)}</div>
@@ -530,6 +642,8 @@
   }
 
   function showProposalRowMenu(event, proposalId) {
+    const proposal = proposalById(proposalId);
+    const intake = proposalIntakeById(proposal?.intake_id) || proposal?.production_proposal_intakes || null;
     document.getElementById('pp-row-menu')?.remove();
     const btn = event.currentTarget;
     const rect = btn.getBoundingClientRect();
@@ -538,7 +652,7 @@
     menu.className = 'pp-row-menu';
     menu.innerHTML = `
       <button class="pp-row-menu-item" onclick="openProposalModal('${proposalId}');document.getElementById('pp-row-menu')?.remove()">Edit Proposal</button>
-      <button class="pp-row-menu-item" onclick="copyProposalShareLink();document.getElementById('pp-row-menu')?.remove()">Copy Share Link</button>
+      ${intake ? `<button class="pp-row-menu-item" onclick="copyProposalIntakeInvite('${intake.id}');document.getElementById('pp-row-menu')?.remove()">Copy Intake Invite</button>` : ''}
       <div class="pp-row-menu-sep"></div>
       <button class="pp-row-menu-item" onclick="approveAndBuildProposal('${proposalId}');document.getElementById('pp-row-menu')?.remove()">Approve &amp; Build</button>
       <button class="pp-row-menu-item danger" onclick="archiveProposal('${proposalId}');document.getElementById('pp-row-menu')?.remove()">Archive</button>
@@ -553,10 +667,48 @@
     }, 0);
   }
 
+  function renderIntakeMeta(label, value) {
+    return `<div class="pp-intake-meta-item"><strong>${esc(label)}</strong>${esc(value || '—')}</div>`;
+  }
+
+  function shareInviteText(intake, url) {
+    return `${intake.title}\n${url}\nPasscode: ${intake.access_code}`;
+  }
+
+  function renderIntakeCard(intake) {
+    const active = intake.id === state.selectedIntakeId;
+    return `
+      <div class="pp-intake-card${active ? ' active' : ''}">
+        <div class="pp-intake-top">
+          <div>
+            <div class="pp-intake-title">${esc(intake.title || 'Season Pitch')}</div>
+            <div class="pp-intake-sub">${esc(intake.season_label || 'Proposal intake')}</div>
+          </div>
+          ${proposalIntakeStatusPill(intake)}
+        </div>
+        <div class="pp-intake-code">
+          <strong>Passcode</strong>
+          <span>${esc(intake.access_code || '—')}</span>
+        </div>
+        <div class="pp-intake-meta">
+          ${renderIntakeMeta('Submissions', state.proposals.filter(item => item.intake_id === intake.id).length)}
+          ${renderIntakeMeta('Closes', intake.closes_at ? fmtDateTime(intake.closes_at) : 'No close date')}
+        </div>
+        <div class="pp-intake-actions">
+          <button class="btn-secondary" onclick="setProposalIntakeFilter('${intake.id}')">View</button>
+          <button class="btn-secondary" onclick="openProposalIntakeShareTab('${intake.id}')">Open Form</button>
+          <button class="btn-secondary" onclick="copyProposalIntakeInvite('${intake.id}')">Copy Invite</button>
+          <button class="btn-secondary" onclick="openProposalIntakeModal('${intake.id}')">Edit</button>
+        </div>
+      </div>
+    `;
+  }
+
   function renderProposalsTab() {
     const root = proposalRoot();
     if (!root) return;
     const proposals = filteredProposals();
+    const selectedIntake = state.selectedIntakeId === 'all' ? null : proposalIntakeById(state.selectedIntakeId);
     const total = state.proposals.length;
     const underReviewCt = state.proposals.filter(function(p) { return p.status === 'under_review'; }).length;
     const shortlistedCt = state.proposals.filter(function(p) { return p.status === 'shortlisted'; }).length;
@@ -566,6 +718,11 @@
     const statusOptions = Object.keys(STATUS_META).map(function(key) {
       return '<option value="' + key + '"' + (state.filterStatus === key ? ' selected' : '') + '>' + esc(STATUS_META[key].label) + '</option>';
     }).join('');
+    const intakeOptions = ['<option value="all">All Season Pitches</option>'].concat(
+      state.intakes.map(function(intake) {
+        return `<option value="${intake.id}"${state.selectedIntakeId === intake.id ? ' selected' : ''}>${esc(intake.title)}</option>`;
+      })
+    ).join('');
 
     root.innerHTML = `
       <div class="opp-shell">
@@ -575,6 +732,22 @@
           ${renderStatCard('Shortlisted', shortlistedCt, 'Strong contenders', 'rgba(120,187,212,0.2)')}
           ${renderStatCard('Selected', selectedCt, 'Moving to production', 'rgba(118,158,123,0.2)')}
           ${renderStatCard('Archived', archivedCt, 'Not selected', 'rgba(90,99,112,0.12)')}
+        </div>
+
+        <div class="pp-intake-panel">
+          <div class="pp-intake-head">
+            <div>
+              <div class="opp-panel-title">Season Pitch Intakes</div>
+              <div class="opp-panel-copy">Each season pitch gets its own URL, passcode, and submission history.</div>
+            </div>
+            <div style="display:flex;gap:0.55rem;flex-wrap:wrap;">
+              <button class="btn-secondary" onclick="setProposalIntakeFilter('all')">View All</button>
+              <button class="btn-primary" onclick="openProposalIntakeModal()">+ New Season Pitch</button>
+            </div>
+          </div>
+          ${state.intakes.length
+            ? `<div class="pp-intake-grid">${state.intakes.map(renderIntakeCard).join('')}</div>`
+            : `<div class="pp-intake-empty">No season pitches yet. Create one first, then share its unique URL and passcode.</div>`}
         </div>
 
         <div class="pp-toolbar">
@@ -587,19 +760,17 @@
             <option value="all"${state.filterStatus === 'all' ? ' selected' : ''}>All Statuses</option>
             ${statusOptions}
           </select>
-          <select class="pp-filter-select">
-            <option>All Seasons</option>
+          <select class="pp-filter-select" onchange="setProposalIntakeFilter(this.value)">
+            ${intakeOptions}
           </select>
-          <button class="pp-filter-btn">
-            <img src="/ASSETS/Images/Icons/Filter.svg?v=20260705" style="width:13px;height:13px;opacity:0.55;" alt="" aria-hidden="true" />
-            Filters
-          </button>
+          ${selectedIntake ? `<button class="pp-filter-btn" onclick="copyProposalIntakeInvite('${selectedIntake.id}')">Copy Invite</button>` : ''}
         </div>
 
         <div class="pp-table-wrap">
           <table class="pp-table">
             <thead>
               <tr>
+                <th>Season Pitch</th>
                 <th>Show</th>
                 <th>Submitted By</th>
                 <th>Date Submitted</th>
@@ -615,7 +786,7 @@
             <tbody>
               ${proposals.length
                 ? proposals.map(renderProposalRow).join('')
-                : '<tr><td colspan="10" class="pp-empty-row">No proposals match your search. Try a different filter or add a new proposal.</td></tr>'}
+                : '<tr><td colspan="11" class="pp-empty-row">No proposals match your search. Try a different filter or share an active season pitch.</td></tr>'}
             </tbody>
           </table>
         </div>
@@ -635,11 +806,11 @@
           <div>
             <div class="pp-next-steps-title">Next Steps</div>
             <div class="pp-next-steps">
-              <div class="pp-next-step"><span class="pp-next-step-num">1.</span><span>Create a new proposal using the button above.</span></div>
-              <div class="pp-next-step"><span class="pp-next-step-num">2.</span><span>Fill out as much information as you can.</span></div>
-              <div class="pp-next-step"><span class="pp-next-step-num">3.</span><span>Submit for review when you are ready.</span></div>
+              <div class="pp-next-step"><span class="pp-next-step-num">1.</span><span>Create a new season pitch with its own passcode.</span></div>
+              <div class="pp-next-step"><span class="pp-next-step-num">2.</span><span>Share that intake link with the people you want pitching shows.</span></div>
+              <div class="pp-next-step"><span class="pp-next-step-num">3.</span><span>Review submitted proposals and approve the best fit.</span></div>
             </div>
-            <button class="pp-learn-more" onclick="copyProposalShareLink()">Share proposal form with your team &rarr;</button>
+            ${selectedIntake ? `<button class="pp-learn-more" onclick="copyProposalIntakeInvite('${selectedIntake.id}')">Copy invite for this season pitch &rarr;</button>` : ''}
           </div>
         </div>
       </div>
@@ -727,6 +898,7 @@
   }
 
   function renderProposalDetail(proposal) {
+    const intake = proposalIntakeById(proposal.intake_id) || proposal.production_proposal_intakes || null;
     const attachments = attachmentsForProposal(proposal.id);
     const proposalFileRows = attachments.length
       ? `<div class="opp-attachment-list">${attachments.map(file => renderAttachment(file)).join('')}</div>`
@@ -743,11 +915,13 @@
         <div class="opp-actions">
           <button class="btn-secondary" onclick="openProposalModal('${proposal.id}')">Edit Proposal</button>
           <button class="btn-secondary" onclick="exportProposalPdf('${proposal.id}')">Download / Export PDF</button>
-          <button class="btn-secondary" onclick="copyProposalShareLink()">Copy Proposal Link</button>
+          ${intake ? `<button class="btn-secondary" onclick="copyProposalIntakeInvite('${intake.id}')">Copy Intake Invite</button>` : ''}
           <button class="btn-secondary" onclick="archiveProposal('${proposal.id}')">Archive Proposal</button>
           <button class="btn-primary" onclick="approveAndBuildProposal('${proposal.id}')">Approve &amp; Build</button>
         </div>
         <div class="opp-section-grid">
+          <div class="opp-kv"><div class="opp-kv-label">Season Pitch</div><div class="opp-kv-value">${esc(intake?.title || '—')}</div></div>
+          <div class="opp-kv"><div class="opp-kv-label">Season Label</div><div class="opp-kv-value">${esc(intake?.season_label || '—')}</div></div>
           <div class="opp-kv"><div class="opp-kv-label">Submitted By</div><div class="opp-kv-value">${esc(proposal.pitch_submitted_by || '—')}</div></div>
           <div class="opp-kv"><div class="opp-kv-label">Submitter Email</div><div class="opp-kv-value">${esc(proposal.submitter_email || '—')}</div></div>
           <div class="opp-kv"><div class="opp-kv-label">Date Submitted</div><div class="opp-kv-value">${esc(fmtDateTime(proposal.submitted_at || proposal.created_at))}</div></div>
@@ -836,8 +1010,18 @@
     renderProposalsTab();
   }
 
+  function renderProposalIntakeOptions(selectedId) {
+    const select = document.getElementById('pp-intake');
+    if (!select) return;
+    const options = ['<option value="">No season pitch</option>'].concat(
+      state.intakes.map(intake => `<option value="${intake.id}"${selectedId === intake.id ? ' selected' : ''}>${esc(intake.title)}</option>`)
+    );
+    select.innerHTML = options.join('');
+  }
+
   function formProposalData() {
     return {
+      intake_id: document.getElementById('pp-intake').value || null,
       proposed_show_title: document.getElementById('pp-title').value.trim(),
       show_version: document.getElementById('pp-version').value.trim() || null,
       licensing_company: document.getElementById('pp-licensing').value.trim() || null,
@@ -875,6 +1059,7 @@
     document.getElementById('proposal-modal-title').textContent = proposal ? 'Edit Production Proposal' : 'New Production Proposal';
     document.getElementById('proposal-form-error').classList.remove('visible');
     document.getElementById('proposal-form-error').textContent = '';
+    renderProposalIntakeOptions(proposal?.intake_id || (state.selectedIntakeId !== 'all' ? state.selectedIntakeId : ''));
     document.getElementById('pp-title').value = proposal?.proposed_show_title || '';
     document.getElementById('pp-version').value = proposal?.show_version || '';
     document.getElementById('pp-licensing').value = proposal?.licensing_company || '';
@@ -923,31 +1108,12 @@
     document.getElementById('proposal-form-modal')?.classList.remove('open');
   }
 
-  async function getProposalShareConfig() {
-    const org = currentOrg();
-    if (!org?.id) return null;
-    if (org.proposal_submission_token && (org.slug || org.abbreviation || org.id)) {
-      return {
-        id: org.id,
-        slug: org.slug || '',
-        abbreviation: org.abbreviation || '',
-        proposal_submission_token: org.proposal_submission_token,
-      };
-    }
-    const { data, error } = await sb().from('organizations')
-      .select('id, slug, abbreviation, proposal_submission_token')
-      .eq('id', org.id)
-      .single();
-    if (error) throw error;
-    return data || null;
-  }
-
-  function buildProposalShareUrl(config) {
-    const orgKey = config?.slug || config?.abbreviation || config?.id || '';
-    const token = config?.proposal_submission_token || '';
-    if (!orgKey || !token) return '';
+  function buildProposalShareUrl(intake) {
+    const intakeKey = intake?.id || '';
+    const token = intake?.access_token || '';
+    if (!intakeKey || !token) return '';
     const url = new URL('/SYSTEM/Public/production-proposal.html', window.location.origin);
-    url.searchParams.set('org', orgKey);
+    url.searchParams.set('intake', intakeKey);
     url.searchParams.set('token', token);
     return url.toString();
   }
@@ -961,28 +1127,93 @@
     return `${Date.now().toString(16)}${Math.random().toString(16).slice(2, 10)}`;
   }
 
-  async function ensureCurrentOrgProposalToken(config) {
-    if (config?.proposal_submission_token) return config;
-    const org = currentOrg();
-    if (!org?.id) throw new Error('Organization context is missing.');
-    const token = generateProposalToken();
-    const { data, error } = await sb().from('organizations')
-      .update({ proposal_submission_token: token })
-      .eq('id', org.id)
-      .select('id, slug, abbreviation, proposal_submission_token')
-      .single();
-    if (error) throw error;
-    if (window.currentOrg) window.currentOrg.proposal_submission_token = data?.proposal_submission_token || token;
-    return data || { ...config, proposal_submission_token: token };
+  function selectedIntakeOrThrow(intakeId) {
+    const intake = proposalIntakeById(intakeId || state.selectedIntakeId);
+    if (!intake) throw new Error('Create a season pitch first.');
+    return intake;
   }
 
-  async function openNewProposalTab() {
+  function openProposalIntakeModal(id) {
+    ensureModalShell();
+    const intake = id ? proposalIntakeById(id) : null;
+    const modal = document.getElementById('proposal-intake-modal');
+    modal.dataset.intakeId = id || '';
+    document.getElementById('proposal-intake-modal-title').textContent = intake ? 'Edit Season Pitch' : 'New Season Pitch';
+    document.getElementById('proposal-intake-form-error').classList.remove('visible');
+    document.getElementById('proposal-intake-form-error').textContent = '';
+    document.getElementById('ppi-title').value = intake?.title || '';
+    document.getElementById('ppi-season-label').value = intake?.season_label || '';
+    document.getElementById('ppi-description').value = intake?.description || '';
+    document.getElementById('ppi-access-code').value = intake?.access_code || generateAccessCode();
+    document.getElementById('ppi-closes-at').value = fmtDateTimeInput(intake?.closes_at || '');
+    document.getElementById('ppi-is-open').value = intake?.is_open === false ? 'no' : 'yes';
+    modal.classList.add('open');
+  }
+
+  function closeProposalIntakeModal() {
+    document.getElementById('proposal-intake-modal')?.classList.remove('open');
+  }
+
+  async function saveProposalIntakeForm() {
+    const modal = document.getElementById('proposal-intake-modal');
+    const intakeId = modal?.dataset?.intakeId || '';
+    const errorEl = document.getElementById('proposal-intake-form-error');
+    const payload = {
+      organization_id: currentOrg().id,
+      title: document.getElementById('ppi-title').value.trim(),
+      season_label: document.getElementById('ppi-season-label').value.trim() || null,
+      description: document.getElementById('ppi-description').value.trim() || null,
+      access_code: document.getElementById('ppi-access-code').value.trim(),
+      closes_at: document.getElementById('ppi-closes-at').value ? new Date(document.getElementById('ppi-closes-at').value).toISOString() : null,
+      is_open: document.getElementById('ppi-is-open').value === 'yes',
+    };
+    if (!payload.title) {
+      errorEl.textContent = 'Pitch title is required.';
+      errorEl.classList.add('visible');
+      return;
+    }
+    if (!payload.access_code) {
+      errorEl.textContent = 'Passcode is required.';
+      errorEl.classList.add('visible');
+      return;
+    }
+    try {
+      let saved;
+      if (intakeId) {
+        const { data, error } = await sb().from('production_proposal_intakes').update(payload).eq('id', intakeId).select().single();
+        if (error) throw error;
+        saved = data;
+      } else {
+        payload.created_by = currentUser()?.id || null;
+        payload.access_token = generateProposalToken();
+        const { data, error } = await sb().from('production_proposal_intakes').insert(payload).select().single();
+        if (error) throw error;
+        saved = data;
+      }
+      closeProposalIntakeModal();
+      await loadProductionProposalIntakes();
+      state.selectedIntakeId = saved.id;
+      renderProposalsTab();
+      showToast(intakeId ? 'Season pitch updated.' : 'Season pitch created.');
+    } catch (error) {
+      console.error('[BTS] save proposal intake failed', error);
+      errorEl.textContent = error.message || 'Could not save season pitch.';
+      errorEl.classList.add('visible');
+    }
+  }
+
+  function setProposalIntakeFilter(value) {
+    state.selectedIntakeId = value || 'all';
+    renderProposalsTab();
+  }
+
+  async function openProposalIntakeShareTab(intakeId) {
+    const intake = selectedIntakeOrThrow(intakeId);
     const draftTab = window.open('', '_blank');
     if (draftTab) draftTab.opener = null;
     try {
-      const config = await ensureCurrentOrgProposalToken(await getProposalShareConfig());
-      const url = buildProposalShareUrl(config);
-      if (!url) throw new Error('Proposal sharing is not ready yet. Run the SQL, then refresh this page.');
+      const url = buildProposalShareUrl(intake);
+      if (!url) throw new Error('Could not build a share URL for this season pitch.');
       if (draftTab) {
         draftTab.location.href = url;
       } else {
@@ -990,8 +1221,8 @@
       }
     } catch (error) {
       if (draftTab) draftTab.close();
-      console.error('[BTS] open proposal share page failed', error);
-      showToast(error.message || 'Could not open the proposal page.', true);
+      console.error('[BTS] open proposal intake page failed', error);
+      showToast(error.message || 'Could not open the season pitch page.', true);
     }
   }
 
@@ -1008,21 +1239,26 @@
     document.body.removeChild(input);
   }
 
-  async function copyProposalShareLink() {
+  async function copyProposalIntakeInvite(intakeId) {
     try {
-      const config = await ensureCurrentOrgProposalToken(await getProposalShareConfig());
-      const url = buildProposalShareUrl(config);
-      if (!url) throw new Error('Proposal sharing is not ready yet. Run the SQL, then refresh this page.');
+      const intake = selectedIntakeOrThrow(intakeId);
+      const url = buildProposalShareUrl(intake);
+      if (!url) throw new Error('Could not build a share URL for this season pitch.');
+      const message = shareInviteText(intake, url);
       if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(url);
+        await navigator.clipboard.writeText(message);
       } else {
-        fallbackCopyText(url);
+        fallbackCopyText(message);
       }
-      showToast('Proposal link copied.');
+      showToast('Season pitch invite copied.');
     } catch (error) {
-      console.error('[BTS] copy proposal share link failed', error);
-      showToast(error.message || 'Could not copy the proposal link.', true);
+      console.error('[BTS] copy proposal intake invite failed', error);
+      showToast(error.message || 'Could not copy the season pitch invite.', true);
     }
+  }
+
+  function openNewProposalTab() {
+    openProposalIntakeModal();
   }
 
   async function saveProposalForm(mode) {
@@ -1390,7 +1626,12 @@
   window.openProposalModal = openProposalModal;
   window.closeProposalModal = closeProposalModal;
   window.openNewProposalTab = openNewProposalTab;
-  window.copyProposalShareLink = copyProposalShareLink;
+  window.openProposalIntakeModal = openProposalIntakeModal;
+  window.closeProposalIntakeModal = closeProposalIntakeModal;
+  window.saveProposalIntakeForm = saveProposalIntakeForm;
+  window.setProposalIntakeFilter = setProposalIntakeFilter;
+  window.openProposalIntakeShareTab = openProposalIntakeShareTab;
+  window.copyProposalIntakeInvite = copyProposalIntakeInvite;
   window.saveProposalForm = saveProposalForm;
   window.selectProductionProposal = selectProductionProposal;
   window.toggleProposalCompare = toggleProposalCompare;
