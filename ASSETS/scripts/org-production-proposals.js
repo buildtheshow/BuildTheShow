@@ -133,9 +133,6 @@
     style.textContent = `
       /* ---- shell ---- */
       .opp-shell { display:flex; flex-direction:column; gap:1.25rem; }
-      .pp-page-head { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
-      .pp-page-title { font-size:2rem; line-height:1; font-weight:900; color:#1a1530; margin:0; }
-      .pp-page-copy { margin-top:0.5rem; font-size:0.95rem; color:#6a5a80; line-height:1.6; }
       .pp-page-actions { display:flex; gap:0.65rem; flex-wrap:wrap; }
       .pp-section-label { font-size:1.25rem; font-weight:900; color:#1a1530; margin:0; }
 
@@ -282,7 +279,6 @@
         .opp-form-grid, .opp-form-grid.three, .opp-section-grid, .opp-level-row { grid-template-columns:1fr; }
         .pp-stat-row { grid-template-columns:1fr 1fr; }
         .pp-intake-grid { grid-template-columns:1fr; }
-        .pp-page-head { align-items:stretch; }
         .pp-page-actions .btn-primary { width:100%; justify-content:center; }
       }
     `;
@@ -525,12 +521,6 @@
     if (!root) return;
     root.innerHTML = `
       <div class="opp-shell">
-        <div class="pp-page-head">
-          <div>
-            <h1 class="pp-page-title">Production Proposals</h1>
-            <div class="pp-page-copy">Add seasons, collect pitches, and choose future shows for your community.</div>
-          </div>
-        </div>
         <div class="pp-intake-empty" style="max-width:760px;">
           <div style="font-weight:900;color:#1a1530;font-size:1.1rem;margin-bottom:0.45rem;">Production Proposals needs one SQL step first.</div>
           <div style="font-size:0.9rem;line-height:1.65;color:#6a5a80;margin-bottom:0.9rem;">The database in this environment does not have the <code>production_proposal_intakes</code> table yet, so seasons cannot load until that migration is run.</div>
@@ -816,14 +806,8 @@
 
     root.innerHTML = `
       <div class="opp-shell">
-        <div class="pp-page-head">
-          <div>
-            <h1 class="pp-page-title">Production Proposals</h1>
-            <div class="pp-page-copy">Add seasons, collect pitches, and choose future shows for your community.</div>
-          </div>
-          <div class="pp-page-actions">
-            <button class="btn-primary" onclick="openProposalIntakeModal()">+ Add Season</button>
-          </div>
+        <div class="pp-page-actions" style="justify-content:flex-end;">
+          <button class="btn-primary" onclick="openProposalIntakeModal()">+ Add Season</button>
         </div>
 
         <div class="pp-intake-panel">
