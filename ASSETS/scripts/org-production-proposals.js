@@ -132,7 +132,12 @@
     style.id = 'org-proposals-style';
     style.textContent = `
       /* ---- shell ---- */
-      .opp-shell { display:flex; flex-direction:column; gap:1.1rem; }
+      .opp-shell { display:flex; flex-direction:column; gap:1.25rem; }
+      .pp-page-head { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+      .pp-page-title { font-size:2rem; line-height:1; font-weight:900; color:#1a1530; margin:0; }
+      .pp-page-copy { margin-top:0.5rem; font-size:0.95rem; color:#6a5a80; line-height:1.6; }
+      .pp-page-actions { display:flex; gap:0.65rem; flex-wrap:wrap; }
+      .pp-section-label { font-size:1.25rem; font-weight:900; color:#1a1530; margin:0; }
 
       /* ---- stat row ---- */
       .pp-stat-row { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:0.85rem; }
@@ -153,22 +158,22 @@
       .pp-toolbar-divider { width:1px; height:22px; background:rgba(87,46,136,0.12); flex-shrink:0; }
       .pp-filter-select { font-family:var(--bts-font); font-size:0.82rem; color:#1a1530; border:1.5px solid rgba(87,46,136,0.2); border-radius:8px; background:#fff; padding:0.42rem 0.75rem; cursor:pointer; }
       .pp-filter-btn { font-family:var(--bts-font); font-size:0.82rem; font-weight:700; color:#572e88; border:1.5px solid rgba(87,46,136,0.2); border-radius:8px; background:#fff; padding:0.42rem 0.85rem; cursor:pointer; display:flex; align-items:center; gap:0.35rem; }
-      .pp-intake-panel { background:#fff; border:1px solid rgba(87,46,136,0.1); border-radius:14px; padding:1rem; display:grid; gap:0.9rem; }
+      .pp-intake-panel { display:grid; gap:0.9rem; }
       .pp-intake-head { display:flex; gap:0.75rem; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; }
-      .pp-intake-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0.85rem; }
-      .pp-intake-card { border:1px solid rgba(87,46,136,0.1); border-radius:14px; padding:0.95rem; background:linear-gradient(180deg,#fff,#fbf9ff); display:grid; gap:0.7rem; }
+      .pp-intake-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1rem; }
+      .pp-intake-card { border:1px solid rgba(87,46,136,0.12); border-radius:16px; padding:1rem; background:#fff; display:grid; gap:0.85rem; box-shadow:0 8px 22px rgba(26,21,48,0.04); }
       .pp-intake-card.active { border-color:#572e88; box-shadow:0 10px 24px rgba(87,46,136,0.12); }
       .pp-intake-top { display:flex; gap:0.75rem; align-items:flex-start; justify-content:space-between; }
-      .pp-intake-title { font-size:0.92rem; font-weight:900; color:#1a1530; line-height:1.25; }
-      .pp-intake-sub { font-size:0.76rem; color:#7d6f97; margin-top:0.15rem; }
-      .pp-intake-code { border-radius:10px; background:rgba(87,46,136,0.05); border:1px dashed rgba(87,46,136,0.18); padding:0.6rem 0.7rem; }
-      .pp-intake-code strong { display:block; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; color:#9a90b0; margin-bottom:0.18rem; }
-      .pp-intake-code span { font-size:0.88rem; font-weight:900; color:#1a1530; letter-spacing:0.04em; }
-      .pp-intake-meta { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.45rem 0.7rem; }
-      .pp-intake-meta-item { font-size:0.76rem; color:#5b4d74; }
-      .pp-intake-meta-item strong { display:block; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.05em; color:#9a90b0; margin-bottom:0.12rem; }
-      .pp-intake-actions { display:flex; gap:0.45rem; flex-wrap:wrap; }
-      .pp-intake-empty { border-radius:14px; padding:1.5rem; text-align:center; border:1px dashed rgba(87,46,136,0.18); color:#8f84a5; background:rgba(87,46,136,0.03); }
+      .pp-intake-title { font-size:0.98rem; font-weight:900; color:#1a1530; line-height:1.25; }
+      .pp-intake-sub { display:none; }
+      .pp-intake-meta { display:grid; gap:0.65rem; }
+      .pp-intake-meta-item { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; font-size:0.82rem; color:#1a1530; }
+      .pp-intake-meta-item strong { display:flex; align-items:center; gap:0.45rem; font-size:0.79rem; font-weight:700; color:#1a1530; }
+      .pp-intake-meta-item strong::before { content:""; width:14px; height:14px; border-radius:4px; background:rgba(87,46,136,0.08); flex-shrink:0; }
+      .pp-intake-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.65rem; margin-top:0.25rem; }
+      .pp-intake-empty { border-radius:16px; padding:1.75rem; text-align:center; border:1px dashed rgba(87,46,136,0.18); color:#8f84a5; background:#fff; }
+      .pp-card-btn { display:inline-flex; align-items:center; justify-content:center; width:100%; border-radius:10px; padding:0.7rem 0.95rem; font-family:var(--bts-font); font-size:0.82rem; font-weight:800; cursor:pointer; border:1.5px solid rgba(87,46,136,0.24); background:#fff; color:#572e88; }
+      .pp-card-btn.primary { background:#572e88; color:#fff; border-color:#572e88; }
       .pp-season-overview { background:#fff; border:1px solid rgba(87,46,136,0.1); border-radius:14px; padding:1.15rem 1.2rem; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:1rem; align-items:start; }
       .pp-season-overview.is-all { background:rgba(87,46,136,0.04); }
       .pp-season-kicker { font-size:0.7rem; font-weight:800; letter-spacing:0.07em; text-transform:uppercase; color:#9a90b0; margin-bottom:0.3rem; }
@@ -267,7 +272,7 @@
       .opp-attachment-item a { color:#572e88; font-weight:800; text-decoration:none; }
       @media (max-width:900px) {
         .pp-stat-row { grid-template-columns:repeat(2,1fr); }
-        .pp-intake-grid { grid-template-columns:1fr; }
+        .pp-intake-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
         .pp-season-overview { grid-template-columns:1fr; }
         .pp-about-card { grid-template-columns:1fr; }
         .pp-table thead th:nth-child(n+5):nth-child(-n+8) { display:none; }
@@ -276,6 +281,9 @@
       @media (max-width:760px) {
         .opp-form-grid, .opp-form-grid.three, .opp-section-grid, .opp-level-row { grid-template-columns:1fr; }
         .pp-stat-row { grid-template-columns:1fr 1fr; }
+        .pp-intake-grid { grid-template-columns:1fr; }
+        .pp-page-head { align-items:stretch; }
+        .pp-page-actions .btn-primary { width:100%; justify-content:center; }
       }
     `;
     document.head.appendChild(style);
@@ -724,28 +732,22 @@
 
   function renderIntakeCard(intake) {
     const active = intake.id === state.selectedIntakeId;
+    const submissionCount = state.proposals.filter(function(item) { return item.intake_id === intake.id; }).length;
     return `
       <div class="pp-intake-card${active ? ' active' : ''}">
         <div class="pp-intake-top">
           <div>
             <div class="pp-intake-title">${esc(intake.title || 'Season')}</div>
-            <div class="pp-intake-sub">${esc(intake.season_label || 'Pitch season')}</div>
           </div>
           ${proposalIntakeStatusPill(intake)}
         </div>
-        <div class="pp-intake-code">
-          <strong>Passcode</strong>
-          <span>${esc(intake.access_code || '—')}</span>
-        </div>
         <div class="pp-intake-meta">
-          ${renderIntakeMeta('Submissions', state.proposals.filter(item => item.intake_id === intake.id).length)}
-          ${renderIntakeMeta('Closes', intake.closes_at ? fmtDateTime(intake.closes_at) : 'No close date')}
+          ${renderIntakeMeta('Closes on', intake.closes_at ? fmtDateTime(intake.closes_at) : 'Not set')}
+          ${renderIntakeMeta('Pitches received', submissionCount)}
         </div>
         <div class="pp-intake-actions">
-          <button class="btn-secondary" onclick="setProposalIntakeFilter('${intake.id}')">View Pitches</button>
-          <button class="btn-secondary" onclick="openProposalIntakeShareTab('${intake.id}')">Open Pitch Page</button>
-          <button class="btn-secondary" onclick="copyProposalIntakeInvite('${intake.id}')">Copy Invite</button>
-          <button class="btn-secondary" onclick="openProposalIntakeModal('${intake.id}')">Edit Season</button>
+          <button class="pp-card-btn" onclick="copyProposalIntakeInvite('${intake.id}')">Copy Link</button>
+          <button class="pp-card-btn primary" onclick="setProposalIntakeFilter('${intake.id}')">View Pitches</button>
         </div>
       </div>
     `;
@@ -785,16 +787,22 @@
 
     root.innerHTML = `
       <div class="opp-shell">
+        <div class="pp-page-head">
+          <div>
+            <h1 class="pp-page-title">Production Proposals</h1>
+            <div class="pp-page-copy">Add seasons, collect pitches, and choose future shows for your community.</div>
+          </div>
+          <div class="pp-page-actions">
+            <button class="btn-primary" onclick="openProposalIntakeModal()">+ Add Season</button>
+          </div>
+        </div>
+
         <div class="pp-intake-panel">
           <div class="pp-intake-head">
             <div>
-              <div class="opp-panel-title">Pitch Seasons</div>
-              <div class="opp-panel-copy">Add a season first, then share that season's pitch page, passcode, and invite.</div>
+              <h2 class="pp-section-label">Seasons</h2>
             </div>
-            <div style="display:flex;gap:0.55rem;flex-wrap:wrap;">
-              <button class="btn-secondary" onclick="setProposalIntakeFilter('all')">View All Seasons</button>
-              <button class="btn-primary" onclick="openProposalIntakeModal()">+ Add Season</button>
-            </div>
+            <div style="display:flex;gap:0.55rem;flex-wrap:wrap;"></div>
           </div>
           ${state.intakes.length
             ? `<div class="pp-intake-grid">${state.intakes.map(renderIntakeCard).join('')}</div>`
