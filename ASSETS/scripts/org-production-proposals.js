@@ -709,11 +709,23 @@
     if (!root) return;
     const proposals = filteredProposals();
     const selectedIntake = state.selectedIntakeId === 'all' ? null : proposalIntakeById(state.selectedIntakeId);
-    const total = state.proposals.length;
-    const underReviewCt = state.proposals.filter(function(p) { return p.status === 'under_review'; }).length;
-    const shortlistedCt = state.proposals.filter(function(p) { return p.status === 'shortlisted'; }).length;
-    const selectedCt = state.proposals.filter(function(p) { return p.status === 'selected'; }).length;
-    const archivedCt = state.proposals.filter(function(p) { return p.status === 'archived'; }).length;
+    const statPool = selectedIntake
+      ? state.proposals.filter(function(p) { return p.intake_id === selectedIntake.id; })
+      : state.proposals;
+    const total = statPool.length;
+    const underReviewCt = statPool.filter(function(p) { return p.status === 'under_review'; }).length;
+    const shortlistedCt = statPool.filter(function(p) { return p.status === 'shortlisted'; }).length;
+    const selectedCt = statPool.filter(function(p) { return p.status === 'selected'; }).length;
+    const archivedCt = statPool.filter(function(p) { return p.status === 'archived'; }).length;
+    const statSubtitle = selectedIntake
+      ? (selectedIntake.season_label || selectedIntake.title || 'Selected season')
+      : 'All seasons combined';
+    const statEmptyAction = `
+      <div class="pp-intake-empty">
+        <div style="font-weight:800;color:#1a1530;margin-bottom:0.45rem;">No seasons yet.</div>
+        <div style="margin-bottom:0.9rem;">Add a season first, then share its unique pitch link and passcode.</div>
+        <button class="btn-primary" onclick="openProposalIntakeModal()">+ Add Season</button>
+      </div>`;
 
     const statusOptions = Object.keys(STATUS_META).map(function(key) {
       return '<option value="' + key + '"' + (state.filterStatus === key ? ' selected' : '') + '>' + esc(STATUS_META[key].label) + '</option>';
@@ -726,14 +738,6 @@
 
     root.innerHTML = `
       <div class="opp-shell">
-        <div class="pp-stat-row">
-          ${renderStatCard('Total Proposals', total, 'All time', 'rgba(87,46,136,0.12)')}
-          ${renderStatCard('Under Review', underReviewCt, 'Currently being reviewed', 'rgba(239,171,69,0.2)')}
-          ${renderStatCard('Shortlisted', shortlistedCt, 'Strong contenders', 'rgba(120,187,212,0.2)')}
-          ${renderStatCard('Selected', selectedCt, 'Moving to production', 'rgba(118,158,123,0.2)')}
-          ${renderStatCard('Archived', archivedCt, 'Not selected', 'rgba(90,99,112,0.12)')}
-        </div>
-
         <div class="pp-intake-panel">
           <div class="pp-intake-head">
             <div>
@@ -747,7 +751,15 @@
           </div>
           ${state.intakes.length
             ? `<div class="pp-intake-grid">${state.intakes.map(renderIntakeCard).join('')}</div>`
-            : `<div class="pp-intake-empty">No seasons yet. Add a season first, then share its unique pitch link and passcode.</div>`}
+            : statEmptyAction}
+        </div>
+
+        <div class="pp-stat-row">
+          ${renderStatCard('Total Proposals', total, statSubtitle, 'rgba(87,46,136,0.12)')}
+          ${renderStatCard('Under Review', underReviewCt, selectedIntake ? 'Inside this season' : 'Across all seasons', 'rgba(239,171,69,0.2)')}
+          ${renderStatCard('Shortlisted', shortlistedCt, selectedIntake ? 'Inside this season' : 'Across all seasons', 'rgba(120,187,212,0.2)')}
+          ${renderStatCard('Selected', selectedCt, selectedIntake ? 'Inside this season' : 'Across all seasons', 'rgba(118,158,123,0.2)')}
+          ${renderStatCard('Archived', archivedCt, selectedIntake ? 'Inside this season' : 'Across all seasons', 'rgba(90,99,112,0.12)')}
         </div>
 
         <div class="pp-toolbar">
