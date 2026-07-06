@@ -290,7 +290,7 @@
               <div class="opp-form-section">
                 <h3>Show Information</h3>
                 <div class="opp-form-grid">
-                  <div class="form-group"><label class="form-label">Season Pitch</label><select class="form-select" id="pp-intake"></select></div>
+                  <div class="form-group"><label class="form-label">Season</label><select class="form-select" id="pp-intake"></select></div>
                   <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="pp-status">${Object.entries(STATUS_META).map(([key, meta]) => `<option value="${key}">${esc(meta.label)}</option>`).join('')}</select></div>
                   <div class="form-group"><label class="form-label">Proposed Show Title</label><input class="form-input" id="pp-title" type="text" /></div>
                   <div class="form-group"><label class="form-label">Show Version</label><input class="form-input" id="pp-version" type="text" /></div>
@@ -380,27 +380,27 @@
           <div class="opp-modal intake-modal-shell">
             <div class="opp-modal-head">
               <div>
-                <div class="opp-panel-title" id="proposal-intake-modal-title">New Season Pitch</div>
-                <div class="opp-panel-copy">Create a specific intake with its own share link and passcode.</div>
+                <div class="opp-panel-title" id="proposal-intake-modal-title">Add Season</div>
+                <div class="opp-panel-copy">Create a season with its own share link and passcode so people know exactly where to pitch.</div>
               </div>
               <button type="button" class="btn-secondary" onclick="closeProposalIntakeModal()">Close</button>
             </div>
             <div class="opp-modal-body">
               <div id="proposal-intake-form-error" class="form-error-msg"></div>
               <div class="opp-form-section">
-                <h3>Season Pitch</h3>
+                <h3>Season Setup</h3>
                 <div class="opp-form-grid">
-                  <div class="form-group"><label class="form-label">Pitch Title</label><input class="form-input" id="ppi-title" type="text" /></div>
+                  <div class="form-group"><label class="form-label">Season Title</label><input class="form-input" id="ppi-title" type="text" placeholder="2027 Mainstage Pitch Season" /></div>
                   <div class="form-group"><label class="form-label">Season Label</label><input class="form-input" id="ppi-season-label" type="text" placeholder="2027 Mainstage Season" /></div>
-                  <div class="form-group opp-form-span-2"><label class="form-label">Description</label><textarea class="form-textarea" id="ppi-description"></textarea></div>
-                  <div class="form-group"><label class="form-label">Passcode</label><input class="form-input" id="ppi-access-code" type="text" /></div>
-                  <div class="form-group"><label class="form-label">Closes At</label><input class="form-input" id="ppi-closes-at" type="datetime-local" /></div>
-                  <div class="form-group"><label class="form-label">Open For Submissions</label><select class="form-select" id="ppi-is-open"><option value="yes">Yes</option><option value="no">No</option></select></div>
+                  <div class="form-group opp-form-span-2"><label class="form-label">Pitch Page Description</label><textarea class="form-textarea" id="ppi-description" placeholder="Tell people what kind of shows you want pitched for this season."></textarea></div>
+                  <div class="form-group"><label class="form-label">Season Passcode</label><input class="form-input" id="ppi-access-code" type="text" /></div>
+                  <div class="form-group"><label class="form-label">Pitch Closes</label><input class="form-input" id="ppi-closes-at" type="datetime-local" /></div>
+                  <div class="form-group"><label class="form-label">Accepting Pitches?</label><select class="form-select" id="ppi-is-open"><option value="yes">Yes</option><option value="no">No</option></select></div>
                 </div>
               </div>
               <div class="opp-form-actions">
                 <button type="button" class="btn-secondary" onclick="closeProposalIntakeModal()">Cancel</button>
-                <button type="button" class="btn-primary" onclick="saveProposalIntakeForm()">Save Season Pitch</button>
+                <button type="button" class="btn-primary" onclick="saveProposalIntakeForm()">Save Season</button>
               </div>
             </div>
           </div>
@@ -606,7 +606,7 @@
     const intake = proposalIntakeById(proposal.intake_id) || proposal.production_proposal_intakes || null;
     return `
       <tr onclick="openProposalModal('${proposal.id}')">
-        <td>${intake ? `<div class="pp-show-name" style="font-size:0.8rem;">${esc(intake.title || 'Season Pitch')}</div><div class="pp-show-sub">${esc(intake.season_label || '')}</div>` : '<span style="color:rgba(26,21,48,0.4);">—</span>'}</td>
+        <td>${intake ? `<div class="pp-show-name" style="font-size:0.8rem;">${esc(intake.title || 'Season')}</div><div class="pp-show-sub">${esc(intake.season_label || '')}</div>` : '<span style="color:rgba(26,21,48,0.4);">—</span>'}</td>
         <td>
           <div class="pp-show-cell">
             <div class="pp-show-thumb" style="background:${thumb};">${esc(letter)}</div>
@@ -681,8 +681,8 @@
       <div class="pp-intake-card${active ? ' active' : ''}">
         <div class="pp-intake-top">
           <div>
-            <div class="pp-intake-title">${esc(intake.title || 'Season Pitch')}</div>
-            <div class="pp-intake-sub">${esc(intake.season_label || 'Proposal intake')}</div>
+            <div class="pp-intake-title">${esc(intake.title || 'Season')}</div>
+            <div class="pp-intake-sub">${esc(intake.season_label || 'Pitch season')}</div>
           </div>
           ${proposalIntakeStatusPill(intake)}
         </div>
@@ -695,10 +695,10 @@
           ${renderIntakeMeta('Closes', intake.closes_at ? fmtDateTime(intake.closes_at) : 'No close date')}
         </div>
         <div class="pp-intake-actions">
-          <button class="btn-secondary" onclick="setProposalIntakeFilter('${intake.id}')">View</button>
-          <button class="btn-secondary" onclick="openProposalIntakeShareTab('${intake.id}')">Open Form</button>
+          <button class="btn-secondary" onclick="setProposalIntakeFilter('${intake.id}')">View Pitches</button>
+          <button class="btn-secondary" onclick="openProposalIntakeShareTab('${intake.id}')">Open Pitch Page</button>
           <button class="btn-secondary" onclick="copyProposalIntakeInvite('${intake.id}')">Copy Invite</button>
-          <button class="btn-secondary" onclick="openProposalIntakeModal('${intake.id}')">Edit</button>
+          <button class="btn-secondary" onclick="openProposalIntakeModal('${intake.id}')">Edit Season</button>
         </div>
       </div>
     `;
@@ -718,7 +718,7 @@
     const statusOptions = Object.keys(STATUS_META).map(function(key) {
       return '<option value="' + key + '"' + (state.filterStatus === key ? ' selected' : '') + '>' + esc(STATUS_META[key].label) + '</option>';
     }).join('');
-    const intakeOptions = ['<option value="all">All Season Pitches</option>'].concat(
+    const intakeOptions = ['<option value="all">All Seasons</option>'].concat(
       state.intakes.map(function(intake) {
         return `<option value="${intake.id}"${state.selectedIntakeId === intake.id ? ' selected' : ''}>${esc(intake.title)}</option>`;
       })
@@ -737,17 +737,17 @@
         <div class="pp-intake-panel">
           <div class="pp-intake-head">
             <div>
-              <div class="opp-panel-title">Season Pitch Intakes</div>
-              <div class="opp-panel-copy">Each season pitch gets its own URL, passcode, and submission history.</div>
+              <div class="opp-panel-title">Pitch Seasons</div>
+              <div class="opp-panel-copy">Add a season first, then share that season's pitch page, passcode, and invite.</div>
             </div>
             <div style="display:flex;gap:0.55rem;flex-wrap:wrap;">
-              <button class="btn-secondary" onclick="setProposalIntakeFilter('all')">View All</button>
-              <button class="btn-primary" onclick="openProposalIntakeModal()">+ New Season Pitch</button>
+              <button class="btn-secondary" onclick="setProposalIntakeFilter('all')">View All Seasons</button>
+              <button class="btn-primary" onclick="openProposalIntakeModal()">+ Add Season</button>
             </div>
           </div>
           ${state.intakes.length
             ? `<div class="pp-intake-grid">${state.intakes.map(renderIntakeCard).join('')}</div>`
-            : `<div class="pp-intake-empty">No season pitches yet. Create one first, then share its unique URL and passcode.</div>`}
+            : `<div class="pp-intake-empty">No seasons yet. Add a season first, then share its unique pitch link and passcode.</div>`}
         </div>
 
         <div class="pp-toolbar">
@@ -770,7 +770,7 @@
           <table class="pp-table">
             <thead>
               <tr>
-                <th>Season Pitch</th>
+                <th>Season</th>
                 <th>Show</th>
                 <th>Submitted By</th>
                 <th>Date Submitted</th>
@@ -786,7 +786,7 @@
             <tbody>
               ${proposals.length
                 ? proposals.map(renderProposalRow).join('')
-                : '<tr><td colspan="11" class="pp-empty-row">No proposals match your search. Try a different filter or share an active season pitch.</td></tr>'}
+                : '<tr><td colspan="11" class="pp-empty-row">No proposals match your search. Try a different filter or share an active pitch season.</td></tr>'}
             </tbody>
           </table>
         </div>
@@ -806,11 +806,11 @@
           <div>
             <div class="pp-next-steps-title">Next Steps</div>
             <div class="pp-next-steps">
-              <div class="pp-next-step"><span class="pp-next-step-num">1.</span><span>Create a new season pitch with its own passcode.</span></div>
-              <div class="pp-next-step"><span class="pp-next-step-num">2.</span><span>Share that intake link with the people you want pitching shows.</span></div>
+              <div class="pp-next-step"><span class="pp-next-step-num">1.</span><span>Add a season with its own passcode.</span></div>
+              <div class="pp-next-step"><span class="pp-next-step-num">2.</span><span>Share that season's pitch page with the people you want pitching shows.</span></div>
               <div class="pp-next-step"><span class="pp-next-step-num">3.</span><span>Review submitted proposals and approve the best fit.</span></div>
             </div>
-            ${selectedIntake ? `<button class="pp-learn-more" onclick="copyProposalIntakeInvite('${selectedIntake.id}')">Copy invite for this season pitch &rarr;</button>` : ''}
+            ${selectedIntake ? `<button class="pp-learn-more" onclick="copyProposalIntakeInvite('${selectedIntake.id}')">Copy invite for this season &rarr;</button>` : ''}
           </div>
         </div>
       </div>
@@ -920,7 +920,7 @@
           <button class="btn-primary" onclick="approveAndBuildProposal('${proposal.id}')">Approve &amp; Build</button>
         </div>
         <div class="opp-section-grid">
-          <div class="opp-kv"><div class="opp-kv-label">Season Pitch</div><div class="opp-kv-value">${esc(intake?.title || '—')}</div></div>
+          <div class="opp-kv"><div class="opp-kv-label">Season</div><div class="opp-kv-value">${esc(intake?.title || '—')}</div></div>
           <div class="opp-kv"><div class="opp-kv-label">Season Label</div><div class="opp-kv-value">${esc(intake?.season_label || '—')}</div></div>
           <div class="opp-kv"><div class="opp-kv-label">Submitted By</div><div class="opp-kv-value">${esc(proposal.pitch_submitted_by || '—')}</div></div>
           <div class="opp-kv"><div class="opp-kv-label">Submitter Email</div><div class="opp-kv-value">${esc(proposal.submitter_email || '—')}</div></div>
@@ -1129,7 +1129,7 @@
 
   function selectedIntakeOrThrow(intakeId) {
     const intake = proposalIntakeById(intakeId || state.selectedIntakeId);
-    if (!intake) throw new Error('Create a season pitch first.');
+    if (!intake) throw new Error('Add a season first.');
     return intake;
   }
 
@@ -1138,7 +1138,7 @@
     const intake = id ? proposalIntakeById(id) : null;
     const modal = document.getElementById('proposal-intake-modal');
     modal.dataset.intakeId = id || '';
-    document.getElementById('proposal-intake-modal-title').textContent = intake ? 'Edit Season Pitch' : 'New Season Pitch';
+    document.getElementById('proposal-intake-modal-title').textContent = intake ? 'Edit Season' : 'Add Season';
     document.getElementById('proposal-intake-form-error').classList.remove('visible');
     document.getElementById('proposal-intake-form-error').textContent = '';
     document.getElementById('ppi-title').value = intake?.title || '';
@@ -1168,7 +1168,7 @@
       is_open: document.getElementById('ppi-is-open').value === 'yes',
     };
     if (!payload.title) {
-      errorEl.textContent = 'Pitch title is required.';
+      errorEl.textContent = 'Season title is required.';
       errorEl.classList.add('visible');
       return;
     }
@@ -1194,10 +1194,10 @@
       await loadProductionProposalIntakes();
       state.selectedIntakeId = saved.id;
       renderProposalsTab();
-      showToast(intakeId ? 'Season pitch updated.' : 'Season pitch created.');
+      showToast(intakeId ? 'Season updated.' : 'Season created.');
     } catch (error) {
       console.error('[BTS] save proposal intake failed', error);
-      errorEl.textContent = error.message || 'Could not save season pitch.';
+      errorEl.textContent = error.message || 'Could not save season.';
       errorEl.classList.add('visible');
     }
   }
@@ -1213,7 +1213,7 @@
     if (draftTab) draftTab.opener = null;
     try {
       const url = buildProposalShareUrl(intake);
-      if (!url) throw new Error('Could not build a share URL for this season pitch.');
+      if (!url) throw new Error('Could not build a share URL for this season.');
       if (draftTab) {
         draftTab.location.href = url;
       } else {
@@ -1243,17 +1243,17 @@
     try {
       const intake = selectedIntakeOrThrow(intakeId);
       const url = buildProposalShareUrl(intake);
-      if (!url) throw new Error('Could not build a share URL for this season pitch.');
+      if (!url) throw new Error('Could not build a share URL for this season.');
       const message = shareInviteText(intake, url);
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(message);
       } else {
         fallbackCopyText(message);
       }
-      showToast('Season pitch invite copied.');
+      showToast('Season invite copied.');
     } catch (error) {
       console.error('[BTS] copy proposal intake invite failed', error);
-      showToast(error.message || 'Could not copy the season pitch invite.', true);
+      showToast(error.message || 'Could not copy the season invite.', true);
     }
   }
 
