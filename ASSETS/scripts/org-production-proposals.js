@@ -515,6 +515,30 @@
     return out;
   }
 
+  function isMissingProposalIntakesSchema(error) {
+    const msg = String(error?.message || '').toLowerCase();
+    return msg.includes('production_proposal_intakes') && (msg.includes('could not find the table') || msg.includes('schema cache'));
+  }
+
+  function renderProposalSetupRequired(message) {
+    const root = proposalRoot();
+    if (!root) return;
+    root.innerHTML = `
+      <div class="opp-shell">
+        <div class="pp-page-head">
+          <div>
+            <h1 class="pp-page-title">Production Proposals</h1>
+            <div class="pp-page-copy">Add seasons, collect pitches, and choose future shows for your community.</div>
+          </div>
+        </div>
+        <div class="pp-intake-empty" style="max-width:760px;">
+          <div style="font-weight:900;color:#1a1530;font-size:1.1rem;margin-bottom:0.45rem;">Production Proposals needs one SQL step first.</div>
+          <div style="font-size:0.9rem;line-height:1.65;color:#6a5a80;margin-bottom:0.9rem;">The database in this environment does not have the <code>production_proposal_intakes</code> table yet, so seasons cannot load until that migration is run.</div>
+          <div style="font-size:0.82rem;line-height:1.55;color:#8f84a5;">${esc(message || 'Missing production proposal intake schema.')}</div>
+        </div>
+      </div>`;
+  }
+
   async function loadProductionProposalIntakes() {
     const { data, error } = await sb().from('production_proposal_intakes')
       .select('*')
@@ -563,7 +587,11 @@
       state.loaded = true;
     } catch (error) {
       console.error('[BTS] load proposals failed', error);
-      if (proposalRoot()) proposalRoot().innerHTML = `<div class="empty-state"><h3>Could not load proposals</h3><p>${esc(error.message || 'Unknown error')}</p></div>`;
+      if (isMissingProposalIntakesSchema(error)) {
+        renderProposalSetupRequired(error.message || 'Missing production proposal intake schema.');
+      } else if (proposalRoot()) {
+        proposalRoot().innerHTML = `<div class="empty-state"><h3>Could not load proposals</h3><p>${esc(error.message || 'Unknown error')}</p></div>`;
+      }
       showToast('Could not load production proposals.', true);
     } finally {
       state.loading = false;
