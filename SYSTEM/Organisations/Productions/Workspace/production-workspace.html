@@ -53641,10 +53641,11 @@ See you soon!
   //  Add Audition Wizard
   // ─────────────────────────────────────────────────────────────
   const AUD_WIZ_TYPES = [
-    { key: 'audition',   label: 'General Audition', desc: 'An open call for all performer types.',            colour: '#572e88', letter: 'G' },
-    { key: 'dance_call', label: 'Dance Call',        desc: 'A movement session to evaluate choreography.',     colour: '#dd8233', letter: 'D' },
-    { key: 'vocal',      label: 'Vocal Audition',    desc: 'A singing-focused session for vocal assessment.',  colour: '#78bbd4', letter: 'V' },
-    { key: 'callback',   label: 'Callback',          desc: 'A follow-up session for shortlisted performers.',  colour: '#769e7b', letter: 'C' },
+    { key: 'audition',   label: 'General Audition', desc: 'An open call for all performer types.',                                colour: '#572e88', letter: 'G' },
+    { key: 'dance_call', label: 'Dance Call',        desc: 'A movement session to evaluate choreography.',                        colour: '#dd8233', letter: 'D' },
+    { key: 'vocal',      label: 'Vocal Audition',    desc: 'A singing-focused session for vocal assessment.',                     colour: '#78bbd4', letter: 'V' },
+    { key: 'callback',   label: 'Callback',          desc: 'A follow-up session for shortlisted performers.',                     colour: '#769e7b', letter: 'C' },
+    { key: 'self_tape',  label: 'Self Tape',         desc: 'Performers record and submit at home. No in-person session needed.',  colour: '#ca7ea7', letter: 'S' },
   ];
   const AUD_WIZ_ZEUS_COLOURS = {
     rehearsal:'#572e88', performance:'#d1523d', music_rehearsal:'#78bbd4',
@@ -53682,7 +53683,7 @@ See you soon!
   }
 
   function openAddAuditionWizard() {
-    _audWiz = { step: 1, type: null, date: '', startTime: '', endTime: '', slotMode: 'timed', slotDuration: 15, location: '', prepNotes: '', zeusEvents: [], zeusLoaded: false, saving: false };
+    _audWiz = { step: 1, type: null, date: '', startTime: '', endTime: '', deadline: '', slotMode: 'timed', slotDuration: 15, location: '', prepNotes: '', zeusEvents: [], zeusLoaded: false, saving: false };
     _ensureAudWizShell();
     _renderAudWiz();
     document.getElementById('add-aud-wiz-overlay').classList.add('open');
@@ -53774,6 +53775,18 @@ See you soon!
   }
 
   function _wizStep2() {
+    if (_audWiz.type === 'self_tape') {
+      return `
+        <div class="add-wiz-field">
+          <div class="add-wiz-label">Submission Opens</div>
+          <input type="date" class="form-input" id="add-wiz-date" value="${_audWiz.date}" onchange="_audWizDateChange(this.value)" style="max-width:240px;" />
+        </div>
+        <div class="add-wiz-field">
+          <div class="add-wiz-label">Submission Deadline</div>
+          <input type="date" class="form-input" id="add-wiz-deadline" value="${_audWiz.deadline || ''}" onchange="_audWiz.deadline=this.value" style="max-width:240px;" />
+          <div style="font-size:0.74rem;color:rgba(26,21,48,0.4);margin-top:0.4rem;">Performers submit their tape by this date. Optional but recommended.</div>
+        </div>`;
+    }
     return `
       <div class="add-wiz-field">
         <div class="add-wiz-label">Date</div>
@@ -53834,6 +53847,12 @@ See you soon!
   }
 
   function _wizStep3() {
+    if (_audWiz.type === 'self_tape') {
+      return `<div style="padding:0.5rem 0;">
+        <div style="font-size:0.95rem;font-weight:700;color:#000;margin-bottom:0.5rem;">No time slots needed</div>
+        <div style="font-size:0.84rem;color:rgba(26,21,48,0.55);line-height:1.6;">Self-tape submissions don't use individual time slots. Performers record on their own schedule and submit before the deadline you set. You can review and manage submissions from the audition card.</div>
+      </div>`;
+    }
     const count = _wizSlotCount();
     const countMsg = count > 0
       ? '<div class="add-wiz-slot-calc">Based on your time window, ' + count + ' slot' + (count === 1 ? '' : 's') + ' of ' + _audWiz.slotDuration + ' minutes each.</div>'
@@ -53889,7 +53908,7 @@ See you soon!
         <div class="add-wiz-review-row"><div class="add-wiz-review-label">Type</div><div class="add-wiz-review-value">${typeObj.label}</div></div>
         <div class="add-wiz-review-row"><div class="add-wiz-review-label">Date</div><div class="add-wiz-review-value">${_audWiz.date ? _wizFmtDate(_audWiz.date) : 'Not set'}</div></div>
         <div class="add-wiz-review-row"><div class="add-wiz-review-label">Time</div><div class="add-wiz-review-value">${_audWiz.startTime && _audWiz.endTime ? _wizFmtTime(_audWiz.startTime) + ' to ' + _wizFmtTime(_audWiz.endTime) : 'Not set'}</div></div>
-        <div class="add-wiz-review-row"><div class="add-wiz-review-label">Slots</div><div class="add-wiz-review-value">${slotSummary}</div></div>
+        ${_audWiz.type !== 'self_tape' ? '<div class="add-wiz-review-row"><div class="add-wiz-review-label">Slots</div><div class="add-wiz-review-value">' + slotSummary + '</div></div>' : (_audWiz.deadline ? '<div class="add-wiz-review-row"><div class="add-wiz-review-label">Deadline</div><div class="add-wiz-review-value">' + _wizFmtDate(_audWiz.deadline) + '</div></div>' : '')}
         <div class="add-wiz-review-row"><div class="add-wiz-review-label">Location</div><div class="add-wiz-review-value">${_audWiz.location || 'Not specified'}</div></div>
         <div class="add-wiz-review-row"><div class="add-wiz-review-label">Prep Notes</div><div class="add-wiz-review-value">${_audWiz.prepNotes ? (_audWiz.prepNotes.length > 80 ? _audWiz.prepNotes.slice(0, 80) + '...' : _audWiz.prepNotes) : 'None added'}</div></div>
       </div>
@@ -53935,18 +53954,19 @@ See you soon!
       }
 
       const typeObj = AUD_WIZ_TYPES.find(function(t) { return t.key === _audWiz.type; }) || AUD_WIZ_TYPES[0];
+      const isSelfTape = _audWiz.type === 'self_tape';
       const sessionPayload = {
         production_id: prodId,
         name: typeObj.label,
-        type: _audWiz.type,
-        format: 'in_person',
+        type: isSelfTape ? 'other_audition' : _audWiz.type,
+        format: isSelfTape ? 'self_tape' : 'in_person',
         is_visible: true,
         sort_order: audSessions.length,
         date: _audWiz.date || null,
         start_time: _audWiz.startTime || null,
-        end_time: _audWiz.endTime || null,
+        end_time: isSelfTape ? (_audWiz.deadline || null) : (_audWiz.endTime || null),
         location: _audWiz.location || null,
-        slot_length: _audWiz.slotMode === 'timed' ? _audWiz.slotDuration : null,
+        slot_length: (!isSelfTape && _audWiz.slotMode === 'timed') ? _audWiz.slotDuration : null,
       };
 
       const { data: sessionData, error: sessionErr } = await sb.from('audition_sessions')
@@ -53975,8 +53995,8 @@ See you soon!
         if (slots.length) await sb.from('audition_time_slots').insert(slots);
       }
 
-      // Sync to Zeus calendar
-      if (_audWiz.date && _audWiz.startTime) {
+      // Sync to Zeus calendar (not applicable for self tape)
+      if (!isSelfTape && _audWiz.date && _audWiz.startTime) {
         try {
           const typeMap = { audition: 'audition', dance_call: 'dance_call', callback: 'callback', vocal: 'audition', other: 'other_audition' };
           const evPayload = {
