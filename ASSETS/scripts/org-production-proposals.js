@@ -875,27 +875,6 @@
         </div>
 
         ${renderComparePanel()}
-
-        <div class="pp-about-card">
-          <div class="pp-about-left">
-            <div class="pp-about-icon">
-              <img src="/ASSETS/Images/Icons/navoverview.svg?v=20260705" alt="" aria-hidden="true" />
-            </div>
-            <div>
-              <div class="pp-about-title">About Production Proposals</div>
-              <p class="pp-about-copy">Proposals help you discover great ideas and choose the right show for your community. Once a proposal is selected, you can create a production and begin planning your show.</p>
-            </div>
-          </div>
-          <div>
-            <div class="pp-next-steps-title">Next Steps</div>
-            <div class="pp-next-steps">
-              <div class="pp-next-step"><span class="pp-next-step-num">1.</span><span>Add a season with its own passcode.</span></div>
-              <div class="pp-next-step"><span class="pp-next-step-num">2.</span><span>Share that season's pitch page with the people you want pitching shows.</span></div>
-              <div class="pp-next-step"><span class="pp-next-step-num">3.</span><span>Review submitted proposals and approve the best fit.</span></div>
-            </div>
-            ${selectedIntake ? `<button class="pp-learn-more" onclick="copyProposalIntakeInvite('${selectedIntake.id}')">Copy invite for this season &rarr;</button>` : ''}
-          </div>
-        </div>
         ` : ''}
       </div>
     `;
