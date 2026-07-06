@@ -12715,6 +12715,8 @@
     .add-wiz-cal-day.today .add-wiz-cal-day-num { color:#572e88; font-weight:900; }
     .add-wiz-cal-day.selected { background:#572e88 !important; border-radius:7px; }
     .add-wiz-cal-day.selected .add-wiz-cal-day-num { color:#fff; font-weight:900; }
+    .add-wiz-cal-day.in-range { background:rgba(87,46,136,0.13); border-radius:0; }
+    .add-wiz-cal-day.in-range .add-wiz-cal-day-num { color:#572e88; font-weight:700; }
     .add-wiz-cal-dots { display:flex; gap:2px; justify-content:center; }
     .add-wiz-cal-dot { width:4px; height:4px; border-radius:50%; flex-shrink:0; }
     .add-wiz-cal-day.selected .add-wiz-cal-dot { opacity:0.75; }
@@ -52807,7 +52809,11 @@ See you soon!
 
     const totalSlotCount = slots.length;
     const collapsedTitle = sessionTypeLabel(session.type || 'audition');
-    const collapsedDate = session.date ? formatAuditionScheduleSessionDate(session.date) : 'No date booked';
+    const collapsedDate = session.date
+      ? (session.end_date
+          ? `${formatAuditionScheduleSessionDate(session.date)} - ${formatAuditionScheduleSessionDate(session.end_date)}`
+          : formatAuditionScheduleSessionDate(session.date))
+      : 'No date booked';
     const collapsedTime = session.start_time
       ? `${formatSlotTime(session.start_time)}${session.end_time ? ` - ${formatSlotTime(session.end_time)}` : ''}`
       : 'No time set';
@@ -53534,7 +53540,7 @@ See you soon!
 
   function openAddAuditionWizard() {
     const _now = new Date();
-    _audWiz = { step: 1, type: null, date: '', startTime: '', endTime: '', slotMode: 'timed', slotDuration: 15, selfTape: false, location: '', prepNotes: '', calYear: _now.getFullYear(), calMonth: _now.getMonth(), calEvents: {}, zeusEvents: [], saving: false, editingSessionId: null };
+    _audWiz = { step: 1, type: null, date: '', endDate: '', startTime: '', endTime: '', slotMode: 'timed', slotDuration: 15, selfTape: false, location: '', prepNotes: '', calYear: _now.getFullYear(), calMonth: _now.getMonth(), calEvents: {}, zeusEvents: [], saving: false, editingSessionId: null };
     _ensureAudWizShell();
     const titleEl = document.querySelector('#add-aud-wiz-overlay .add-wiz-title');
     if (titleEl) titleEl.textContent = 'Add Audition';
@@ -53554,6 +53560,7 @@ See you soon!
       editingSessionId: sessionId,
       type: session.type || 'audition',
       date: sessionDate,
+      endDate: session.end_date || '',
       startTime: session.start_time ? session.start_time.slice(0, 5) : '',
       endTime: session.end_time ? session.end_time.slice(0, 5) : '',
       slotMode: session.booking_mode === 'open' ? 'open' : 'timed',
@@ -53670,12 +53677,17 @@ See you soon!
     const dows = ['Su','Mo','Tu','We','Th','Fr','Sa'];
     let cells = dows.map(d => '<div class="add-wiz-cal-dow">' + d + '</div>').join('');
     for (let i = 0; i < firstDow; i++) cells += '<div class="add-wiz-cal-day add-wiz-cal-day--empty"></div>';
+    const _rangeStart = _audWiz.date, _rangeEnd = _audWiz.endDate;
     for (let d = 1; d <= daysInMonth; d++) {
       const ds = yr + '-' + String(mo + 1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
       const evs = _audWiz.calEvents[ds] || [];
       const dots = evs.slice(0,3).map(ev => '<div class="add-wiz-cal-dot" style="background:' + (AUD_WIZ_ZEUS_COLOURS[ev.event_type] || '#8b7eaa') + ';"></div>').join('');
       let cls = 'add-wiz-cal-day';
-      if (ds === _audWiz.date) cls += ' selected';
+      const isStart = ds === _rangeStart;
+      const isEnd = ds === _rangeEnd;
+      const inRange = _rangeStart && _rangeEnd && ds > _rangeStart && ds < _rangeEnd;
+      if (isStart || isEnd) cls += ' selected';
+      if (inRange) cls += ' in-range';
       if (ds === today) cls += ' today';
       cells += '<button class="' + cls + '" onclick="_audWizPickDay(\'' + ds + '\')">' +
         '<span class="add-wiz-cal-day-num">' + d + '</span>' +
@@ -53722,7 +53734,15 @@ See you soon!
   }
 
   function _audWizPickDay(dateStr) {
-    _audWiz.date = dateStr;
+    if (!_audWiz.date) {
+      _audWiz.date = dateStr; _audWiz.endDate = '';
+    } else if (!_audWiz.endDate) {
+      if (dateStr === _audWiz.date) { _audWiz.date = ''; }
+      else if (dateStr < _audWiz.date) { _audWiz.endDate = _audWiz.date; _audWiz.date = dateStr; }
+      else { _audWiz.endDate = dateStr; }
+    } else {
+      _audWiz.date = dateStr; _audWiz.endDate = '';
+    }
     _renderAudWiz();
   }
 
@@ -53890,6 +53910,7 @@ See you soon!
           type: _audWiz.type,
           format,
           date: _audWiz.date || null,
+          end_date: _audWiz.endDate || null,
           start_time: _audWiz.startTime || null,
           end_time: _audWiz.endTime || null,
           location: _audWiz.location || null,
@@ -53926,6 +53947,7 @@ See you soon!
           session.type = _audWiz.type;
           session.format = format;
           session.date = _audWiz.date || null;
+          session.end_date = _audWiz.endDate || null;
           session.start_time = _audWiz.startTime || null;
           session.end_time = _audWiz.endTime || null;
           session.location = _audWiz.location || null;
@@ -53964,6 +53986,7 @@ See you soon!
         is_visible: true,
         sort_order: audSessions.length,
         date: _audWiz.date || null,
+        end_date: _audWiz.endDate || null,
         start_time: _audWiz.startTime || null,
         end_time: _audWiz.endTime || null,
         location: _audWiz.location || null,
