@@ -3,13 +3,13 @@
 
   const PROPOSAL_FOLDER_NAME = 'Production Proposals';
   const STATUS_META = {
-    draft:         { label: 'Draft',         color: '#8b7eaa', bg: 'rgba(139,126,170,0.12)' },
-    submitted:     { label: 'Submitted',     color: '#3566b8', bg: 'rgba(53,102,184,0.12)' },
-    under_review:  { label: 'Under Review',  color: '#d47a1f', bg: 'rgba(212,122,31,0.12)' },
-    shortlisted:   { label: 'Shortlisted',   color: '#0f8d70', bg: 'rgba(15,141,112,0.12)' },
-    selected:      { label: 'Selected',      color: '#2f7d32', bg: 'rgba(47,125,50,0.12)' },
-    not_selected:  { label: 'Not Selected',  color: '#b74b4b', bg: 'rgba(183,75,75,0.12)' },
-    archived:      { label: 'Archived',      color: '#4f5967', bg: 'rgba(79,89,103,0.12)' },
+    draft:         { label: 'Draft',         color: '#7b6f99', bg: 'rgba(139,126,170,0.12)' },
+    submitted:     { label: 'Submitted',     color: '#476aaa', bg: 'rgba(71,106,170,0.14)' },
+    under_review:  { label: 'Under Review',  color: '#b85e00', bg: 'rgba(239,171,69,0.22)' },
+    shortlisted:   { label: 'Shortlisted',   color: '#2070a0', bg: 'rgba(120,187,212,0.22)' },
+    selected:      { label: 'Selected',      color: '#3a6646', bg: 'rgba(118,158,123,0.2)' },
+    not_selected:  { label: 'Not Selected',  color: '#5a6370', bg: 'rgba(90,99,112,0.12)' },
+    archived:      { label: 'Archived',      color: '#5a6370', bg: 'rgba(90,99,112,0.12)' },
   };
   const LEVELS = ['low', 'medium', 'high'];
   const PROPOSAL_TAG = 'proposal-attachment';
@@ -23,6 +23,7 @@
     proposalFolderId: '',
     attachmentsByProposal: {},
     filterStatus: 'all',
+    searchQuery: '',
     queryIntentHandled: false,
   };
 
@@ -123,45 +124,81 @@
     const style = document.createElement('style');
     style.id = 'org-proposals-style';
     style.textContent = `
-      .opp-shell { display:grid; gap:1.2rem; }
-      .opp-toolbar { display:flex; gap:0.8rem; align-items:center; justify-content:space-between; flex-wrap:wrap; }
-      .opp-filter-row { display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap; }
-      .opp-stat-chip { padding:0.45rem 0.75rem; border-radius:999px; background:rgba(87,46,136,0.08); color:#572e88; font-size:0.78rem; font-weight:700; }
-      .opp-grid { display:grid; grid-template-columns:minmax(340px, 1.1fr) minmax(0, 1.35fr); gap:1rem; }
-      .opp-list-panel, .opp-detail-panel, .opp-compare-panel { background:#fff; border:1px solid rgba(87,46,136,0.12); border-radius:16px; box-shadow:0 12px 35px rgba(87,46,136,0.06); }
+      /* ---- shell ---- */
+      .opp-shell { display:flex; flex-direction:column; gap:1.1rem; }
+
+      /* ---- stat row ---- */
+      .pp-stat-row { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:0.85rem; }
+      .pp-stat-card { background:#fff; border:1px solid rgba(87,46,136,0.1); border-radius:14px; padding:1.1rem 1.2rem; display:flex; align-items:center; gap:0.95rem; }
+      .pp-stat-icon { width:44px; height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+      .pp-stat-icon img { width:22px; height:22px; }
+      .pp-stat-body { min-width:0; }
+      .pp-stat-label { font-size:0.72rem; font-weight:700; color:rgba(26,21,48,0.5); margin-bottom:0.15rem; }
+      .pp-stat-value { font-size:1.75rem; font-weight:900; color:#000; line-height:1; }
+      .pp-stat-sub { font-size:0.7rem; color:rgba(26,21,48,0.4); margin-top:0.18rem; }
+
+      /* ---- toolbar ---- */
+      .pp-toolbar { display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap; background:#fff; border:1px solid rgba(87,46,136,0.1); border-radius:12px; padding:0.75rem 1rem; }
+      .pp-search-wrap { display:flex; align-items:center; gap:0.45rem; flex:1; min-width:160px; }
+      .pp-search-icon { width:16px; height:16px; opacity:0.35; flex-shrink:0; }
+      .pp-search { border:none; outline:none; font-family:var(--bts-font); font-size:0.86rem; color:#1a1530; background:transparent; flex:1; min-width:0; }
+      .pp-search::placeholder { color:rgba(26,21,48,0.35); }
+      .pp-toolbar-divider { width:1px; height:22px; background:rgba(87,46,136,0.12); flex-shrink:0; }
+      .pp-filter-select { font-family:var(--bts-font); font-size:0.82rem; color:#1a1530; border:1.5px solid rgba(87,46,136,0.2); border-radius:8px; background:#fff; padding:0.42rem 0.75rem; cursor:pointer; }
+      .pp-filter-btn { font-family:var(--bts-font); font-size:0.82rem; font-weight:700; color:#572e88; border:1.5px solid rgba(87,46,136,0.2); border-radius:8px; background:#fff; padding:0.42rem 0.85rem; cursor:pointer; display:flex; align-items:center; gap:0.35rem; }
+
+      /* ---- table ---- */
+      .pp-table-wrap { background:#fff; border:1px solid rgba(87,46,136,0.1); border-radius:14px; overflow:hidden; }
+      .pp-table { width:100%; border-collapse:collapse; }
+      .pp-table thead th { padding:0.75rem 0.9rem; font-size:0.68rem; font-weight:800; letter-spacing:0.07em; text-transform:uppercase; color:rgba(26,21,48,0.45); text-align:left; border-bottom:1px solid rgba(87,46,136,0.08); white-space:nowrap; }
+      .pp-table tbody tr { border-bottom:1px solid rgba(87,46,136,0.06); transition:background 0.12s; cursor:pointer; }
+      .pp-table tbody tr:last-child { border-bottom:none; }
+      .pp-table tbody tr:hover { background:rgba(87,46,136,0.025); }
+      .pp-table tbody td { padding:0.85rem 0.9rem; font-size:0.82rem; color:#1a1530; vertical-align:middle; }
+      .pp-table tbody td.pp-col-num { color:rgba(26,21,48,0.6); font-weight:600; }
+      .pp-table tbody td.pp-col-menu { text-align:right; padding-right:0.75rem; }
+      .pp-show-cell { display:flex; align-items:center; gap:0.75rem; }
+      .pp-show-thumb { width:44px; height:44px; border-radius:8px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:1rem; font-weight:900; color:#fff; }
+      .pp-show-name { font-weight:800; color:#000; font-size:0.86rem; line-height:1.25; }
+      .pp-show-sub { font-size:0.74rem; color:rgba(26,21,48,0.45); margin-top:0.1rem; }
+      .pp-submitter-cell { display:flex; align-items:center; gap:0.6rem; }
+      .pp-submitter-avatar { width:30px; height:30px; border-radius:50%; background:#efefef; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:0.72rem; font-weight:900; color:#572e88; }
+      .pp-submitter-name { font-weight:700; font-size:0.82rem; color:#1a1530; line-height:1.25; }
+      .pp-submitter-role { font-size:0.72rem; color:rgba(26,21,48,0.45); }
+      .pp-updated-date { font-size:0.82rem; color:#1a1530; }
+      .pp-updated-by { font-size:0.72rem; color:rgba(26,21,48,0.45); margin-top:0.1rem; }
+      .pp-empty-row { padding:2.5rem; text-align:center; color:rgba(26,21,48,0.4); font-size:0.88rem; }
+      .pp-menu-btn { background:none; border:none; cursor:pointer; padding:0.3rem 0.5rem; border-radius:6px; color:rgba(26,21,48,0.4); font-size:1rem; font-weight:900; line-height:1; transition:background 0.12s,color 0.12s; }
+      .pp-menu-btn:hover { background:rgba(87,46,136,0.08); color:#572e88; }
+
+      /* ---- row overflow dropdown ---- */
+      .pp-row-menu { position:fixed; background:#fff; border:1px solid rgba(87,46,136,0.14); border-radius:10px; box-shadow:0 8px 28px rgba(26,21,48,0.14); z-index:3100; min-width:160px; padding:0.3rem 0; }
+      .pp-row-menu-item { display:block; width:100%; text-align:left; padding:0.55rem 1rem; font-family:var(--bts-font); font-size:0.83rem; color:#1a1530; font-weight:600; background:none; border:none; cursor:pointer; transition:background 0.1s; }
+      .pp-row-menu-item:hover { background:rgba(87,46,136,0.06); }
+      .pp-row-menu-item.danger { color:#d1523d; }
+      .pp-row-menu-sep { height:1px; background:rgba(87,46,136,0.08); margin:0.25rem 0; }
+
+      /* ---- status pill ---- */
+      .opp-status-pill { display:inline-flex; align-items:center; border-radius:999px; padding:0.28rem 0.65rem; font-size:0.72rem; font-weight:800; white-space:nowrap; }
+
+      /* ---- about card ---- */
+      .pp-about-card { background:rgba(87,46,136,0.04); border:1px solid rgba(87,46,136,0.1); border-radius:14px; padding:1.5rem 1.75rem; display:grid; grid-template-columns:1fr auto; gap:2rem; align-items:start; }
+      .pp-about-left { display:flex; gap:1rem; align-items:flex-start; }
+      .pp-about-icon { width:44px; height:44px; border-radius:50%; background:#572e88; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:0.1rem; }
+      .pp-about-icon img { width:22px; height:22px; filter:brightness(0) invert(1); }
+      .pp-about-title { font-size:1rem; font-weight:900; color:#000; margin-bottom:0.4rem; }
+      .pp-about-copy { font-size:0.84rem; color:rgba(26,21,48,0.6); line-height:1.6; }
+      .pp-next-steps-title { font-size:0.88rem; font-weight:900; color:#000; margin-bottom:0.6rem; }
+      .pp-next-steps { display:flex; flex-direction:column; gap:0.35rem; }
+      .pp-next-step { font-size:0.82rem; color:rgba(26,21,48,0.65); display:flex; gap:0.5rem; }
+      .pp-next-step-num { font-weight:800; color:#572e88; flex-shrink:0; }
+      .pp-learn-more { display:inline-flex; align-items:center; gap:0.3rem; margin-top:0.9rem; font-size:0.82rem; font-weight:800; color:#572e88; text-decoration:none; cursor:pointer; background:none; border:none; font-family:var(--bts-font); padding:0; }
+
+      /* ---- detail modal (existing) ---- */
+      .opp-compare-panel { overflow:auto; background:#fff; border:1px solid rgba(87,46,136,0.12); border-radius:16px; }
       .opp-panel-head { padding:1rem 1.1rem; border-bottom:1px solid rgba(87,46,136,0.08); display:flex; align-items:center; justify-content:space-between; gap:0.75rem; }
       .opp-panel-title { font-size:0.92rem; font-weight:900; color:#1a1530; }
       .opp-panel-copy { font-size:0.78rem; color:#7d6f97; margin-top:0.2rem; }
-      .opp-list-wrap { padding:0.85rem; display:grid; gap:0.8rem; max-height:74vh; overflow:auto; }
-      .opp-card { border:1px solid rgba(87,46,136,0.1); border-radius:14px; padding:0.95rem; display:grid; gap:0.7rem; cursor:pointer; background:linear-gradient(180deg,#fff,#fbf9ff); }
-      .opp-card.active { border-color:#572e88; box-shadow:0 10px 24px rgba(87,46,136,0.12); }
-      .opp-card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:0.75rem; }
-      .opp-card-title { font-size:1rem; font-weight:900; color:#1a1530; line-height:1.15; }
-      .opp-card-sub { font-size:0.8rem; color:#7d6f97; margin-top:0.18rem; }
-      .opp-status-pill { display:inline-flex; align-items:center; border-radius:999px; padding:0.28rem 0.6rem; font-size:0.72rem; font-weight:800; white-space:nowrap; }
-      .opp-meta-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.45rem 0.75rem; }
-      .opp-meta-item { font-size:0.77rem; color:#5b4d74; }
-      .opp-meta-item strong { display:block; font-size:0.67rem; letter-spacing:0.04em; text-transform:uppercase; color:#9a90b0; margin-bottom:0.12rem; }
-      .opp-card-actions { display:flex; align-items:center; justify-content:space-between; gap:0.5rem; }
-      .opp-compare-toggle { display:inline-flex; gap:0.35rem; align-items:center; font-size:0.76rem; color:#5b4d74; font-weight:700; }
-      .opp-detail-wrap { padding:1.1rem; display:grid; gap:1rem; }
-      .opp-empty { padding:2.4rem 1.25rem; text-align:center; color:#9a90b0; font-size:0.88rem; }
-      .opp-actions { display:flex; gap:0.55rem; flex-wrap:wrap; }
-      .opp-section { border:1px solid rgba(87,46,136,0.08); border-radius:14px; padding:0.95rem 1rem; background:#fff; }
-      .opp-section h3 { margin:0 0 0.55rem; font-size:0.9rem; color:#1a1530; }
-      .opp-section p { margin:0; font-size:0.85rem; color:#504267; line-height:1.55; white-space:pre-wrap; }
-      .opp-section-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.75rem; }
-      .opp-kv { background:rgba(87,46,136,0.04); border-radius:12px; padding:0.7rem 0.8rem; }
-      .opp-kv-label { font-size:0.67rem; font-weight:800; text-transform:uppercase; letter-spacing:0.05em; color:#9a90b0; margin-bottom:0.15rem; }
-      .opp-kv-value { font-size:0.86rem; font-weight:700; color:#1a1530; }
-      .opp-level-row { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:0.55rem; }
-      .opp-level-card { border-radius:12px; padding:0.7rem; background:rgba(87,46,136,0.04); }
-      .opp-level-card strong { display:block; font-size:0.7rem; text-transform:uppercase; color:#9a90b0; margin-bottom:0.15rem; }
-      .opp-level-card span { display:block; font-size:0.84rem; font-weight:800; color:#1a1530; }
-      .opp-attachment-list { display:grid; gap:0.55rem; }
-      .opp-attachment-item { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; padding:0.7rem 0.8rem; border-radius:12px; background:rgba(87,46,136,0.04); }
-      .opp-attachment-item a { color:#572e88; font-weight:800; text-decoration:none; }
-      .opp-compare-panel { overflow:auto; }
       .opp-compare-grid { display:grid; grid-template-columns:180px repeat(var(--opp-compare-count,2), minmax(200px,1fr)); min-width:640px; }
       .opp-compare-cell { padding:0.8rem 0.9rem; border-bottom:1px solid rgba(87,46,136,0.08); border-right:1px solid rgba(87,46,136,0.08); font-size:0.82rem; color:#4b3d62; background:#fff; }
       .opp-compare-cell.label { font-weight:800; color:#1a1530; background:#faf8ff; }
@@ -179,11 +216,32 @@
       .opp-form-help { font-size:0.75rem; color:#8f84a5; line-height:1.45; margin-top:0.25rem; }
       .opp-form-actions { position:sticky; bottom:0; background:#fff; padding-top:0.85rem; border-top:1px solid rgba(87,46,136,0.08); display:flex; gap:0.6rem; flex-wrap:wrap; justify-content:flex-end; }
       .opp-note-box { width:100%; min-height:120px; }
-      @media (max-width: 1100px) {
-        .opp-grid { grid-template-columns:1fr; }
+      .opp-detail-wrap { padding:1.1rem; display:grid; gap:1rem; }
+      .opp-empty { padding:2.4rem 1.25rem; text-align:center; color:#9a90b0; font-size:0.88rem; }
+      .opp-actions { display:flex; gap:0.55rem; flex-wrap:wrap; }
+      .opp-section { border:1px solid rgba(87,46,136,0.08); border-radius:14px; padding:0.95rem 1rem; background:#fff; }
+      .opp-section h3 { margin:0 0 0.55rem; font-size:0.9rem; color:#1a1530; }
+      .opp-section p { margin:0; font-size:0.85rem; color:#504267; line-height:1.55; white-space:pre-wrap; }
+      .opp-section-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.75rem; }
+      .opp-kv { background:rgba(87,46,136,0.04); border-radius:12px; padding:0.7rem 0.8rem; }
+      .opp-kv-label { font-size:0.67rem; font-weight:800; text-transform:uppercase; letter-spacing:0.05em; color:#9a90b0; margin-bottom:0.15rem; }
+      .opp-kv-value { font-size:0.86rem; font-weight:700; color:#1a1530; }
+      .opp-level-row { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:0.55rem; }
+      .opp-level-card { border-radius:12px; padding:0.7rem; background:rgba(87,46,136,0.04); }
+      .opp-level-card strong { display:block; font-size:0.7rem; text-transform:uppercase; color:#9a90b0; margin-bottom:0.15rem; }
+      .opp-level-card span { display:block; font-size:0.84rem; font-weight:800; color:#1a1530; }
+      .opp-attachment-list { display:grid; gap:0.55rem; }
+      .opp-attachment-item { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; padding:0.7rem 0.8rem; border-radius:12px; background:rgba(87,46,136,0.04); }
+      .opp-attachment-item a { color:#572e88; font-weight:800; text-decoration:none; }
+      @media (max-width:900px) {
+        .pp-stat-row { grid-template-columns:repeat(2,1fr); }
+        .pp-about-card { grid-template-columns:1fr; }
+        .pp-table thead th:nth-child(n+5):nth-child(-n+8) { display:none; }
+        .pp-table tbody td:nth-child(n+5):nth-child(-n+8) { display:none; }
       }
-      @media (max-width: 760px) {
-        .opp-form-grid, .opp-form-grid.three, .opp-section-grid, .opp-meta-grid, .opp-level-row { grid-template-columns:1fr; }
+      @media (max-width:760px) {
+        .opp-form-grid, .opp-form-grid.three, .opp-section-grid, .opp-level-row { grid-template-columns:1fr; }
+        .pp-stat-row { grid-template-columns:1fr 1fr; }
       }
     `;
     document.head.appendChild(style);
@@ -387,56 +445,210 @@
   }
 
   function filteredProposals() {
-    if (state.filterStatus === 'all') return [...state.proposals];
-    return state.proposals.filter(item => item.status === state.filterStatus);
+    let list = [...state.proposals];
+    if (state.filterStatus !== 'all') list = list.filter(item => item.status === state.filterStatus);
+    if (state.searchQuery) {
+      const q = state.searchQuery.toLowerCase();
+      list = list.filter(item =>
+        (item.proposed_show_title || '').toLowerCase().includes(q) ||
+        (item.licensing_company || '').toLowerCase().includes(q) ||
+        (item.pitch_submitted_by || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }
+
+  function setProposalSearch(q) {
+    state.searchQuery = q || '';
+    renderProposalsTab();
+  }
+
+  function thumbColour(title) {
+    const COLOURS = ['#572e88','#d1523d','#769e7b','#dd8233','#476aaa','#ca7ea7','#efab45','#78bbd4'];
+    let hash = 0;
+    for (let i = 0; i < (title || 'A').length; i++) hash = ((hash << 5) - hash) + (title || 'A').charCodeAt(i);
+    return COLOURS[Math.abs(hash) % COLOURS.length];
+  }
+
+  function initialsOf(name) {
+    return (name || '?').split(' ').filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+  }
+
+  function renderStatCard(label, value, sub, iconBg) {
+    return `
+      <div class="pp-stat-card">
+        <div class="pp-stat-icon" style="background:${iconBg};">
+          <img src="/ASSETS/Images/Icons/Files.svg?v=20260705" alt="" aria-hidden="true" />
+        </div>
+        <div class="pp-stat-body">
+          <div class="pp-stat-label">${esc(label)}</div>
+          <div class="pp-stat-value">${esc(String(value))}</div>
+          <div class="pp-stat-sub">${esc(sub)}</div>
+        </div>
+      </div>`;
+  }
+
+  function renderProposalRow(proposal) {
+    const thumb = thumbColour(proposal.proposed_show_title);
+    const letter = (proposal.proposed_show_title || 'P')[0].toUpperCase();
+    const submitterInitials = initialsOf(proposal.pitch_submitted_by);
+    const licensor = proposal.licensing_company || proposal.show_version || '';
+    return `
+      <tr onclick="openProposalModal('${proposal.id}')">
+        <td>
+          <div class="pp-show-cell">
+            <div class="pp-show-thumb" style="background:${thumb};">${esc(letter)}</div>
+            <div>
+              <div class="pp-show-name">${esc(proposal.proposed_show_title || 'Untitled Proposal')}</div>
+              ${licensor ? `<div class="pp-show-sub">${esc(licensor)}</div>` : ''}
+            </div>
+          </div>
+        </td>
+        <td>
+          <div class="pp-submitter-cell">
+            <div class="pp-submitter-avatar">${esc(submitterInitials)}</div>
+            <div>
+              <div class="pp-submitter-name">${esc(proposal.pitch_submitted_by || 'Unknown')}</div>
+              ${proposal.genre_type ? `<div class="pp-submitter-role">${esc(proposal.genre_type)}</div>` : ''}
+            </div>
+          </div>
+        </td>
+        <td>${esc(fmtDateTime(proposal.submitted_at || proposal.created_at))}</td>
+        <td>${statusPill(proposal.status)}</td>
+        <td class="pp-col-num">${esc(fmtRuntime(proposal.runtime_minutes))}</td>
+        <td class="pp-col-num">${esc(proposal.number_of_songs != null ? String(proposal.number_of_songs) : '--')}</td>
+        <td class="pp-col-num">${esc(proposal.named_roles != null ? String(proposal.named_roles) : '--')}</td>
+        <td class="pp-col-num">${esc(fmtCurrency(proposal.estimated_licensing_fee))}</td>
+        <td>
+          <div class="pp-updated-date">${esc(fmtDateTime(proposal.updated_at))}</div>
+          ${proposal.pitch_submitted_by ? `<div class="pp-updated-by">by ${esc((proposal.pitch_submitted_by || '').split(' ').map((w, i) => i === 0 ? w : w[0] + '.').join(' '))}</div>` : ''}
+        </td>
+        <td class="pp-col-menu" onclick="event.stopPropagation()">
+          <button class="pp-menu-btn" onclick="showProposalRowMenu(event,'${proposal.id}')" aria-label="More options">&#8943;</button>
+        </td>
+      </tr>`;
+  }
+
+  function showProposalRowMenu(event, proposalId) {
+    document.getElementById('pp-row-menu')?.remove();
+    const btn = event.currentTarget;
+    const rect = btn.getBoundingClientRect();
+    const menu = document.createElement('div');
+    menu.id = 'pp-row-menu';
+    menu.className = 'pp-row-menu';
+    menu.innerHTML = `
+      <button class="pp-row-menu-item" onclick="openProposalModal('${proposalId}');document.getElementById('pp-row-menu')?.remove()">Edit Proposal</button>
+      <button class="pp-row-menu-item" onclick="copyProposalShareLink();document.getElementById('pp-row-menu')?.remove()">Copy Share Link</button>
+      <div class="pp-row-menu-sep"></div>
+      <button class="pp-row-menu-item" onclick="approveAndBuildProposal('${proposalId}');document.getElementById('pp-row-menu')?.remove()">Approve &amp; Build</button>
+      <button class="pp-row-menu-item danger" onclick="archiveProposal('${proposalId}');document.getElementById('pp-row-menu')?.remove()">Archive</button>
+    `;
+    menu.style.top = (rect.bottom + 4) + 'px';
+    menu.style.right = (window.innerWidth - rect.right) + 'px';
+    document.body.appendChild(menu);
+    setTimeout(function() {
+      document.addEventListener('click', function dismiss(e) {
+        if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', dismiss); }
+      });
+    }, 0);
   }
 
   function renderProposalsTab() {
     const root = proposalRoot();
     if (!root) return;
     const proposals = filteredProposals();
-    const selected = proposalById(state.selectedProposalId);
+    const total = state.proposals.length;
+    const underReviewCt = state.proposals.filter(function(p) { return p.status === 'under_review'; }).length;
+    const shortlistedCt = state.proposals.filter(function(p) { return p.status === 'shortlisted'; }).length;
+    const selectedCt = state.proposals.filter(function(p) { return p.status === 'selected'; }).length;
+    const archivedCt = state.proposals.filter(function(p) { return p.status === 'archived'; }).length;
+
+    const statusOptions = Object.keys(STATUS_META).map(function(key) {
+      return '<option value="' + key + '"' + (state.filterStatus === key ? ' selected' : '') + '>' + esc(STATUS_META[key].label) + '</option>';
+    }).join('');
+
     root.innerHTML = `
       <div class="opp-shell">
-        <div class="opp-toolbar">
-          <div>
-            <div class="opp-panel-title">Production Proposals</div>
-            <div class="opp-panel-copy">Ideas stay here until they are approved and turned into active productions.</div>
-          </div>
-          <div style="display:flex;gap:0.55rem;flex-wrap:wrap;">
-            <button class="btn-secondary" onclick="refreshProductionProposals()">Refresh</button>
-            <button class="btn-secondary" onclick="copyProposalShareLink()">Copy Proposal Link</button>
-            <button class="btn-primary" onclick="openNewProposalTab()">+ New Proposal</button>
-          </div>
+        <div class="pp-stat-row">
+          ${renderStatCard('Total Proposals', total, 'All time', 'rgba(87,46,136,0.12)')}
+          ${renderStatCard('Under Review', underReviewCt, 'Currently being reviewed', 'rgba(239,171,69,0.2)')}
+          ${renderStatCard('Shortlisted', shortlistedCt, 'Strong contenders', 'rgba(120,187,212,0.2)')}
+          ${renderStatCard('Selected', selectedCt, 'Moving to production', 'rgba(118,158,123,0.2)')}
+          ${renderStatCard('Archived', archivedCt, 'Not selected', 'rgba(90,99,112,0.12)')}
         </div>
-        <div class="opp-filter-row">
-          <span class="opp-stat-chip">${state.proposals.length} proposal${state.proposals.length === 1 ? '' : 's'}</span>
-          <span class="opp-stat-chip">${state.proposals.filter(item => item.status === 'submitted' || item.status === 'under_review').length} in review</span>
-          <span class="opp-stat-chip">${state.proposals.filter(item => item.status === 'selected').length} selected</span>
-          <select class="form-select" style="max-width:220px;" onchange="setProposalStatusFilter(this.value)">
-            <option value="all"${state.filterStatus === 'all' ? ' selected' : ''}>All statuses</option>
-            ${Object.keys(STATUS_META).map(key => `<option value="${key}"${state.filterStatus === key ? ' selected' : ''}>${esc(STATUS_META[key].label)}</option>`).join('')}
+
+        <div class="pp-toolbar">
+          <div class="pp-search-wrap">
+            <img src="/ASSETS/Images/Icons/Search.svg?v=20260705" class="pp-search-icon" alt="" aria-hidden="true" />
+            <input class="pp-search" type="search" placeholder="Search proposals..." value="${esc(state.searchQuery)}" oninput="setProposalSearch(this.value)" />
+          </div>
+          <div class="pp-toolbar-divider"></div>
+          <select class="pp-filter-select" onchange="setProposalStatusFilter(this.value)">
+            <option value="all"${state.filterStatus === 'all' ? ' selected' : ''}>All Statuses</option>
+            ${statusOptions}
           </select>
+          <select class="pp-filter-select">
+            <option>All Seasons</option>
+          </select>
+          <button class="pp-filter-btn">
+            <img src="/ASSETS/Images/Icons/Filter.svg?v=20260705" style="width:13px;height:13px;opacity:0.55;" alt="" aria-hidden="true" />
+            Filters
+          </button>
         </div>
+
+        <div class="pp-table-wrap">
+          <table class="pp-table">
+            <thead>
+              <tr>
+                <th>Show</th>
+                <th>Submitted By</th>
+                <th>Date Submitted</th>
+                <th>Status</th>
+                <th>Runtime</th>
+                <th>Songs</th>
+                <th>Roles</th>
+                <th>Est. Rights Fee</th>
+                <th>Last Updated</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${proposals.length
+                ? proposals.map(renderProposalRow).join('')
+                : '<tr><td colspan="10" class="pp-empty-row">No proposals match your search. Try a different filter or add a new proposal.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+
         ${renderComparePanel()}
-        <div class="opp-grid">
-          <div class="opp-list-panel">
-            <div class="opp-panel-head">
-              <div>
-                <div class="opp-panel-title">Proposal List</div>
-                <div class="opp-panel-copy">Readable cards for quick board review.</div>
-              </div>
+
+        <div class="pp-about-card">
+          <div class="pp-about-left">
+            <div class="pp-about-icon">
+              <img src="/ASSETS/Images/Icons/navoverview.svg?v=20260705" alt="" aria-hidden="true" />
             </div>
-            <div class="opp-list-wrap">
-              ${proposals.length ? proposals.map(renderProposalCard).join('') : `<div class="opp-empty">No proposals yet. Start with a draft and build it into a board-ready pitch.</div>`}
+            <div>
+              <div class="pp-about-title">About Production Proposals</div>
+              <p class="pp-about-copy">Proposals help you discover great ideas and choose the right show for your community. Once a proposal is selected, you can create a production and begin planning your show.</p>
             </div>
           </div>
-          <div class="opp-detail-panel">
-            ${selected ? renderProposalDetail(selected) : `<div class="opp-empty">Select a proposal to read the full packet.</div>`}
+          <div>
+            <div class="pp-next-steps-title">Next Steps</div>
+            <div class="pp-next-steps">
+              <div class="pp-next-step"><span class="pp-next-step-num">1.</span><span>Create a new proposal using the button above.</span></div>
+              <div class="pp-next-step"><span class="pp-next-step-num">2.</span><span>Fill out as much information as you can.</span></div>
+              <div class="pp-next-step"><span class="pp-next-step-num">3.</span><span>Submit for review when you are ready.</span></div>
+            </div>
+            <button class="pp-learn-more" onclick="copyProposalShareLink()">Share proposal form with your team &rarr;</button>
           </div>
         </div>
       </div>
     `;
+  }
+
+  function setProposalStatusFilter(value) {
+    state.filterStatus = value || 'all';
+    renderProposalsTab();
   }
 
   function renderComparePanel() {
@@ -597,11 +809,6 @@
     const text = String(value || '').trim();
     if (!text) return '';
     return text.charAt(0).toUpperCase() + text.slice(1).replace(/_/g, ' ');
-  }
-
-  function setProposalStatusFilter(value) {
-    state.filterStatus = value || 'all';
-    renderProposalsTab();
   }
 
   async function selectProductionProposal(id) {
@@ -1153,6 +1360,8 @@
     }
   }
 
+  window.setProposalSearch = setProposalSearch;
+  window.showProposalRowMenu = showProposalRowMenu;
   window.loadProductionProposalsTab = loadProductionProposalsTab;
   window.openProposalModal = openProposalModal;
   window.closeProposalModal = closeProposalModal;
