@@ -952,11 +952,35 @@
     return url.toString();
   }
 
+  function generateProposalToken() {
+    if (window.crypto?.getRandomValues) {
+      const bytes = new Uint8Array(12);
+      window.crypto.getRandomValues(bytes);
+      return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    }
+    return `${Date.now().toString(16)}${Math.random().toString(16).slice(2, 10)}`;
+  }
+
+  async function ensureCurrentOrgProposalToken(config) {
+    if (config?.proposal_submission_token) return config;
+    const org = currentOrg();
+    if (!org?.id) throw new Error('Organization context is missing.');
+    const token = generateProposalToken();
+    const { data, error } = await sb().from('organizations')
+      .update({ proposal_submission_token: token })
+      .eq('id', org.id)
+      .select('id, slug, abbreviation, proposal_submission_token')
+      .single();
+    if (error) throw error;
+    if (window.currentOrg) window.currentOrg.proposal_submission_token = data?.proposal_submission_token || token;
+    return data || { ...config, proposal_submission_token: token };
+  }
+
   async function openNewProposalTab() {
     const draftTab = window.open('', '_blank');
     if (draftTab) draftTab.opener = null;
     try {
-      const config = await getProposalShareConfig();
+      const config = await ensureCurrentOrgProposalToken(await getProposalShareConfig());
       const url = buildProposalShareUrl(config);
       if (!url) throw new Error('Proposal sharing is not ready yet. Run the SQL, then refresh this page.');
       if (draftTab) {
@@ -986,7 +1010,7 @@
 
   async function copyProposalShareLink() {
     try {
-      const config = await getProposalShareConfig();
+      const config = await ensureCurrentOrgProposalToken(await getProposalShareConfig());
       const url = buildProposalShareUrl(config);
       if (!url) throw new Error('Proposal sharing is not ready yet. Run the SQL, then refresh this page.');
       if (navigator.clipboard?.writeText) {

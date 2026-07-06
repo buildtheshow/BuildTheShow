@@ -1,18 +1,12 @@
 alter table public.organizations
   add column if not exists proposal_submission_token text;
 
-update public.organizations
-set proposal_submission_token = encode(gen_random_bytes(12), 'hex')
-where proposal_submission_token is null or btrim(proposal_submission_token) = '';
-
 alter table public.organizations
   alter column proposal_submission_token set default encode(gen_random_bytes(12), 'hex');
 
-alter table public.organizations
-  alter column proposal_submission_token set not null;
-
 create unique index if not exists organizations_proposal_submission_token_idx
-  on public.organizations (proposal_submission_token);
+  on public.organizations (proposal_submission_token)
+  where proposal_submission_token is not null;
 
 alter table public.production_proposals
   add column if not exists submitter_email text,
