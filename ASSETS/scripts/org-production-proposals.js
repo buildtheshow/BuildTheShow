@@ -169,6 +169,14 @@
       .pp-intake-meta-item strong { display:block; font-size:0.66rem; text-transform:uppercase; letter-spacing:0.05em; color:#9a90b0; margin-bottom:0.12rem; }
       .pp-intake-actions { display:flex; gap:0.45rem; flex-wrap:wrap; }
       .pp-intake-empty { border-radius:14px; padding:1.5rem; text-align:center; border:1px dashed rgba(87,46,136,0.18); color:#8f84a5; background:rgba(87,46,136,0.03); }
+      .pp-season-overview { background:#fff; border:1px solid rgba(87,46,136,0.1); border-radius:14px; padding:1.15rem 1.2rem; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:1rem; align-items:start; }
+      .pp-season-overview.is-all { background:rgba(87,46,136,0.04); }
+      .pp-season-kicker { font-size:0.7rem; font-weight:800; letter-spacing:0.07em; text-transform:uppercase; color:#9a90b0; margin-bottom:0.3rem; }
+      .pp-season-title { font-size:1.15rem; font-weight:900; color:#1a1530; line-height:1.15; }
+      .pp-season-copy { margin-top:0.35rem; font-size:0.82rem; color:#6a5a80; line-height:1.55; max-width:760px; }
+      .pp-season-meta { display:flex; gap:0.55rem; flex-wrap:wrap; margin-top:0.75rem; }
+      .pp-season-chip { display:inline-flex; align-items:center; gap:0.35rem; border-radius:999px; padding:0.35rem 0.65rem; background:rgba(87,46,136,0.06); border:1px solid rgba(87,46,136,0.1); font-size:0.74rem; font-weight:700; color:#572e88; }
+      .pp-season-actions { display:flex; gap:0.55rem; flex-wrap:wrap; justify-content:flex-end; }
 
       /* ---- table ---- */
       .pp-table-wrap { background:#fff; border:1px solid rgba(87,46,136,0.1); border-radius:14px; overflow:hidden; }
@@ -260,6 +268,7 @@
       @media (max-width:900px) {
         .pp-stat-row { grid-template-columns:repeat(2,1fr); }
         .pp-intake-grid { grid-template-columns:1fr; }
+        .pp-season-overview { grid-template-columns:1fr; }
         .pp-about-card { grid-template-columns:1fr; }
         .pp-table thead th:nth-child(n+5):nth-child(-n+8) { display:none; }
         .pp-table tbody td:nth-child(n+5):nth-child(-n+8) { display:none; }
@@ -505,7 +514,8 @@
       .order('created_at', { ascending: false });
     if (error) throw error;
     state.intakes = data || [];
-    if (state.selectedIntakeId !== 'all' && !proposalIntakeById(state.selectedIntakeId)) state.selectedIntakeId = 'all';
+    if (state.selectedIntakeId === 'all' && state.intakes.length) state.selectedIntakeId = state.intakes[0].id;
+    if (state.selectedIntakeId !== 'all' && !proposalIntakeById(state.selectedIntakeId)) state.selectedIntakeId = state.intakes[0]?.id || 'all';
   }
 
   async function loadProductionProposalsTab() {
@@ -675,6 +685,43 @@
     return `${intake.title}\n${url}\nPasscode: ${intake.access_code}`;
   }
 
+  function renderSeasonOverview(intake) {
+    if (!intake) {
+      return `
+        <div class="pp-season-overview is-all">
+          <div>
+            <div class="pp-season-kicker">Season Overview</div>
+            <div class="pp-season-title">All Seasons</div>
+            <div class="pp-season-copy">Choose a season card above to see the proposal totals, status counts, and pitch activity for that specific season.</div>
+          </div>
+          <div class="pp-season-actions">
+            <button class="btn-primary" onclick="openProposalIntakeModal()">+ Add Season</button>
+          </div>
+        </div>`;
+    }
+    const status = proposalIntakeStatus(intake);
+    const submissionCount = state.proposals.filter(function(item) { return item.intake_id === intake.id; }).length;
+    return `
+      <div class="pp-season-overview">
+        <div>
+          <div class="pp-season-kicker">Selected Season</div>
+          <div class="pp-season-title">${esc(intake.title || 'Season')}</div>
+          <div class="pp-season-copy">${esc(intake.description || 'This is the pitch intake for this season. Share it with your community, collect proposals here, and review them before building a production.')}</div>
+          <div class="pp-season-meta">
+            <div class="pp-season-chip">${esc(status.charAt(0).toUpperCase() + status.slice(1))}</div>
+            <div class="pp-season-chip">${esc(intake.season_label || 'Season label not set')}</div>
+            <div class="pp-season-chip">${esc(String(submissionCount))} proposals</div>
+            <div class="pp-season-chip">${esc(intake.closes_at ? 'Closes ' + fmtDateTime(intake.closes_at) : 'No close date')}</div>
+          </div>
+        </div>
+        <div class="pp-season-actions">
+          <button class="btn-secondary" onclick="copyProposalIntakeInvite('${intake.id}')">Copy Invite</button>
+          <button class="btn-secondary" onclick="openProposalIntakeShareTab('${intake.id}')">Open Pitch Page</button>
+          <button class="btn-secondary" onclick="openProposalIntakeModal('${intake.id}')">Edit Season</button>
+        </div>
+      </div>`;
+  }
+
   function renderIntakeCard(intake) {
     const active = intake.id === state.selectedIntakeId;
     return `
@@ -753,6 +800,8 @@
             ? `<div class="pp-intake-grid">${state.intakes.map(renderIntakeCard).join('')}</div>`
             : statEmptyAction}
         </div>
+
+        ${renderSeasonOverview(selectedIntake)}
 
         <div class="pp-stat-row">
           ${renderStatCard('Total Proposals', total, statSubtitle, 'rgba(87,46,136,0.12)')}
