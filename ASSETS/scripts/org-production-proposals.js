@@ -756,6 +756,7 @@
   function renderProposalsTab() {
     const root = proposalRoot();
     if (!root) return;
+    const hasSeasons = state.intakes.length > 0;
     const proposals = filteredProposals();
     const selectedIntake = state.selectedIntakeId === 'all' ? null : proposalIntakeById(state.selectedIntakeId);
     const statPool = selectedIntake
@@ -809,8 +810,9 @@
             : statEmptyAction}
         </div>
 
-        ${renderSeasonOverview(selectedIntake)}
+        ${hasSeasons ? renderSeasonOverview(selectedIntake) : ''}
 
+        ${hasSeasons ? `
         <div class="pp-stat-row">
           ${renderStatCard('Total Proposals', total, statSubtitle, 'rgba(87,46,136,0.12)')}
           ${renderStatCard('Under Review', underReviewCt, selectedIntake ? 'Inside this season' : 'Across all seasons', 'rgba(239,171,69,0.2)')}
@@ -882,6 +884,7 @@
             ${selectedIntake ? `<button class="pp-learn-more" onclick="copyProposalIntakeInvite('${selectedIntake.id}')">Copy invite for this season &rarr;</button>` : ''}
           </div>
         </div>
+        ` : ''}
       </div>
     `;
   }
