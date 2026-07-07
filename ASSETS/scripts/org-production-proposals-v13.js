@@ -19,6 +19,157 @@
     expired: { label: 'Expired', color: '#b85e00', bg: 'rgba(239,171,69,0.22)'  },
   };
 
+  var currentFormConfig = null;
+
+  var QUESTION_TYPES = [
+    { value:'short_answer',      label:'Short Answer' },
+    { value:'long_answer',       label:'Long Answer' },
+    { value:'email',             label:'Email' },
+    { value:'phone',             label:'Phone' },
+    { value:'number',            label:'Number' },
+    { value:'currency',          label:'Currency' },
+    { value:'date',              label:'Date' },
+    { value:'date_range',        label:'Date Range' },
+    { value:'time',              label:'Time' },
+    { value:'url',               label:'URL' },
+    { value:'dropdown',          label:'Dropdown' },
+    { value:'checkbox',          label:'Checkbox' },
+    { value:'yes_no',            label:'Yes / No' },
+    { value:'yes_no_unsure',     label:'Yes / No / Unsure' },
+    { value:'rating',            label:'Rating (1–5)' },
+    { value:'file_upload',       label:'File Upload' },
+    { value:'info_text',         label:'Info Text' },
+    { value:'divider',           label:'Divider' },
+    { value:'agreement_checkbox',label:'Agreement Checkbox' },
+  ];
+
+  function mkQ(id, label, type, overrides) {
+    return Object.assign({ id:id, label:label, type:type, required:false, enabled:true, help_text:'', placeholder:'', options:[], conditions:[], field_key:id }, overrides||{});
+  }
+
+  var DEFAULT_FORM_CONFIG = { sections: [
+    { id:'sec_submitter', title:'Submitter Info', enabled:true, questions:[
+      mkQ('si_name','Your name','short_answer',{required:true,field_key:'pitch_submitted_by'}),
+      mkQ('si_email','Your email','email',{required:true,field_key:'submitter_email'}),
+      mkQ('si_phone','Your phone number','phone',{field_key:'submitter_phone'}),
+      mkQ('si_role','Your role / relationship to the organisation','dropdown',{options:['Director','Producer','Board member','Volunteer','Parent','Performer','Community member','Other']}),
+      mkQ('si_worked_before','Have you worked with this organisation before?','yes_no'),
+      mkQ('si_experience','Tell us about your experience','long_answer'),
+    ]},
+    { id:'sec_show_basics', title:'Show Basics', enabled:true, questions:[
+      mkQ('sb_title','Show title','short_answer',{required:true,field_key:'proposed_show_title'}),
+      mkQ('sb_version','Show version / edition','short_answer',{placeholder:'JR, Teen Edition, School Edition, Full Version',field_key:'show_version'}),
+      mkQ('sb_author','Author / composer / playwright','short_answer'),
+      mkQ('sb_licensing_co','Licensing company','dropdown',{options:['MTI','Concord Theatricals','Playscripts','Broadway Licensing','Stage Rights','Theatrical Rights Worldwide','Public domain','Original work','Unknown','Other'],field_key:'licensing_company'}),
+      mkQ('sb_licensing_link','Licensing link','url'),
+      mkQ('sb_licensing_cost','Estimated licensing cost','currency',{field_key:'estimated_licensing_fee'}),
+      mkQ('sb_genre','Genre','checkbox',{options:['Musical','Play','Comedy','Drama','Family','Youth','Holiday','Shakespeare','New work','Other'],field_key:'genre_type'}),
+      mkQ('sb_runtime','Runtime','short_answer',{placeholder:'e.g. 2 hours 15 minutes',field_key:'runtime_minutes'}),
+      mkQ('sb_acts','Number of acts','number'),
+      mkQ('sb_synopsis','Synopsis','long_answer',{field_key:'short_synopsis'}),
+    ]},
+    { id:'sec_why', title:'Why This Show?', enabled:true, questions:[
+      mkQ('why_pitching','Why are you pitching this show?','long_answer'),
+      mkQ('why_fit','Why is this show a good fit for this organisation?','long_answer',{field_key:'organization_fit'}),
+      mkQ('why_now','Why is this the right time for this show?','long_answer'),
+      mkQ('why_audience','Who is the audience for this show?','checkbox',{options:['Families','Adults','Teens','Children','Seniors','Schools','General audience','Existing theatre audience','New audience','Other']}),
+      mkQ('why_appeal','Why would audiences come see it?','long_answer'),
+      mkQ('why_over_others','What makes this show worth choosing over other options?','long_answer'),
+    ]},
+    { id:'sec_casting', title:'Casting', enabled:true, questions:[
+      mkQ('cast_named_roles','Number of named roles','number',{field_key:'named_roles'}),
+      mkQ('cast_character_list','Character list','long_answer',{help_text:'List main characters with notes on size, range, age, and flexibility.',field_key:'character_list'}),
+      mkQ('cast_ensemble_size','Estimated ensemble size','number'),
+      mkQ('cast_min','Minimum cast size','number'),
+      mkQ('cast_ideal','Ideal cast size','number'),
+      mkQ('cast_max','Maximum cast size','number'),
+      mkQ('cast_doubled','Can roles be doubled?','yes_no_unsure'),
+      mkQ('cast_flexible','Is casting flexible?','yes_no_unsure'),
+      mkQ('cast_gender_flex','Gender flexibility','long_answer',{field_key:'gender_flexibility'}),
+      mkQ('cast_age_flex','Age flexibility','long_answer'),
+      mkQ('cast_youth','Are there roles for youth?','yes_no_unsure'),
+      mkQ('cast_adults','Are there roles for adults?','yes_no_unsure'),
+      mkQ('cast_ensemble_opps','Are there ensemble opportunities?','long_answer',{field_key:'ensemble_opportunities'}),
+      mkQ('cast_performer_type','What type of performers does this show need?','checkbox',{options:['Strong singers','Strong dancers','Strong actors','Comedic actors','Children','Teens','Adults','Large ensemble','Small ensemble','Special skills','Other']}),
+    ]},
+    { id:'sec_music', title:'Music and Choreography', enabled:true, questions:[
+      mkQ('mu_is_musical','Is this a musical?','yes_no',{required:true}),
+      mkQ('mu_songs','Number of songs','number',{conditions:[{question_id:'mu_is_musical',operator:'equals',value:'yes'}],field_key:'number_of_songs'}),
+      mkQ('mu_vocal_diff','Vocal difficulty','rating',{conditions:[{question_id:'mu_is_musical',operator:'equals',value:'yes'}]}),
+      mkQ('mu_dance_diff','Dance difficulty','rating',{conditions:[{question_id:'mu_is_musical',operator:'equals',value:'yes'}]}),
+      mkQ('mu_music_diff','Music difficulty','rating',{conditions:[{question_id:'mu_is_musical',operator:'equals',value:'yes'}]}),
+      mkQ('mu_live_musicians','Does it require live musicians?','yes_no_unsure',{conditions:[{question_id:'mu_is_musical',operator:'equals',value:'yes'}]}),
+      mkQ('mu_tracks','Can tracks be used?','yes_no_unsure',{conditions:[{question_id:'mu_is_musical',operator:'equals',value:'yes'}]}),
+      mkQ('mu_orchestra','Estimated orchestra size','number',{conditions:[{question_id:'mu_is_musical',operator:'equals',value:'yes'}]}),
+      mkQ('mu_dance_numbers','Are there major dance numbers?','yes_no'),
+      mkQ('mu_choreo_notes','Choreography notes','long_answer'),
+    ]},
+    { id:'sec_production', title:'Production Requirements', enabled:true, questions:[
+      mkQ('pr_sets','Set complexity','rating'),
+      mkQ('pr_costumes','Costume complexity','rating'),
+      mkQ('pr_props','Prop complexity','rating'),
+      mkQ('pr_lighting','Lighting complexity','rating'),
+      mkQ('pr_sound','Sound complexity','rating'),
+      mkQ('pr_stage_mgmt','Stage management complexity','rating'),
+      mkQ('pr_overall','Overall production complexity','rating'),
+      mkQ('pr_set_reqs','Set requirements','long_answer'),
+      mkQ('pr_costume_reqs','Costume requirements','long_answer'),
+      mkQ('pr_prop_reqs','Prop requirements','long_answer'),
+      mkQ('pr_lighting_reqs','Lighting requirements','long_answer'),
+      mkQ('pr_sound_reqs','Sound requirements','long_answer'),
+      mkQ('pr_special_reqs','Special requirements','checkbox',{options:['Flying','Projections','Puppets','Animals','Weapons','Food on stage','Water','Fog / haze','Pyrotechnics','Quick changes','Large set pieces','Dance floor','Microphones','Special effects','None','Other'],field_key:'special_requirements'}),
+      mkQ('pr_biggest_challenge','Biggest technical challenge','long_answer',{field_key:'biggest_challenge'}),
+    ]},
+    { id:'sec_budget', title:'Budget', enabled:true, questions:[
+      mkQ('bu_licensing','Estimated licensing fee','currency'),
+      mkQ('bu_sets','Estimated set cost','short_answer',{placeholder:'e.g. $500–$2,000'}),
+      mkQ('bu_costumes','Estimated costume cost','short_answer',{placeholder:'e.g. $500–$2,000'}),
+      mkQ('bu_props','Estimated prop cost','short_answer'),
+      mkQ('bu_music','Estimated music cost','short_answer'),
+      mkQ('bu_special','Estimated special rental costs','short_answer'),
+      mkQ('bu_level','Overall budget level','dropdown',{options:['Very low','Low','Medium','High','Very high','Unsure']}),
+      mkQ('bu_expensive','Known expensive items','long_answer'),
+      mkQ('bu_simple','Could this show be produced simply?','yes_no_unsure'),
+      mkQ('bu_notes','Budget notes','long_answer'),
+    ]},
+    { id:'sec_content', title:'Content and Suitability', enabled:true, questions:[
+      mkQ('cs_warnings','Content warnings','checkbox',{options:['Language','Violence','Alcohol','Drugs','Smoking','Death','Grief','Bullying','Mental health themes','Sexual references','Religious themes','Racism','Discrimination','Scary scenes','None known','Other'],field_key:'content_warnings'}),
+      mkQ('cs_age','Audience age suitability','dropdown',{options:['All ages','6+','8+','10+','12+','14+','16+','Adults only','Unsure']}),
+      mkQ('cs_family_friendly','Is the show family friendly?','dropdown',{options:['Yes','No','Somewhat']}),
+      mkQ('cs_notes','Suitability notes','long_answer'),
+    ]},
+    { id:'sec_vision', title:'Creative Vision', enabled:true, questions:[
+      mkQ('vi_vision','What is your vision for this production?','long_answer'),
+      mkQ('vi_tone','What tone or style do you imagine?','long_answer'),
+      mkQ('vi_design','Are there design ideas you already have?','long_answer'),
+      mkQ('vi_feel','What should the audience feel or take away?','long_answer'),
+      mkQ('vi_inspiration','Upload inspiration images / mood board / poster','file_upload'),
+    ]},
+    { id:'sec_creative_team', title:'Creative Team', enabled:true, questions:[
+      mkQ('ct_self_director','Are you proposing yourself as director?','yes_no_unsure'),
+      mkQ('ct_director_name','Proposed director name','short_answer'),
+      mkQ('ct_has_team','Do you have a creative team in mind?','yes_no'),
+      mkQ('ct_team','Creative team list','long_answer',{help_text:'Name, role, and whether they are confirmed.'}),
+      mkQ('ct_experience','What experience does the proposed team have?','long_answer'),
+    ]},
+    { id:'sec_schedule', title:'Schedule Fit', enabled:true, questions:[
+      mkQ('sc_window','Preferred production window','short_answer',{placeholder:'e.g. Spring 2027, Summer'}),
+      mkQ('sc_concerns','Known scheduling concerns','long_answer'),
+      mkQ('sc_long_rehearsal','Does this show require a long rehearsal period?','yes_no_unsure'),
+      mkQ('sc_rehearsal_needs','Estimated rehearsal needs','long_answer'),
+      mkQ('sc_blackouts','Any blackout dates?','long_answer'),
+    ]},
+    { id:'sec_risks', title:'Risks and Challenges', enabled:true, questions:[
+      mkQ('ri_challenge','What is the biggest challenge with producing this show?','long_answer'),
+      mkQ('ri_solution','How would you solve or reduce that challenge?','long_answer'),
+      mkQ('ri_difficult','What could make this show difficult for this organisation?','long_answer'),
+      mkQ('ri_support','What support would this show need?','long_answer'),
+    ]},
+    { id:'sec_attachments', title:'Attachments', enabled:true, questions:[
+      mkQ('at_files','Supporting files','file_upload',{help_text:'Script sample, licensing quote, budget notes, mood board, poster, director résumé, etc.'}),
+    ]},
+  ]};
+
   const state = {
     loaded: false,
     loading: false,
@@ -323,6 +474,42 @@
       .pp-sub-intake-header { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; }
       .pp-sub-intake-year-name { font-size:0.88rem; font-weight:900; color:#1a1530; }
       .pp-sub-intake-empty { font-size:0.84rem; color:#8f84a5; padding:0.5rem 0; }
+
+      /* ---- form builder (Step 3) ---- */
+      .pfb-section { border:1px solid rgba(87,46,136,0.12); border-radius:12px; overflow:hidden; background:#fff; }
+      .pfb-section--disabled { opacity:0.6; }
+      .pfb-section-head { display:flex; align-items:center; gap:0.55rem; padding:0.6rem 0.75rem; background:rgba(87,46,136,0.05); border-bottom:1px solid rgba(87,46,136,0.08); flex-wrap:wrap; }
+      .pfb-section-title-input { flex:1; min-width:100px; border:none; background:transparent; font:inherit; font-weight:800; font-size:0.9rem; color:#1a1530; outline:none; padding:0; }
+      .pfb-section-title-input:focus { background:rgba(87,46,136,0.06); border-radius:4px; padding:0 4px; }
+      .pfb-q-count { font-size:0.68rem; font-weight:700; color:rgba(87,46,136,0.45); white-space:nowrap; flex-shrink:0; }
+      .pfb-section-actions { display:flex; align-items:center; gap:0.28rem; margin-left:auto; flex-shrink:0; }
+      .pfb-section-body { padding:0.6rem 0.7rem; display:flex; flex-direction:column; gap:0.45rem; }
+      .pfb-question { border:1px solid rgba(87,46,136,0.09); border-radius:8px; overflow:hidden; background:#fafafa; }
+      .pfb-question--disabled { opacity:0.5; }
+      .pfb-q-row { display:flex; align-items:center; gap:0.45rem; padding:0.4rem 0.55rem; flex-wrap:wrap; }
+      .pfb-q-label-input { flex:1; min-width:140px; border:1px solid rgba(87,46,136,0.15); border-radius:6px; padding:0.28rem 0.45rem; font:inherit; font-size:0.81rem; font-weight:700; color:#1a1530; }
+      .pfb-q-type-sel { border:1px solid rgba(87,46,136,0.15); border-radius:6px; padding:0.28rem 0.45rem; font:inherit; font-size:0.74rem; color:#572e88; background:#fff; max-width:160px; }
+      .pfb-q-req-lbl { font-size:0.7rem; font-weight:700; color:rgba(26,21,48,0.5); display:flex; align-items:center; gap:0.25rem; white-space:nowrap; cursor:pointer; }
+      .pfb-q-btns { display:flex; align-items:center; gap:0.22rem; flex-shrink:0; margin-left:auto; }
+      .pfb-q-settings { padding:0.3rem 0.55rem 0.45rem; display:flex; gap:0.45rem; flex-wrap:wrap; border-top:1px solid rgba(87,46,136,0.07); background:rgba(87,46,136,0.02); }
+      .pfb-q-help-input,.pfb-q-placeholder-input { flex:1; min-width:160px; border:1px solid rgba(87,46,136,0.12); border-radius:6px; padding:0.22rem 0.4rem; font:inherit; font-size:0.74rem; color:rgba(26,21,48,0.6); }
+      .pfb-q-options { width:100%; display:flex; flex-direction:column; gap:0.22rem; padding-top:0.25rem; }
+      .pfb-q-options-label { font-size:0.65rem; font-weight:900; letter-spacing:0.07em; text-transform:uppercase; color:rgba(87,46,136,0.5); margin-bottom:0.1rem; }
+      .pfb-q-option-row { display:flex; gap:0.3rem; align-items:center; }
+      .pfb-q-option-input { flex:1; border:1px solid rgba(87,46,136,0.12); border-radius:6px; padding:0.2rem 0.38rem; font:inherit; font-size:0.76rem; }
+      .pfb-btn { appearance:none; border:1px solid rgba(87,46,136,0.2); border-radius:6px; background:#fff; color:#572e88; font:inherit; font-size:0.7rem; font-weight:700; padding:0.18rem 0.42rem; cursor:pointer; transition:background 0.12s; line-height:1.2; }
+      .pfb-btn:hover:not(:disabled) { background:rgba(87,46,136,0.08); }
+      .pfb-btn:disabled { opacity:0.28; cursor:not-allowed; }
+      .pfb-btn--danger { color:#d1523d; border-color:rgba(209,82,61,0.2); }
+      .pfb-btn--danger:hover:not(:disabled) { background:rgba(209,82,61,0.06); }
+      .pfb-add-q-btn { appearance:none; border:1px dashed rgba(87,46,136,0.22); border-radius:8px; background:transparent; color:rgba(87,46,136,0.55); font:inherit; font-size:0.76rem; font-weight:700; padding:0.4rem 0.7rem; cursor:pointer; width:100%; transition:background 0.12s,color 0.12s; }
+      .pfb-add-q-btn:hover { background:rgba(87,46,136,0.05); color:#572e88; }
+      .pfb-toggle-small { position:relative; display:inline-flex; align-items:center; cursor:pointer; width:30px; height:17px; flex-shrink:0; }
+      .pfb-toggle-small input { position:absolute; opacity:0; width:0; height:0; }
+      .pfb-toggle-track { position:absolute; inset:0; border-radius:99px; background:rgba(87,46,136,0.15); transition:background 0.16s; }
+      .pfb-toggle-small input:checked ~ .pfb-toggle-track { background:#572e88; }
+      .pfb-toggle-thumb { position:absolute; width:11px; height:11px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.22); top:3px; left:3px; transition:transform 0.16s; pointer-events:none; }
+      .pfb-toggle-small input:checked ~ .pfb-toggle-thumb { transform:translateX(13px); }
     `;
     document.head.appendChild(style);
   }
@@ -444,6 +631,7 @@
               <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;">
                 <div id="ppi-step-pill-1" style="flex:1;height:3px;border-radius:99px;background:#572e88;transition:background 0.2s;"></div>
                 <div id="ppi-step-pill-2" style="flex:1;height:3px;border-radius:99px;background:rgba(87,46,136,0.15);transition:background 0.2s;"></div>
+                <div id="ppi-step-pill-3" style="flex:1;height:3px;border-radius:99px;background:rgba(87,46,136,0.15);transition:background 0.2s;"></div>
               </div>
 
               <div id="proposal-intake-form-error" class="form-error-msg"></div>
@@ -483,6 +671,17 @@
                 <div id="ppi-projects-list" style="display:flex;flex-direction:column;gap:0.75rem;margin-bottom:0.5rem;"></div>
                 <div id="ppi-projects-empty" style="font-size:0.84rem;color:rgba(26,21,48,0.35);padding:0.25rem 0 1rem;">No projects yet.</div>
                 <button type="button" class="btn-secondary" style="margin-bottom:1.5rem;" onclick="addProposalProject()">+ Add Project</button>
+                <div class="opp-form-actions">
+                  <button type="button" class="btn-secondary" onclick="proposalIntakePrevStep()">Back</button>
+                  <button type="button" class="btn-primary" onclick="proposalIntakeNextStep()">Next: Form</button>
+                </div>
+              </div>
+
+              <!-- step 3: form builder -->
+              <div id="ppi-step-3" style="display:none;">
+                <p style="font-size:0.83rem;color:rgba(26,21,48,0.42);margin:0 0 1rem;">Configure which sections and questions appear in the public pitch form. Toggle, reorder, rename, or add your own.</p>
+                <div id="ppi-fb-sections" style="display:flex;flex-direction:column;gap:0.6rem;max-height:54vh;overflow-y:auto;padding-right:3px;margin-bottom:0.75rem;"></div>
+                <button type="button" class="pfb-add-q-btn" style="margin-bottom:1.25rem;" onclick="pfbAddSection()">+ Add Section</button>
                 <div class="opp-form-actions">
                   <button type="button" class="btn-secondary" onclick="proposalIntakePrevStep()">Back</button>
                   <button type="button" class="btn-primary" id="ppi-save-btn" onclick="saveProposalIntakeForm()">Save Season</button>
@@ -1329,25 +1528,164 @@
   }
 
   function proposalIntakeNextStep() {
-    const title = document.getElementById('ppi-title').value.trim();
-    const errorEl = document.getElementById('proposal-intake-form-error');
-    if (!title) {
-      errorEl.textContent = 'Season name is required.';
-      errorEl.classList.add('visible');
-      return;
+    const step1 = document.getElementById('ppi-step-1');
+    const step2 = document.getElementById('ppi-step-2');
+    const step3 = document.getElementById('ppi-step-3');
+    if (step1 && step1.style.display !== 'none') {
+      const title = document.getElementById('ppi-title').value.trim();
+      const errorEl = document.getElementById('proposal-intake-form-error');
+      if (!title) { errorEl.textContent = 'Season name is required.'; errorEl.classList.add('visible'); return; }
+      errorEl.classList.remove('visible');
+      errorEl.textContent = '';
+      step1.style.display = 'none';
+      step2.style.display = '';
+      document.getElementById('ppi-step-pill-2').style.background = '#572e88';
+    } else if (step2 && step2.style.display !== 'none') {
+      step2.style.display = 'none';
+      step3.style.display = '';
+      document.getElementById('ppi-step-pill-3').style.background = '#572e88';
+      const shell = document.querySelector('.intake-modal-shell');
+      if (shell) shell.style.maxWidth = '860px';
+      renderFormBuilder();
     }
-    errorEl.classList.remove('visible');
-    errorEl.textContent = '';
-    document.getElementById('ppi-step-1').style.display = 'none';
-    document.getElementById('ppi-step-2').style.display = '';
-    document.getElementById('ppi-step-pill-2').style.background = '#572e88';
   }
 
   function proposalIntakePrevStep() {
-    document.getElementById('ppi-step-2').style.display = 'none';
-    document.getElementById('ppi-step-1').style.display = '';
-    document.getElementById('ppi-step-pill-2').style.background = 'rgba(87,46,136,0.15)';
+    const step2 = document.getElementById('ppi-step-2');
+    const step3 = document.getElementById('ppi-step-3');
+    if (step3 && step3.style.display !== 'none') {
+      step3.style.display = 'none';
+      step2.style.display = '';
+      document.getElementById('ppi-step-pill-3').style.background = 'rgba(87,46,136,0.15)';
+      const shell = document.querySelector('.intake-modal-shell');
+      if (shell) shell.style.maxWidth = '560px';
+    } else {
+      step2.style.display = 'none';
+      document.getElementById('ppi-step-1').style.display = '';
+      document.getElementById('ppi-step-pill-2').style.background = 'rgba(87,46,136,0.15)';
+    }
   }
+
+  // ---- Form Builder ----
+  function pfbGetSection(sId) { return currentFormConfig && currentFormConfig.sections.find(function(s){ return s.id === sId; }); }
+  function pfbGetQuestion(sId, qId) { var s = pfbGetSection(sId); return s ? s.questions.find(function(q){ return q.id === qId; }) : null; }
+
+  function renderFormBuilder() {
+    var container = document.getElementById('ppi-fb-sections');
+    if (!container || !currentFormConfig) return;
+    container.innerHTML = currentFormConfig.sections.map(function(section, sIdx) {
+      return renderFBSection(section, sIdx, currentFormConfig.sections.length);
+    }).join('');
+  }
+
+  function renderFBSection(section, sIdx, totalSections) {
+    var qCount = section.questions.length;
+    var typeOpts = QUESTION_TYPES.map(function(t){ return '<option value="'+t.value+'">'+esc(t.label)+'</option>'; }).join('');
+    var questionsHtml = section.questions.map(function(q, qIdx) {
+      return renderFBQuestion(q, section.id, qIdx, section.questions.length, typeOpts);
+    }).join('');
+    return '<div class="pfb-section'+(section.enabled?'':' pfb-section--disabled')+'" data-sid="'+esc(section.id)+'">'
+      +'<div class="pfb-section-head">'
+      +'<input class="pfb-section-title-input" value="'+esc(section.title)+'" onchange="pfbRenameSection(\''+esc(section.id)+'\',this.value)" />'
+      +'<span class="pfb-q-count">'+qCount+' question'+(qCount===1?'':'s')+'</span>'
+      +'<div class="pfb-section-actions">'
+      +'<button class="pfb-btn" onclick="pfbMoveSection(\''+esc(section.id)+'\',-1)" '+(sIdx===0?'disabled':'')+' title="Move up">↑</button>'
+      +'<button class="pfb-btn" onclick="pfbMoveSection(\''+esc(section.id)+'\',1)" '+(sIdx===totalSections-1?'disabled':'')+' title="Move down">↓</button>'
+      +'<button class="pfb-btn" onclick="pfbDuplicateSection(\''+esc(section.id)+'\')" title="Duplicate">⧉</button>'
+      +'<button class="pfb-btn pfb-btn--danger" onclick="pfbDeleteSection(\''+esc(section.id)+'\')" title="Delete">✕</button>'
+      +'<label class="pfb-toggle-small" title="'+(section.enabled?'Hide':'Show')+' section">'
+      +'<input type="checkbox" '+(section.enabled?'checked':'')+' onchange="pfbToggleSection(\''+esc(section.id)+'\',this.checked)">'
+      +'<span class="pfb-toggle-track"></span><span class="pfb-toggle-thumb"></span></label>'
+      +'</div></div>'
+      +'<div class="pfb-section-body">'+questionsHtml
+      +'<button class="pfb-add-q-btn" onclick="pfbAddQuestion(\''+esc(section.id)+'\')">+ Add Question</button>'
+      +'</div></div>';
+  }
+
+  function renderFBQuestion(q, sId, qIdx, totalQ, typeOpts) {
+    var selOpts = QUESTION_TYPES.map(function(t){ return '<option value="'+t.value+'"'+(q.type===t.value?' selected':'')+'>'+esc(t.label)+'</option>'; }).join('');
+    var hasOptions = ['dropdown','checkbox','yes_no','yes_no_unsure'].includes(q.type);
+    var optionsHtml = hasOptions && q.type !== 'yes_no' && q.type !== 'yes_no_unsure' ? (
+      '<div class="pfb-q-options"><div class="pfb-q-options-label">Options</div>'
+      +(q.options||[]).map(function(opt, oIdx){
+        return '<div class="pfb-q-option-row"><input class="pfb-q-option-input" value="'+esc(opt)+'" onchange="pfbUpdateOption(\''+esc(sId)+'\',\''+esc(q.id)+'\','+oIdx+',this.value)" />'
+          +'<button class="pfb-btn pfb-btn--danger" onclick="pfbDeleteOption(\''+esc(sId)+'\',\''+esc(q.id)+'\','+oIdx+')">✕</button></div>';
+      }).join('')
+      +'<button class="pfb-btn" style="margin-top:0.2rem;" onclick="pfbAddOption(\''+esc(sId)+'\',\''+esc(q.id)+'\')">+ Add Option</button>'
+      +'</div>'
+    ) : '';
+    return '<div class="pfb-question'+(q.enabled?'':' pfb-question--disabled')+'">'
+      +'<div class="pfb-q-row">'
+      +'<input class="pfb-q-label-input" value="'+esc(q.label)+'" placeholder="Question label" onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'label\',this.value)" />'
+      +'<select class="pfb-q-type-sel" onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'type\',this.value)">'+selOpts+'</select>'
+      +'<label class="pfb-q-req-lbl"><input type="checkbox" '+(q.required?'checked':'')+' onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'required\',this.checked)"> Required</label>'
+      +'<div class="pfb-q-btns">'
+      +'<button class="pfb-btn" onclick="pfbMoveQuestion(\''+esc(sId)+'\',\''+esc(q.id)+'\',-1)" '+(qIdx===0?'disabled':'')+'>↑</button>'
+      +'<button class="pfb-btn" onclick="pfbMoveQuestion(\''+esc(sId)+'\',\''+esc(q.id)+'\',1)" '+(qIdx===totalQ-1?'disabled':'')+'>↓</button>'
+      +'<label class="pfb-toggle-small"><input type="checkbox" '+(q.enabled?'checked':'')+' onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'enabled\',this.checked)"><span class="pfb-toggle-track"></span><span class="pfb-toggle-thumb"></span></label>'
+      +'<button class="pfb-btn pfb-btn--danger" onclick="pfbDeleteQuestion(\''+esc(sId)+'\',\''+esc(q.id)+'\')">✕</button>'
+      +'</div></div>'
+      +'<div class="pfb-q-settings">'
+      +'<input class="pfb-q-help-input" value="'+esc(q.help_text||'')+'" placeholder="Help text (optional)" onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'help_text\',this.value)" />'
+      +'<input class="pfb-q-placeholder-input" value="'+esc(q.placeholder||'')+'" placeholder="Placeholder (optional)" onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'placeholder\',this.value)" />'
+      +optionsHtml
+      +'</div></div>';
+  }
+
+  function pfbToggleSection(sId, enabled) { var s=pfbGetSection(sId); if(s){s.enabled=enabled; renderFormBuilder();} }
+  function pfbRenameSection(sId, v) { var s=pfbGetSection(sId); if(s) s.title=v; }
+  function pfbMoveSection(sId, dir) {
+    var secs=currentFormConfig.sections, idx=secs.findIndex(function(s){return s.id===sId;}), ni=idx+dir;
+    if(idx<0||ni<0||ni>=secs.length) return;
+    var tmp=secs[idx]; secs[idx]=secs[ni]; secs[ni]=tmp; renderFormBuilder();
+  }
+  function pfbDuplicateSection(sId) {
+    var secs=currentFormConfig.sections, idx=secs.findIndex(function(s){return s.id===sId;});
+    if(idx<0) return;
+    var copy=JSON.parse(JSON.stringify(secs[idx]));
+    copy.id='sec_'+Date.now(); copy.title=copy.title+' (copy)';
+    copy.questions=copy.questions.map(function(q){return Object.assign({},q,{id:q.id+'_'+Date.now()});});
+    secs.splice(idx+1,0,copy); renderFormBuilder();
+  }
+  function pfbDeleteSection(sId) {
+    if(!window.confirm('Delete this section and all its questions?')) return;
+    currentFormConfig.sections=currentFormConfig.sections.filter(function(s){return s.id!==sId;}); renderFormBuilder();
+  }
+  function pfbAddSection() {
+    currentFormConfig.sections.push({id:'sec_'+Date.now(),title:'New Section',enabled:true,questions:[]});
+    renderFormBuilder();
+  }
+  function pfbUpdateQ(sId, qId, field, value) {
+    var q=pfbGetQuestion(sId,qId); if(!q) return; q[field]=value;
+    if(field==='type') renderFormBuilder();
+  }
+  function pfbMoveQuestion(sId, qId, dir) {
+    var s=pfbGetSection(sId); if(!s) return;
+    var idx=s.questions.findIndex(function(q){return q.id===qId;}), ni=idx+dir;
+    if(idx<0||ni<0||ni>=s.questions.length) return;
+    var tmp=s.questions[idx]; s.questions[idx]=s.questions[ni]; s.questions[ni]=tmp; renderFormBuilder();
+  }
+  function pfbDeleteQuestion(sId, qId) {
+    var s=pfbGetSection(sId); if(!s) return;
+    s.questions=s.questions.filter(function(q){return q.id!==qId;}); renderFormBuilder();
+  }
+  function pfbAddQuestion(sId) {
+    var s=pfbGetSection(sId); if(!s) return;
+    s.questions.push(mkQ('q_'+Date.now(),'New Question','short_answer')); renderFormBuilder();
+  }
+  function pfbAddOption(sId, qId) {
+    var q=pfbGetQuestion(sId,qId); if(!q) return;
+    if(!q.options) q.options=[];
+    q.options.push('Option '+(q.options.length+1)); renderFormBuilder();
+  }
+  function pfbDeleteOption(sId, qId, oIdx) {
+    var q=pfbGetQuestion(sId,qId); if(!q||!q.options) return;
+    q.options.splice(oIdx,1); renderFormBuilder();
+  }
+  function pfbUpdateOption(sId, qId, oIdx, value) {
+    var q=pfbGetQuestion(sId,qId); if(!q||!q.options) return; q.options[oIdx]=value;
+  }
+  // ---- End Form Builder ----
 
   function syncProjectsEmpty() {
     const list = document.getElementById('ppi-projects-list');
@@ -1386,7 +1724,12 @@
     // always start on step 1
     document.getElementById('ppi-step-1').style.display = '';
     document.getElementById('ppi-step-2').style.display = 'none';
+    document.getElementById('ppi-step-3').style.display = 'none';
     document.getElementById('ppi-step-pill-2').style.background = 'rgba(87,46,136,0.15)';
+    document.getElementById('ppi-step-pill-3').style.background = 'rgba(87,46,136,0.15)';
+    const shell = document.querySelector('.intake-modal-shell');
+    if (shell) shell.style.maxWidth = '560px';
+    currentFormConfig = intake && intake.form_config ? JSON.parse(JSON.stringify(intake.form_config)) : JSON.parse(JSON.stringify(DEFAULT_FORM_CONFIG));
 
     document.getElementById('ppi-title').value = intake?.title || '';
     document.getElementById('ppi-season-year').value = intake?.season_label || '';
@@ -1442,6 +1785,7 @@
       closes_at: document.getElementById('ppi-closes-at').value ? new Date(document.getElementById('ppi-closes-at').value).toISOString() : null,
       is_open: document.getElementById('ppi-is-open').value === 'yes',
       projects: projects,
+      form_config: currentFormConfig || DEFAULT_FORM_CONFIG,
     };
     if (!intakeId) {
       payload.access_code = document.getElementById('ppi-access-code').value.trim();
@@ -1984,6 +2328,20 @@
   window.setProposalStatusFilter = setProposalStatusFilter;
   window.changeProposalStatus = changeProposalStatus;
   window.saveProposalInternalNotes = saveProposalInternalNotes;
+  window.renderFormBuilder = renderFormBuilder;
+  window.pfbToggleSection = pfbToggleSection;
+  window.pfbRenameSection = pfbRenameSection;
+  window.pfbMoveSection = pfbMoveSection;
+  window.pfbDuplicateSection = pfbDuplicateSection;
+  window.pfbDeleteSection = pfbDeleteSection;
+  window.pfbAddSection = pfbAddSection;
+  window.pfbUpdateQ = pfbUpdateQ;
+  window.pfbMoveQuestion = pfbMoveQuestion;
+  window.pfbDeleteQuestion = pfbDeleteQuestion;
+  window.pfbAddQuestion = pfbAddQuestion;
+  window.pfbAddOption = pfbAddOption;
+  window.pfbDeleteOption = pfbDeleteOption;
+  window.pfbUpdateOption = pfbUpdateOption;
   window.archiveProposal = archiveProposal;
   window.exportProposalPdf = exportProposalPdf;
   window.deleteProposalAttachment = function (fileId) { deleteProposalAttachment(fileId).catch(err => showToast(err.message || 'Could not remove attachment.', true)); };

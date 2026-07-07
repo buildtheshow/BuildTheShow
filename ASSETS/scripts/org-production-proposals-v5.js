@@ -1314,15 +1314,13 @@
 
   function renderProposalProjectRow(proj) {
     const id = proj.id || ('p' + Date.now() + Math.random().toString(36).slice(2, 6));
-    return '<div class="ppi-project-row" data-proj-id="' + id + '" style="background:rgba(87,46,136,0.04);border:1px solid rgba(87,46,136,0.1);border-radius:12px;padding:0.85rem;display:flex;flex-direction:column;gap:0.75rem;">' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">' +
-        '<div class="form-group" style="margin:0;"><label class="form-label">Project Name</label><input class="form-input ppi-proj-name" type="text" placeholder="Kids, Youth, Workshop..." value="' + esc(proj.name || '') + '" /></div>' +
-        '<div class="form-group" style="margin:0;"><label class="form-label">Production Type</label><select class="form-select ppi-proj-type"><option value="">No preference</option><option value="Musical"' + (proj.production_type === 'Musical' ? ' selected' : '') + '>Musical</option><option value="Play"' + (proj.production_type === 'Play' ? ' selected' : '') + '>Play</option><option value="Workshop"' + (proj.production_type === 'Workshop' ? ' selected' : '') + '>Workshop</option></select></div>' +
-      '</div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;align-items:end;">' +
-        '<div class="form-group" style="margin:0;"><label class="form-label">Performer Age</label><div style="display:flex;align-items:center;gap:0.5rem;"><input class="form-input ppi-proj-min-age" type="number" min="0" max="99" placeholder="Min age" value="' + (proj.min_age ?? '') + '" /><span style="color:rgba(26,21,48,0.3);flex-shrink:0;">–</span><input class="form-input ppi-proj-max-age" type="number" min="0" max="99" placeholder="Max age" value="' + (proj.max_age ?? '') + '" /></div></div>' +
-        '<div style="display:flex;justify-content:flex-end;"><button type="button" class="btn-secondary" style="font-size:0.75rem;color:#d1523d;border-color:rgba(209,82,61,0.3);" onclick="removeProposalProject(\'' + id + '\')">Remove</button></div>' +
-      '</div>' +
+    const h = 'height:42px;box-sizing:border-box;';
+    return '<div class="ppi-project-row" data-proj-id="' + id + '" style="display:grid;grid-template-columns:1fr 1fr auto auto auto auto;gap:0.65rem;align-items:end;padding:0.75rem;background:rgba(87,46,136,0.04);border:1px solid rgba(87,46,136,0.1);border-radius:12px;">' +
+      '<div class="form-group" style="margin:0;"><label class="form-label">Project Name</label><input class="form-input ppi-proj-name" type="text" placeholder="Kids, Youth..." value="' + esc(proj.name || '') + '" style="' + h + '" /></div>' +
+      '<div class="form-group" style="margin:0;"><label class="form-label">Production Type</label><select class="form-select ppi-proj-type" style="' + h + '"><option value="">No preference</option><option value="Musical"' + (proj.production_type === 'Musical' ? ' selected' : '') + '>Musical</option><option value="Play"' + (proj.production_type === 'Play' ? ' selected' : '') + '>Play</option><option value="Workshop"' + (proj.production_type === 'Workshop' ? ' selected' : '') + '>Workshop</option></select></div>' +
+      '<div class="form-group" style="margin:0;"><label class="form-label">Min Age</label><input class="form-input ppi-proj-min-age" type="number" min="0" max="99" placeholder="—" value="' + (proj.min_age ?? '') + '" style="' + h + 'width:72px;" /></div>' +
+      '<div class="form-group" style="margin:0;"><label class="form-label">Max Age</label><input class="form-input ppi-proj-max-age" type="number" min="0" max="99" placeholder="—" value="' + (proj.max_age ?? '') + '" style="' + h + 'width:72px;" /></div>' +
+      '<div style="padding-bottom:1px;"><button type="button" class="btn-secondary" style="' + h + 'color:#d1523d;border-color:rgba(209,82,61,0.3);white-space:nowrap;" onclick="removeProposalProject(\'' + id + '\')">Remove</button></div>' +
     '</div>';
   }
 

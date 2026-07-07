@@ -295,7 +295,10 @@
       .pp-sc-menu-btn:hover { background:rgba(255,255,255,0.12); color:#fff; }
       .pp-sc-year { font-size:0.78rem; font-weight:700; color:rgba(255,255,255,0.65); line-height:1; margin-bottom:0.18rem; }
       .pp-sc-title { font-size:1.75rem; font-weight:950; color:#fff; line-height:1; margin-bottom:0.42rem; max-width:75%; }
-      .pp-sc-passcode { font-size:0.72rem; font-weight:700; color:rgba(255,255,255,0.55); letter-spacing:0.06em; margin-bottom:0.7rem; }
+      .pp-sc-passcode { display:flex; align-items:center; gap:0.4rem; font-size:0.72rem; font-weight:700; color:rgba(255,255,255,0.55); letter-spacing:0.06em; margin-bottom:0.7rem; }
+      .pp-sc-passcode-copy { background:none; border:none; cursor:pointer; padding:0; display:flex; align-items:center; opacity:0.5; transition:opacity 0.15s; flex-shrink:0; }
+      .pp-sc-passcode-copy:hover { opacity:1; }
+      .pp-sc-passcode-copy img { width:13px; height:13px; filter:brightness(0) invert(1); }
       .pp-sc-info-row { display:flex; border-top:1px solid rgba(255,255,255,0.18); border-bottom:1px solid rgba(255,255,255,0.18); padding:0.65rem 0; margin-bottom:0.7rem; }
       .pp-sc-info-cell { flex:1; display:flex; align-items:stretch; gap:0.38rem; padding:0 0.5rem; min-width:0; }
       .pp-sc-info-cell:first-child { padding-left:0; }
@@ -891,7 +894,7 @@
       '<div class="pp-sc-top">' + statusPill + '</div>' +
       '<div class="pp-sc-year">' + esc(intake.season_label || '') + '</div>' +
       '<div class="pp-sc-title">' + esc(intake.title || 'Season') + '</div>' +
-      (intake.access_code ? '<div class="pp-sc-passcode">Passcode: ' + esc(intake.access_code) + '</div>' : '') +
+      (intake.access_code ? '<div class="pp-sc-passcode"><span>Passcode: ' + esc(intake.access_code) + '</span><button class="pp-sc-passcode-copy" onclick="event.stopPropagation();navigator.clipboard.writeText(\'' + esc(intake.access_code) + '\').then(function(){window.showToast&&showToast(\'Passcode copied.\');})" title="Copy passcode"><img src="/ASSETS/Images/Icons/Checklist.svg" alt="Copy"></button></div>' : '') +
       infoRow + footer + '</div>';
   }
 

@@ -871,27 +871,21 @@
     const publicPageLabel = statusKey === 'open' ? 'View' : 'Preview';
     const infoRow =
       '<div class="pp-sc-info-row">' +
-        '<div class="pp-sc-info-cell"><img class="pp-sc-info-icon" src="/ASSETS/Images/Icons/calendar-date.svg" alt=""><div class="pp-sc-info-body"><div class="pp-sc-info-label">Closes</div><div class="pp-sc-info-value">' + closesVal + '</div></div></div>' +
+        '<div class="pp-sc-info-cell"><img class="pp-sc-info-icon" src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt=""><div class="pp-sc-info-body"><div class="pp-sc-info-label">Closes</div><div class="pp-sc-info-value">' + closesVal + '</div></div></div>' +
         '<div class="pp-sc-info-cell"><img class="pp-sc-info-icon" src="/ASSETS/Images/Icons/Applications.svg" alt=""><div class="pp-sc-info-body"><div class="pp-sc-info-label">Proposals</div><div class="pp-sc-info-value">' + esc(String(submissionCount)) + '</div></div></div>' +
         '<div class="pp-sc-info-cell"><img class="pp-sc-info-icon" src="/ASSETS/Images/Icons/visible.svg" alt=""><div class="pp-sc-info-body"><div class="pp-sc-info-label">Public Page</div><div class="pp-sc-info-value pp-sc-info-value--link" onclick="event.stopPropagation();openProposalIntakeShareTab(\'' + sid + '\')">' + publicPageLabel + '</div></div></div>' +
       '</div>';
-    const pitchWord = submissionCount === 1 ? 'proposal' : 'proposals';
-    const deleteWarning = submissionCount > 0
-      ? 'Delete \\"' + (intake.title || 'this season') + '\\"? This will permanently remove the season and its ' + submissionCount + ' ' + pitchWord + '. This cannot be undone.'
-      : 'Delete \\"' + (intake.title || 'this season') + '\\"? This cannot be undone.';
     const footer =
       '<div class="pp-sc-footer">' +
         '<button class="pp-sc-action" onclick="event.stopPropagation();openProposalIntakeModal(\'' + sid + '\')"><img class="pp-sc-action-icon" src="/ASSETS/Images/Icons/edit-pencil.svg" alt="">Edit</button>' +
         '<div class="pp-sc-divider"></div>' +
         '<button class="pp-sc-action" onclick="event.stopPropagation();copyProposalIntakeInvite(\'' + sid + '\')">Copy Invite</button>' +
         '<div class="pp-sc-divider"></div>' +
-        '<button class="pp-sc-action pp-sc-action--primary" onclick="event.stopPropagation();setProposalIntakeFilter(\'' + sid + '\')">View Season</button>' +
-        '<div class="pp-sc-divider"></div>' +
-        '<button class="pp-sc-action pp-sc-action--danger" onclick="event.stopPropagation();deleteProposalIntake(\'' + sid + '\',' + submissionCount + ',\'' + deleteWarning + '\')">Delete</button>' +
+        '<button class="pp-sc-action pp-sc-action--danger" onclick="event.stopPropagation();deleteProposalIntakeById(\'' + sid + '\')">Delete</button>' +
       '</div>';
     return '<div class="pp-season-card' + (active ? ' pp-season-card--active' : '') + '" style="background:' + tileColor + ';" onclick="setProposalIntakeFilter(\'' + sid + '\')">' +
       '<img class="pp-sc-deco" src="' + esc(decoIcon) + '" alt="">' +
-      '<div class="pp-sc-top">' + statusPill + '<button class="pp-sc-menu-btn" onclick="event.stopPropagation();openProposalIntakeModal(\'' + sid + '\')">&#8942;</button></div>' +
+      '<div class="pp-sc-top">' + statusPill + '</div>' +
       '<div class="pp-sc-year">' + esc(intake.season_label || '') + '</div>' +
       '<div class="pp-sc-title">' + esc(intake.title || 'Season') + '</div>' +
       infoRow + footer + '</div>';
@@ -1485,6 +1479,16 @@
     await deleteProposalIntake(intakeId, submissionCount, warning);
   }
 
+  async function deleteProposalIntakeById(intakeId) {
+    const intake = proposalIntakeById(intakeId);
+    const submissionCount = state.proposals.filter(function(p) { return p.intake_id === intakeId; }).length;
+    const name = intake?.title || 'this season';
+    const warning = submissionCount > 0
+      ? 'Delete "' + name + '"? This will permanently remove the season and its ' + submissionCount + ' ' + (submissionCount === 1 ? 'proposal' : 'proposals') + '. This cannot be undone.'
+      : 'Delete "' + name + '"? This cannot be undone.';
+    await deleteProposalIntake(intakeId, submissionCount, warning);
+  }
+
   async function deleteProposalIntake(intakeId, proposalCount, warningMsg) {
     const confirmed = window.confirm(warningMsg);
     if (!confirmed) return;
@@ -1954,6 +1958,7 @@
   window.openProposalIntakeModal = openProposalIntakeModal;
   window.toggleExpandYear = toggleExpandYear;
   window.deleteProposalIntake = deleteProposalIntake;
+  window.deleteProposalIntakeById = deleteProposalIntakeById;
   window.proposalIntakeDelete = proposalIntakeDelete;
   window.addProposalProject = addProposalProject;
   window.removeProposalProject = removeProposalProject;

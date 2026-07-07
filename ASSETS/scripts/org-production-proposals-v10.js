@@ -881,6 +881,8 @@
         '<div class="pp-sc-divider"></div>' +
         '<button class="pp-sc-action" onclick="event.stopPropagation();copyProposalIntakeInvite(\'' + sid + '\')">Copy Invite</button>' +
         '<div class="pp-sc-divider"></div>' +
+        '<button class="pp-sc-action" onclick="event.stopPropagation();openProposalIntakeShareTab(\'' + sid + '\')">View Page</button>' +
+        '<div class="pp-sc-divider"></div>' +
         '<button class="pp-sc-action pp-sc-action--danger" onclick="event.stopPropagation();deleteProposalIntakeById(\'' + sid + '\')">Delete</button>' +
       '</div>';
     return '<div class="pp-season-card' + (active ? ' pp-season-card--active' : '') + '" style="background:' + tileColor + ';" onclick="setProposalIntakeFilter(\'' + sid + '\')">' +

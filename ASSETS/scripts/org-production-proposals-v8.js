@@ -868,12 +868,12 @@
     const statusPill = '<span class="opp-status-pill" style="color:#fff;background:rgba(255,255,255,0.22);font-size:0.68rem;font-weight:800;padding:0.2rem 0.55rem;border-radius:99px;">' + esc(statusMeta.label) + '</span>';
     const submissionCount = state.proposals.filter(function(p) { return p.intake_id === sid; }).length;
     const closesVal = intake.closes_at ? esc(fmtDateTime(intake.closes_at)) : 'Not set';
-    const publicPageLabel = statusKey === 'open' ? 'View' : 'Preview';
+    const projectCount = Array.isArray(intake.projects) ? intake.projects.length : 0;
     const infoRow =
       '<div class="pp-sc-info-row">' +
         '<div class="pp-sc-info-cell"><img class="pp-sc-info-icon" src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt=""><div class="pp-sc-info-body"><div class="pp-sc-info-label">Closes</div><div class="pp-sc-info-value">' + closesVal + '</div></div></div>' +
         '<div class="pp-sc-info-cell"><img class="pp-sc-info-icon" src="/ASSETS/Images/Icons/Applications.svg" alt=""><div class="pp-sc-info-body"><div class="pp-sc-info-label">Proposals</div><div class="pp-sc-info-value">' + esc(String(submissionCount)) + '</div></div></div>' +
-        '<div class="pp-sc-info-cell"><img class="pp-sc-info-icon" src="/ASSETS/Images/Icons/visible.svg" alt=""><div class="pp-sc-info-body"><div class="pp-sc-info-label">Public Page</div><div class="pp-sc-info-value pp-sc-info-value--link" onclick="event.stopPropagation();openProposalIntakeShareTab(\'' + sid + '\')">' + publicPageLabel + '</div></div></div>' +
+        '<div class="pp-sc-info-cell"><img class="pp-sc-info-icon" src="/ASSETS/Images/Icons/Characters.svg" alt=""><div class="pp-sc-info-body"><div class="pp-sc-info-label">Projects</div><div class="pp-sc-info-value">' + esc(String(projectCount)) + '</div></div></div>' +
       '</div>';
     const footer =
       '<div class="pp-sc-footer">' +
@@ -932,7 +932,6 @@
             : statEmptyAction}
         </div>
 
-        ${hasSeasons ? renderSeasonOverview(selectedIntake) : ''}
 
         ${hasSeasons ? `
         <div class="pp-stat-row">

@@ -296,11 +296,11 @@
       .pp-sc-year { font-size:0.78rem; font-weight:700; color:rgba(255,255,255,0.65); line-height:1; margin-bottom:0.18rem; }
       .pp-sc-title { font-size:1.75rem; font-weight:950; color:#fff; line-height:1; margin-bottom:0.85rem; max-width:75%; }
       .pp-sc-info-row { display:flex; border-top:1px solid rgba(255,255,255,0.18); border-bottom:1px solid rgba(255,255,255,0.18); padding:0.65rem 0; margin-bottom:0.7rem; }
-      .pp-sc-info-cell { flex:1; display:flex; align-items:flex-start; gap:0.38rem; padding:0 0.5rem; min-width:0; }
+      .pp-sc-info-cell { flex:1; display:flex; align-items:stretch; gap:0.38rem; padding:0 0.5rem; min-width:0; }
       .pp-sc-info-cell:first-child { padding-left:0; }
       .pp-sc-info-cell:last-child { padding-right:0; }
       .pp-sc-info-cell + .pp-sc-info-cell { border-left:1px solid rgba(255,255,255,0.18); }
-      .pp-sc-info-icon { width:14px; height:14px; opacity:0.7; flex-shrink:0; margin-top:1px; filter:brightness(0) invert(1); }
+      .pp-sc-info-icon { width:auto; height:100%; opacity:0.7; flex-shrink:0; filter:brightness(0) invert(1); object-fit:contain; }
       .pp-sc-info-body { display:flex; flex-direction:column; gap:0.18rem; min-width:0; }
       .pp-sc-info-label { font-size:0.62rem; font-weight:800; color:rgba(255,255,255,0.6); text-transform:uppercase; letter-spacing:0.04em; line-height:1; }
       .pp-sc-info-value { font-size:0.8rem; font-weight:800; color:#fff; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }

@@ -465,7 +465,7 @@
                   </div>
                 </div>
                 <div class="opp-form-actions" style="justify-content:space-between;">
-                  <button type="button" id="ppi-delete-btn" class="btn-secondary" style="color:#d1523d;border-color:rgba(209,82,61,0.35);display:none;" onclick="proposalIntakeDelete()">Delete Season</button>
+                  <button type="button" id="ppi-delete-btn" class="btn-secondary" style="color:#d1523d;border-color:rgba(209,82,61,0.35);" onclick="proposalIntakeDelete()">Delete Season</button>
                   <div style="display:flex;gap:0.65rem;">
                     <button type="button" class="btn-secondary" onclick="closeProposalIntakeModal()">Cancel</button>
                     <button type="button" class="btn-primary" onclick="proposalIntakeNextStep()">Next: Projects</button>
@@ -1377,7 +1377,7 @@
 
     document.getElementById('proposal-intake-modal-title').textContent = intake ? 'Edit Season' : 'Add Season';
     document.getElementById('ppi-save-btn').textContent = intake ? 'Save Season' : 'Create Season';
-    document.getElementById('ppi-delete-btn').style.display = intake ? '' : 'none';
+    document.getElementById('ppi-delete-btn').style.display = intake ? 'block' : 'none';
     document.getElementById('proposal-intake-form-error').classList.remove('visible');
     document.getElementById('proposal-intake-form-error').textContent = '';
 

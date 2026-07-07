@@ -476,34 +476,47 @@
       .pp-sub-intake-empty { font-size:0.84rem; color:#8f84a5; padding:0.5rem 0; }
 
       /* ---- form builder (Step 3) ---- */
-      .pfb-section { border:1px solid rgba(87,46,136,0.12); border-radius:12px; overflow:hidden; background:#fff; }
-      .pfb-section--disabled { opacity:0.6; }
-      .pfb-section-head { display:flex; align-items:center; gap:0.55rem; padding:0.6rem 0.75rem; background:rgba(87,46,136,0.05); border-bottom:1px solid rgba(87,46,136,0.08); flex-wrap:wrap; }
-      .pfb-section-title-input { flex:1; min-width:100px; border:none; background:transparent; font:inherit; font-weight:800; font-size:0.9rem; color:#1a1530; outline:none; padding:0; }
+      .pfb-section { border:1px solid rgba(87,46,136,0.13); border-radius:12px; background:#fff; overflow:hidden; transition:box-shadow 0.15s; }
+      .pfb-section--open { box-shadow:0 4px 18px rgba(87,46,136,0.1); }
+      .pfb-section-head { display:flex; align-items:center; gap:0.55rem; padding:0.7rem 0.85rem; cursor:pointer; user-select:none; transition:background 0.12s; }
+      .pfb-section-head:hover { background:rgba(87,46,136,0.04); }
+      .pfb-section--open .pfb-section-head { background:rgba(87,46,136,0.06); border-bottom:1px solid rgba(87,46,136,0.1); }
+      .pfb-section--disabled .pfb-section-head { opacity:0.55; }
+      .pfb-chevron { font-size:0.65rem; color:rgba(87,46,136,0.35); transition:transform 0.18s; flex-shrink:0; }
+      .pfb-section--open .pfb-chevron { transform:rotate(90deg); }
+      .pfb-section-title-input { flex:1; min-width:80px; border:none; background:transparent; font:inherit; font-weight:800; font-size:0.92rem; color:#1a1530; outline:none; padding:0; }
       .pfb-section-title-input:focus { background:rgba(87,46,136,0.06); border-radius:4px; padding:0 4px; }
-      .pfb-q-count { font-size:0.68rem; font-weight:700; color:rgba(87,46,136,0.45); white-space:nowrap; flex-shrink:0; }
-      .pfb-section-actions { display:flex; align-items:center; gap:0.28rem; margin-left:auto; flex-shrink:0; }
-      .pfb-section-body { padding:0.6rem 0.7rem; display:flex; flex-direction:column; gap:0.45rem; }
-      .pfb-question { border:1px solid rgba(87,46,136,0.09); border-radius:8px; overflow:hidden; background:#fafafa; }
-      .pfb-question--disabled { opacity:0.5; }
-      .pfb-q-row { display:flex; align-items:center; gap:0.45rem; padding:0.4rem 0.55rem; flex-wrap:wrap; }
-      .pfb-q-label-input { flex:1; min-width:140px; border:1px solid rgba(87,46,136,0.15); border-radius:6px; padding:0.28rem 0.45rem; font:inherit; font-size:0.81rem; font-weight:700; color:#1a1530; }
-      .pfb-q-type-sel { border:1px solid rgba(87,46,136,0.15); border-radius:6px; padding:0.28rem 0.45rem; font:inherit; font-size:0.74rem; color:#572e88; background:#fff; max-width:160px; }
-      .pfb-q-req-lbl { font-size:0.7rem; font-weight:700; color:rgba(26,21,48,0.5); display:flex; align-items:center; gap:0.25rem; white-space:nowrap; cursor:pointer; }
-      .pfb-q-btns { display:flex; align-items:center; gap:0.22rem; flex-shrink:0; margin-left:auto; }
-      .pfb-q-settings { padding:0.3rem 0.55rem 0.45rem; display:flex; gap:0.45rem; flex-wrap:wrap; border-top:1px solid rgba(87,46,136,0.07); background:rgba(87,46,136,0.02); }
-      .pfb-q-help-input,.pfb-q-placeholder-input { flex:1; min-width:160px; border:1px solid rgba(87,46,136,0.12); border-radius:6px; padding:0.22rem 0.4rem; font:inherit; font-size:0.74rem; color:rgba(26,21,48,0.6); }
-      .pfb-q-options { width:100%; display:flex; flex-direction:column; gap:0.22rem; padding-top:0.25rem; }
-      .pfb-q-options-label { font-size:0.65rem; font-weight:900; letter-spacing:0.07em; text-transform:uppercase; color:rgba(87,46,136,0.5); margin-bottom:0.1rem; }
+      .pfb-q-count { font-size:0.68rem; font-weight:800; background:rgba(87,46,136,0.09); color:#572e88; border-radius:99px; padding:0.12rem 0.55rem; white-space:nowrap; flex-shrink:0; }
+      .pfb-section-actions { display:flex; align-items:center; gap:0.12rem; flex-shrink:0; }
+      .pfb-section-body { display:none; padding:0.55rem 0.7rem 0.65rem; background:#f7f5fb; flex-direction:column; gap:0.3rem; }
+      .pfb-section--open .pfb-section-body { display:flex; }
+      .pfb-question { background:#fff; border:1px solid rgba(87,46,136,0.1); border-radius:8px; overflow:hidden; }
+      .pfb-question--disabled { opacity:0.42; }
+      .pfb-q-row { display:flex; align-items:center; gap:0.45rem; padding:0.48rem 0.6rem; }
+      .pfb-q-move-btns { display:flex; flex-direction:column; gap:0; flex-shrink:0; }
+      .pfb-q-label-input { flex:1; min-width:100px; border:none; background:transparent; font:inherit; font-size:0.85rem; font-weight:700; color:#1a1530; outline:none; padding:0; }
+      .pfb-q-label-input:focus { background:rgba(87,46,136,0.05); border-radius:4px; padding:0 4px; }
+      .pfb-q-type-pill { font-size:0.63rem; font-weight:800; background:rgba(87,46,136,0.09); color:#572e88; border-radius:6px; padding:0.13rem 0.42rem; white-space:nowrap; flex-shrink:0; letter-spacing:0.01em; }
+      .pfb-q-req-dot { width:6px; height:6px; border-radius:50%; background:#d1523d; flex-shrink:0; }
+      .pfb-q-btns { display:flex; align-items:center; gap:0.14rem; flex-shrink:0; }
+      .pfb-q-settings { display:none; padding:0.6rem 0.7rem 0.65rem; border-top:1px solid rgba(87,46,136,0.08); background:rgba(87,46,136,0.02); flex-direction:column; gap:0.5rem; }
+      .pfb-q--settings-open .pfb-q-settings { display:flex; }
+      .pfb-q-settings-row { display:flex; gap:0.5rem; flex-wrap:wrap; }
+      .pfb-q-settings-label { font-size:0.62rem; font-weight:900; text-transform:uppercase; letter-spacing:0.07em; color:rgba(87,46,136,0.5); margin-bottom:0.2rem; }
+      .pfb-q-field-wrap { display:flex; flex-direction:column; flex:1; min-width:140px; }
+      .pfb-q-type-sel { border:1px solid rgba(87,46,136,0.15); border-radius:6px; padding:0.26rem 0.42rem; font:inherit; font-size:0.8rem; color:#572e88; background:#fff; }
+      .pfb-q-help-input,.pfb-q-placeholder-input,.pfb-q-option-input { border:1px solid rgba(87,46,136,0.14); border-radius:6px; padding:0.26rem 0.42rem; font:inherit; font-size:0.8rem; color:rgba(26,21,48,0.7); background:#fff; width:100%; box-sizing:border-box; }
+      .pfb-q-req-lbl { font-size:0.76rem; font-weight:700; color:rgba(26,21,48,0.55); display:flex; align-items:center; gap:0.28rem; cursor:pointer; white-space:nowrap; padding-top:1.1rem; }
+      .pfb-q-options { display:flex; flex-direction:column; gap:0.22rem; width:100%; }
+      .pfb-q-options-label { font-size:0.62rem; font-weight:900; letter-spacing:0.07em; text-transform:uppercase; color:rgba(87,46,136,0.5); margin-bottom:0.1rem; }
       .pfb-q-option-row { display:flex; gap:0.3rem; align-items:center; }
-      .pfb-q-option-input { flex:1; border:1px solid rgba(87,46,136,0.12); border-radius:6px; padding:0.2rem 0.38rem; font:inherit; font-size:0.76rem; }
-      .pfb-btn { appearance:none; border:1px solid rgba(87,46,136,0.2); border-radius:6px; background:#fff; color:#572e88; font:inherit; font-size:0.7rem; font-weight:700; padding:0.18rem 0.42rem; cursor:pointer; transition:background 0.12s; line-height:1.2; }
-      .pfb-btn:hover:not(:disabled) { background:rgba(87,46,136,0.08); }
-      .pfb-btn:disabled { opacity:0.28; cursor:not-allowed; }
-      .pfb-btn--danger { color:#d1523d; border-color:rgba(209,82,61,0.2); }
-      .pfb-btn--danger:hover:not(:disabled) { background:rgba(209,82,61,0.06); }
-      .pfb-add-q-btn { appearance:none; border:1px dashed rgba(87,46,136,0.22); border-radius:8px; background:transparent; color:rgba(87,46,136,0.55); font:inherit; font-size:0.76rem; font-weight:700; padding:0.4rem 0.7rem; cursor:pointer; width:100%; transition:background 0.12s,color 0.12s; }
-      .pfb-add-q-btn:hover { background:rgba(87,46,136,0.05); color:#572e88; }
+      .pfb-btn { appearance:none; border:none; border-radius:6px; background:transparent; color:rgba(87,46,136,0.45); font:inherit; font-size:0.76rem; font-weight:700; padding:0.2rem 0.38rem; cursor:pointer; transition:background 0.12s,color 0.12s; line-height:1.2; }
+      .pfb-btn:hover:not(:disabled) { background:rgba(87,46,136,0.1); color:#572e88; }
+      .pfb-btn:disabled { opacity:0.2; cursor:not-allowed; }
+      .pfb-btn--danger:hover:not(:disabled) { background:rgba(209,82,61,0.08); color:#d1523d; }
+      .pfb-btn--gear { font-size:0.65rem; }
+      .pfb-add-q-btn { appearance:none; border:1px dashed rgba(87,46,136,0.2); border-radius:8px; background:transparent; color:rgba(87,46,136,0.5); font:inherit; font-size:0.76rem; font-weight:700; padding:0.38rem 0.7rem; cursor:pointer; width:100%; margin-top:0.1rem; transition:background 0.12s,color 0.12s; }
+      .pfb-add-q-btn:hover { background:rgba(87,46,136,0.06); color:#572e88; }
       .pfb-toggle-small { position:relative; display:inline-flex; align-items:center; cursor:pointer; width:30px; height:17px; flex-shrink:0; }
       .pfb-toggle-small input { position:absolute; opacity:0; width:0; height:0; }
       .pfb-toggle-track { position:absolute; inset:0; border-radius:99px; background:rgba(87,46,136,0.15); transition:background 0.16s; }
@@ -1567,8 +1580,26 @@
   }
 
   // ---- Form Builder ----
+  var pfbOpenSections = new Set();
+  var pfbOpenQuestions = new Set();
+
   function pfbGetSection(sId) { return currentFormConfig && currentFormConfig.sections.find(function(s){ return s.id === sId; }); }
   function pfbGetQuestion(sId, qId) { var s = pfbGetSection(sId); return s ? s.questions.find(function(q){ return q.id === qId; }) : null; }
+
+  function pfbToggleSectionOpen(sId) {
+    if (pfbOpenSections.has(sId)) pfbOpenSections.delete(sId);
+    else pfbOpenSections.add(sId);
+    var el = document.querySelector('.pfb-section[data-sid="'+sId+'"]');
+    if (el) el.classList.toggle('pfb-section--open', pfbOpenSections.has(sId));
+  }
+
+  function pfbToggleQuestionSettings(sId, qId) {
+    var key = sId+'|'+qId;
+    if (pfbOpenQuestions.has(key)) pfbOpenQuestions.delete(key);
+    else pfbOpenQuestions.add(key);
+    var el = document.querySelector('.pfb-question[data-qid="'+qId+'"]');
+    if (el) el.classList.toggle('pfb-q--settings-open', pfbOpenQuestions.has(key));
+  }
 
   function renderFormBuilder() {
     var container = document.getElementById('ppi-fb-sections');
@@ -1576,58 +1607,80 @@
     container.innerHTML = currentFormConfig.sections.map(function(section, sIdx) {
       return renderFBSection(section, sIdx, currentFormConfig.sections.length);
     }).join('');
+    pfbOpenSections.forEach(function(sId) {
+      var el = container.querySelector('.pfb-section[data-sid="'+sId+'"]');
+      if (el) el.classList.add('pfb-section--open');
+    });
+    pfbOpenQuestions.forEach(function(key) {
+      var qId = key.split('|')[1];
+      var el = container.querySelector('.pfb-question[data-qid="'+qId+'"]');
+      if (el) el.classList.add('pfb-q--settings-open');
+    });
   }
 
   function renderFBSection(section, sIdx, totalSections) {
-    var qCount = section.questions.length;
-    var typeOpts = QUESTION_TYPES.map(function(t){ return '<option value="'+t.value+'">'+esc(t.label)+'</option>'; }).join('');
+    var enabledCount = section.questions.filter(function(q){ return q.enabled !== false; }).length;
+    var totalCount = section.questions.length;
+    var countLabel = enabledCount === totalCount ? totalCount+' question'+(totalCount===1?'':'s') : enabledCount+' / '+totalCount+' on';
     var questionsHtml = section.questions.map(function(q, qIdx) {
-      return renderFBQuestion(q, section.id, qIdx, section.questions.length, typeOpts);
+      return renderFBQuestion(q, section.id, qIdx, section.questions.length);
     }).join('');
     return '<div class="pfb-section'+(section.enabled?'':' pfb-section--disabled')+'" data-sid="'+esc(section.id)+'">'
-      +'<div class="pfb-section-head">'
-      +'<input class="pfb-section-title-input" value="'+esc(section.title)+'" onchange="pfbRenameSection(\''+esc(section.id)+'\',this.value)" />'
-      +'<span class="pfb-q-count">'+qCount+' question'+(qCount===1?'':'s')+'</span>'
-      +'<div class="pfb-section-actions">'
-      +'<button class="pfb-btn" onclick="pfbMoveSection(\''+esc(section.id)+'\',-1)" '+(sIdx===0?'disabled':'')+' title="Move up">↑</button>'
-      +'<button class="pfb-btn" onclick="pfbMoveSection(\''+esc(section.id)+'\',1)" '+(sIdx===totalSections-1?'disabled':'')+' title="Move down">↓</button>'
-      +'<button class="pfb-btn" onclick="pfbDuplicateSection(\''+esc(section.id)+'\')" title="Duplicate">⧉</button>'
-      +'<button class="pfb-btn pfb-btn--danger" onclick="pfbDeleteSection(\''+esc(section.id)+'\')" title="Delete">✕</button>'
-      +'<label class="pfb-toggle-small" title="'+(section.enabled?'Hide':'Show')+' section">'
+      +'<div class="pfb-section-head" onclick="pfbToggleSectionOpen(\''+esc(section.id)+'\')">'
+      +'<span class="pfb-chevron">&#9658;</span>'
+      +'<input class="pfb-section-title-input" value="'+esc(section.title)+'" onclick="event.stopPropagation()" onchange="pfbRenameSection(\''+esc(section.id)+'\',this.value)" />'
+      +'<span class="pfb-q-count">'+esc(countLabel)+'</span>'
+      +'<div class="pfb-section-actions" onclick="event.stopPropagation()">'
+      +'<button type="button" class="pfb-btn" onclick="pfbMoveSection(\''+esc(section.id)+'\',-1)" '+(sIdx===0?'disabled':'')+' title="Move up">↑</button>'
+      +'<button type="button" class="pfb-btn" onclick="pfbMoveSection(\''+esc(section.id)+'\',1)" '+(sIdx===totalSections-1?'disabled':'')+' title="Move down">↓</button>'
+      +'<button type="button" class="pfb-btn pfb-btn--danger" onclick="pfbDeleteSection(\''+esc(section.id)+'\')" title="Remove">✕</button>'
+      +'<label class="pfb-toggle-small" title="Show / hide on form" onclick="event.stopPropagation()">'
       +'<input type="checkbox" '+(section.enabled?'checked':'')+' onchange="pfbToggleSection(\''+esc(section.id)+'\',this.checked)">'
       +'<span class="pfb-toggle-track"></span><span class="pfb-toggle-thumb"></span></label>'
       +'</div></div>'
       +'<div class="pfb-section-body">'+questionsHtml
-      +'<button class="pfb-add-q-btn" onclick="pfbAddQuestion(\''+esc(section.id)+'\')">+ Add Question</button>'
+      +'<button type="button" class="pfb-add-q-btn" onclick="pfbAddQuestion(\''+esc(section.id)+'\')">+ Add Question</button>'
       +'</div></div>';
   }
 
-  function renderFBQuestion(q, sId, qIdx, totalQ, typeOpts) {
-    var selOpts = QUESTION_TYPES.map(function(t){ return '<option value="'+t.value+'"'+(q.type===t.value?' selected':'')+'>'+esc(t.label)+'</option>'; }).join('');
-    var hasOptions = ['dropdown','checkbox','yes_no','yes_no_unsure'].includes(q.type);
-    var optionsHtml = hasOptions && q.type !== 'yes_no' && q.type !== 'yes_no_unsure' ? (
+  function renderFBQuestion(q, sId, qIdx, totalQ) {
+    var typeLabel = (QUESTION_TYPES.find(function(t){ return t.value===q.type; })||{label:q.type}).label;
+    var hasOptions = q.type === 'dropdown' || q.type === 'checkbox';
+    var optionsHtml = hasOptions ? (
       '<div class="pfb-q-options"><div class="pfb-q-options-label">Options</div>'
       +(q.options||[]).map(function(opt, oIdx){
-        return '<div class="pfb-q-option-row"><input class="pfb-q-option-input" value="'+esc(opt)+'" onchange="pfbUpdateOption(\''+esc(sId)+'\',\''+esc(q.id)+'\','+oIdx+',this.value)" />'
-          +'<button class="pfb-btn pfb-btn--danger" onclick="pfbDeleteOption(\''+esc(sId)+'\',\''+esc(q.id)+'\','+oIdx+')">✕</button></div>';
+        return '<div class="pfb-q-option-row">'
+          +'<input class="pfb-q-option-input" value="'+esc(opt)+'" onchange="pfbUpdateOption(\''+esc(sId)+'\',\''+esc(q.id)+'\','+oIdx+',this.value)" />'
+          +'<button type="button" class="pfb-btn pfb-btn--danger" onclick="pfbDeleteOption(\''+esc(sId)+'\',\''+esc(q.id)+'\','+oIdx+')">✕</button></div>';
       }).join('')
-      +'<button class="pfb-btn" style="margin-top:0.2rem;" onclick="pfbAddOption(\''+esc(sId)+'\',\''+esc(q.id)+'\')">+ Add Option</button>'
+      +'<button type="button" class="pfb-btn" style="margin-top:0.3rem;" onclick="pfbAddOption(\''+esc(sId)+'\',\''+esc(q.id)+'\')">+ Add Option</button>'
       +'</div>'
     ) : '';
-    return '<div class="pfb-question'+(q.enabled?'':' pfb-question--disabled')+'">'
+    var typeSelOpts = QUESTION_TYPES.map(function(t){ return '<option value="'+t.value+'"'+(q.type===t.value?' selected':'')+'>'+esc(t.label)+'</option>'; }).join('');
+    return '<div class="pfb-question'+(q.enabled?'':' pfb-question--disabled')+'" data-qid="'+esc(q.id)+'">'
       +'<div class="pfb-q-row">'
+      +'<div class="pfb-q-move-btns">'
+      +'<button type="button" class="pfb-btn" style="padding:0.1rem 0.32rem;font-size:0.6rem;" onclick="pfbMoveQuestion(\''+esc(sId)+'\',\''+esc(q.id)+'\',-1)" '+(qIdx===0?'disabled':'')+'>↑</button>'
+      +'<button type="button" class="pfb-btn" style="padding:0.1rem 0.32rem;font-size:0.6rem;" onclick="pfbMoveQuestion(\''+esc(sId)+'\',\''+esc(q.id)+'\',1)" '+(qIdx===totalQ-1?'disabled':'')+'>↓</button>'
+      +'</div>'
       +'<input class="pfb-q-label-input" value="'+esc(q.label)+'" placeholder="Question label" onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'label\',this.value)" />'
-      +'<select class="pfb-q-type-sel" onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'type\',this.value)">'+selOpts+'</select>'
-      +'<label class="pfb-q-req-lbl"><input type="checkbox" '+(q.required?'checked':'')+' onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'required\',this.checked)"> Required</label>'
+      +'<span class="pfb-q-type-pill">'+esc(typeLabel)+'</span>'
+      +(q.required?'<span class="pfb-q-req-dot" title="Required"></span>':'')
       +'<div class="pfb-q-btns">'
-      +'<button class="pfb-btn" onclick="pfbMoveQuestion(\''+esc(sId)+'\',\''+esc(q.id)+'\',-1)" '+(qIdx===0?'disabled':'')+'>↑</button>'
-      +'<button class="pfb-btn" onclick="pfbMoveQuestion(\''+esc(sId)+'\',\''+esc(q.id)+'\',1)" '+(qIdx===totalQ-1?'disabled':'')+'>↓</button>'
-      +'<label class="pfb-toggle-small"><input type="checkbox" '+(q.enabled?'checked':'')+' onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'enabled\',this.checked)"><span class="pfb-toggle-track"></span><span class="pfb-toggle-thumb"></span></label>'
-      +'<button class="pfb-btn pfb-btn--danger" onclick="pfbDeleteQuestion(\''+esc(sId)+'\',\''+esc(q.id)+'\')">✕</button>'
+      +'<button type="button" class="pfb-btn pfb-btn--gear" onclick="pfbToggleQuestionSettings(\''+esc(sId)+'\',\''+esc(q.id)+'\')" title="Settings">&#9881;</button>'
+      +'<label class="pfb-toggle-small" title="Show / hide question"><input type="checkbox" '+(q.enabled?'checked':'')+' onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'enabled\',this.checked)"><span class="pfb-toggle-track"></span><span class="pfb-toggle-thumb"></span></label>'
+      +'<button type="button" class="pfb-btn pfb-btn--danger" onclick="pfbDeleteQuestion(\''+esc(sId)+'\',\''+esc(q.id)+'\')">✕</button>'
       +'</div></div>'
       +'<div class="pfb-q-settings">'
-      +'<input class="pfb-q-help-input" value="'+esc(q.help_text||'')+'" placeholder="Help text (optional)" onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'help_text\',this.value)" />'
-      +'<input class="pfb-q-placeholder-input" value="'+esc(q.placeholder||'')+'" placeholder="Placeholder (optional)" onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'placeholder\',this.value)" />'
+      +'<div class="pfb-q-settings-row">'
+      +'<div class="pfb-q-field-wrap"><span class="pfb-q-settings-label">Type</span>'
+      +'<select class="pfb-q-type-sel" onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'type\',this.value)">'+typeSelOpts+'</select></div>'
+      +'<div class="pfb-q-field-wrap"><span class="pfb-q-settings-label">Help text</span>'
+      +'<input class="pfb-q-help-input" value="'+esc(q.help_text||'')+'" placeholder="Shown below the label" onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'help_text\',this.value)" /></div>'
+      +'<div class="pfb-q-field-wrap"><span class="pfb-q-settings-label">Placeholder</span>'
+      +'<input class="pfb-q-placeholder-input" value="'+esc(q.placeholder||'')+'" placeholder="Input placeholder" onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'placeholder\',this.value)" /></div>'
+      +'<label class="pfb-q-req-lbl"><input type="checkbox" '+(q.required?'checked':'')+' onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'required\',this.checked)"> Required</label>'
+      +'</div>'
       +optionsHtml
       +'</div></div>';
   }
@@ -1730,6 +1783,8 @@
     const shell = document.querySelector('.intake-modal-shell');
     if (shell) shell.style.maxWidth = '560px';
     currentFormConfig = intake && intake.form_config ? JSON.parse(JSON.stringify(intake.form_config)) : JSON.parse(JSON.stringify(DEFAULT_FORM_CONFIG));
+    pfbOpenSections = new Set();
+    pfbOpenQuestions = new Set();
 
     document.getElementById('ppi-title').value = intake?.title || '';
     document.getElementById('ppi-season-year').value = intake?.season_label || '';
@@ -2329,6 +2384,8 @@
   window.changeProposalStatus = changeProposalStatus;
   window.saveProposalInternalNotes = saveProposalInternalNotes;
   window.renderFormBuilder = renderFormBuilder;
+  window.pfbToggleSectionOpen = pfbToggleSectionOpen;
+  window.pfbToggleQuestionSettings = pfbToggleQuestionSettings;
   window.pfbToggleSection = pfbToggleSection;
   window.pfbRenameSection = pfbRenameSection;
   window.pfbMoveSection = pfbMoveSection;
