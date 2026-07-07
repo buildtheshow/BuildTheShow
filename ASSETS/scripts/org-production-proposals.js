@@ -436,58 +436,20 @@
               </div>
               <button type="button" class="btn-secondary" onclick="closeProposalIntakeModal()">Close</button>
             </div>
-            <div class="opp-modal-body">
+            <div class="opp-modal-body" style="padding-top:0.75rem;">
               <div id="proposal-intake-form-error" class="form-error-msg"></div>
-              <div class="opp-form-section">
-                <h3>Season Details</h3>
-                <div class="opp-form-grid">
-                  <div class="form-group"><label class="form-label">Season Name</label><input class="form-input" id="ppi-title" type="text" placeholder="Summer Kids, Youth Workshop..." /></div>
-                  <div class="form-group"><label class="form-label">Year</label><input class="form-input" id="ppi-season-year" type="number" min="2000" max="2100" placeholder="2026" /></div>
-                  <div class="form-group opp-form-span-2"><label class="form-label">Description</label><textarea class="form-textarea" id="ppi-description" placeholder="Tell people what kind of shows you want pitched this season."></textarea></div>
-                </div>
+              <div class="opp-form-grid three" style="gap:0.65rem 1rem;margin-bottom:0.65rem;">
+                <div class="form-group" style="margin:0;"><label class="form-label">Season Name</label><input class="form-input" id="ppi-title" type="text" placeholder="Summer Kids, Youth Workshop..." /></div>
+                <div class="form-group" style="margin:0;"><label class="form-label">Year</label><input class="form-input" id="ppi-season-year" type="number" min="2000" max="2100" placeholder="2026" /></div>
+                <div class="form-group" style="margin:0;"><label class="form-label">Accepting Pitches?</label><select class="form-select" id="ppi-is-open"><option value="yes">Yes</option><option value="no">No</option></select></div>
+                <div class="form-group" style="margin:0;"><label class="form-label">Passcode</label><input class="form-input" id="ppi-access-code" type="text" readonly style="background:rgba(26,21,48,0.04);color:rgba(26,21,48,0.5);cursor:default;" /></div>
+                <div class="form-group" style="margin:0;"><label class="form-label">Pitch Closes</label><input class="form-input" id="ppi-closes-at" type="datetime-local" /></div>
+                <div class="form-group" style="margin:0;"><label class="form-label">Production Type</label><select class="form-select" id="ppi-production-type"><option value="">No preference</option><option value="Musical">Musical</option><option value="Play">Play</option><option value="Workshop">Workshop</option></select></div>
+                <div class="form-group" style="margin:0;"><label class="form-label">Ideal Cast Size</label><select class="form-select" id="ppi-cast-size"><option value="">No preference</option><option value="Small Cast (1–10)">Small (1–10)</option><option value="Medium Cast (11–20)">Medium (11–20)</option><option value="Large Cast (21–35)">Large (21–35)</option><option value="Extra Large Cast (36+)">Extra Large (36+)</option></select></div>
+                <div class="form-group" style="margin:0;"><label class="form-label">Performer Age</label><div style="display:flex;align-items:center;gap:0.4rem;"><input class="form-input" id="ppi-min-age" type="number" min="0" max="99" placeholder="Min" /><span style="font-size:0.8rem;color:rgba(26,21,48,0.4);flex-shrink:0;">–</span><input class="form-input" id="ppi-max-age" type="number" min="0" max="99" placeholder="Max" /></div></div>
+                <div class="form-group" style="margin:0;"><label class="form-label">Description</label><textarea class="form-textarea" id="ppi-description" placeholder="Optional notes for pitchers." style="height:60px;resize:none;"></textarea></div>
               </div>
-              <div class="opp-form-section">
-                <h3>Pitch Settings</h3>
-                <div class="opp-form-grid">
-                  <div class="form-group"><label class="form-label">Season Passcode</label><input class="form-input" id="ppi-access-code" type="text" readonly style="background:rgba(26,21,48,0.04);color:rgba(26,21,48,0.5);cursor:default;" /></div>
-                  <div class="form-group"><label class="form-label">Pitch Closes</label><input class="form-input" id="ppi-closes-at" type="datetime-local" /></div>
-                  <div class="form-group"><label class="form-label">Accepting Pitches?</label><select class="form-select" id="ppi-is-open"><option value="yes">Yes</option><option value="no">No</option></select></div>
-                </div>
-              </div>
-              <div class="opp-form-section">
-                <h3>What We're Looking For</h3>
-                <div class="opp-form-grid">
-                  <div class="form-group">
-                    <label class="form-label">Production Type</label>
-                    <select class="form-select" id="ppi-production-type">
-                      <option value="">No preference</option>
-                      <option value="Musical">Musical</option>
-                      <option value="Play">Play</option>
-                      <option value="Workshop">Workshop</option>
-                    </select>
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">Performer Age</label>
-                    <div style="display:flex;align-items:center;gap:0.5rem;">
-                      <input class="form-input" id="ppi-min-age" type="number" min="0" max="99" placeholder="Min" style="width:80px;" />
-                      <span style="font-size:0.8rem;color:rgba(26,21,48,0.4);flex-shrink:0;">to</span>
-                      <input class="form-input" id="ppi-max-age" type="number" min="0" max="99" placeholder="Max" style="width:80px;" />
-                    </div>
-                    <div style="font-size:0.65rem;color:rgba(26,21,48,0.4);margin-top:0.3rem;">Leave blank for no restriction.</div>
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">Ideal Cast Size</label>
-                    <select class="form-select" id="ppi-cast-size">
-                      <option value="">No preference</option>
-                      <option value="Small Cast (1–10)">Small Cast (1–10)</option>
-                      <option value="Medium Cast (11–20)">Medium Cast (11–20)</option>
-                      <option value="Large Cast (21–35)">Large Cast (21–35)</option>
-                      <option value="Extra Large Cast (36+)">Extra Large Cast (36+)</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-              <div class="opp-form-actions">
+              <div class="opp-form-actions" style="padding-top:0.5rem;">
                 <button type="button" class="btn-secondary" onclick="closeProposalIntakeModal()">Cancel</button>
                 <button type="button" class="btn-primary" id="ppi-save-btn" onclick="saveProposalIntakeForm()">Save Season</button>
               </div>
