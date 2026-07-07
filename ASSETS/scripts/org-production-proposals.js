@@ -14,9 +14,9 @@
   const LEVELS = ['low', 'medium', 'high'];
   const PROPOSAL_TAG = 'proposal-attachment';
   const INTAKE_STATUS_META = {
-    open: { label: 'Open', color: '#3a6646', bg: 'rgba(118,158,123,0.2)' },
-    closed: { label: 'Closed', color: '#5a6370', bg: 'rgba(90,99,112,0.12)' },
-    expired: { label: 'Expired', color: '#b85e00', bg: 'rgba(239,171,69,0.22)' },
+    open:    { label: 'Open',    color: '#3a6646', bg: 'rgba(118,158,123,0.2)'  },
+    closed:  { label: 'Draft',   color: '#5a6370', bg: 'rgba(90,99,112,0.12)'   },
+    expired: { label: 'Expired', color: '#b85e00', bg: 'rgba(239,171,69,0.22)'  },
   };
 
   const state = {
@@ -284,54 +284,41 @@
         .pp-page-actions .btn-primary { width:100%; justify-content:center; }
       }
 
-      /* ---- brand tile base (content mode) ---- */
-      .template-brand-card { position:relative; z-index:1; isolation:isolate; width:min(100%,300px); background:var(--brand-tile-bg,#572e88); color:var(--brand-tile-ink,#fff); border:none; border-radius:8px; box-shadow:0 18px 36px rgba(26,21,48,0.14),0 4px 10px rgba(26,21,48,0.08); container-type:inline-size; overflow:hidden; display:block; padding:0; font-family:var(--bts-font); text-align:left; }
-      .template-brand-card::before { content:''; position:absolute; inset:0; z-index:-1; border-radius:inherit; background:var(--brand-tile-bg,#572e88); opacity:1; pointer-events:none; }
-      .template-brand-card--square { aspect-ratio:1/1; }
-      .template-brand-card--portrait { aspect-ratio:4/5; }
-      .template-brand-card-inner { height:100%; display:block; padding:0; box-sizing:border-box; }
-      .template-brand-tile-content { width:100%; height:100%; min-width:0; box-sizing:border-box; }
-      .template-brand-card--content .template-brand-card-inner { padding:8cqw; color:var(--brand-tile-ink,#fff); }
-      .template-brand-card--content .template-brand-tile-content { display:flex; flex-direction:column; height:100%; }
-      .template-brand-tile-container { display:flex; flex-direction:column; justify-content:center; padding:0; min-height:0; overflow:hidden; }
-      .template-brand-tile-container--header { flex:0 0 10cqw; }
-      .template-brand-tile-container--title  { flex:0 0 28cqw; }
-      .template-brand-tile-container--body   { flex:1 1 0; }
-      .template-brand-tile-container--footer { flex:0 0 14cqw; }
-      .template-brand-tile-kicker { font-size:4.2cqw; font-weight:950; letter-spacing:0.08em; line-height:1; text-transform:uppercase; opacity:0.72; }
-      .template-brand-tile-title { font-size:13cqw; font-weight:950; letter-spacing:0; line-height:0.95; min-width:0; max-width:100%; word-break:normal; overflow-wrap:normal; hyphens:manual; }
-      .template-brand-tile-body { min-width:0; font-size:5.2cqw; font-weight:800; line-height:1.32; opacity:0.84; }
-      .template-brand-tile-button { align-self:flex-start; border:0; border-radius:8px; background:var(--brand-tile-ink,#fff); color:var(--brand-tile-bg,#572e88); padding:3.4cqw 5.2cqw; font-family:var(--bts-font); font-size:4.8cqw; font-weight:950; line-height:1; cursor:pointer; }
+      /* ---- season card tiles ---- */
+      .pp-intake-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+      .pp-season-card { background:#fff; border:1px solid rgba(87,46,136,0.12); border-radius:16px; padding:1rem 1.1rem 0.75rem; display:flex; flex-direction:column; gap:0; box-shadow:0 2px 12px rgba(26,21,48,0.06); position:relative; overflow:hidden; cursor:pointer; transition:border-color 0.15s,box-shadow 0.15s; }
+      .pp-season-card--active { border-color:#572e88; box-shadow:0 4px 20px rgba(87,46,136,0.14); background:rgba(87,46,136,0.02); }
+      .pp-season-card--year { background:rgba(87,46,136,0.025); }
+      .pp-season-card--year.pp-season-card--active { border-color:#572e88; }
+      .pp-sc-deco { position:absolute; top:0.6rem; right:0.9rem; width:88px; height:88px; opacity:0.11; pointer-events:none; object-fit:contain; }
+      .pp-sc-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:0.55rem; }
+      .opp-status-pill { text-transform:uppercase; letter-spacing:0.05em; }
+      .pp-sc-menu-btn { background:none; border:none; cursor:pointer; padding:0.2rem 0.4rem; border-radius:6px; color:rgba(26,21,48,0.35); font-size:1.05rem; line-height:1; font-weight:900; transition:background 0.12s,color 0.12s; }
+      .pp-sc-menu-btn:hover { background:rgba(87,46,136,0.07); color:#572e88; }
+      .pp-sc-year { font-size:0.78rem; font-weight:700; color:rgba(26,21,48,0.45); line-height:1; margin-bottom:0.18rem; }
+      .pp-sc-title { font-size:1.75rem; font-weight:950; color:#1a1530; line-height:1; margin-bottom:0.85rem; max-width:75%; }
+      .pp-sc-info-row { display:flex; border-top:1px solid rgba(87,46,136,0.08); border-bottom:1px solid rgba(87,46,136,0.08); padding:0.65rem 0; margin-bottom:0.7rem; }
+      .pp-sc-info-cell { flex:1; display:flex; align-items:flex-start; gap:0.38rem; padding:0 0.5rem; min-width:0; }
+      .pp-sc-info-cell:first-child { padding-left:0; }
+      .pp-sc-info-cell:last-child { padding-right:0; }
+      .pp-sc-info-cell + .pp-sc-info-cell { border-left:1px solid rgba(87,46,136,0.08); }
+      .pp-sc-info-icon { width:14px; height:14px; opacity:0.38; flex-shrink:0; margin-top:1px; }
+      .pp-sc-info-body { display:flex; flex-direction:column; gap:0.18rem; min-width:0; }
+      .pp-sc-info-label { font-size:0.62rem; font-weight:800; color:rgba(26,21,48,0.4); text-transform:uppercase; letter-spacing:0.04em; line-height:1; }
+      .pp-sc-info-value { font-size:0.8rem; font-weight:800; color:#1a1530; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .pp-sc-info-value--link { color:#572e88; cursor:pointer; }
+      .pp-sc-footer { display:flex; align-items:center; }
+      .pp-sc-action { flex:1; display:flex; align-items:center; justify-content:center; gap:0.3rem; padding:0.45rem 0.3rem; font-family:var(--bts-font); font-size:0.74rem; font-weight:800; color:rgba(26,21,48,0.5); background:none; border:none; cursor:pointer; border-radius:8px; transition:background 0.12s,color 0.12s; white-space:nowrap; }
+      .pp-sc-action:hover { background:rgba(87,46,136,0.06); color:#572e88; }
+      .pp-sc-action--primary { color:#572e88; font-weight:900; }
+      .pp-sc-action-icon { width:13px; height:13px; opacity:0.7; flex-shrink:0; }
+      .pp-sc-divider { width:1px; height:16px; background:rgba(87,46,136,0.12); flex-shrink:0; }
 
       /* ---- sub-season panel ---- */
-      .pp-sub-intake-panel { background:rgba(87,46,136,0.04); border:1px solid rgba(87,46,136,0.1); border-radius:14px; padding:1rem; display:grid; gap:0.75rem; }
+      .pp-sub-intake-panel { background:rgba(87,46,136,0.03); border:1px solid rgba(87,46,136,0.1); border-radius:14px; padding:1rem; display:grid; gap:0.75rem; }
       .pp-sub-intake-header { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; }
       .pp-sub-intake-year-name { font-size:0.88rem; font-weight:900; color:#1a1530; }
       .pp-sub-intake-empty { font-size:0.84rem; color:#8f84a5; padding:0.5rem 0; }
-
-      /* ---- season intake tiles ---- */
-      .pp-intake-tile { cursor:pointer; }
-      .pp-intake-tile .template-brand-card { width:100%; aspect-ratio:auto !important; min-height:260px; }
-      .pp-intake-tile--active .template-brand-card { box-shadow:0 0 0 3px rgba(255,255,255,0.9),0 0 0 6px rgba(87,46,136,0.45); }
-      .pp-intake-tile .template-brand-card::after { content:''; position:absolute; bottom:-4cqw; right:-4cqw; width:42cqw; height:42cqw; background:var(--pp-tile-deco-icon) center/contain no-repeat; filter:brightness(0) invert(1); opacity:0.14; pointer-events:none; z-index:0; }
-      .pp-intake-tile .template-brand-card-inner { position:relative; z-index:1; }
-      .pp-intake-tile .template-brand-tile-title { font-size:10cqw; line-height:1.05; }
-      .pp-intake-tile .template-brand-tile-container--title { flex:0 0 18cqw; }
-      .pp-tile-body-inner { display:flex; flex-direction:column; gap:2.5cqw; }
-      .pp-tile-deadline-row { display:flex; align-items:center; gap:3cqw; }
-      .pp-tile-cal-badge { flex-shrink:0; width:16cqw; border-radius:4px; overflow:hidden; }
-      .pp-tile-cal-badge-month { background:#efab45; text-align:center; font-size:3cqw; font-weight:950; letter-spacing:0.08em; text-transform:uppercase; color:#fff; padding:1cqw 0; line-height:1; }
-      .pp-tile-cal-badge-day { background:#fff; text-align:center; font-size:7cqw; font-weight:950; color:#1a1530; padding:1cqw 0 1.5cqw; line-height:1; }
-      .pp-tile-deadline-info { display:flex; flex-direction:column; gap:0.8cqw; min-width:0; }
-      .pp-tile-deadline-label { font-size:3cqw; font-weight:800; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em; line-height:1; }
-      .pp-tile-deadline-date { font-size:4.5cqw; font-weight:950; line-height:1.1; }
-      .pp-tile-row { display:flex; align-items:center; gap:2cqw; font-size:4.5cqw; font-weight:800; opacity:0.88; }
-      .pp-tile-icon { width:4cqw; height:4cqw; min-width:12px; min-height:12px; filter:brightness(0) invert(1); flex-shrink:0; }
-      .pp-tile-chips { display:flex; flex-wrap:wrap; gap:1.5cqw; }
-      .pp-tile-chip { display:inline-flex; padding:1.2cqw 2.5cqw; border-radius:999px; font-size:3.5cqw; font-weight:800; background:rgba(255,255,255,0.18); border:1px solid rgba(255,255,255,0.28); line-height:1.2; }
-      .pp-tile-btns { display:flex; gap:2cqw; width:100%; }
-      .pp-tile-btn { flex:1; border:1.5px solid rgba(255,255,255,0.5); background:transparent; color:var(--brand-tile-ink,#fff); border-radius:7px; padding:2cqw 2.5cqw; font-family:var(--bts-font); font-size:4cqw; font-weight:950; cursor:pointer; text-align:center; white-space:nowrap; }
-      .pp-tile-btn--hi { background:rgba(255,255,255,0.22); border-color:rgba(255,255,255,0.6); }
     `;
     document.head.appendChild(style);
   }
@@ -877,96 +864,65 @@
   ];
 
   function renderIntakeCard(intake, tileIndex) {
-    const tileRender = window.BTSAuditionTemplates && window.BTSAuditionTemplates.renderBrandTileTemplate;
     const active = intake.id === state.selectedIntakeId;
     const idx = typeof tileIndex === 'number' ? tileIndex : 0;
-    const tileColor = INTAKE_TILE_PALETTE[idx % INTAKE_TILE_PALETTE.length];
     const decoIcon = '/ASSETS/Images/Icons/' + INTAKE_TILE_ICONS[idx % INTAKE_TILE_ICONS.length];
     const sid = intake.id;
-    const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-    if (!tileRender) {
-      const submissionCount = state.proposals.filter(function(item) { return item.intake_id === intake.id; }).length;
-      return `<div class="pp-intake-card${active ? ' active' : ''}">
-        <div class="pp-intake-top"><div class="pp-intake-title">${esc(intake.title || 'Season')}</div></div>
-        <div class="pp-intake-meta">${renderIntakeMeta('Pitches received', submissionCount)}</div>
-        <div class="pp-intake-actions">
-          <button class="pp-card-btn" onclick="copyProposalIntakeUrl('${sid}')">Copy</button>
-          <button class="pp-card-btn primary" onclick="setProposalIntakeFilter('${sid}')">View</button>
-        </div>
-      </div>`;
-    }
+    const statusKey = proposalIntakeStatus(intake);
+    const statusMeta = INTAKE_STATUS_META[statusKey] || INTAKE_STATUS_META.closed;
+    const statusPill = '<span class="opp-status-pill" style="color:' + statusMeta.color + ';background:' + statusMeta.bg + ';">' + esc(statusMeta.label) + '</span>';
 
     // ── Year tile ──────────────────────────────────────────
     if (intakeIsYear(intake)) {
       const subs = subIntakesOf(sid);
       const totalPitches = proposalsForIntake(sid).length;
       const isExpanded = state.expandedYearId === sid;
-      const projectRow = '<div class="pp-tile-row"><img src="/ASSETS/Images/Icons/Auditions.svg" class="pp-tile-icon" alt="">' +
-        esc(String(subs.length)) + ' ' + (subs.length === 1 ? 'project' : 'projects') + '</div>';
-      const pitchRow = '<div class="pp-tile-row"><img src="/ASSETS/Images/Icons/Applications.svg" class="pp-tile-icon" alt="">' +
-        esc(String(totalPitches)) + ' ' + (totalPitches === 1 ? 'pitch' : 'pitches') + ' total</div>';
       const closeDates = subs.map(function(s) { return s.closes_at ? new Date(s.closes_at) : null; }).filter(Boolean);
-      var deadlineHtml = '';
-      if (closeDates.length) {
-        const earliest = new Date(Math.min.apply(null, closeDates));
-        const badgeHtml = '<div class="pp-tile-cal-badge"><div class="pp-tile-cal-badge-month">' + MONTHS_SHORT[earliest.getMonth()] + '</div><div class="pp-tile-cal-badge-day">' + earliest.getDate() + '</div></div>';
-        deadlineHtml = '<div class="pp-tile-deadline-row">' + badgeHtml +
-          '<div class="pp-tile-deadline-info"><div class="pp-tile-deadline-label">First close</div><div class="pp-tile-deadline-date">' + esc(fmtDateTime(earliest.toISOString())) + '</div></div>' +
-          '</div>';
-      }
-      const bodyHtml = '<div class="pp-tile-body-inner">' + projectRow + pitchRow + deadlineHtml + '</div>';
-      const buttonHtml = '<div class="pp-tile-btns">' +
-        '<button class="pp-tile-btn" onclick="event.stopPropagation();openProposalIntakeModal(\'' + sid + '\')">Edit</button>' +
-        '<button class="pp-tile-btn pp-tile-btn--hi" onclick="event.stopPropagation();toggleExpandYear(\'' + sid + '\')">' + (isExpanded ? 'Collapse' : 'Projects') + '</button>' +
+      const earliestClose = closeDates.length ? new Date(Math.min.apply(null, closeDates)) : null;
+      const infoRow =
+        '<div class="pp-sc-info-row">' +
+          '<div class="pp-sc-info-cell"><img class="pp-sc-info-icon" src="/ASSETS/Images/Icons/Auditions.svg" alt=""><div class="pp-sc-info-body"><div class="pp-sc-info-label">Projects</div><div class="pp-sc-info-value">' + esc(String(subs.length)) + '</div></div></div>' +
+          '<div class="pp-sc-info-cell"><img class="pp-sc-info-icon" src="/ASSETS/Images/Icons/Applications.svg" alt=""><div class="pp-sc-info-body"><div class="pp-sc-info-label">Proposals</div><div class="pp-sc-info-value">' + esc(String(totalPitches)) + '</div></div></div>' +
+          '<div class="pp-sc-info-cell"><img class="pp-sc-info-icon" src="/ASSETS/Images/Icons/calendar-date.svg" alt=""><div class="pp-sc-info-body"><div class="pp-sc-info-label">First Close</div><div class="pp-sc-info-value">' + esc(earliestClose ? fmtDateTime(earliestClose.toISOString()) : 'Not set') + '</div></div></div>' +
         '</div>';
-      return '<div class="pp-intake-tile pp-intake-tile--year' + (isExpanded ? ' pp-intake-tile--active' : '') + '" onclick="toggleExpandYear(\'' + sid + '\')">' +
-        tileRender({ esc: esc, variant: 'square', mode: 'content', color: tileColor, ink: '#ffffff',
-          style: '--pp-tile-deco-icon:url(' + decoIcon + ');',
-          kicker: 'Year',
-          title: intake.title || intake.season_label || 'Year',
-          bodyHtml: bodyHtml,
-          buttonHtml: buttonHtml,
-        }) + '</div>';
+      const footer =
+        '<div class="pp-sc-footer">' +
+          '<button class="pp-sc-action" onclick="event.stopPropagation();openProposalIntakeModal(\'' + sid + '\')"><img class="pp-sc-action-icon" src="/ASSETS/Images/Icons/edit-pencil.svg" alt="">Edit</button>' +
+          '<div class="pp-sc-divider"></div>' +
+          '<button class="pp-sc-action pp-sc-action--primary" onclick="event.stopPropagation();toggleExpandYear(\'' + sid + '\')">' + (isExpanded ? 'Collapse' : 'Projects') + '</button>' +
+        '</div>';
+      return '<div class="pp-season-card pp-season-card--year' + (isExpanded ? ' pp-season-card--active' : '') + '" onclick="toggleExpandYear(\'' + sid + '\')">' +
+        '<img class="pp-sc-deco" src="' + esc(decoIcon) + '" alt="">' +
+        '<div class="pp-sc-top">' + statusPill + '<button class="pp-sc-menu-btn" onclick="event.stopPropagation();openProposalIntakeModal(\'' + sid + '\')">&#8942;</button></div>' +
+        '<div class="pp-sc-year">Year</div>' +
+        '<div class="pp-sc-title">' + esc(intake.title || intake.season_label || 'Year') + '</div>' +
+        infoRow + footer + '</div>';
     }
 
     // ── Project tile ───────────────────────────────────────
     const submissionCount = state.proposals.filter(function(item) { return item.intake_id === sid; }).length;
-    var ageMin = intake.min_performer_age, ageMax = intake.max_performer_age;
-    var ageText = ageMin && ageMax ? 'Ages ' + ageMin + '–' + ageMax : ageMin ? 'Ages ' + ageMin + '+' : ageMax ? 'Up to age ' + ageMax : '';
-
-    var deadlineHtml = '';
-    if (intake.closes_at) {
-      var cd = new Date(intake.closes_at);
-      var badgeHtml = '<div class="pp-tile-cal-badge"><div class="pp-tile-cal-badge-month">' + MONTHS_SHORT[cd.getMonth()] + '</div><div class="pp-tile-cal-badge-day">' + cd.getDate() + '</div></div>';
-      deadlineHtml = '<div class="pp-tile-deadline-row">' + badgeHtml +
-        '<div class="pp-tile-deadline-info"><div class="pp-tile-deadline-label">Closes</div><div class="pp-tile-deadline-date">' + esc(fmtDateTime(intake.closes_at)) + '</div></div>' +
-        '</div>';
-    } else {
-      deadlineHtml = '<div class="pp-tile-row" style="opacity:0.55;">No close date</div>';
-    }
-
-    var pitchRow = '<div class="pp-tile-row"><img src="/ASSETS/Images/Icons/Applications.svg" class="pp-tile-icon" alt="">' + esc(String(submissionCount)) + ' ' + (submissionCount === 1 ? 'pitch' : 'pitches') + ' received</div>';
-    var ageRow = ageText ? '<div class="pp-tile-row"><img src="/ASSETS/Images/Icons/Performer.svg" class="pp-tile-icon" alt="">' + esc(ageText) + '</div>' : '';
-    var chips = [];
-    if (intake.production_type) chips.push(esc(intake.production_type));
-    if (intake.cast_size) chips.push(esc(intake.cast_size));
-    var chipsHtml = chips.length ? '<div class="pp-tile-chips">' + chips.map(function(c) { return '<span class="pp-tile-chip">' + c + '</span>'; }).join('') + '</div>' : '';
-    var bodyHtml = '<div class="pp-tile-body-inner">' + deadlineHtml + pitchRow + ageRow + chipsHtml + '</div>';
-    var buttonHtml = '<div class="pp-tile-btns">' +
-      '<button class="pp-tile-btn" onclick="event.stopPropagation();openProposalIntakeModal(\'' + sid + '\')">Edit</button>' +
-      '<button class="pp-tile-btn" onclick="event.stopPropagation();copyProposalIntakeUrl(\'' + sid + '\')">Copy</button>' +
-      '<button class="pp-tile-btn pp-tile-btn--hi" onclick="event.stopPropagation();setProposalIntakeFilter(\'' + sid + '\')">View</button>' +
+    const closesVal = intake.closes_at ? esc(fmtDateTime(intake.closes_at)) : 'Not set';
+    const publicPageLabel = statusKey === 'open' ? 'View' : 'Preview';
+    const infoRow =
+      '<div class="pp-sc-info-row">' +
+        '<div class="pp-sc-info-cell"><img class="pp-sc-info-icon" src="/ASSETS/Images/Icons/calendar-date.svg" alt=""><div class="pp-sc-info-body"><div class="pp-sc-info-label">Closes</div><div class="pp-sc-info-value">' + closesVal + '</div></div></div>' +
+        '<div class="pp-sc-info-cell"><img class="pp-sc-info-icon" src="/ASSETS/Images/Icons/Applications.svg" alt=""><div class="pp-sc-info-body"><div class="pp-sc-info-label">Proposals</div><div class="pp-sc-info-value">' + esc(String(submissionCount)) + '</div></div></div>' +
+        '<div class="pp-sc-info-cell"><img class="pp-sc-info-icon" src="/ASSETS/Images/Icons/visible.svg" alt=""><div class="pp-sc-info-body"><div class="pp-sc-info-label">Public Page</div><div class="pp-sc-info-value pp-sc-info-value--link" onclick="event.stopPropagation();openProposalIntakeShareTab(\'' + sid + '\')">' + publicPageLabel + '</div></div></div>' +
       '</div>';
-
-    return '<div class="pp-intake-tile' + (active ? ' pp-intake-tile--active' : '') + '" onclick="setProposalIntakeFilter(\'' + sid + '\')">' +
-      tileRender({ esc: esc, variant: 'square', mode: 'content', color: tileColor, ink: '#ffffff',
-        style: '--pp-tile-deco-icon:url(' + decoIcon + ');',
-        kicker: intake.season_label || '',
-        title: intake.title || 'Project',
-        bodyHtml: bodyHtml,
-        buttonHtml: buttonHtml,
-      }) + '</div>';
+    const footer =
+      '<div class="pp-sc-footer">' +
+        '<button class="pp-sc-action" onclick="event.stopPropagation();openProposalIntakeModal(\'' + sid + '\')"><img class="pp-sc-action-icon" src="/ASSETS/Images/Icons/edit-pencil.svg" alt="">Edit</button>' +
+        '<div class="pp-sc-divider"></div>' +
+        '<button class="pp-sc-action" onclick="event.stopPropagation();copyProposalIntakeInvite(\'' + sid + '\')">Copy Invite</button>' +
+        '<div class="pp-sc-divider"></div>' +
+        '<button class="pp-sc-action pp-sc-action--primary" onclick="event.stopPropagation();setProposalIntakeFilter(\'' + sid + '\')">View Season</button>' +
+      '</div>';
+    return '<div class="pp-season-card' + (active ? ' pp-season-card--active' : '') + '" onclick="setProposalIntakeFilter(\'' + sid + '\')">' +
+      '<img class="pp-sc-deco" src="' + esc(decoIcon) + '" alt="">' +
+      '<div class="pp-sc-top">' + statusPill + '<button class="pp-sc-menu-btn" onclick="event.stopPropagation();openProposalIntakeModal(\'' + sid + '\')">&#8942;</button></div>' +
+      '<div class="pp-sc-year">' + esc(intake.season_label || '') + '</div>' +
+      '<div class="pp-sc-title">' + esc(intake.title || 'Project') + '</div>' +
+      infoRow + footer + '</div>';
   }
 
   function renderProposalsTab() {
