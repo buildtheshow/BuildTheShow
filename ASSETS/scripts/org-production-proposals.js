@@ -438,16 +438,21 @@
             </div>
             <div class="opp-modal-body" style="padding-top:0.75rem;">
               <div id="proposal-intake-form-error" class="form-error-msg"></div>
-              <div class="opp-form-grid three" style="gap:0.65rem 1rem;margin-bottom:0.65rem;">
-                <div class="form-group" style="margin:0;"><label class="form-label">Season Name</label><input class="form-input" id="ppi-title" type="text" placeholder="Summer Kids, Youth Workshop..." /></div>
+              <div class="opp-form-grid three" style="gap:0.65rem 1rem;margin-bottom:0.9rem;">
+                <div class="form-group" style="margin:0;"><label class="form-label">Season Name</label><input class="form-input" id="ppi-title" type="text" placeholder="Summer, Fall..." /></div>
                 <div class="form-group" style="margin:0;"><label class="form-label">Year</label><input class="form-input" id="ppi-season-year" type="number" min="2000" max="2100" placeholder="2026" /></div>
                 <div class="form-group" style="margin:0;"><label class="form-label">Accepting Pitches?</label><select class="form-select" id="ppi-is-open"><option value="yes">Yes</option><option value="no">No</option></select></div>
                 <div class="form-group" style="margin:0;"><label class="form-label">Passcode</label><input class="form-input" id="ppi-access-code" type="text" readonly style="background:rgba(26,21,48,0.04);color:rgba(26,21,48,0.5);cursor:default;" /></div>
                 <div class="form-group" style="margin:0;"><label class="form-label">Pitch Closes</label><input class="form-input" id="ppi-closes-at" type="datetime-local" /></div>
-                <div class="form-group" style="margin:0;"><label class="form-label">Production Type</label><select class="form-select" id="ppi-production-type"><option value="">No preference</option><option value="Musical">Musical</option><option value="Play">Play</option><option value="Workshop">Workshop</option></select></div>
-                <div class="form-group" style="margin:0;"><label class="form-label">Ideal Cast Size</label><select class="form-select" id="ppi-cast-size"><option value="">No preference</option><option value="Small Cast (1–10)">Small (1–10)</option><option value="Medium Cast (11–20)">Medium (11–20)</option><option value="Large Cast (21–35)">Large (21–35)</option><option value="Extra Large Cast (36+)">Extra Large (36+)</option></select></div>
-                <div class="form-group" style="margin:0;"><label class="form-label">Performer Age</label><div style="display:flex;align-items:center;gap:0.4rem;"><input class="form-input" id="ppi-min-age" type="number" min="0" max="99" placeholder="Min" /><span style="font-size:0.8rem;color:rgba(26,21,48,0.4);flex-shrink:0;">–</span><input class="form-input" id="ppi-max-age" type="number" min="0" max="99" placeholder="Max" /></div></div>
-                <div class="form-group" style="margin:0;"><label class="form-label">Description</label><textarea class="form-textarea" id="ppi-description" placeholder="Optional notes for pitchers." style="height:60px;resize:none;"></textarea></div>
+                <div class="form-group" style="margin:0;"><label class="form-label">Description</label><textarea class="form-textarea" id="ppi-description" placeholder="Optional notes for pitchers." style="height:38px;resize:none;"></textarea></div>
+              </div>
+              <div style="border-top:1px solid rgba(87,46,136,0.1);padding-top:0.75rem;margin-bottom:0.75rem;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.55rem;">
+                  <div style="font-size:0.72rem;font-weight:900;color:rgba(26,21,48,0.45);text-transform:uppercase;letter-spacing:0.06em;">Projects</div>
+                  <button type="button" class="btn-secondary" style="font-size:0.75rem;padding:0.3rem 0.75rem;" onclick="addProposalProject()">+ Add Project</button>
+                </div>
+                <div id="ppi-projects-list" style="display:flex;flex-direction:column;gap:0.45rem;"></div>
+                <div id="ppi-projects-empty" style="font-size:0.82rem;color:rgba(26,21,48,0.38);padding:0.4rem 0;">No projects yet — add one to give pitchers a target.</div>
               </div>
               <div class="opp-form-actions" style="padding-top:0.5rem;">
                 <button type="button" class="btn-secondary" onclick="closeProposalIntakeModal()">Cancel</button>
@@ -1280,6 +1285,38 @@
     return intake;
   }
 
+  function renderProposalProjectRow(proj) {
+    const id = proj.id || ('p' + Date.now() + Math.random().toString(36).slice(2, 6));
+    return '<div class="ppi-project-row" data-proj-id="' + id + '" style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:0.4rem;align-items:end;">' +
+      '<div class="form-group" style="margin:0;"><label class="form-label">Project Name</label><input class="form-input ppi-proj-name" type="text" placeholder="Kids, Youth, Workshop..." value="' + esc(proj.name || '') + '" /></div>' +
+      '<div class="form-group" style="margin:0;"><label class="form-label">Production Type</label><select class="form-select ppi-proj-type"><option value="">No preference</option><option value="Musical"' + (proj.production_type === 'Musical' ? ' selected' : '') + '>Musical</option><option value="Play"' + (proj.production_type === 'Play' ? ' selected' : '') + '>Play</option><option value="Workshop"' + (proj.production_type === 'Workshop' ? ' selected' : '') + '>Workshop</option></select></div>' +
+      '<div class="form-group" style="margin:0;"><label class="form-label">Performer Age</label><div style="display:flex;align-items:center;gap:0.35rem;"><input class="form-input ppi-proj-min-age" type="number" min="0" max="99" placeholder="Min" style="min-width:0;" value="' + (proj.min_age ?? '') + '" /><span style="font-size:0.8rem;color:rgba(26,21,48,0.4);flex-shrink:0;">–</span><input class="form-input ppi-proj-max-age" type="number" min="0" max="99" placeholder="Max" style="min-width:0;" value="' + (proj.max_age ?? '') + '" /></div></div>' +
+      '<button type="button" style="background:none;border:none;cursor:pointer;color:rgba(26,21,48,0.3);font-size:1.1rem;padding:0.3rem 0.4rem;border-radius:6px;align-self:flex-end;margin-bottom:1px;transition:color 0.12s,background 0.12s;" onmouseenter="this.style.color=\'#d1523d\';this.style.background=\'rgba(209,82,61,0.08)\';" onmouseleave="this.style.color=\'rgba(26,21,48,0.3)\';this.style.background=\'none\';" onclick="removeProposalProject(\'' + id + '\')">&#x2715;</button>' +
+    '</div>';
+  }
+
+  function syncProjectsEmpty() {
+    const list = document.getElementById('ppi-projects-list');
+    const empty = document.getElementById('ppi-projects-empty');
+    if (!list || !empty) return;
+    empty.style.display = list.children.length === 0 ? '' : 'none';
+  }
+
+  function addProposalProject(proj) {
+    const list = document.getElementById('ppi-projects-list');
+    if (!list) return;
+    const div = document.createElement('div');
+    div.innerHTML = renderProposalProjectRow(proj || {});
+    list.appendChild(div.firstElementChild);
+    syncProjectsEmpty();
+  }
+
+  function removeProposalProject(projId) {
+    const row = document.querySelector('[data-proj-id="' + projId + '"]');
+    if (row) row.remove();
+    syncProjectsEmpty();
+  }
+
   function openProposalIntakeModal(id) {
     ensureModalShell();
     const intake = id ? proposalIntakeById(id) : null;
@@ -1297,10 +1334,14 @@
     document.getElementById('ppi-access-code').value = intake?.access_code || generateProposalToken().slice(0, 8).toLowerCase();
     document.getElementById('ppi-closes-at').value = fmtDateTimeInput(intake?.closes_at || '');
     document.getElementById('ppi-is-open').value = intake?.is_open === false ? 'no' : 'yes';
-    document.getElementById('ppi-production-type').value = intake?.production_type || '';
-    document.getElementById('ppi-min-age').value = intake?.min_performer_age ?? '';
-    document.getElementById('ppi-max-age').value = intake?.max_performer_age ?? '';
-    document.getElementById('ppi-cast-size').value = intake?.cast_size || '';
+
+    const list = document.getElementById('ppi-projects-list');
+    if (list) {
+      list.innerHTML = '';
+      const projects = Array.isArray(intake?.projects) ? intake.projects : [];
+      projects.forEach(function(p) { addProposalProject(p); });
+      syncProjectsEmpty();
+    }
 
     modal.classList.add('open');
   }
@@ -1320,6 +1361,18 @@
       errorEl.classList.add('visible');
       return;
     }
+    const projectRows = Array.from(document.querySelectorAll('#ppi-projects-list .ppi-project-row'));
+    const projects = projectRows.map(function(row) {
+      const minAge = row.querySelector('.ppi-proj-min-age').value;
+      const maxAge = row.querySelector('.ppi-proj-max-age').value;
+      return {
+        id: row.dataset.projId,
+        name: row.querySelector('.ppi-proj-name').value.trim(),
+        production_type: row.querySelector('.ppi-proj-type').value || null,
+        min_age: minAge !== '' ? parseInt(minAge, 10) : null,
+        max_age: maxAge !== '' ? parseInt(maxAge, 10) : null,
+      };
+    }).filter(function(p) { return p.name; });
     const payload = {
       organization_id: currentOrg().id,
       title: title,
@@ -1328,10 +1381,7 @@
       parent_id: null,
       closes_at: document.getElementById('ppi-closes-at').value ? new Date(document.getElementById('ppi-closes-at').value).toISOString() : null,
       is_open: document.getElementById('ppi-is-open').value === 'yes',
-      production_type: document.getElementById('ppi-production-type').value || null,
-      min_performer_age: document.getElementById('ppi-min-age').value !== '' ? parseInt(document.getElementById('ppi-min-age').value, 10) : null,
-      max_performer_age: document.getElementById('ppi-max-age').value !== '' ? parseInt(document.getElementById('ppi-max-age').value, 10) : null,
-      cast_size: document.getElementById('ppi-cast-size').value || null,
+      projects: projects,
     };
     if (!intakeId) {
       payload.access_code = document.getElementById('ppi-access-code').value.trim();
@@ -1830,6 +1880,8 @@
   window.openProposalIntakeModal = openProposalIntakeModal;
   window.toggleExpandYear = toggleExpandYear;
   window.deleteProposalIntake = deleteProposalIntake;
+  window.addProposalProject = addProposalProject;
+  window.removeProposalProject = removeProposalProject;
   window.closeProposalIntakeModal = closeProposalIntakeModal;
   window.saveProposalIntakeForm = saveProposalIntakeForm;
   window.setProposalIntakeFilter = setProposalIntakeFilter;
