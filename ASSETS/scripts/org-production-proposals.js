@@ -282,6 +282,39 @@
         .pp-intake-grid { grid-template-columns:1fr; }
         .pp-page-actions .btn-primary { width:100%; justify-content:center; }
       }
+
+      /* ---- brand tile base (content mode) ---- */
+      .template-brand-card { position:relative; z-index:1; isolation:isolate; width:min(100%,300px); background:var(--brand-tile-bg,#572e88); color:var(--brand-tile-ink,#fff); border:none; border-radius:8px; box-shadow:0 18px 36px rgba(26,21,48,0.14),0 4px 10px rgba(26,21,48,0.08); container-type:inline-size; overflow:hidden; display:block; padding:0; font-family:var(--bts-font); text-align:left; }
+      .template-brand-card::before { content:''; position:absolute; inset:0; z-index:-1; border-radius:inherit; background:var(--brand-tile-bg,#572e88); opacity:1; pointer-events:none; }
+      .template-brand-card--square { aspect-ratio:1/1; }
+      .template-brand-card--portrait { aspect-ratio:4/5; }
+      .template-brand-card-inner { height:100%; display:block; padding:0; box-sizing:border-box; }
+      .template-brand-tile-content { width:100%; height:100%; min-width:0; box-sizing:border-box; }
+      .template-brand-card--content .template-brand-card-inner { padding:8cqw; color:var(--brand-tile-ink,#fff); }
+      .template-brand-card--content .template-brand-tile-content { display:flex; flex-direction:column; height:100%; }
+      .template-brand-tile-container { display:flex; flex-direction:column; justify-content:center; padding:0; min-height:0; overflow:hidden; }
+      .template-brand-tile-container--header { flex:0 0 10cqw; }
+      .template-brand-tile-container--title  { flex:0 0 28cqw; }
+      .template-brand-tile-container--body   { flex:1 1 0; }
+      .template-brand-tile-container--footer { flex:0 0 14cqw; }
+      .template-brand-tile-kicker { font-size:4.2cqw; font-weight:950; letter-spacing:0.08em; line-height:1; text-transform:uppercase; opacity:0.72; }
+      .template-brand-tile-title { font-size:13cqw; font-weight:950; letter-spacing:0; line-height:0.95; min-width:0; max-width:100%; word-break:normal; overflow-wrap:normal; hyphens:manual; }
+      .template-brand-tile-body { min-width:0; font-size:5.2cqw; font-weight:800; line-height:1.32; opacity:0.84; }
+      .template-brand-tile-button { align-self:flex-start; border:0; border-radius:8px; background:var(--brand-tile-ink,#fff); color:var(--brand-tile-bg,#572e88); padding:3.4cqw 5.2cqw; font-family:var(--bts-font); font-size:4.8cqw; font-weight:950; line-height:1; cursor:pointer; }
+
+      /* ---- season intake tiles ---- */
+      .pp-intake-tile { cursor:pointer; }
+      .pp-intake-tile .template-brand-card { width:100%; aspect-ratio:auto !important; min-height:220px; }
+      .pp-intake-tile--active .template-brand-card { box-shadow:0 0 0 3px rgba(255,255,255,0.9),0 0 0 6px rgba(87,46,136,0.45); }
+      .pp-intake-tile .template-brand-tile-title { font-size:10cqw; line-height:1.05; }
+      .pp-tile-body-inner { display:flex; flex-direction:column; gap:2cqw; }
+      .pp-tile-row { display:flex; align-items:center; gap:2cqw; font-size:4.5cqw; font-weight:800; opacity:0.92; }
+      .pp-tile-icon { width:4cqw; height:4cqw; min-width:12px; min-height:12px; filter:brightness(0) invert(1); flex-shrink:0; }
+      .pp-tile-chips { display:flex; flex-wrap:wrap; gap:1.5cqw; margin-top:1.5cqw; }
+      .pp-tile-chip { display:inline-flex; padding:1.2cqw 2.5cqw; border-radius:999px; font-size:3.5cqw; font-weight:800; background:rgba(255,255,255,0.18); border:1px solid rgba(255,255,255,0.28); line-height:1.2; }
+      .pp-tile-btns { display:flex; gap:2cqw; width:100%; }
+      .pp-tile-btn { flex:1; border:1.5px solid rgba(255,255,255,0.5); background:transparent; color:var(--brand-tile-ink,#fff); border-radius:7px; padding:2cqw 2.5cqw; font-family:var(--bts-font); font-size:4cqw; font-weight:950; cursor:pointer; text-align:center; white-space:nowrap; }
+      .pp-tile-btn--hi { background:rgba(255,255,255,0.22); border-color:rgba(255,255,255,0.6); }
     `;
     document.head.appendChild(style);
   }
@@ -787,27 +820,59 @@
   }
 
   function renderIntakeCard(intake) {
+    const tileRender = window.BTSAuditionTemplates && window.BTSAuditionTemplates.renderBrandTileTemplate;
     const active = intake.id === state.selectedIntakeId;
     const submissionCount = state.proposals.filter(function(item) { return item.intake_id === intake.id; }).length;
-    return `
-      <div class="pp-intake-card${active ? ' active' : ''}">
-        <div class="pp-intake-top">
-          <div>
-            <div class="pp-intake-title">${esc(intake.title || 'Season')}</div>
-          </div>
-          ${proposalIntakeStatusPill(intake)}
-        </div>
+    const statusKey = proposalIntakeStatus(intake);
+    const tileColor = statusKey === 'open' ? '#769e7b' : statusKey === 'expired' ? '#dd8233' : '#572e88';
+    const sid = intake.id;
+
+    if (!tileRender) {
+      return `<div class="pp-intake-card${active ? ' active' : ''}">
+        <div class="pp-intake-top"><div class="pp-intake-title">${esc(intake.title || 'Season')}</div>${proposalIntakeStatusPill(intake)}</div>
         <div class="pp-intake-meta">
           ${renderIntakeMeta('Closes on', intake.closes_at ? fmtDateTime(intake.closes_at) : 'Not set')}
           ${renderIntakeMeta('Pitches received', submissionCount)}
-          ${renderIntakeCode('Passcode', intake.access_code || 'Not set')}
         </div>
         <div class="pp-intake-actions">
-          <button class="pp-card-btn" onclick="copyProposalIntakeUrl('${intake.id}')">Copy Link</button>
-          <button class="pp-card-btn primary" onclick="setProposalIntakeFilter('${intake.id}')">View Pitches</button>
+          <button class="pp-card-btn" onclick="copyProposalIntakeUrl('${sid}')">Copy Link</button>
+          <button class="pp-card-btn primary" onclick="setProposalIntakeFilter('${sid}')">View Pitches</button>
         </div>
-      </div>
-    `;
+      </div>`;
+    }
+
+    const bodyRows = [
+      `<div class="pp-tile-row"><img src="/ASSETS/Images/Icons/Applications.svg" class="pp-tile-icon" alt="">${esc(String(submissionCount))} ${submissionCount === 1 ? 'pitch' : 'pitches'} received</div>`,
+    ];
+    if (intake.closes_at) {
+      bodyRows.push(`<div class="pp-tile-row"><img src="/ASSETS/Images/Icons/calendar-date.svg" class="pp-tile-icon" alt="">Closes ${esc(fmtDateTime(intake.closes_at))}</div>`);
+    } else {
+      bodyRows.push(`<div class="pp-tile-row"><img src="/ASSETS/Images/Icons/calendar-date.svg" class="pp-tile-icon" alt="">No close date</div>`);
+    }
+    const chips = [];
+    if (intake.production_type) chips.push(esc(intake.production_type));
+    var ageMin = intake.min_performer_age, ageMax = intake.max_performer_age;
+    if (ageMin != null || ageMax != null) {
+      chips.push(ageMin && ageMax ? 'Ages ' + ageMin + '–' + ageMax : ageMin ? 'Ages ' + ageMin + '+' : 'Up to age ' + ageMax);
+    }
+    if (intake.cast_size) chips.push(esc(intake.cast_size));
+    var bodyHtml = '<div class="pp-tile-body-inner">' + bodyRows.join('') +
+      (chips.length ? '<div class="pp-tile-chips">' + chips.map(function(c) { return '<span class="pp-tile-chip">' + c + '</span>'; }).join('') + '</div>' : '') +
+      '</div>';
+
+    var buttonHtml = '<div class="pp-tile-btns">' +
+      '<button class="pp-tile-btn" onclick="event.stopPropagation();copyProposalIntakeUrl(\'' + sid + '\')">Copy Link</button>' +
+      '<button class="pp-tile-btn pp-tile-btn--hi" onclick="event.stopPropagation();setProposalIntakeFilter(\'' + sid + '\')">View Pitches</button>' +
+      '</div>';
+
+    return '<div class="pp-intake-tile' + (active ? ' pp-intake-tile--active' : '') + '" onclick="setProposalIntakeFilter(\'' + sid + '\')">' +
+      tileRender({ esc: esc, variant: 'square', mode: 'content', color: tileColor, ink: '#ffffff',
+        kicker: intake.season_label || '',
+        title: intake.title || 'Season',
+        bodyHtml: bodyHtml,
+        buttonHtml: buttonHtml,
+      }) +
+      '</div>';
   }
 
   function renderProposalsTab() {
