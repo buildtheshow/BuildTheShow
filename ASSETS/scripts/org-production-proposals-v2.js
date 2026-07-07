@@ -424,7 +424,8 @@
       });
     }
 
-    if (!document.getElementById('proposal-intake-modal')) {
+    document.getElementById('proposal-intake-modal')?.remove();
+    {
       const intakeWrap = document.createElement('div');
       intakeWrap.innerHTML = `
         <div class="opp-modal-overlay" id="proposal-intake-modal">
