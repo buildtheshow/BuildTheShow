@@ -451,17 +451,17 @@
                     <div class="form-group" style="margin:0;"><label class="form-label">Season Name</label><input class="form-input" id="ppi-title" type="text" placeholder="Summer, Fall, Spring..." /></div>
                     <div class="form-group" style="margin:0;"><label class="form-label">Year</label><input class="form-input" id="ppi-season-year" type="number" min="2000" max="2100" placeholder="2026" /></div>
                   </div>
-                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-                    <div class="form-group" style="margin:0;"><label class="form-label">Pitch Closes</label><input class="form-input" id="ppi-closes-at" type="datetime-local" /></div>
-                    <div class="form-group" style="margin:0;"><label class="form-label">Accepting Pitches?</label><select class="form-select" id="ppi-is-open"><option value="yes">Yes</option><option value="no">No</option></select></div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:end;">
+                    <div class="form-group" style="margin:0;"><label class="form-label">Pitch Closes</label><input class="form-input" id="ppi-closes-at" type="datetime-local" style="height:42px;" /></div>
+                    <div class="form-group" style="margin:0;"><label class="form-label">Accepting Pitches?</label><select class="form-select" id="ppi-is-open" style="height:42px;"><option value="yes">Yes</option><option value="no">No</option></select></div>
                   </div>
                   <div class="form-group" style="margin:0;">
                     <label class="form-label">Passcode <span style="font-weight:500;opacity:0.45;text-transform:none;letter-spacing:0;">(set at creation, cannot be changed)</span></label>
-                    <input class="form-input" id="ppi-access-code" type="text" readonly style="background:rgba(26,21,48,0.03);color:rgba(26,21,48,0.4);cursor:default;letter-spacing:0.06em;" />
+                    <input class="form-input" id="ppi-access-code" type="text" readonly style="height:42px;background:rgba(26,21,48,0.03);color:rgba(26,21,48,0.4);cursor:default;letter-spacing:0.06em;" />
                   </div>
                   <div class="form-group" style="margin:0;">
                     <label class="form-label">Description <span style="font-weight:500;opacity:0.45;text-transform:none;letter-spacing:0;">(optional)</span></label>
-                    <textarea class="form-textarea" id="ppi-description" placeholder="Tell pitchers what you're looking for this season." style="height:90px;resize:none;"></textarea>
+                    <textarea class="form-textarea" id="ppi-description" placeholder="Tell pitchers what you're looking for this season." style="height:100px;resize:none;display:block;width:100%;box-sizing:border-box;"></textarea>
                   </div>
                 </div>
                 <div class="opp-form-actions">
