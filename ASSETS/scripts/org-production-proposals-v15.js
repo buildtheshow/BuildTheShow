@@ -1106,7 +1106,7 @@
       '<div class="pp-sc-top">' + statusPill + '</div>' +
       '<div class="pp-sc-year">' + esc(intake.season_label || '') + '</div>' +
       '<div class="pp-sc-title">' + esc(intake.title || 'Season') + '</div>' +
-      (intake.access_code ? '<div class="pp-sc-passcode"><span>Passcode: ' + esc(intake.access_code) + '</span><button class="pp-sc-passcode-copy" onclick="event.stopPropagation();navigator.clipboard.writeText(\'' + esc(intake.access_code) + '\').then(function(){window.showToast&&showToast(\'Passcode copied.\');})" title="Copy passcode"><img src="/ASSETS/Images/Icons/Checklist.svg" alt="Copy"></button></div>' : '') +
+      (intake.access_code ? '<div class="pp-sc-passcode"><span>Passcode: ' + esc(intake.access_code) + '</span><button class="pp-sc-passcode-copy" onclick="event.stopPropagation();navigator.clipboard.writeText(\'' + esc(intake.access_code) + '\').then(function(){window.showToast&&showToast(\'Passcode copied.\');})" title="Copy passcode"><img src="/ASSETS/Images/Icons/copy.svg" alt="Copy"></button></div>' : '') +
       infoRow + footer + '</div>';
   }
 
