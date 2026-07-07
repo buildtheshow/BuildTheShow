@@ -309,6 +309,8 @@
       .pp-sc-action { flex:1; display:flex; align-items:center; justify-content:center; gap:0.3rem; padding:0.45rem 0.3rem; font-family:var(--bts-font); font-size:0.74rem; font-weight:800; color:rgba(255,255,255,0.75); background:none; border:none; cursor:pointer; border-radius:8px; transition:background 0.12s,color 0.12s; white-space:nowrap; }
       .pp-sc-action:hover { background:rgba(255,255,255,0.12); color:#fff; }
       .pp-sc-action--primary { color:#fff; font-weight:900; }
+      .pp-sc-action--danger { color:rgba(255,255,255,0.55); }
+      .pp-sc-action--danger:hover { background:rgba(209,82,61,0.28); color:#fff; }
       .pp-sc-action-icon { width:13px; height:13px; opacity:0.75; flex-shrink:0; filter:brightness(0) invert(1); }
       .pp-sc-divider { width:1px; height:16px; background:rgba(255,255,255,0.2); flex-shrink:0; }
 
@@ -879,6 +881,10 @@
         '<div class="pp-sc-info-cell"><img class="pp-sc-info-icon" src="/ASSETS/Images/Icons/Applications.svg" alt=""><div class="pp-sc-info-body"><div class="pp-sc-info-label">Proposals</div><div class="pp-sc-info-value">' + esc(String(submissionCount)) + '</div></div></div>' +
         '<div class="pp-sc-info-cell"><img class="pp-sc-info-icon" src="/ASSETS/Images/Icons/visible.svg" alt=""><div class="pp-sc-info-body"><div class="pp-sc-info-label">Public Page</div><div class="pp-sc-info-value pp-sc-info-value--link" onclick="event.stopPropagation();openProposalIntakeShareTab(\'' + sid + '\')">' + publicPageLabel + '</div></div></div>' +
       '</div>';
+    const pitchWord = submissionCount === 1 ? 'proposal' : 'proposals';
+    const deleteWarning = submissionCount > 0
+      ? 'Delete \\"' + (intake.title || 'this season') + '\\"? This will permanently remove the season and its ' + submissionCount + ' ' + pitchWord + '. This cannot be undone.'
+      : 'Delete \\"' + (intake.title || 'this season') + '\\"? This cannot be undone.';
     const footer =
       '<div class="pp-sc-footer">' +
         '<button class="pp-sc-action" onclick="event.stopPropagation();openProposalIntakeModal(\'' + sid + '\')"><img class="pp-sc-action-icon" src="/ASSETS/Images/Icons/edit-pencil.svg" alt="">Edit</button>' +
@@ -886,6 +892,8 @@
         '<button class="pp-sc-action" onclick="event.stopPropagation();copyProposalIntakeInvite(\'' + sid + '\')">Copy Invite</button>' +
         '<div class="pp-sc-divider"></div>' +
         '<button class="pp-sc-action pp-sc-action--primary" onclick="event.stopPropagation();setProposalIntakeFilter(\'' + sid + '\')">View Season</button>' +
+        '<div class="pp-sc-divider"></div>' +
+        '<button class="pp-sc-action pp-sc-action--danger" onclick="event.stopPropagation();deleteProposalIntake(\'' + sid + '\',' + submissionCount + ',\'' + deleteWarning + '\')">Delete</button>' +
       '</div>';
     return '<div class="pp-season-card' + (active ? ' pp-season-card--active' : '') + '" style="background:' + tileColor + ';" onclick="setProposalIntakeFilter(\'' + sid + '\')">' +
       '<img class="pp-sc-deco" src="' + esc(decoIcon) + '" alt="">' +
@@ -1391,6 +1399,25 @@
     }
   }
 
+  async function deleteProposalIntake(intakeId, proposalCount, warningMsg) {
+    const confirmed = window.confirm(warningMsg);
+    if (!confirmed) return;
+    try {
+      if (proposalCount > 0) {
+        await sb().from('production_proposals').delete().eq('intake_id', intakeId);
+      }
+      const { error } = await sb().from('production_proposal_intakes').delete().eq('id', intakeId);
+      if (error) throw error;
+      if (state.selectedIntakeId === intakeId) state.selectedIntakeId = 'all';
+      await loadProductionProposalIntakes();
+      renderProposalsTab();
+      showToast('Season deleted.');
+    } catch (err) {
+      console.error('[BTS] delete intake failed', err);
+      showToast(err.message || 'Could not delete season.', true);
+    }
+  }
+
   function setProposalIntakeFilter(value) {
     state.selectedIntakeId = value || 'all';
     renderProposalsTab();
@@ -1840,6 +1867,7 @@
   window.openNewProposalTab = openNewProposalTab;
   window.openProposalIntakeModal = openProposalIntakeModal;
   window.toggleExpandYear = toggleExpandYear;
+  window.deleteProposalIntake = deleteProposalIntake;
   window.closeProposalIntakeModal = closeProposalIntakeModal;
   window.saveProposalIntakeForm = saveProposalIntakeForm;
   window.setProposalIntakeFilter = setProposalIntakeFilter;
