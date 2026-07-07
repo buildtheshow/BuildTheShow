@@ -304,13 +304,21 @@
 
       /* ---- season intake tiles ---- */
       .pp-intake-tile { cursor:pointer; }
-      .pp-intake-tile .template-brand-card { width:100%; aspect-ratio:auto !important; min-height:220px; }
+      .pp-intake-tile .template-brand-card { width:100%; aspect-ratio:auto !important; min-height:260px; }
       .pp-intake-tile--active .template-brand-card { box-shadow:0 0 0 3px rgba(255,255,255,0.9),0 0 0 6px rgba(87,46,136,0.45); }
       .pp-intake-tile .template-brand-tile-title { font-size:10cqw; line-height:1.05; }
-      .pp-tile-body-inner { display:flex; flex-direction:column; gap:2cqw; }
-      .pp-tile-row { display:flex; align-items:center; gap:2cqw; font-size:4.5cqw; font-weight:800; opacity:0.92; }
+      .pp-intake-tile .template-brand-tile-container--title { flex:0 0 18cqw; }
+      .pp-tile-body-inner { display:flex; flex-direction:column; gap:2.5cqw; }
+      .pp-tile-deadline-row { display:flex; align-items:center; gap:3cqw; }
+      .pp-tile-cal-badge { flex-shrink:0; width:16cqw; border-radius:4px; overflow:hidden; }
+      .pp-tile-cal-badge-month { background:#efab45; text-align:center; font-size:3cqw; font-weight:950; letter-spacing:0.08em; text-transform:uppercase; color:#fff; padding:1cqw 0; line-height:1; }
+      .pp-tile-cal-badge-day { background:#fff; text-align:center; font-size:7cqw; font-weight:950; color:#1a1530; padding:1cqw 0 1.5cqw; line-height:1; }
+      .pp-tile-deadline-info { display:flex; flex-direction:column; gap:0.8cqw; min-width:0; }
+      .pp-tile-deadline-label { font-size:3cqw; font-weight:800; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em; line-height:1; }
+      .pp-tile-deadline-date { font-size:4.5cqw; font-weight:950; line-height:1.1; }
+      .pp-tile-row { display:flex; align-items:center; gap:2cqw; font-size:4.5cqw; font-weight:800; opacity:0.88; }
       .pp-tile-icon { width:4cqw; height:4cqw; min-width:12px; min-height:12px; filter:brightness(0) invert(1); flex-shrink:0; }
-      .pp-tile-chips { display:flex; flex-wrap:wrap; gap:1.5cqw; margin-top:1.5cqw; }
+      .pp-tile-chips { display:flex; flex-wrap:wrap; gap:1.5cqw; }
       .pp-tile-chip { display:inline-flex; padding:1.2cqw 2.5cqw; border-radius:999px; font-size:3.5cqw; font-weight:800; background:rgba(255,255,255,0.18); border:1px solid rgba(255,255,255,0.28); line-height:1.2; }
       .pp-tile-btns { display:flex; gap:2cqw; width:100%; }
       .pp-tile-btn { flex:1; border:1.5px solid rgba(255,255,255,0.5); background:transparent; color:var(--brand-tile-ink,#fff); border-radius:7px; padding:2cqw 2.5cqw; font-family:var(--bts-font); font-size:4cqw; font-weight:950; cursor:pointer; text-align:center; white-space:nowrap; }
@@ -841,24 +849,31 @@
       </div>`;
     }
 
-    const bodyRows = [
-      `<div class="pp-tile-row"><img src="/ASSETS/Images/Icons/Applications.svg" class="pp-tile-icon" alt="">${esc(String(submissionCount))} ${submissionCount === 1 ? 'pitch' : 'pitches'} received</div>`,
-    ];
-    if (intake.closes_at) {
-      bodyRows.push(`<div class="pp-tile-row"><img src="/ASSETS/Images/Icons/calendar-date.svg" class="pp-tile-icon" alt="">Closes ${esc(fmtDateTime(intake.closes_at))}</div>`);
-    } else {
-      bodyRows.push(`<div class="pp-tile-row"><img src="/ASSETS/Images/Icons/calendar-date.svg" class="pp-tile-icon" alt="">No close date</div>`);
-    }
-    const chips = [];
-    if (intake.production_type) chips.push(esc(intake.production_type));
     var ageMin = intake.min_performer_age, ageMax = intake.max_performer_age;
-    if (ageMin != null || ageMax != null) {
-      chips.push(ageMin && ageMax ? 'Ages ' + ageMin + '–' + ageMax : ageMin ? 'Ages ' + ageMin + '+' : 'Up to age ' + ageMax);
+    var ageText = ageMin && ageMax ? 'Ages ' + ageMin + '–' + ageMax : ageMin ? 'Ages ' + ageMin + '+' : ageMax ? 'Up to age ' + ageMax : '';
+
+    // Calendar badge for deadline
+    var deadlineHtml = '';
+    if (intake.closes_at) {
+      var cd = new Date(intake.closes_at);
+      var MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      var badgeHtml = '<div class="pp-tile-cal-badge"><div class="pp-tile-cal-badge-month">' + MONTHS_SHORT[cd.getMonth()] + '</div><div class="pp-tile-cal-badge-day">' + cd.getDate() + '</div></div>';
+      deadlineHtml = '<div class="pp-tile-deadline-row">' + badgeHtml +
+        '<div class="pp-tile-deadline-info"><div class="pp-tile-deadline-label">Closes</div><div class="pp-tile-deadline-date">' + esc(fmtDateTime(intake.closes_at)) + '</div></div>' +
+        '</div>';
+    } else {
+      deadlineHtml = '<div class="pp-tile-row" style="opacity:0.55;">No close date</div>';
     }
+
+    var pitchRow = '<div class="pp-tile-row"><img src="/ASSETS/Images/Icons/Applications.svg" class="pp-tile-icon" alt="">' + esc(String(submissionCount)) + ' ' + (submissionCount === 1 ? 'pitch' : 'pitches') + ' received</div>';
+    var ageRow = ageText ? '<div class="pp-tile-row"><img src="/ASSETS/Images/Icons/Performer.svg" class="pp-tile-icon" alt="">' + esc(ageText) + '</div>' : '';
+
+    var chips = [];
+    if (intake.production_type) chips.push(esc(intake.production_type));
     if (intake.cast_size) chips.push(esc(intake.cast_size));
-    var bodyHtml = '<div class="pp-tile-body-inner">' + bodyRows.join('') +
-      (chips.length ? '<div class="pp-tile-chips">' + chips.map(function(c) { return '<span class="pp-tile-chip">' + c + '</span>'; }).join('') + '</div>' : '') +
-      '</div>';
+    var chipsHtml = chips.length ? '<div class="pp-tile-chips">' + chips.map(function(c) { return '<span class="pp-tile-chip">' + c + '</span>'; }).join('') + '</div>' : '';
+
+    var bodyHtml = '<div class="pp-tile-body-inner">' + deadlineHtml + pitchRow + ageRow + chipsHtml + '</div>';
 
     var buttonHtml = '<div class="pp-tile-btns">' +
       '<button class="pp-tile-btn" onclick="event.stopPropagation();copyProposalIntakeUrl(\'' + sid + '\')">Copy Link</button>' +
