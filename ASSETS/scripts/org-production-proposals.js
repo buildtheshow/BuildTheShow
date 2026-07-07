@@ -286,33 +286,31 @@
 
       /* ---- season card tiles ---- */
       .pp-intake-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
-      .pp-season-card { background:#fff; border:1px solid rgba(87,46,136,0.12); border-radius:16px; padding:1rem 1.1rem 0.75rem; display:flex; flex-direction:column; gap:0; box-shadow:0 2px 12px rgba(26,21,48,0.06); position:relative; overflow:hidden; cursor:pointer; transition:border-color 0.15s,box-shadow 0.15s; }
-      .pp-season-card--active { border-color:#572e88; box-shadow:0 4px 20px rgba(87,46,136,0.14); background:rgba(87,46,136,0.02); }
-      .pp-season-card--year { background:rgba(87,46,136,0.025); }
-      .pp-season-card--year.pp-season-card--active { border-color:#572e88; }
-      .pp-sc-deco { position:absolute; top:0.6rem; right:0.9rem; width:88px; height:88px; opacity:0.11; pointer-events:none; object-fit:contain; }
+      .pp-season-card { background:#fff; border:2px solid transparent; border-radius:16px; padding:1rem 1.1rem 0.75rem; display:flex; flex-direction:column; gap:0; box-shadow:0 4px 18px rgba(26,21,48,0.18); position:relative; overflow:hidden; cursor:pointer; transition:filter 0.15s,box-shadow 0.15s; }
+      .pp-season-card--active { box-shadow:0 6px 28px rgba(0,0,0,0.22); filter:brightness(1.06); border-color:rgba(255,255,255,0.35); }
+      .pp-sc-deco { position:absolute; top:0.6rem; right:0.9rem; width:88px; height:88px; opacity:0.15; pointer-events:none; object-fit:contain; filter:brightness(0) invert(1); }
       .pp-sc-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:0.55rem; }
       .opp-status-pill { text-transform:uppercase; letter-spacing:0.05em; }
-      .pp-sc-menu-btn { background:none; border:none; cursor:pointer; padding:0.2rem 0.4rem; border-radius:6px; color:rgba(26,21,48,0.35); font-size:1.05rem; line-height:1; font-weight:900; transition:background 0.12s,color 0.12s; }
-      .pp-sc-menu-btn:hover { background:rgba(87,46,136,0.07); color:#572e88; }
-      .pp-sc-year { font-size:0.78rem; font-weight:700; color:rgba(26,21,48,0.45); line-height:1; margin-bottom:0.18rem; }
-      .pp-sc-title { font-size:1.75rem; font-weight:950; color:#1a1530; line-height:1; margin-bottom:0.85rem; max-width:75%; }
-      .pp-sc-info-row { display:flex; border-top:1px solid rgba(87,46,136,0.08); border-bottom:1px solid rgba(87,46,136,0.08); padding:0.65rem 0; margin-bottom:0.7rem; }
+      .pp-sc-menu-btn { background:none; border:none; cursor:pointer; padding:0.2rem 0.4rem; border-radius:6px; color:rgba(255,255,255,0.6); font-size:1.05rem; line-height:1; font-weight:900; transition:background 0.12s,color 0.12s; }
+      .pp-sc-menu-btn:hover { background:rgba(255,255,255,0.12); color:#fff; }
+      .pp-sc-year { font-size:0.78rem; font-weight:700; color:rgba(255,255,255,0.65); line-height:1; margin-bottom:0.18rem; }
+      .pp-sc-title { font-size:1.75rem; font-weight:950; color:#fff; line-height:1; margin-bottom:0.85rem; max-width:75%; }
+      .pp-sc-info-row { display:flex; border-top:1px solid rgba(255,255,255,0.18); border-bottom:1px solid rgba(255,255,255,0.18); padding:0.65rem 0; margin-bottom:0.7rem; }
       .pp-sc-info-cell { flex:1; display:flex; align-items:flex-start; gap:0.38rem; padding:0 0.5rem; min-width:0; }
       .pp-sc-info-cell:first-child { padding-left:0; }
       .pp-sc-info-cell:last-child { padding-right:0; }
-      .pp-sc-info-cell + .pp-sc-info-cell { border-left:1px solid rgba(87,46,136,0.08); }
-      .pp-sc-info-icon { width:14px; height:14px; opacity:0.38; flex-shrink:0; margin-top:1px; }
+      .pp-sc-info-cell + .pp-sc-info-cell { border-left:1px solid rgba(255,255,255,0.18); }
+      .pp-sc-info-icon { width:14px; height:14px; opacity:0.7; flex-shrink:0; margin-top:1px; filter:brightness(0) invert(1); }
       .pp-sc-info-body { display:flex; flex-direction:column; gap:0.18rem; min-width:0; }
-      .pp-sc-info-label { font-size:0.62rem; font-weight:800; color:rgba(26,21,48,0.4); text-transform:uppercase; letter-spacing:0.04em; line-height:1; }
-      .pp-sc-info-value { font-size:0.8rem; font-weight:800; color:#1a1530; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-      .pp-sc-info-value--link { color:#572e88; cursor:pointer; }
+      .pp-sc-info-label { font-size:0.62rem; font-weight:800; color:rgba(255,255,255,0.6); text-transform:uppercase; letter-spacing:0.04em; line-height:1; }
+      .pp-sc-info-value { font-size:0.8rem; font-weight:800; color:#fff; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .pp-sc-info-value--link { color:#fff; cursor:pointer; text-decoration:underline; text-decoration-color:rgba(255,255,255,0.4); }
       .pp-sc-footer { display:flex; align-items:center; }
-      .pp-sc-action { flex:1; display:flex; align-items:center; justify-content:center; gap:0.3rem; padding:0.45rem 0.3rem; font-family:var(--bts-font); font-size:0.74rem; font-weight:800; color:rgba(26,21,48,0.5); background:none; border:none; cursor:pointer; border-radius:8px; transition:background 0.12s,color 0.12s; white-space:nowrap; }
-      .pp-sc-action:hover { background:rgba(87,46,136,0.06); color:#572e88; }
-      .pp-sc-action--primary { color:#572e88; font-weight:900; }
-      .pp-sc-action-icon { width:13px; height:13px; opacity:0.7; flex-shrink:0; }
-      .pp-sc-divider { width:1px; height:16px; background:rgba(87,46,136,0.12); flex-shrink:0; }
+      .pp-sc-action { flex:1; display:flex; align-items:center; justify-content:center; gap:0.3rem; padding:0.45rem 0.3rem; font-family:var(--bts-font); font-size:0.74rem; font-weight:800; color:rgba(255,255,255,0.75); background:none; border:none; cursor:pointer; border-radius:8px; transition:background 0.12s,color 0.12s; white-space:nowrap; }
+      .pp-sc-action:hover { background:rgba(255,255,255,0.12); color:#fff; }
+      .pp-sc-action--primary { color:#fff; font-weight:900; }
+      .pp-sc-action-icon { width:13px; height:13px; opacity:0.75; flex-shrink:0; filter:brightness(0) invert(1); }
+      .pp-sc-divider { width:1px; height:16px; background:rgba(255,255,255,0.2); flex-shrink:0; }
 
       /* ---- sub-season panel ---- */
       .pp-sub-intake-panel { background:rgba(87,46,136,0.03); border:1px solid rgba(87,46,136,0.1); border-radius:14px; padding:1rem; display:grid; gap:0.75rem; }
@@ -866,11 +864,12 @@
   function renderIntakeCard(intake, tileIndex) {
     const active = intake.id === state.selectedIntakeId;
     const idx = typeof tileIndex === 'number' ? tileIndex : 0;
+    const tileColor = INTAKE_TILE_PALETTE[idx % INTAKE_TILE_PALETTE.length];
     const decoIcon = '/ASSETS/Images/Icons/' + INTAKE_TILE_ICONS[idx % INTAKE_TILE_ICONS.length];
     const sid = intake.id;
     const statusKey = proposalIntakeStatus(intake);
     const statusMeta = INTAKE_STATUS_META[statusKey] || INTAKE_STATUS_META.closed;
-    const statusPill = '<span class="opp-status-pill" style="color:' + statusMeta.color + ';background:' + statusMeta.bg + ';">' + esc(statusMeta.label) + '</span>';
+    const statusPill = '<span class="opp-status-pill" style="color:#fff;background:rgba(255,255,255,0.22);font-size:0.68rem;font-weight:800;padding:0.2rem 0.55rem;border-radius:99px;">' + esc(statusMeta.label) + '</span>';
 
     // ── Year tile ──────────────────────────────────────────
     if (intakeIsYear(intake)) {
@@ -891,7 +890,7 @@
           '<div class="pp-sc-divider"></div>' +
           '<button class="pp-sc-action pp-sc-action--primary" onclick="event.stopPropagation();toggleExpandYear(\'' + sid + '\')">' + (isExpanded ? 'Collapse' : 'Projects') + '</button>' +
         '</div>';
-      return '<div class="pp-season-card pp-season-card--year' + (isExpanded ? ' pp-season-card--active' : '') + '" onclick="toggleExpandYear(\'' + sid + '\')">' +
+      return '<div class="pp-season-card pp-season-card--year' + (isExpanded ? ' pp-season-card--active' : '') + '" style="background:' + tileColor + ';" onclick="toggleExpandYear(\'' + sid + '\')">' +
         '<img class="pp-sc-deco" src="' + esc(decoIcon) + '" alt="">' +
         '<div class="pp-sc-top">' + statusPill + '<button class="pp-sc-menu-btn" onclick="event.stopPropagation();openProposalIntakeModal(\'' + sid + '\')">&#8942;</button></div>' +
         '<div class="pp-sc-year">Year</div>' +
@@ -917,7 +916,7 @@
         '<div class="pp-sc-divider"></div>' +
         '<button class="pp-sc-action pp-sc-action--primary" onclick="event.stopPropagation();setProposalIntakeFilter(\'' + sid + '\')">View Season</button>' +
       '</div>';
-    return '<div class="pp-season-card' + (active ? ' pp-season-card--active' : '') + '" onclick="setProposalIntakeFilter(\'' + sid + '\')">' +
+    return '<div class="pp-season-card' + (active ? ' pp-season-card--active' : '') + '" style="background:' + tileColor + ';" onclick="setProposalIntakeFilter(\'' + sid + '\')">' +
       '<img class="pp-sc-deco" src="' + esc(decoIcon) + '" alt="">' +
       '<div class="pp-sc-top">' + statusPill + '<button class="pp-sc-menu-btn" onclick="event.stopPropagation();openProposalIntakeModal(\'' + sid + '\')">&#8942;</button></div>' +
       '<div class="pp-sc-year">' + esc(intake.season_label || '') + '</div>' +
@@ -963,10 +962,6 @@
 
     root.innerHTML = `
       <div class="opp-shell">
-        <div class="pp-page-actions" style="justify-content:flex-end;">
-          <button class="btn-primary" onclick="openProposalIntakeModal()">+ Add Year</button>
-        </div>
-
         <div class="pp-intake-panel">
           <div>
           ${topLevelIntakes().length
