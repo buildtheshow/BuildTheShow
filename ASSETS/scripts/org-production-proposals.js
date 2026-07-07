@@ -167,6 +167,7 @@
       .pp-intake-meta-item { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; font-size:0.82rem; color:#1a1530; }
       .pp-intake-meta-item strong { display:flex; align-items:center; gap:0.45rem; font-size:0.79rem; font-weight:700; color:#1a1530; }
       .pp-intake-meta-item strong::before { content:""; width:14px; height:14px; border-radius:4px; background:rgba(87,46,136,0.08); flex-shrink:0; }
+      .pp-intake-meta-code { font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace; font-size:0.8rem; font-weight:700; letter-spacing:0.04em; color:#572e88; }
       .pp-intake-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.65rem; margin-top:0.25rem; }
       .pp-intake-empty { border-radius:16px; padding:1.75rem; text-align:center; border:1px dashed rgba(87,46,136,0.18); color:#8f84a5; background:#fff; }
       .pp-card-btn { display:inline-flex; align-items:center; justify-content:center; width:100%; border-radius:10px; padding:0.7rem 0.95rem; font-family:var(--bts-font); font-size:0.82rem; font-weight:800; cursor:pointer; border:1.5px solid rgba(87,46,136,0.24); background:#fff; color:#572e88; }
@@ -707,6 +708,10 @@
     return `<div class="pp-intake-meta-item"><strong>${esc(label)}</strong>${esc(value || '—')}</div>`;
   }
 
+  function renderIntakeCode(label, value) {
+    return `<div class="pp-intake-meta-item"><strong>${esc(label)}</strong><span class="pp-intake-meta-code">${esc(value || '—')}</span></div>`;
+  }
+
   function shareInviteText(intake, url) {
     return `${intake.title}\n${url}\nPasscode: ${intake.access_code}`;
   }
@@ -762,6 +767,7 @@
         <div class="pp-intake-meta">
           ${renderIntakeMeta('Closes on', intake.closes_at ? fmtDateTime(intake.closes_at) : 'Not set')}
           ${renderIntakeMeta('Pitches received', submissionCount)}
+          ${renderIntakeCode('Passcode', intake.access_code || 'Not set')}
         </div>
         <div class="pp-intake-actions">
           <button class="pp-card-btn" onclick="copyProposalIntakeUrl('${intake.id}')">Copy Link</button>
