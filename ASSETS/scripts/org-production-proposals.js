@@ -1437,8 +1437,10 @@
       max_performer_age: isProject && document.getElementById('ppi-max-age').value !== '' ? parseInt(document.getElementById('ppi-max-age').value, 10) : null,
       cast_size: isProject ? (document.getElementById('ppi-cast-size').value || null) : null,
     };
-    if (!intakeId && isProject) {
-      payload.access_code = document.getElementById('ppi-access-code').value.trim();
+    if (!intakeId) {
+      payload.access_code = isProject
+        ? document.getElementById('ppi-access-code').value.trim()
+        : generateProposalToken().slice(0, 8).toLowerCase();
     }
     if (!payload.title) {
       errorEl.textContent = isProject ? 'Project name is required.' : 'Year is required.';
@@ -1918,6 +1920,7 @@
   window.closeProposalModal = closeProposalModal;
   window.openNewProposalTab = openNewProposalTab;
   window.openProposalIntakeModal = openProposalIntakeModal;
+  window.toggleExpandYear = toggleExpandYear;
   window.closeProposalIntakeModal = closeProposalIntakeModal;
   window.saveProposalIntakeForm = saveProposalIntakeForm;
   window.setProposalIntakeFilter = setProposalIntakeFilter;
