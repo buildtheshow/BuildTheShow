@@ -26,6 +26,7 @@
     intakes: [],
     selectedProposalId: '',
     selectedIntakeId: 'all',
+    expandedYearId: null,
     compareIds: new Set(),
     proposalFolderId: '',
     attachmentsByProposal: {},
@@ -302,6 +303,12 @@
       .template-brand-tile-body { min-width:0; font-size:5.2cqw; font-weight:800; line-height:1.32; opacity:0.84; }
       .template-brand-tile-button { align-self:flex-start; border:0; border-radius:8px; background:var(--brand-tile-ink,#fff); color:var(--brand-tile-bg,#572e88); padding:3.4cqw 5.2cqw; font-family:var(--bts-font); font-size:4.8cqw; font-weight:950; line-height:1; cursor:pointer; }
 
+      /* ---- sub-season panel ---- */
+      .pp-sub-intake-panel { background:rgba(87,46,136,0.04); border:1px solid rgba(87,46,136,0.1); border-radius:14px; padding:1rem; display:grid; gap:0.75rem; }
+      .pp-sub-intake-header { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; }
+      .pp-sub-intake-year-name { font-size:0.88rem; font-weight:900; color:#1a1530; }
+      .pp-sub-intake-empty { font-size:0.84rem; color:#8f84a5; padding:0.5rem 0; }
+
       /* ---- season intake tiles ---- */
       .pp-intake-tile { cursor:pointer; }
       .pp-intake-tile .template-brand-card { width:100%; aspect-ratio:auto !important; min-height:260px; }
@@ -437,25 +444,30 @@
           <div class="opp-modal intake-modal-shell">
             <div class="opp-modal-head">
               <div>
-                <div class="opp-panel-title" id="proposal-intake-modal-title">Add Season</div>
-                <div class="opp-panel-copy">Create a season with its own share link and passcode so people know exactly where to pitch.</div>
+                <div class="opp-panel-title" id="proposal-intake-modal-title">Add Year</div>
+                <div class="opp-panel-copy" id="proposal-intake-modal-sub">Group projects under a year to keep everything organised.</div>
               </div>
               <button type="button" class="btn-secondary" onclick="closeProposalIntakeModal()">Close</button>
             </div>
             <div class="opp-modal-body">
+              <input type="hidden" id="ppi-parent-id" />
               <div id="proposal-intake-form-error" class="form-error-msg"></div>
               <div class="opp-form-section">
-                <h3>Season Setup</h3>
+                <h3 id="ppi-section-head">Year Setup</h3>
                 <div class="opp-form-grid">
-                  <div class="form-group"><label class="form-label">Season Title</label><input class="form-input" id="ppi-title" type="text" placeholder="Summer Mainstage" /></div>
-                  <div class="form-group"><label class="form-label">Season Year</label><input class="form-input" id="ppi-season-label" type="text" placeholder="2027" /></div>
-                  <div class="form-group opp-form-span-2"><label class="form-label">Pitch Page Description</label><textarea class="form-textarea" id="ppi-description" placeholder="Tell people what kind of shows you want pitched for this season."></textarea></div>
+                  <div class="form-group"><label class="form-label" id="ppi-title-label">Year</label><input class="form-input" id="ppi-title" type="text" placeholder="2027" /></div>
+                  <div class="form-group opp-form-span-2"><label class="form-label">Description</label><textarea class="form-textarea" id="ppi-description" placeholder="Tell people what kind of shows you want pitched this year."></textarea></div>
+                </div>
+              </div>
+              <div class="opp-form-section" id="ppi-project-section">
+                <h3>Project Setup</h3>
+                <div class="opp-form-grid">
                   <div class="form-group"><label class="form-label">Season Passcode</label><input class="form-input" id="ppi-access-code" type="text" readonly style="background:rgba(26,21,48,0.04);color:rgba(26,21,48,0.5);cursor:default;" /></div>
                   <div class="form-group"><label class="form-label">Pitch Closes</label><input class="form-input" id="ppi-closes-at" type="datetime-local" /></div>
                   <div class="form-group"><label class="form-label">Accepting Pitches?</label><select class="form-select" id="ppi-is-open"><option value="yes">Yes</option><option value="no">No</option></select></div>
                 </div>
               </div>
-              <div class="opp-form-section">
+              <div class="opp-form-section" id="ppi-criteria-section">
                 <h3>What We're Looking For</h3>
                 <div class="opp-form-grid">
                   <div class="form-group">
@@ -490,7 +502,7 @@
               </div>
               <div class="opp-form-actions">
                 <button type="button" class="btn-secondary" onclick="closeProposalIntakeModal()">Cancel</button>
-                <button type="button" class="btn-primary" onclick="saveProposalIntakeForm()">Save Season</button>
+                <button type="button" class="btn-primary" id="ppi-save-btn" onclick="saveProposalIntakeForm()">Save Year</button>
               </div>
             </div>
           </div>
@@ -561,6 +573,18 @@
     return state.intakes.find(item => item.id === id) || null;
   }
 
+  function topLevelIntakes() {
+    return state.intakes.filter(function(i) { return !i.parent_id; });
+  }
+
+  function subIntakesOf(parentId) {
+    return state.intakes.filter(function(i) { return i.parent_id === parentId; });
+  }
+
+  function intakeIsYear(intake) {
+    return intake && !intake.parent_id;
+  }
+
   function proposalIntakeStatus(intake) {
     if (!intake) return 'closed';
     if (!intake.is_open) return 'closed';
@@ -617,8 +641,10 @@
       var yb = parseInt(b.season_label, 10) || 0;
       return yb - ya;
     });
-    if (state.selectedIntakeId === 'all' && state.intakes.length) state.selectedIntakeId = state.intakes[0].id;
-    if (state.selectedIntakeId !== 'all' && !proposalIntakeById(state.selectedIntakeId)) state.selectedIntakeId = state.intakes[0]?.id || 'all';
+    const topLevel = topLevelIntakes();
+    if (state.selectedIntakeId === 'all' && topLevel.length) state.selectedIntakeId = topLevel[0].id;
+    if (state.selectedIntakeId !== 'all' && !proposalIntakeById(state.selectedIntakeId)) state.selectedIntakeId = topLevel[0]?.id || 'all';
+    if (state.expandedYearId && !proposalIntakeById(state.expandedYearId)) state.expandedYearId = null;
   }
 
   async function loadProductionProposalsTab() {
@@ -669,9 +695,18 @@
     }
   }
 
+  function proposalsForIntake(intakeId) {
+    if (!intakeId || intakeId === 'all') return state.proposals;
+    const sel = proposalIntakeById(intakeId);
+    if (sel && intakeIsYear(sel)) {
+      const subIds = subIntakesOf(sel.id).map(function(s) { return s.id; });
+      return state.proposals.filter(function(p) { return subIds.includes(p.intake_id); });
+    }
+    return state.proposals.filter(function(p) { return p.intake_id === intakeId; });
+  }
+
   function filteredProposals() {
-    let list = [...state.proposals];
-    if (state.selectedIntakeId !== 'all') list = list.filter(item => item.intake_id === state.selectedIntakeId);
+    let list = proposalsForIntake(state.selectedIntakeId);
     if (state.filterStatus !== 'all') list = list.filter(item => item.status === state.filterStatus);
     if (state.searchQuery) {
       const q = state.searchQuery.toLowerCase();
@@ -844,34 +879,65 @@
   function renderIntakeCard(intake, tileIndex) {
     const tileRender = window.BTSAuditionTemplates && window.BTSAuditionTemplates.renderBrandTileTemplate;
     const active = intake.id === state.selectedIntakeId;
-    const submissionCount = state.proposals.filter(function(item) { return item.intake_id === intake.id; }).length;
     const idx = typeof tileIndex === 'number' ? tileIndex : 0;
     const tileColor = INTAKE_TILE_PALETTE[idx % INTAKE_TILE_PALETTE.length];
     const decoIcon = '/ASSETS/Images/Icons/' + INTAKE_TILE_ICONS[idx % INTAKE_TILE_ICONS.length];
     const sid = intake.id;
+    const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
     if (!tileRender) {
+      const submissionCount = state.proposals.filter(function(item) { return item.intake_id === intake.id; }).length;
       return `<div class="pp-intake-card${active ? ' active' : ''}">
-        <div class="pp-intake-top"><div class="pp-intake-title">${esc(intake.title || 'Season')}</div>${proposalIntakeStatusPill(intake)}</div>
-        <div class="pp-intake-meta">
-          ${renderIntakeMeta('Closes on', intake.closes_at ? fmtDateTime(intake.closes_at) : 'Not set')}
-          ${renderIntakeMeta('Pitches received', submissionCount)}
-        </div>
+        <div class="pp-intake-top"><div class="pp-intake-title">${esc(intake.title || 'Season')}</div></div>
+        <div class="pp-intake-meta">${renderIntakeMeta('Pitches received', submissionCount)}</div>
         <div class="pp-intake-actions">
-          <button class="pp-card-btn" onclick="copyProposalIntakeUrl('${sid}')">Copy Link</button>
-          <button class="pp-card-btn primary" onclick="setProposalIntakeFilter('${sid}')">View Pitches</button>
+          <button class="pp-card-btn" onclick="copyProposalIntakeUrl('${sid}')">Copy</button>
+          <button class="pp-card-btn primary" onclick="setProposalIntakeFilter('${sid}')">View</button>
         </div>
       </div>`;
     }
 
+    // ── Year tile ──────────────────────────────────────────
+    if (intakeIsYear(intake)) {
+      const subs = subIntakesOf(sid);
+      const totalPitches = proposalsForIntake(sid).length;
+      const isExpanded = state.expandedYearId === sid;
+      const projectRow = '<div class="pp-tile-row"><img src="/ASSETS/Images/Icons/Auditions.svg" class="pp-tile-icon" alt="">' +
+        esc(String(subs.length)) + ' ' + (subs.length === 1 ? 'project' : 'projects') + '</div>';
+      const pitchRow = '<div class="pp-tile-row"><img src="/ASSETS/Images/Icons/Applications.svg" class="pp-tile-icon" alt="">' +
+        esc(String(totalPitches)) + ' ' + (totalPitches === 1 ? 'pitch' : 'pitches') + ' total</div>';
+      const closeDates = subs.map(function(s) { return s.closes_at ? new Date(s.closes_at) : null; }).filter(Boolean);
+      var deadlineHtml = '';
+      if (closeDates.length) {
+        const earliest = new Date(Math.min.apply(null, closeDates));
+        const badgeHtml = '<div class="pp-tile-cal-badge"><div class="pp-tile-cal-badge-month">' + MONTHS_SHORT[earliest.getMonth()] + '</div><div class="pp-tile-cal-badge-day">' + earliest.getDate() + '</div></div>';
+        deadlineHtml = '<div class="pp-tile-deadline-row">' + badgeHtml +
+          '<div class="pp-tile-deadline-info"><div class="pp-tile-deadline-label">First close</div><div class="pp-tile-deadline-date">' + esc(fmtDateTime(earliest.toISOString())) + '</div></div>' +
+          '</div>';
+      }
+      const bodyHtml = '<div class="pp-tile-body-inner">' + projectRow + pitchRow + deadlineHtml + '</div>';
+      const buttonHtml = '<div class="pp-tile-btns">' +
+        '<button class="pp-tile-btn" onclick="event.stopPropagation();openProposalIntakeModal(\'' + sid + '\')">Edit</button>' +
+        '<button class="pp-tile-btn pp-tile-btn--hi" onclick="event.stopPropagation();toggleExpandYear(\'' + sid + '\')">' + (isExpanded ? 'Collapse' : 'Projects') + '</button>' +
+        '</div>';
+      return '<div class="pp-intake-tile pp-intake-tile--year' + (isExpanded ? ' pp-intake-tile--active' : '') + '" onclick="toggleExpandYear(\'' + sid + '\')">' +
+        tileRender({ esc: esc, variant: 'square', mode: 'content', color: tileColor, ink: '#ffffff',
+          style: '--pp-tile-deco-icon:url(' + decoIcon + ');',
+          kicker: 'Year',
+          title: intake.title || intake.season_label || 'Year',
+          bodyHtml: bodyHtml,
+          buttonHtml: buttonHtml,
+        }) + '</div>';
+    }
+
+    // ── Project tile ───────────────────────────────────────
+    const submissionCount = state.proposals.filter(function(item) { return item.intake_id === sid; }).length;
     var ageMin = intake.min_performer_age, ageMax = intake.max_performer_age;
     var ageText = ageMin && ageMax ? 'Ages ' + ageMin + '–' + ageMax : ageMin ? 'Ages ' + ageMin + '+' : ageMax ? 'Up to age ' + ageMax : '';
 
-    // Calendar badge for deadline
     var deadlineHtml = '';
     if (intake.closes_at) {
       var cd = new Date(intake.closes_at);
-      var MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
       var badgeHtml = '<div class="pp-tile-cal-badge"><div class="pp-tile-cal-badge-month">' + MONTHS_SHORT[cd.getMonth()] + '</div><div class="pp-tile-cal-badge-day">' + cd.getDate() + '</div></div>';
       deadlineHtml = '<div class="pp-tile-deadline-row">' + badgeHtml +
         '<div class="pp-tile-deadline-info"><div class="pp-tile-deadline-label">Closes</div><div class="pp-tile-deadline-date">' + esc(fmtDateTime(intake.closes_at)) + '</div></div>' +
@@ -882,14 +948,11 @@
 
     var pitchRow = '<div class="pp-tile-row"><img src="/ASSETS/Images/Icons/Applications.svg" class="pp-tile-icon" alt="">' + esc(String(submissionCount)) + ' ' + (submissionCount === 1 ? 'pitch' : 'pitches') + ' received</div>';
     var ageRow = ageText ? '<div class="pp-tile-row"><img src="/ASSETS/Images/Icons/Performer.svg" class="pp-tile-icon" alt="">' + esc(ageText) + '</div>' : '';
-
     var chips = [];
     if (intake.production_type) chips.push(esc(intake.production_type));
     if (intake.cast_size) chips.push(esc(intake.cast_size));
     var chipsHtml = chips.length ? '<div class="pp-tile-chips">' + chips.map(function(c) { return '<span class="pp-tile-chip">' + c + '</span>'; }).join('') + '</div>' : '';
-
     var bodyHtml = '<div class="pp-tile-body-inner">' + deadlineHtml + pitchRow + ageRow + chipsHtml + '</div>';
-
     var buttonHtml = '<div class="pp-tile-btns">' +
       '<button class="pp-tile-btn" onclick="event.stopPropagation();openProposalIntakeModal(\'' + sid + '\')">Edit</button>' +
       '<button class="pp-tile-btn" onclick="event.stopPropagation();copyProposalIntakeUrl(\'' + sid + '\')">Copy</button>' +
@@ -900,11 +963,10 @@
       tileRender({ esc: esc, variant: 'square', mode: 'content', color: tileColor, ink: '#ffffff',
         style: '--pp-tile-deco-icon:url(' + decoIcon + ');',
         kicker: intake.season_label || '',
-        title: intake.title || 'Season',
+        title: intake.title || 'Project',
         bodyHtml: bodyHtml,
         buttonHtml: buttonHtml,
-      }) +
-      '</div>';
+      }) + '</div>';
   }
 
   function renderProposalsTab() {
@@ -913,9 +975,7 @@
     const hasSeasons = state.intakes.length > 0;
     const proposals = filteredProposals();
     const selectedIntake = state.selectedIntakeId === 'all' ? null : proposalIntakeById(state.selectedIntakeId);
-    const statPool = selectedIntake
-      ? state.proposals.filter(function(p) { return p.intake_id === selectedIntake.id; })
-      : state.proposals;
+    const statPool = proposalsForIntake(state.selectedIntakeId);
     const total = statPool.length;
     const underReviewCt = statPool.filter(function(p) { return p.status === 'under_review'; }).length;
     const shortlistedCt = statPool.filter(function(p) { return p.status === 'shortlisted'; }).length;
@@ -934,23 +994,42 @@
     const statusOptions = Object.keys(STATUS_META).map(function(key) {
       return '<option value="' + key + '"' + (state.filterStatus === key ? ' selected' : '') + '>' + esc(STATUS_META[key].label) + '</option>';
     }).join('');
-    const intakeOptions = ['<option value="all">All Seasons</option>'].concat(
-      state.intakes.map(function(intake) {
-        return `<option value="${intake.id}"${state.selectedIntakeId === intake.id ? ' selected' : ''}>${esc(intake.title)}</option>`;
+    const intakeOptions = ['<option value="all">All</option>'].concat(
+      topLevelIntakes().map(function(year) {
+        const subs = subIntakesOf(year.id);
+        const yearOpt = `<option value="${year.id}"${state.selectedIntakeId === year.id ? ' selected' : ''}>${esc(year.title || year.season_label || 'Year')} (all)</option>`;
+        const subOpts = subs.map(function(s) {
+          return `<option value="${s.id}"${state.selectedIntakeId === s.id ? ' selected' : ''}>&nbsp;&nbsp;${esc(s.title)}</option>`;
+        }).join('');
+        return yearOpt + subOpts;
       })
     ).join('');
 
     root.innerHTML = `
       <div class="opp-shell">
         <div class="pp-page-actions" style="justify-content:flex-end;">
-          <button class="btn-primary" onclick="openProposalIntakeModal()">+ Add Season</button>
+          <button class="btn-primary" onclick="openProposalIntakeModal()">+ Add Year</button>
         </div>
 
         <div class="pp-intake-panel">
           <div>
-          ${state.intakes.length
-            ? `<div class="pp-intake-grid">${state.intakes.map(function(intake, i) { return renderIntakeCard(intake, i); }).join('')}</div>`
+          ${topLevelIntakes().length
+            ? `<div class="pp-intake-grid">${topLevelIntakes().map(function(intake, i) { return renderIntakeCard(intake, i); }).join('')}</div>`
             : statEmptyAction}
+          ${state.expandedYearId ? (function() {
+              const subs = subIntakesOf(state.expandedYearId);
+              const yearIntake = proposalIntakeById(state.expandedYearId);
+              return '<div class="pp-sub-intake-panel">' +
+                '<div class="pp-sub-intake-header">' +
+                  '<div class="pp-sub-intake-year-name">' + esc((yearIntake && yearIntake.title) || 'Year') + ' Projects</div>' +
+                  '<button class="btn-secondary" style="font-size:0.8rem;padding:0.45rem 0.9rem;" onclick="openProposalIntakeModal(null,\'' + state.expandedYearId + '\')">+ Add Project</button>' +
+                '</div>' +
+                (subs.length
+                  ? '<div class="pp-intake-grid">' + subs.map(function(s, i) { return renderIntakeCard(s, i); }).join('') + '</div>'
+                  : '<div class="pp-sub-intake-empty">No projects yet. Add one to get started.</div>'
+                ) +
+                '</div>';
+            })() : ''}
         </div>
 
         ${hasSeasons ? renderSeasonOverview(selectedIntake) : ''}
@@ -1327,24 +1406,50 @@
     return intake;
   }
 
-  function openProposalIntakeModal(id) {
+  function openProposalIntakeModal(id, parentId) {
     ensureModalShell();
     const intake = id ? proposalIntakeById(id) : null;
+    const resolvedParentId = parentId || intake?.parent_id || '';
+    const isProject = !!(resolvedParentId || (intake && intake.parent_id));
     const modal = document.getElementById('proposal-intake-modal');
     modal.dataset.intakeId = id || '';
-    document.getElementById('proposal-intake-modal-title').textContent = intake ? 'Edit Season' : 'Add Season';
+    modal.dataset.parentId = resolvedParentId;
+
+    // Show/hide sections
+    document.getElementById('ppi-project-section').style.display = isProject ? '' : 'none';
+    document.getElementById('ppi-criteria-section').style.display = isProject ? '' : 'none';
+
+    // Labels and titles
+    document.getElementById('proposal-intake-modal-title').textContent = intake
+      ? (isProject ? 'Edit Project' : 'Edit Year')
+      : (isProject ? 'Add Project' : 'Add Year');
+    document.getElementById('proposal-intake-modal-sub').textContent = isProject
+      ? 'Set up a project with its own pitch link, passcode, and criteria.'
+      : 'Group projects under a year to keep everything organised.';
+    document.getElementById('ppi-section-head').textContent = isProject ? 'Project Setup' : 'Year Setup';
+    document.getElementById('ppi-title-label').textContent = isProject ? 'Project Name' : 'Year';
+    document.getElementById('ppi-save-btn').textContent = intake
+      ? (isProject ? 'Save Project' : 'Save Year')
+      : (isProject ? 'Create Project' : 'Create Year');
+
+    // Placeholder
+    document.getElementById('ppi-title').placeholder = isProject ? 'Kids, Youth, Workshop...' : '2027';
+
     document.getElementById('proposal-intake-form-error').classList.remove('visible');
     document.getElementById('proposal-intake-form-error').textContent = '';
+    document.getElementById('ppi-parent-id').value = resolvedParentId;
     document.getElementById('ppi-title').value = intake?.title || '';
-    document.getElementById('ppi-season-label').value = intake?.season_label || '';
     document.getElementById('ppi-description').value = intake?.description || '';
-    document.getElementById('ppi-access-code').value = intake?.access_code || generateAccessCode();
-    document.getElementById('ppi-closes-at').value = fmtDateTimeInput(intake?.closes_at || '');
-    document.getElementById('ppi-is-open').value = intake?.is_open === false ? 'no' : 'yes';
-    document.getElementById('ppi-production-type').value = intake?.production_type || '';
-    document.getElementById('ppi-min-age').value = intake?.min_performer_age ?? '';
-    document.getElementById('ppi-max-age').value = intake?.max_performer_age ?? '';
-    document.getElementById('ppi-cast-size').value = intake?.cast_size || '';
+
+    if (isProject) {
+      document.getElementById('ppi-access-code').value = intake?.access_code || generateAccessCode();
+      document.getElementById('ppi-closes-at').value = fmtDateTimeInput(intake?.closes_at || '');
+      document.getElementById('ppi-is-open').value = intake?.is_open === false ? 'no' : 'yes';
+      document.getElementById('ppi-production-type').value = intake?.production_type || '';
+      document.getElementById('ppi-min-age').value = intake?.min_performer_age ?? '';
+      document.getElementById('ppi-max-age').value = intake?.max_performer_age ?? '';
+      document.getElementById('ppi-cast-size').value = intake?.cast_size || '';
+    }
     modal.classList.add('open');
   }
 
@@ -1355,24 +1460,32 @@
   async function saveProposalIntakeForm() {
     const modal = document.getElementById('proposal-intake-modal');
     const intakeId = modal?.dataset?.intakeId || '';
+    const parentId = modal?.dataset?.parentId || '';
+    const isProject = !!parentId || !!(intakeId && proposalIntakeById(intakeId)?.parent_id);
     const errorEl = document.getElementById('proposal-intake-form-error');
+    const title = document.getElementById('ppi-title').value.trim();
+    const parentIntake = parentId ? proposalIntakeById(parentId) : null;
+    const seasonLabel = isProject
+      ? (parentIntake?.season_label || parentIntake?.title || null)
+      : (title || null);
     const payload = {
       organization_id: currentOrg().id,
-      title: document.getElementById('ppi-title').value.trim(),
-      season_label: document.getElementById('ppi-season-label').value.trim() || null,
+      title: title,
+      season_label: seasonLabel,
       description: document.getElementById('ppi-description').value.trim() || null,
-      closes_at: document.getElementById('ppi-closes-at').value ? new Date(document.getElementById('ppi-closes-at').value).toISOString() : null,
-      is_open: document.getElementById('ppi-is-open').value === 'yes',
-      production_type: document.getElementById('ppi-production-type').value || null,
-      min_performer_age: document.getElementById('ppi-min-age').value !== '' ? parseInt(document.getElementById('ppi-min-age').value, 10) : null,
-      max_performer_age: document.getElementById('ppi-max-age').value !== '' ? parseInt(document.getElementById('ppi-max-age').value, 10) : null,
-      cast_size: document.getElementById('ppi-cast-size').value || null,
+      parent_id: isProject ? (parentId || proposalIntakeById(intakeId)?.parent_id || null) : null,
+      closes_at: isProject && document.getElementById('ppi-closes-at').value ? new Date(document.getElementById('ppi-closes-at').value).toISOString() : null,
+      is_open: isProject ? document.getElementById('ppi-is-open').value === 'yes' : true,
+      production_type: isProject ? (document.getElementById('ppi-production-type').value || null) : null,
+      min_performer_age: isProject && document.getElementById('ppi-min-age').value !== '' ? parseInt(document.getElementById('ppi-min-age').value, 10) : null,
+      max_performer_age: isProject && document.getElementById('ppi-max-age').value !== '' ? parseInt(document.getElementById('ppi-max-age').value, 10) : null,
+      cast_size: isProject ? (document.getElementById('ppi-cast-size').value || null) : null,
     };
-    if (!intakeId) {
+    if (!intakeId && isProject) {
       payload.access_code = document.getElementById('ppi-access-code').value.trim();
     }
     if (!payload.title) {
-      errorEl.textContent = 'Season title is required.';
+      errorEl.textContent = isProject ? 'Project name is required.' : 'Year is required.';
       errorEl.classList.add('visible');
       return;
     }
@@ -1393,7 +1506,7 @@
       await loadProductionProposalIntakes();
       state.selectedIntakeId = saved.id;
       renderProposalsTab();
-      showToast(intakeId ? 'Season updated.' : 'Season created.');
+      showToast(intakeId ? (isProject ? 'Project updated.' : 'Year updated.') : (isProject ? 'Project created.' : 'Year created.'));
     } catch (error) {
       console.error('[BTS] save proposal intake failed', error);
       errorEl.textContent = error.message || 'Could not save season.';
@@ -1403,6 +1516,12 @@
 
   function setProposalIntakeFilter(value) {
     state.selectedIntakeId = value || 'all';
+    renderProposalsTab();
+  }
+
+  function toggleExpandYear(yearId) {
+    state.expandedYearId = state.expandedYearId === yearId ? null : yearId;
+    if (state.expandedYearId) state.selectedIntakeId = yearId;
     renderProposalsTab();
   }
 
