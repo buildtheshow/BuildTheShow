@@ -764,7 +764,7 @@
           ${renderIntakeMeta('Pitches received', submissionCount)}
         </div>
         <div class="pp-intake-actions">
-          <button class="pp-card-btn" onclick="copyProposalIntakeInvite('${intake.id}')">Copy Link</button>
+          <button class="pp-card-btn" onclick="copyProposalIntakeUrl('${intake.id}')">Copy Link</button>
           <button class="pp-card-btn primary" onclick="setProposalIntakeFilter('${intake.id}')">View Pitches</button>
         </div>
       </div>
@@ -1320,6 +1320,23 @@
     }
   }
 
+  async function copyProposalIntakeUrl(intakeId) {
+    try {
+      const intake = selectedIntakeOrThrow(intakeId);
+      const url = buildProposalShareUrl(intake);
+      if (!url) throw new Error('Could not build a share URL for this season.');
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        fallbackCopyText(url);
+      }
+      showToast('Season link copied.');
+    } catch (error) {
+      console.error('[BTS] copy proposal intake url failed', error);
+      showToast(error.message || 'Could not copy the season link.', true);
+    }
+  }
+
   function openNewProposalTab() {
     openProposalIntakeModal();
   }
@@ -1695,6 +1712,7 @@
   window.setProposalIntakeFilter = setProposalIntakeFilter;
   window.openProposalIntakeShareTab = openProposalIntakeShareTab;
   window.copyProposalIntakeInvite = copyProposalIntakeInvite;
+  window.copyProposalIntakeUrl = copyProposalIntakeUrl;
   window.saveProposalForm = saveProposalForm;
   window.selectProductionProposal = selectProductionProposal;
   window.toggleProposalCompare = toggleProposalCompare;
