@@ -429,30 +429,30 @@
           <div class="opp-modal intake-modal-shell">
             <div class="opp-modal-head">
               <div>
-                <div class="opp-panel-title" id="proposal-intake-modal-title">Add Year</div>
-                <div class="opp-panel-copy" id="proposal-intake-modal-sub">Group projects under a year to keep everything organised.</div>
+                <div class="opp-panel-title" id="proposal-intake-modal-title">Add Season</div>
+                <div class="opp-panel-copy">Set up a season, share its pitch link, and collect proposals.</div>
               </div>
               <button type="button" class="btn-secondary" onclick="closeProposalIntakeModal()">Close</button>
             </div>
             <div class="opp-modal-body">
-              <input type="hidden" id="ppi-parent-id" />
               <div id="proposal-intake-form-error" class="form-error-msg"></div>
               <div class="opp-form-section">
-                <h3 id="ppi-section-head">Year Setup</h3>
+                <h3>Season Details</h3>
                 <div class="opp-form-grid">
-                  <div class="form-group"><label class="form-label" id="ppi-title-label">Year</label><input class="form-input" id="ppi-title" type="text" placeholder="2027" /></div>
-                  <div class="form-group opp-form-span-2"><label class="form-label">Description</label><textarea class="form-textarea" id="ppi-description" placeholder="Tell people what kind of shows you want pitched this year."></textarea></div>
+                  <div class="form-group"><label class="form-label">Season Name</label><input class="form-input" id="ppi-title" type="text" placeholder="Summer Kids, Youth Workshop..." /></div>
+                  <div class="form-group"><label class="form-label">Year</label><input class="form-input" id="ppi-season-year" type="number" min="2000" max="2100" placeholder="2026" /></div>
+                  <div class="form-group opp-form-span-2"><label class="form-label">Description</label><textarea class="form-textarea" id="ppi-description" placeholder="Tell people what kind of shows you want pitched this season."></textarea></div>
                 </div>
               </div>
-              <div class="opp-form-section" id="ppi-project-section">
-                <h3>Project Setup</h3>
+              <div class="opp-form-section">
+                <h3>Pitch Settings</h3>
                 <div class="opp-form-grid">
                   <div class="form-group"><label class="form-label">Season Passcode</label><input class="form-input" id="ppi-access-code" type="text" readonly style="background:rgba(26,21,48,0.04);color:rgba(26,21,48,0.5);cursor:default;" /></div>
                   <div class="form-group"><label class="form-label">Pitch Closes</label><input class="form-input" id="ppi-closes-at" type="datetime-local" /></div>
                   <div class="form-group"><label class="form-label">Accepting Pitches?</label><select class="form-select" id="ppi-is-open"><option value="yes">Yes</option><option value="no">No</option></select></div>
                 </div>
               </div>
-              <div class="opp-form-section" id="ppi-criteria-section">
+              <div class="opp-form-section">
                 <h3>What We're Looking For</h3>
                 <div class="opp-form-grid">
                   <div class="form-group">
@@ -471,7 +471,7 @@
                       <span style="font-size:0.8rem;color:rgba(26,21,48,0.4);flex-shrink:0;">to</span>
                       <input class="form-input" id="ppi-max-age" type="number" min="0" max="99" placeholder="Max" style="width:80px;" />
                     </div>
-                    <div style="font-size:0.65rem;color:rgba(26,21,48,0.4);margin-top:0.3rem;">Leave blank if no minimum or maximum.</div>
+                    <div style="font-size:0.65rem;color:rgba(26,21,48,0.4);margin-top:0.3rem;">Leave blank for no restriction.</div>
                   </div>
                   <div class="form-group">
                     <label class="form-label">Ideal Cast Size</label>
@@ -487,7 +487,7 @@
               </div>
               <div class="opp-form-actions">
                 <button type="button" class="btn-secondary" onclick="closeProposalIntakeModal()">Cancel</button>
-                <button type="button" class="btn-primary" id="ppi-save-btn" onclick="saveProposalIntakeForm()">Save Year</button>
+                <button type="button" class="btn-primary" id="ppi-save-btn" onclick="saveProposalIntakeForm()">Save Season</button>
               </div>
             </div>
           </div>
@@ -870,36 +870,7 @@
     const statusKey = proposalIntakeStatus(intake);
     const statusMeta = INTAKE_STATUS_META[statusKey] || INTAKE_STATUS_META.closed;
     const statusPill = '<span class="opp-status-pill" style="color:#fff;background:rgba(255,255,255,0.22);font-size:0.68rem;font-weight:800;padding:0.2rem 0.55rem;border-radius:99px;">' + esc(statusMeta.label) + '</span>';
-
-    // ── Year tile ──────────────────────────────────────────
-    if (intakeIsYear(intake)) {
-      const subs = subIntakesOf(sid);
-      const totalPitches = proposalsForIntake(sid).length;
-      const isExpanded = state.expandedYearId === sid;
-      const closeDates = subs.map(function(s) { return s.closes_at ? new Date(s.closes_at) : null; }).filter(Boolean);
-      const earliestClose = closeDates.length ? new Date(Math.min.apply(null, closeDates)) : null;
-      const infoRow =
-        '<div class="pp-sc-info-row">' +
-          '<div class="pp-sc-info-cell"><img class="pp-sc-info-icon" src="/ASSETS/Images/Icons/Auditions.svg" alt=""><div class="pp-sc-info-body"><div class="pp-sc-info-label">Projects</div><div class="pp-sc-info-value">' + esc(String(subs.length)) + '</div></div></div>' +
-          '<div class="pp-sc-info-cell"><img class="pp-sc-info-icon" src="/ASSETS/Images/Icons/Applications.svg" alt=""><div class="pp-sc-info-body"><div class="pp-sc-info-label">Proposals</div><div class="pp-sc-info-value">' + esc(String(totalPitches)) + '</div></div></div>' +
-          '<div class="pp-sc-info-cell"><img class="pp-sc-info-icon" src="/ASSETS/Images/Icons/calendar-date.svg" alt=""><div class="pp-sc-info-body"><div class="pp-sc-info-label">First Close</div><div class="pp-sc-info-value">' + esc(earliestClose ? fmtDateTime(earliestClose.toISOString()) : 'Not set') + '</div></div></div>' +
-        '</div>';
-      const footer =
-        '<div class="pp-sc-footer">' +
-          '<button class="pp-sc-action" onclick="event.stopPropagation();openProposalIntakeModal(\'' + sid + '\')"><img class="pp-sc-action-icon" src="/ASSETS/Images/Icons/edit-pencil.svg" alt="">Edit</button>' +
-          '<div class="pp-sc-divider"></div>' +
-          '<button class="pp-sc-action pp-sc-action--primary" onclick="event.stopPropagation();toggleExpandYear(\'' + sid + '\')">' + (isExpanded ? 'Collapse' : 'Projects') + '</button>' +
-        '</div>';
-      return '<div class="pp-season-card pp-season-card--year' + (isExpanded ? ' pp-season-card--active' : '') + '" style="background:' + tileColor + ';" onclick="toggleExpandYear(\'' + sid + '\')">' +
-        '<img class="pp-sc-deco" src="' + esc(decoIcon) + '" alt="">' +
-        '<div class="pp-sc-top">' + statusPill + '<button class="pp-sc-menu-btn" onclick="event.stopPropagation();openProposalIntakeModal(\'' + sid + '\')">&#8942;</button></div>' +
-        '<div class="pp-sc-year">Year</div>' +
-        '<div class="pp-sc-title">' + esc(intake.title || intake.season_label || 'Year') + '</div>' +
-        infoRow + footer + '</div>';
-    }
-
-    // ── Project tile ───────────────────────────────────────
-    const submissionCount = state.proposals.filter(function(item) { return item.intake_id === sid; }).length;
+    const submissionCount = state.proposals.filter(function(p) { return p.intake_id === sid; }).length;
     const closesVal = intake.closes_at ? esc(fmtDateTime(intake.closes_at)) : 'Not set';
     const publicPageLabel = statusKey === 'open' ? 'View' : 'Preview';
     const infoRow =
@@ -920,7 +891,7 @@
       '<img class="pp-sc-deco" src="' + esc(decoIcon) + '" alt="">' +
       '<div class="pp-sc-top">' + statusPill + '<button class="pp-sc-menu-btn" onclick="event.stopPropagation();openProposalIntakeModal(\'' + sid + '\')">&#8942;</button></div>' +
       '<div class="pp-sc-year">' + esc(intake.season_label || '') + '</div>' +
-      '<div class="pp-sc-title">' + esc(intake.title || 'Project') + '</div>' +
+      '<div class="pp-sc-title">' + esc(intake.title || 'Season') + '</div>' +
       infoRow + footer + '</div>';
   }
 
@@ -949,14 +920,10 @@
     const statusOptions = Object.keys(STATUS_META).map(function(key) {
       return '<option value="' + key + '"' + (state.filterStatus === key ? ' selected' : '') + '>' + esc(STATUS_META[key].label) + '</option>';
     }).join('');
-    const intakeOptions = ['<option value="all">All</option>'].concat(
-      topLevelIntakes().map(function(year) {
-        const subs = subIntakesOf(year.id);
-        const yearOpt = `<option value="${year.id}"${state.selectedIntakeId === year.id ? ' selected' : ''}>${esc(year.title || year.season_label || 'Year')} (all)</option>`;
-        const subOpts = subs.map(function(s) {
-          return `<option value="${s.id}"${state.selectedIntakeId === s.id ? ' selected' : ''}>&nbsp;&nbsp;${esc(s.title)}</option>`;
-        }).join('');
-        return yearOpt + subOpts;
+    const intakeOptions = ['<option value="all">All Seasons</option>'].concat(
+      state.intakes.map(function(intake) {
+        const label = [intake.season_label, intake.title].filter(Boolean).join(' — ');
+        return '<option value="' + intake.id + '"' + (state.selectedIntakeId === intake.id ? ' selected' : '') + '>' + esc(label) + '</option>';
       })
     ).join('');
 
@@ -964,23 +931,9 @@
       <div class="opp-shell">
         <div class="pp-intake-panel">
           <div>
-          ${topLevelIntakes().length
-            ? `<div class="pp-intake-grid">${topLevelIntakes().map(function(intake, i) { return renderIntakeCard(intake, i); }).join('')}</div>`
+          ${state.intakes.length
+            ? '<div class="pp-intake-grid">' + state.intakes.map(function(intake, i) { return renderIntakeCard(intake, i); }).join('') + '</div>'
             : statEmptyAction}
-          ${state.expandedYearId ? (function() {
-              const subs = subIntakesOf(state.expandedYearId);
-              const yearIntake = proposalIntakeById(state.expandedYearId);
-              return '<div class="pp-sub-intake-panel">' +
-                '<div class="pp-sub-intake-header">' +
-                  '<div class="pp-sub-intake-year-name">' + esc((yearIntake && yearIntake.title) || 'Year') + ' Projects</div>' +
-                  '<button class="btn-secondary" style="font-size:0.8rem;padding:0.45rem 0.9rem;" onclick="openProposalIntakeModal(null,\'' + state.expandedYearId + '\')">+ Add Project</button>' +
-                '</div>' +
-                (subs.length
-                  ? '<div class="pp-intake-grid">' + subs.map(function(s, i) { return renderIntakeCard(s, i); }).join('') + '</div>'
-                  : '<div class="pp-sub-intake-empty">No projects yet. Add one to get started.</div>'
-                ) +
-                '</div>';
-            })() : ''}
         </div>
 
         ${hasSeasons ? renderSeasonOverview(selectedIntake) : ''}
@@ -1357,50 +1310,28 @@
     return intake;
   }
 
-  function openProposalIntakeModal(id, parentId) {
+  function openProposalIntakeModal(id) {
     ensureModalShell();
     const intake = id ? proposalIntakeById(id) : null;
-    const resolvedParentId = parentId || intake?.parent_id || '';
-    const isProject = !!(resolvedParentId || (intake && intake.parent_id));
     const modal = document.getElementById('proposal-intake-modal');
     modal.dataset.intakeId = id || '';
-    modal.dataset.parentId = resolvedParentId;
 
-    // Show/hide sections
-    document.getElementById('ppi-project-section').style.display = isProject ? '' : 'none';
-    document.getElementById('ppi-criteria-section').style.display = isProject ? '' : 'none';
-
-    // Labels and titles
-    document.getElementById('proposal-intake-modal-title').textContent = intake
-      ? (isProject ? 'Edit Project' : 'Edit Year')
-      : (isProject ? 'Add Project' : 'Add Year');
-    document.getElementById('proposal-intake-modal-sub').textContent = isProject
-      ? 'Set up a project with its own pitch link, passcode, and criteria.'
-      : 'Group projects under a year to keep everything organised.';
-    document.getElementById('ppi-section-head').textContent = isProject ? 'Project Setup' : 'Year Setup';
-    document.getElementById('ppi-title-label').textContent = isProject ? 'Project Name' : 'Year';
-    document.getElementById('ppi-save-btn').textContent = intake
-      ? (isProject ? 'Save Project' : 'Save Year')
-      : (isProject ? 'Create Project' : 'Create Year');
-
-    // Placeholder
-    document.getElementById('ppi-title').placeholder = isProject ? 'Kids, Youth, Workshop...' : '2027';
-
+    document.getElementById('proposal-intake-modal-title').textContent = intake ? 'Edit Season' : 'Add Season';
+    document.getElementById('ppi-save-btn').textContent = intake ? 'Save Season' : 'Create Season';
     document.getElementById('proposal-intake-form-error').classList.remove('visible');
     document.getElementById('proposal-intake-form-error').textContent = '';
-    document.getElementById('ppi-parent-id').value = resolvedParentId;
-    document.getElementById('ppi-title').value = intake?.title || '';
-    document.getElementById('ppi-description').value = intake?.description || '';
 
-    if (isProject) {
-      document.getElementById('ppi-access-code').value = intake?.access_code || generateAccessCode();
-      document.getElementById('ppi-closes-at').value = fmtDateTimeInput(intake?.closes_at || '');
-      document.getElementById('ppi-is-open').value = intake?.is_open === false ? 'no' : 'yes';
-      document.getElementById('ppi-production-type').value = intake?.production_type || '';
-      document.getElementById('ppi-min-age').value = intake?.min_performer_age ?? '';
-      document.getElementById('ppi-max-age').value = intake?.max_performer_age ?? '';
-      document.getElementById('ppi-cast-size').value = intake?.cast_size || '';
-    }
+    document.getElementById('ppi-title').value = intake?.title || '';
+    document.getElementById('ppi-season-year').value = intake?.season_label || '';
+    document.getElementById('ppi-description').value = intake?.description || '';
+    document.getElementById('ppi-access-code').value = intake?.access_code || generateProposalToken().slice(0, 8).toLowerCase();
+    document.getElementById('ppi-closes-at').value = fmtDateTimeInput(intake?.closes_at || '');
+    document.getElementById('ppi-is-open').value = intake?.is_open === false ? 'no' : 'yes';
+    document.getElementById('ppi-production-type').value = intake?.production_type || '';
+    document.getElementById('ppi-min-age').value = intake?.min_performer_age ?? '';
+    document.getElementById('ppi-max-age').value = intake?.max_performer_age ?? '';
+    document.getElementById('ppi-cast-size').value = intake?.cast_size || '';
+
     modal.classList.add('open');
   }
 
@@ -1411,36 +1342,29 @@
   async function saveProposalIntakeForm() {
     const modal = document.getElementById('proposal-intake-modal');
     const intakeId = modal?.dataset?.intakeId || '';
-    const parentId = modal?.dataset?.parentId || '';
-    const isProject = !!parentId || !!(intakeId && proposalIntakeById(intakeId)?.parent_id);
     const errorEl = document.getElementById('proposal-intake-form-error');
     const title = document.getElementById('ppi-title').value.trim();
-    const parentIntake = parentId ? proposalIntakeById(parentId) : null;
-    const seasonLabel = isProject
-      ? (parentIntake?.season_label || parentIntake?.title || null)
-      : (title || null);
+    const yearVal = document.getElementById('ppi-season-year').value.trim();
+    if (!title) {
+      errorEl.textContent = 'Season name is required.';
+      errorEl.classList.add('visible');
+      return;
+    }
     const payload = {
       organization_id: currentOrg().id,
       title: title,
-      season_label: seasonLabel,
+      season_label: yearVal || null,
       description: document.getElementById('ppi-description').value.trim() || null,
-      parent_id: isProject ? (parentId || proposalIntakeById(intakeId)?.parent_id || null) : null,
-      closes_at: isProject && document.getElementById('ppi-closes-at').value ? new Date(document.getElementById('ppi-closes-at').value).toISOString() : null,
-      is_open: isProject ? document.getElementById('ppi-is-open').value === 'yes' : true,
-      production_type: isProject ? (document.getElementById('ppi-production-type').value || null) : null,
-      min_performer_age: isProject && document.getElementById('ppi-min-age').value !== '' ? parseInt(document.getElementById('ppi-min-age').value, 10) : null,
-      max_performer_age: isProject && document.getElementById('ppi-max-age').value !== '' ? parseInt(document.getElementById('ppi-max-age').value, 10) : null,
-      cast_size: isProject ? (document.getElementById('ppi-cast-size').value || null) : null,
+      parent_id: null,
+      closes_at: document.getElementById('ppi-closes-at').value ? new Date(document.getElementById('ppi-closes-at').value).toISOString() : null,
+      is_open: document.getElementById('ppi-is-open').value === 'yes',
+      production_type: document.getElementById('ppi-production-type').value || null,
+      min_performer_age: document.getElementById('ppi-min-age').value !== '' ? parseInt(document.getElementById('ppi-min-age').value, 10) : null,
+      max_performer_age: document.getElementById('ppi-max-age').value !== '' ? parseInt(document.getElementById('ppi-max-age').value, 10) : null,
+      cast_size: document.getElementById('ppi-cast-size').value || null,
     };
     if (!intakeId) {
-      payload.access_code = isProject
-        ? document.getElementById('ppi-access-code').value.trim()
-        : generateProposalToken().slice(0, 8).toLowerCase();
-    }
-    if (!payload.title) {
-      errorEl.textContent = isProject ? 'Project name is required.' : 'Year is required.';
-      errorEl.classList.add('visible');
-      return;
+      payload.access_code = document.getElementById('ppi-access-code').value.trim();
     }
     try {
       let saved;
@@ -1459,7 +1383,7 @@
       await loadProductionProposalIntakes();
       state.selectedIntakeId = saved.id;
       renderProposalsTab();
-      showToast(intakeId ? (isProject ? 'Project updated.' : 'Year updated.') : (isProject ? 'Project created.' : 'Year created.'));
+      showToast(intakeId ? 'Season updated.' : 'Season created.');
     } catch (error) {
       console.error('[BTS] save proposal intake failed', error);
       errorEl.textContent = error.message || 'Could not save season.';
