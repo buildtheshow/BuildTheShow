@@ -876,8 +876,9 @@
     var bodyHtml = '<div class="pp-tile-body-inner">' + deadlineHtml + pitchRow + ageRow + chipsHtml + '</div>';
 
     var buttonHtml = '<div class="pp-tile-btns">' +
-      '<button class="pp-tile-btn" onclick="event.stopPropagation();copyProposalIntakeUrl(\'' + sid + '\')">Copy Link</button>' +
-      '<button class="pp-tile-btn pp-tile-btn--hi" onclick="event.stopPropagation();setProposalIntakeFilter(\'' + sid + '\')">View Pitches</button>' +
+      '<button class="pp-tile-btn" onclick="event.stopPropagation();openProposalIntakeModal(\'' + sid + '\')">Edit</button>' +
+      '<button class="pp-tile-btn" onclick="event.stopPropagation();copyProposalIntakeUrl(\'' + sid + '\')">Copy</button>' +
+      '<button class="pp-tile-btn pp-tile-btn--hi" onclick="event.stopPropagation();setProposalIntakeFilter(\'' + sid + '\')">View</button>' +
       '</div>';
 
     return '<div class="pp-intake-tile' + (active ? ' pp-intake-tile--active' : '') + '" onclick="setProposalIntakeFilter(\'' + sid + '\')">' +
@@ -930,12 +931,7 @@
         </div>
 
         <div class="pp-intake-panel">
-          <div class="pp-intake-head">
-            <div>
-              <h2 class="pp-section-label">Seasons</h2>
-            </div>
-            <div style="display:flex;gap:0.55rem;flex-wrap:wrap;"></div>
-          </div>
+          <div>
           ${state.intakes.length
             ? `<div class="pp-intake-grid">${state.intakes.map(renderIntakeCard).join('')}</div>`
             : statEmptyAction}
