@@ -436,27 +436,45 @@
               </div>
               <button type="button" class="btn-secondary" onclick="closeProposalIntakeModal()">Close</button>
             </div>
-            <div class="opp-modal-body" style="padding-top:0.75rem;">
+            <div class="opp-modal-body" style="padding-top:0.6rem;">
               <div id="proposal-intake-form-error" class="form-error-msg"></div>
-              <div class="opp-form-grid three" style="gap:0.65rem 1rem;margin-bottom:0.9rem;">
-                <div class="form-group" style="margin:0;"><label class="form-label">Season Name</label><input class="form-input" id="ppi-title" type="text" placeholder="Summer, Fall..." /></div>
-                <div class="form-group" style="margin:0;"><label class="form-label">Year</label><input class="form-input" id="ppi-season-year" type="number" min="2000" max="2100" placeholder="2026" /></div>
-                <div class="form-group" style="margin:0;"><label class="form-label">Accepting Pitches?</label><select class="form-select" id="ppi-is-open"><option value="yes">Yes</option><option value="no">No</option></select></div>
-                <div class="form-group" style="margin:0;"><label class="form-label">Passcode</label><input class="form-input" id="ppi-access-code" type="text" readonly style="background:rgba(26,21,48,0.04);color:rgba(26,21,48,0.5);cursor:default;" /></div>
-                <div class="form-group" style="margin:0;"><label class="form-label">Pitch Closes</label><input class="form-input" id="ppi-closes-at" type="datetime-local" /></div>
-                <div class="form-group" style="margin:0;"><label class="form-label">Description</label><textarea class="form-textarea" id="ppi-description" placeholder="Optional notes for pitchers." style="height:38px;resize:none;"></textarea></div>
+
+              <!-- step pills -->
+              <div style="display:flex;gap:0.4rem;margin-bottom:1rem;">
+                <div id="ppi-step-pill-1" style="flex:1;height:4px;border-radius:99px;background:#572e88;transition:background 0.2s;"></div>
+                <div id="ppi-step-pill-2" style="flex:1;height:4px;border-radius:99px;background:rgba(87,46,136,0.15);transition:background 0.2s;"></div>
               </div>
-              <div style="border-top:1px solid rgba(87,46,136,0.1);padding-top:0.75rem;margin-bottom:0.75rem;">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.55rem;">
-                  <div style="font-size:0.72rem;font-weight:900;color:rgba(26,21,48,0.45);text-transform:uppercase;letter-spacing:0.06em;">Projects</div>
-                  <button type="button" class="btn-secondary" style="font-size:0.75rem;padding:0.3rem 0.75rem;" onclick="addProposalProject()">+ Add Project</button>
+
+              <!-- step 1: season info -->
+              <div id="ppi-step-1">
+                <div style="display:grid;grid-template-columns:1fr auto;gap:0.65rem 1rem;margin-bottom:0.65rem;">
+                  <div class="form-group" style="margin:0;"><label class="form-label">Season Name</label><input class="form-input" id="ppi-title" type="text" placeholder="Summer, Fall, Spring..." /></div>
+                  <div class="form-group" style="margin:0;width:100px;"><label class="form-label">Year</label><input class="form-input" id="ppi-season-year" type="number" min="2000" max="2100" placeholder="2026" /></div>
                 </div>
-                <div id="ppi-projects-list" style="display:flex;flex-direction:column;gap:0.45rem;"></div>
-                <div id="ppi-projects-empty" style="font-size:0.82rem;color:rgba(26,21,48,0.38);padding:0.4rem 0;">No projects yet — add one to give pitchers a target.</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.65rem 1rem;margin-bottom:0.65rem;">
+                  <div class="form-group" style="margin:0;"><label class="form-label">Pitch Closes</label><input class="form-input" id="ppi-closes-at" type="datetime-local" /></div>
+                  <div class="form-group" style="margin:0;"><label class="form-label">Accepting Pitches?</label><select class="form-select" id="ppi-is-open"><option value="yes">Yes</option><option value="no">No</option></select></div>
+                  <div class="form-group" style="margin:0;"><label class="form-label">Passcode</label><input class="form-input" id="ppi-access-code" type="text" readonly style="background:rgba(26,21,48,0.04);color:rgba(26,21,48,0.5);cursor:default;" /></div>
+                  <div class="form-group" style="margin:0;"><label class="form-label">Description <span style="font-weight:500;opacity:0.5;">(optional)</span></label><input class="form-input" id="ppi-description" type="text" placeholder="Any notes for pitchers." /></div>
+                </div>
+                <div class="opp-form-actions" style="padding-top:0.25rem;">
+                  <button type="button" class="btn-secondary" onclick="closeProposalIntakeModal()">Cancel</button>
+                  <button type="button" class="btn-primary" onclick="proposalIntakeNextStep()">Next: Projects</button>
+                </div>
               </div>
-              <div class="opp-form-actions" style="padding-top:0.5rem;">
-                <button type="button" class="btn-secondary" onclick="closeProposalIntakeModal()">Cancel</button>
-                <button type="button" class="btn-primary" id="ppi-save-btn" onclick="saveProposalIntakeForm()">Save Season</button>
+
+              <!-- step 2: projects -->
+              <div id="ppi-step-2" style="display:none;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.55rem;">
+                  <div style="font-size:0.78rem;color:rgba(26,21,48,0.5);">Add the projects pitchers can target. Leave empty if this season takes open pitches.</div>
+                  <button type="button" class="btn-secondary" style="font-size:0.75rem;padding:0.3rem 0.75rem;flex-shrink:0;margin-left:1rem;" onclick="addProposalProject()">+ Add Project</button>
+                </div>
+                <div id="ppi-projects-list" style="display:flex;flex-direction:column;gap:0.45rem;min-height:2rem;"></div>
+                <div id="ppi-projects-empty" style="font-size:0.82rem;color:rgba(26,21,48,0.35);padding:0.5rem 0;">No projects added — pitchers will submit as a general pitch.</div>
+                <div class="opp-form-actions" style="padding-top:0.75rem;">
+                  <button type="button" class="btn-secondary" onclick="proposalIntakePrevStep()">Back</button>
+                  <button type="button" class="btn-primary" id="ppi-save-btn" onclick="saveProposalIntakeForm()">Save Season</button>
+                </div>
               </div>
             </div>
           </div>
@@ -1295,6 +1313,27 @@
     '</div>';
   }
 
+  function proposalIntakeNextStep() {
+    const title = document.getElementById('ppi-title').value.trim();
+    const errorEl = document.getElementById('proposal-intake-form-error');
+    if (!title) {
+      errorEl.textContent = 'Season name is required.';
+      errorEl.classList.add('visible');
+      return;
+    }
+    errorEl.classList.remove('visible');
+    errorEl.textContent = '';
+    document.getElementById('ppi-step-1').style.display = 'none';
+    document.getElementById('ppi-step-2').style.display = '';
+    document.getElementById('ppi-step-pill-2').style.background = '#572e88';
+  }
+
+  function proposalIntakePrevStep() {
+    document.getElementById('ppi-step-2').style.display = 'none';
+    document.getElementById('ppi-step-1').style.display = '';
+    document.getElementById('ppi-step-pill-2').style.background = 'rgba(87,46,136,0.15)';
+  }
+
   function syncProjectsEmpty() {
     const list = document.getElementById('ppi-projects-list');
     const empty = document.getElementById('ppi-projects-empty');
@@ -1327,6 +1366,11 @@
     document.getElementById('ppi-save-btn').textContent = intake ? 'Save Season' : 'Create Season';
     document.getElementById('proposal-intake-form-error').classList.remove('visible');
     document.getElementById('proposal-intake-form-error').textContent = '';
+
+    // always start on step 1
+    document.getElementById('ppi-step-1').style.display = '';
+    document.getElementById('ppi-step-2').style.display = 'none';
+    document.getElementById('ppi-step-pill-2').style.background = 'rgba(87,46,136,0.15)';
 
     document.getElementById('ppi-title').value = intake?.title || '';
     document.getElementById('ppi-season-year').value = intake?.season_label || '';
@@ -1882,6 +1926,8 @@
   window.deleteProposalIntake = deleteProposalIntake;
   window.addProposalProject = addProposalProject;
   window.removeProposalProject = removeProposalProject;
+  window.proposalIntakeNextStep = proposalIntakeNextStep;
+  window.proposalIntakePrevStep = proposalIntakePrevStep;
   window.closeProposalIntakeModal = closeProposalIntakeModal;
   window.saveProposalIntakeForm = saveProposalIntakeForm;
   window.setProposalIntakeFilter = setProposalIntakeFilter;
