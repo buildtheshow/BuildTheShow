@@ -306,6 +306,8 @@
       .pp-intake-tile { cursor:pointer; }
       .pp-intake-tile .template-brand-card { width:100%; aspect-ratio:auto !important; min-height:260px; }
       .pp-intake-tile--active .template-brand-card { box-shadow:0 0 0 3px rgba(255,255,255,0.9),0 0 0 6px rgba(87,46,136,0.45); }
+      .pp-intake-tile .template-brand-card::after { content:''; position:absolute; bottom:-4cqw; right:-4cqw; width:42cqw; height:42cqw; background:var(--pp-tile-deco-icon) center/contain no-repeat; filter:brightness(0) invert(1); opacity:0.14; pointer-events:none; z-index:0; }
+      .pp-intake-tile .template-brand-card-inner { position:relative; z-index:1; }
       .pp-intake-tile .template-brand-tile-title { font-size:10cqw; line-height:1.05; }
       .pp-intake-tile .template-brand-tile-container--title { flex:0 0 18cqw; }
       .pp-tile-body-inner { display:flex; flex-direction:column; gap:2.5cqw; }
@@ -827,12 +829,21 @@
       </div>`;
   }
 
-  function renderIntakeCard(intake) {
+  var INTAKE_TILE_PALETTE = [
+    '#572e88','#769e7b','#d1523d','#476aaa','#dd8233','#ca7ea7','#78bbd4','#efab45'
+  ];
+  var INTAKE_TILE_ICONS = [
+    'Auditions.svg','Star.svg','script-music-songs.svg','Characters.svg',
+    'Rehearsals.svg','Performer.svg','Producer.svg','Choreography.svg'
+  ];
+
+  function renderIntakeCard(intake, tileIndex) {
     const tileRender = window.BTSAuditionTemplates && window.BTSAuditionTemplates.renderBrandTileTemplate;
     const active = intake.id === state.selectedIntakeId;
     const submissionCount = state.proposals.filter(function(item) { return item.intake_id === intake.id; }).length;
-    const statusKey = proposalIntakeStatus(intake);
-    const tileColor = statusKey === 'open' ? '#769e7b' : statusKey === 'expired' ? '#dd8233' : '#572e88';
+    const idx = typeof tileIndex === 'number' ? tileIndex : 0;
+    const tileColor = INTAKE_TILE_PALETTE[idx % INTAKE_TILE_PALETTE.length];
+    const decoIcon = '/ASSETS/Images/Icons/' + INTAKE_TILE_ICONS[idx % INTAKE_TILE_ICONS.length];
     const sid = intake.id;
 
     if (!tileRender) {
@@ -883,6 +894,7 @@
 
     return '<div class="pp-intake-tile' + (active ? ' pp-intake-tile--active' : '') + '" onclick="setProposalIntakeFilter(\'' + sid + '\')">' +
       tileRender({ esc: esc, variant: 'square', mode: 'content', color: tileColor, ink: '#ffffff',
+        style: '--pp-tile-deco-icon:url(' + decoIcon + ');',
         kicker: intake.season_label || '',
         title: intake.title || 'Season',
         bodyHtml: bodyHtml,
@@ -933,7 +945,7 @@
         <div class="pp-intake-panel">
           <div>
           ${state.intakes.length
-            ? `<div class="pp-intake-grid">${state.intakes.map(renderIntakeCard).join('')}</div>`
+            ? `<div class="pp-intake-grid">${state.intakes.map(function(intake, i) { return renderIntakeCard(intake, i); }).join('')}</div>`
             : statEmptyAction}
         </div>
 
