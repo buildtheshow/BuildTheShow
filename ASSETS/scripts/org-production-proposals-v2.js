@@ -429,36 +429,42 @@
       const intakeWrap = document.createElement('div');
       intakeWrap.innerHTML = `
         <div class="opp-modal-overlay" id="proposal-intake-modal">
-          <div class="opp-modal intake-modal-shell">
-            <div class="opp-modal-head">
-              <div>
-                <div class="opp-panel-title" id="proposal-intake-modal-title">Add Season</div>
-                <div class="opp-panel-copy">Set up a season, share its pitch link, and collect proposals.</div>
-              </div>
+          <div class="opp-modal intake-modal-shell" style="max-width:560px;">
+            <div class="opp-modal-head" style="padding-bottom:0.5rem;">
+              <div class="opp-panel-title" id="proposal-intake-modal-title">Add Season</div>
               <button type="button" class="btn-secondary" onclick="closeProposalIntakeModal()">Close</button>
             </div>
-            <div class="opp-modal-body" style="padding-top:0.6rem;">
-              <div id="proposal-intake-form-error" class="form-error-msg"></div>
+            <div class="opp-modal-body" style="padding-top:0.5rem;">
 
               <!-- step pills -->
-              <div style="display:flex;gap:0.4rem;margin-bottom:1rem;">
-                <div id="ppi-step-pill-1" style="flex:1;height:4px;border-radius:99px;background:#572e88;transition:background 0.2s;"></div>
-                <div id="ppi-step-pill-2" style="flex:1;height:4px;border-radius:99px;background:rgba(87,46,136,0.15);transition:background 0.2s;"></div>
+              <div style="display:flex;gap:0.5rem;margin-bottom:1.5rem;">
+                <div id="ppi-step-pill-1" style="flex:1;height:3px;border-radius:99px;background:#572e88;transition:background 0.2s;"></div>
+                <div id="ppi-step-pill-2" style="flex:1;height:3px;border-radius:99px;background:rgba(87,46,136,0.15);transition:background 0.2s;"></div>
               </div>
+
+              <div id="proposal-intake-form-error" class="form-error-msg"></div>
 
               <!-- step 1: season info -->
               <div id="ppi-step-1">
-                <div style="display:grid;grid-template-columns:1fr auto;gap:0.65rem 1rem;margin-bottom:0.65rem;">
-                  <div class="form-group" style="margin:0;"><label class="form-label">Season Name</label><input class="form-input" id="ppi-title" type="text" placeholder="Summer, Fall, Spring..." /></div>
-                  <div class="form-group" style="margin:0;width:100px;"><label class="form-label">Year</label><input class="form-input" id="ppi-season-year" type="number" min="2000" max="2100" placeholder="2026" /></div>
+                <div style="display:flex;flex-direction:column;gap:1rem;margin-bottom:1.5rem;">
+                  <div style="display:grid;grid-template-columns:1fr 110px;gap:1rem;">
+                    <div class="form-group" style="margin:0;"><label class="form-label">Season Name</label><input class="form-input" id="ppi-title" type="text" placeholder="Summer, Fall, Spring..." /></div>
+                    <div class="form-group" style="margin:0;"><label class="form-label">Year</label><input class="form-input" id="ppi-season-year" type="number" min="2000" max="2100" placeholder="2026" /></div>
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                    <div class="form-group" style="margin:0;"><label class="form-label">Pitch Closes</label><input class="form-input" id="ppi-closes-at" type="datetime-local" /></div>
+                    <div class="form-group" style="margin:0;"><label class="form-label">Accepting Pitches?</label><select class="form-select" id="ppi-is-open"><option value="yes">Yes</option><option value="no">No</option></select></div>
+                  </div>
+                  <div class="form-group" style="margin:0;">
+                    <label class="form-label">Passcode <span style="font-weight:500;opacity:0.45;text-transform:none;letter-spacing:0;">(set at creation, cannot be changed)</span></label>
+                    <input class="form-input" id="ppi-access-code" type="text" readonly style="background:rgba(26,21,48,0.03);color:rgba(26,21,48,0.4);cursor:default;letter-spacing:0.06em;" />
+                  </div>
+                  <div class="form-group" style="margin:0;">
+                    <label class="form-label">Description <span style="font-weight:500;opacity:0.45;text-transform:none;letter-spacing:0;">(optional)</span></label>
+                    <textarea class="form-textarea" id="ppi-description" placeholder="Tell pitchers what you're looking for this season." style="height:90px;resize:none;"></textarea>
+                  </div>
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.65rem 1rem;margin-bottom:0.65rem;">
-                  <div class="form-group" style="margin:0;"><label class="form-label">Pitch Closes</label><input class="form-input" id="ppi-closes-at" type="datetime-local" /></div>
-                  <div class="form-group" style="margin:0;"><label class="form-label">Accepting Pitches?</label><select class="form-select" id="ppi-is-open"><option value="yes">Yes</option><option value="no">No</option></select></div>
-                  <div class="form-group" style="margin:0;"><label class="form-label">Passcode</label><input class="form-input" id="ppi-access-code" type="text" readonly style="background:rgba(26,21,48,0.04);color:rgba(26,21,48,0.5);cursor:default;" /></div>
-                  <div class="form-group" style="margin:0;"><label class="form-label">Description <span style="font-weight:500;opacity:0.5;">(optional)</span></label><input class="form-input" id="ppi-description" type="text" placeholder="Any notes for pitchers." /></div>
-                </div>
-                <div class="opp-form-actions" style="padding-top:0.25rem;">
+                <div class="opp-form-actions">
                   <button type="button" class="btn-secondary" onclick="closeProposalIntakeModal()">Cancel</button>
                   <button type="button" class="btn-primary" onclick="proposalIntakeNextStep()">Next: Projects</button>
                 </div>
@@ -466,17 +472,16 @@
 
               <!-- step 2: projects -->
               <div id="ppi-step-2" style="display:none;">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.55rem;">
-                  <div style="font-size:0.78rem;color:rgba(26,21,48,0.5);">Add the projects pitchers can target. Leave empty if this season takes open pitches.</div>
-                  <button type="button" class="btn-secondary" style="font-size:0.75rem;padding:0.3rem 0.75rem;flex-shrink:0;margin-left:1rem;" onclick="addProposalProject()">+ Add Project</button>
-                </div>
-                <div id="ppi-projects-list" style="display:flex;flex-direction:column;gap:0.45rem;min-height:2rem;"></div>
-                <div id="ppi-projects-empty" style="font-size:0.82rem;color:rgba(26,21,48,0.35);padding:0.5rem 0;">No projects added — pitchers will submit as a general pitch.</div>
-                <div class="opp-form-actions" style="padding-top:0.75rem;">
+                <p style="font-size:0.84rem;color:rgba(26,21,48,0.45);margin:0 0 1.25rem;">List the projects pitchers can apply for. Leave this empty if the season accepts general pitches.</p>
+                <div id="ppi-projects-list" style="display:flex;flex-direction:column;gap:0.75rem;margin-bottom:0.5rem;"></div>
+                <div id="ppi-projects-empty" style="font-size:0.84rem;color:rgba(26,21,48,0.35);padding:0.25rem 0 1rem;">No projects yet.</div>
+                <button type="button" class="btn-secondary" style="margin-bottom:1.5rem;" onclick="addProposalProject()">+ Add Project</button>
+                <div class="opp-form-actions">
                   <button type="button" class="btn-secondary" onclick="proposalIntakePrevStep()">Back</button>
                   <button type="button" class="btn-primary" id="ppi-save-btn" onclick="saveProposalIntakeForm()">Save Season</button>
                 </div>
               </div>
+
             </div>
           </div>
         </div>
@@ -1306,11 +1311,15 @@
 
   function renderProposalProjectRow(proj) {
     const id = proj.id || ('p' + Date.now() + Math.random().toString(36).slice(2, 6));
-    return '<div class="ppi-project-row" data-proj-id="' + id + '" style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:0.4rem;align-items:end;">' +
-      '<div class="form-group" style="margin:0;"><label class="form-label">Project Name</label><input class="form-input ppi-proj-name" type="text" placeholder="Kids, Youth, Workshop..." value="' + esc(proj.name || '') + '" /></div>' +
-      '<div class="form-group" style="margin:0;"><label class="form-label">Production Type</label><select class="form-select ppi-proj-type"><option value="">No preference</option><option value="Musical"' + (proj.production_type === 'Musical' ? ' selected' : '') + '>Musical</option><option value="Play"' + (proj.production_type === 'Play' ? ' selected' : '') + '>Play</option><option value="Workshop"' + (proj.production_type === 'Workshop' ? ' selected' : '') + '>Workshop</option></select></div>' +
-      '<div class="form-group" style="margin:0;"><label class="form-label">Performer Age</label><div style="display:flex;align-items:center;gap:0.35rem;"><input class="form-input ppi-proj-min-age" type="number" min="0" max="99" placeholder="Min" style="min-width:0;" value="' + (proj.min_age ?? '') + '" /><span style="font-size:0.8rem;color:rgba(26,21,48,0.4);flex-shrink:0;">–</span><input class="form-input ppi-proj-max-age" type="number" min="0" max="99" placeholder="Max" style="min-width:0;" value="' + (proj.max_age ?? '') + '" /></div></div>' +
-      '<button type="button" style="background:none;border:none;cursor:pointer;color:rgba(26,21,48,0.3);font-size:1.1rem;padding:0.3rem 0.4rem;border-radius:6px;align-self:flex-end;margin-bottom:1px;transition:color 0.12s,background 0.12s;" onmouseenter="this.style.color=\'#d1523d\';this.style.background=\'rgba(209,82,61,0.08)\';" onmouseleave="this.style.color=\'rgba(26,21,48,0.3)\';this.style.background=\'none\';" onclick="removeProposalProject(\'' + id + '\')">&#x2715;</button>' +
+    return '<div class="ppi-project-row" data-proj-id="' + id + '" style="background:rgba(87,46,136,0.04);border:1px solid rgba(87,46,136,0.1);border-radius:12px;padding:0.85rem;display:flex;flex-direction:column;gap:0.75rem;">' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">' +
+        '<div class="form-group" style="margin:0;"><label class="form-label">Project Name</label><input class="form-input ppi-proj-name" type="text" placeholder="Kids, Youth, Workshop..." value="' + esc(proj.name || '') + '" /></div>' +
+        '<div class="form-group" style="margin:0;"><label class="form-label">Production Type</label><select class="form-select ppi-proj-type"><option value="">No preference</option><option value="Musical"' + (proj.production_type === 'Musical' ? ' selected' : '') + '>Musical</option><option value="Play"' + (proj.production_type === 'Play' ? ' selected' : '') + '>Play</option><option value="Workshop"' + (proj.production_type === 'Workshop' ? ' selected' : '') + '>Workshop</option></select></div>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;align-items:end;">' +
+        '<div class="form-group" style="margin:0;"><label class="form-label">Performer Age</label><div style="display:flex;align-items:center;gap:0.5rem;"><input class="form-input ppi-proj-min-age" type="number" min="0" max="99" placeholder="Min age" value="' + (proj.min_age ?? '') + '" /><span style="color:rgba(26,21,48,0.3);flex-shrink:0;">–</span><input class="form-input ppi-proj-max-age" type="number" min="0" max="99" placeholder="Max age" value="' + (proj.max_age ?? '') + '" /></div></div>' +
+        '<div style="display:flex;justify-content:flex-end;"><button type="button" class="btn-secondary" style="font-size:0.75rem;color:#d1523d;border-color:rgba(209,82,61,0.3);" onclick="removeProposalProject(\'' + id + '\')">Remove</button></div>' +
+      '</div>' +
     '</div>';
   }
 
