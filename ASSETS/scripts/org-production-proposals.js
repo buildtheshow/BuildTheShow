@@ -854,7 +854,7 @@
   }
 
   var INTAKE_TILE_PALETTE = [
-    '#572e88','#769e7b','#d1523d','#476aaa','#dd8233','#ca7ea7','#78bbd4','#efab45'
+    '#769e7b','#d1523d','#476aaa','#dd8233','#ca7ea7','#78bbd4','#efab45','#000000'
   ];
   var INTAKE_TILE_ICONS = [
     'Auditions.svg','Star.svg','script-music-songs.svg','Characters.svg',
