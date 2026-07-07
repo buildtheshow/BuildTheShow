@@ -610,9 +610,13 @@
     const { data, error } = await sb().from('production_proposal_intakes')
       .select('*')
       .eq('organization_id', currentOrg().id)
-      .order('created_at', { ascending: false });
+      .order('season_label', { ascending: false, nullsFirst: false });
     if (error) throw error;
-    state.intakes = data || [];
+    state.intakes = (data || []).sort(function(a, b) {
+      var ya = parseInt(a.season_label, 10) || 0;
+      var yb = parseInt(b.season_label, 10) || 0;
+      return yb - ya;
+    });
     if (state.selectedIntakeId === 'all' && state.intakes.length) state.selectedIntakeId = state.intakes[0].id;
     if (state.selectedIntakeId !== 'all' && !proposalIntakeById(state.selectedIntakeId)) state.selectedIntakeId = state.intakes[0]?.id || 'all';
   }
