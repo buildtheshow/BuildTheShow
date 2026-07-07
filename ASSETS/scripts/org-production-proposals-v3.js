@@ -464,9 +464,12 @@
                     <textarea class="form-textarea" id="ppi-description" placeholder="Tell pitchers what you're looking for this season." style="height:100px;resize:none;display:block;width:100%;box-sizing:border-box;"></textarea>
                   </div>
                 </div>
-                <div class="opp-form-actions">
-                  <button type="button" class="btn-secondary" onclick="closeProposalIntakeModal()">Cancel</button>
-                  <button type="button" class="btn-primary" onclick="proposalIntakeNextStep()">Next: Projects</button>
+                <div class="opp-form-actions" style="justify-content:space-between;">
+                  <button type="button" id="ppi-delete-btn" class="btn-secondary" style="color:#d1523d;border-color:rgba(209,82,61,0.35);display:none;" onclick="proposalIntakeDelete()">Delete Season</button>
+                  <div style="display:flex;gap:0.65rem;">
+                    <button type="button" class="btn-secondary" onclick="closeProposalIntakeModal()">Cancel</button>
+                    <button type="button" class="btn-primary" onclick="proposalIntakeNextStep()">Next: Projects</button>
+                  </div>
                 </div>
               </div>
 
@@ -1374,6 +1377,7 @@
 
     document.getElementById('proposal-intake-modal-title').textContent = intake ? 'Edit Season' : 'Add Season';
     document.getElementById('ppi-save-btn').textContent = intake ? 'Save Season' : 'Create Season';
+    document.getElementById('ppi-delete-btn').style.display = intake ? '' : 'none';
     document.getElementById('proposal-intake-form-error').classList.remove('visible');
     document.getElementById('proposal-intake-form-error').textContent = '';
 
@@ -1463,6 +1467,20 @@
       errorEl.textContent = error.message || 'Could not save season.';
       errorEl.classList.add('visible');
     }
+  }
+
+  async function proposalIntakeDelete() {
+    const modal = document.getElementById('proposal-intake-modal');
+    const intakeId = modal?.dataset?.intakeId;
+    if (!intakeId) return;
+    const intake = proposalIntakeById(intakeId);
+    const submissionCount = state.proposals.filter(function(p) { return p.intake_id === intakeId; }).length;
+    const name = intake?.title || 'this season';
+    const warning = submissionCount > 0
+      ? 'Delete "' + name + '"? This will permanently remove the season and its ' + submissionCount + ' ' + (submissionCount === 1 ? 'proposal' : 'proposals') + '. This cannot be undone.'
+      : 'Delete "' + name + '"? This cannot be undone.';
+    closeProposalIntakeModal();
+    await deleteProposalIntake(intakeId, submissionCount, warning);
   }
 
   async function deleteProposalIntake(intakeId, proposalCount, warningMsg) {
@@ -1934,6 +1952,7 @@
   window.openProposalIntakeModal = openProposalIntakeModal;
   window.toggleExpandYear = toggleExpandYear;
   window.deleteProposalIntake = deleteProposalIntake;
+  window.proposalIntakeDelete = proposalIntakeDelete;
   window.addProposalProject = addProposalProject;
   window.removeProposalProject = removeProposalProject;
   window.proposalIntakeNextStep = proposalIntakeNextStep;
