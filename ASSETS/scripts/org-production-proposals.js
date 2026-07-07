@@ -404,12 +404,47 @@
               <div class="opp-form-section">
                 <h3>Season Setup</h3>
                 <div class="opp-form-grid">
-                  <div class="form-group"><label class="form-label">Season Title</label><input class="form-input" id="ppi-title" type="text" placeholder="2027 Mainstage Pitch Season" /></div>
-                  <div class="form-group"><label class="form-label">Season Label</label><input class="form-input" id="ppi-season-label" type="text" placeholder="2027 Mainstage Season" /></div>
+                  <div class="form-group"><label class="form-label">Season Title</label><input class="form-input" id="ppi-title" type="text" placeholder="Summer Mainstage" /></div>
+                  <div class="form-group"><label class="form-label">Season Year</label><input class="form-input" id="ppi-season-label" type="text" placeholder="2027" /></div>
                   <div class="form-group opp-form-span-2"><label class="form-label">Pitch Page Description</label><textarea class="form-textarea" id="ppi-description" placeholder="Tell people what kind of shows you want pitched for this season."></textarea></div>
                   <div class="form-group"><label class="form-label">Season Passcode</label><input class="form-input" id="ppi-access-code" type="text" /></div>
                   <div class="form-group"><label class="form-label">Pitch Closes</label><input class="form-input" id="ppi-closes-at" type="datetime-local" /></div>
                   <div class="form-group"><label class="form-label">Accepting Pitches?</label><select class="form-select" id="ppi-is-open"><option value="yes">Yes</option><option value="no">No</option></select></div>
+                </div>
+              </div>
+              <div class="opp-form-section">
+                <h3>What We're Looking For</h3>
+                <div class="opp-form-grid">
+                  <div class="form-group">
+                    <label class="form-label">Production Type</label>
+                    <select class="form-select" id="ppi-production-type">
+                      <option value="">No preference</option>
+                      <option value="Musical">Musical</option>
+                      <option value="Play">Play</option>
+                      <option value="Workshop">Workshop</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Performer Age</label>
+                    <select class="form-select" id="ppi-performer-age">
+                      <option value="">No preference</option>
+                      <option value="Children">Children</option>
+                      <option value="Youth">Youth</option>
+                      <option value="Teen">Teen</option>
+                      <option value="Adult">Adult</option>
+                      <option value="Mixed Ages">Mixed Ages</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Ideal Cast Size</label>
+                    <select class="form-select" id="ppi-cast-size">
+                      <option value="">No preference</option>
+                      <option value="Small Cast (1–10)">Small Cast (1–10)</option>
+                      <option value="Medium Cast (11–20)">Medium Cast (11–20)</option>
+                      <option value="Large Cast (21–35)">Large Cast (21–35)</option>
+                      <option value="Extra Large Cast (36+)">Extra Large Cast (36+)</option>
+                    </select>
+                  </div>
                 </div>
               </div>
               <div class="opp-form-actions">
@@ -1216,6 +1251,9 @@
     document.getElementById('ppi-access-code').value = intake?.access_code || generateAccessCode();
     document.getElementById('ppi-closes-at').value = fmtDateTimeInput(intake?.closes_at || '');
     document.getElementById('ppi-is-open').value = intake?.is_open === false ? 'no' : 'yes';
+    document.getElementById('ppi-production-type').value = intake?.production_type || '';
+    document.getElementById('ppi-performer-age').value = intake?.performer_age || '';
+    document.getElementById('ppi-cast-size').value = intake?.cast_size || '';
     modal.classList.add('open');
   }
 
@@ -1235,6 +1273,9 @@
       access_code: document.getElementById('ppi-access-code').value.trim(),
       closes_at: document.getElementById('ppi-closes-at').value ? new Date(document.getElementById('ppi-closes-at').value).toISOString() : null,
       is_open: document.getElementById('ppi-is-open').value === 'yes',
+      production_type: document.getElementById('ppi-production-type').value || null,
+      performer_age: document.getElementById('ppi-performer-age').value || null,
+      cast_size: document.getElementById('ppi-cast-size').value || null,
     };
     if (!payload.title) {
       errorEl.textContent = 'Season title is required.';
