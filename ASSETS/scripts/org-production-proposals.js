@@ -426,14 +426,12 @@
                   </div>
                   <div class="form-group">
                     <label class="form-label">Performer Age</label>
-                    <select class="form-select" id="ppi-performer-age">
-                      <option value="">No preference</option>
-                      <option value="Children">Children</option>
-                      <option value="Youth">Youth</option>
-                      <option value="Teen">Teen</option>
-                      <option value="Adult">Adult</option>
-                      <option value="Mixed Ages">Mixed Ages</option>
-                    </select>
+                    <div style="display:flex;align-items:center;gap:0.5rem;">
+                      <input class="form-input" id="ppi-min-age" type="number" min="0" max="99" placeholder="Min" style="width:80px;" />
+                      <span style="font-size:0.8rem;color:rgba(26,21,48,0.4);flex-shrink:0;">to</span>
+                      <input class="form-input" id="ppi-max-age" type="number" min="0" max="99" placeholder="Max" style="width:80px;" />
+                    </div>
+                    <div style="font-size:0.65rem;color:rgba(26,21,48,0.4);margin-top:0.3rem;">Leave blank if no minimum or maximum.</div>
                   </div>
                   <div class="form-group">
                     <label class="form-label">Ideal Cast Size</label>
@@ -1252,7 +1250,8 @@
     document.getElementById('ppi-closes-at').value = fmtDateTimeInput(intake?.closes_at || '');
     document.getElementById('ppi-is-open').value = intake?.is_open === false ? 'no' : 'yes';
     document.getElementById('ppi-production-type').value = intake?.production_type || '';
-    document.getElementById('ppi-performer-age').value = intake?.performer_age || '';
+    document.getElementById('ppi-min-age').value = intake?.min_performer_age ?? '';
+    document.getElementById('ppi-max-age').value = intake?.max_performer_age ?? '';
     document.getElementById('ppi-cast-size').value = intake?.cast_size || '';
     modal.classList.add('open');
   }
@@ -1273,7 +1272,8 @@
       closes_at: document.getElementById('ppi-closes-at').value ? new Date(document.getElementById('ppi-closes-at').value).toISOString() : null,
       is_open: document.getElementById('ppi-is-open').value === 'yes',
       production_type: document.getElementById('ppi-production-type').value || null,
-      performer_age: document.getElementById('ppi-performer-age').value || null,
+      min_performer_age: document.getElementById('ppi-min-age').value !== '' ? parseInt(document.getElementById('ppi-min-age').value, 10) : null,
+      max_performer_age: document.getElementById('ppi-max-age').value !== '' ? parseInt(document.getElementById('ppi-max-age').value, 10) : null,
       cast_size: document.getElementById('ppi-cast-size').value || null,
     };
     if (!intakeId) {
