@@ -407,7 +407,7 @@
                   <div class="form-group"><label class="form-label">Season Title</label><input class="form-input" id="ppi-title" type="text" placeholder="Summer Mainstage" /></div>
                   <div class="form-group"><label class="form-label">Season Year</label><input class="form-input" id="ppi-season-label" type="text" placeholder="2027" /></div>
                   <div class="form-group opp-form-span-2"><label class="form-label">Pitch Page Description</label><textarea class="form-textarea" id="ppi-description" placeholder="Tell people what kind of shows you want pitched for this season."></textarea></div>
-                  <div class="form-group"><label class="form-label">Season Passcode</label><input class="form-input" id="ppi-access-code" type="text" /></div>
+                  <div class="form-group"><label class="form-label">Season Passcode</label><input class="form-input" id="ppi-access-code" type="text" readonly style="background:rgba(26,21,48,0.04);color:rgba(26,21,48,0.5);cursor:default;" /></div>
                   <div class="form-group"><label class="form-label">Pitch Closes</label><input class="form-input" id="ppi-closes-at" type="datetime-local" /></div>
                   <div class="form-group"><label class="form-label">Accepting Pitches?</label><select class="form-select" id="ppi-is-open"><option value="yes">Yes</option><option value="no">No</option></select></div>
                 </div>
@@ -1270,20 +1270,17 @@
       title: document.getElementById('ppi-title').value.trim(),
       season_label: document.getElementById('ppi-season-label').value.trim() || null,
       description: document.getElementById('ppi-description').value.trim() || null,
-      access_code: document.getElementById('ppi-access-code').value.trim(),
       closes_at: document.getElementById('ppi-closes-at').value ? new Date(document.getElementById('ppi-closes-at').value).toISOString() : null,
       is_open: document.getElementById('ppi-is-open').value === 'yes',
       production_type: document.getElementById('ppi-production-type').value || null,
       performer_age: document.getElementById('ppi-performer-age').value || null,
       cast_size: document.getElementById('ppi-cast-size').value || null,
     };
+    if (!intakeId) {
+      payload.access_code = document.getElementById('ppi-access-code').value.trim();
+    }
     if (!payload.title) {
       errorEl.textContent = 'Season title is required.';
-      errorEl.classList.add('visible');
-      return;
-    }
-    if (!payload.access_code) {
-      errorEl.textContent = 'Passcode is required.';
       errorEl.classList.add('visible');
       return;
     }
