@@ -392,7 +392,8 @@
       .opp-modal-overlay { display:none; position:fixed; inset:0; background:rgba(26,21,48,0.55); z-index:3200; padding:1rem; align-items:center; justify-content:center; }
       .opp-modal-overlay.open { display:flex; }
       .opp-modal { width:min(1080px,100%); max-height:92vh; overflow:auto; background:#fff; border-radius:18px; box-shadow:0 30px 80px rgba(26,21,48,0.28); }
-      .opp-modal.intake-modal-shell { width:min(560px,100%); }
+      .opp-modal.intake-modal-shell { width:min(560px,100%); max-height:94vh; }
+      .opp-modal.intake-modal-shell.pfb-wide { width:min(1060px,96vw); }
       .opp-modal-head { padding:1rem 1.15rem; border-bottom:1px solid rgba(87,46,136,0.08); display:flex; align-items:center; justify-content:space-between; gap:0.75rem; position:sticky; top:0; background:#fff; z-index:2; }
       .opp-modal-body { padding:1rem 1.15rem 1.2rem; display:grid; gap:1rem; }
       .opp-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.8rem; }
@@ -476,7 +477,7 @@
       .pp-sub-intake-empty { font-size:0.84rem; color:#8f84a5; padding:0.5rem 0; }
 
       /* ---- form builder (Step 3) ---- */
-      .pfb-layout { display:flex; height:58vh; border:1px solid rgba(87,46,136,0.13); border-radius:14px; overflow:hidden; }
+      .pfb-layout { display:flex; height:68vh; border:1px solid rgba(87,46,136,0.13); border-radius:14px; overflow:hidden; }
       .pfb-sidebar { width:210px; flex-shrink:0; display:flex; flex-direction:column; border-right:1px solid rgba(87,46,136,0.1); background:#faf9fc; overflow-y:auto; }
       .pfb-sidebar-item { display:flex; align-items:center; gap:0.45rem; padding:0.65rem 0.85rem; cursor:pointer; border-bottom:1px solid rgba(87,46,136,0.07); user-select:none; transition:background 0.12s; }
       .pfb-sidebar-item:hover { background:rgba(87,46,136,0.06); }
@@ -1560,7 +1561,7 @@
       step3.style.display = '';
       document.getElementById('ppi-step-pill-3').style.background = '#572e88';
       const shell = document.querySelector('.intake-modal-shell');
-      if (shell) shell.style.maxWidth = '860px';
+      if (shell) shell.classList.add('pfb-wide');
       renderFormBuilder();
     }
   }
@@ -1573,7 +1574,7 @@
       step2.style.display = '';
       document.getElementById('ppi-step-pill-3').style.background = 'rgba(87,46,136,0.15)';
       const shell = document.querySelector('.intake-modal-shell');
-      if (shell) shell.style.maxWidth = '560px';
+      if (shell) shell.classList.remove('pfb-wide');
     } else {
       step2.style.display = 'none';
       document.getElementById('ppi-step-1').style.display = '';
@@ -1803,7 +1804,7 @@
     document.getElementById('ppi-step-pill-2').style.background = 'rgba(87,46,136,0.15)';
     document.getElementById('ppi-step-pill-3').style.background = 'rgba(87,46,136,0.15)';
     const shell = document.querySelector('.intake-modal-shell');
-    if (shell) shell.style.maxWidth = '560px';
+    if (shell) shell.classList.remove('pfb-wide');
     currentFormConfig = intake && intake.form_config ? JSON.parse(JSON.stringify(intake.form_config)) : JSON.parse(JSON.stringify(DEFAULT_FORM_CONFIG));
     pfbOpenQuestions = new Set();
     pfbSelectedSectionId = null;
