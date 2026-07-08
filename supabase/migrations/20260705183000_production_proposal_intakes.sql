@@ -198,7 +198,9 @@ begin
       'season_label', v_intake.season_label,
       'description', v_intake.description,
       'is_open', v_intake.is_open,
-      'closes_at', v_intake.closes_at
+      'closes_at', v_intake.closes_at,
+      'projects', coalesce(v_intake.projects, '[]'::jsonb),
+      'form_config', v_intake.form_config
     )
   );
 end;
@@ -334,6 +336,8 @@ begin
     special_requirements,
     biggest_challenge,
     additional_notes,
+    production_type,
+    form_answers,
     submission_origin
   )
   values (
@@ -382,6 +386,8 @@ begin
     nullif(btrim(coalesce(p_payload->>'special_requirements', '')), ''),
     nullif(btrim(coalesce(p_payload->>'biggest_challenge', '')), ''),
     nullif(btrim(coalesce(p_payload->>'additional_notes', '')), ''),
+    nullif(btrim(coalesce(p_payload->>'production_type', '')), ''),
+    coalesce(p_payload->'form_answers', '{}'::jsonb),
     'public'
   )
   returning *
