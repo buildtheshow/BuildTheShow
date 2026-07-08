@@ -948,41 +948,185 @@
     function printHtmlForPayload(answers, flat) {
       var orgName = (pageState.organization && pageState.organization.name) || 'Organisation';
       var intakeTitle = (pageState.intake && pageState.intake.title) || 'Season Pitch';
-      var showTitle = flat.proposed_show_title || answers.proposed_show_title || 'Untitled Proposal';
-      var submittedBy = flat.pitch_submitted_by || answers.pitch_submitted_by || '';
-      var config = currentPublicFormConfig || PUBLIC_FALLBACK_FORM_CONFIG;
-      var sectionsHtml = config.sections.filter(function(s){ return s.enabled !== false; }).map(function(section) {
-        var qs = section.questions.filter(function(q){ return q.enabled !== false && q.type !== 'divider'; });
-        if (!qs.length) return '';
-        var rowsHtml = qs.map(function(q) {
-          var val = answers[q.id];
-          if (val === undefined || val === null || val === '') return '';
-          var display = Array.isArray(val) ? val.join(', ') : (typeof val === 'object' ? (val.from || '') + ' — ' + (val.to || '') : String(val));
-          var isLong = ['long_answer','short_synopsis','organization_fit','character_list'].includes(q.type) || display.length > 80;
-          return isLong
-            ? '<h3 style="margin:16px 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:0.05em;color:#572e88;">'+esc(q.label)+'</h3><div class="box">'+esc(display)+'</div>'
-            : '<div class="card"><div class="label">'+esc(q.label)+'</div><div class="value">'+esc(display)+'</div></div>';
-        }).join('');
-        if (!rowsHtml) return '';
-        return '<h2>'+esc(section.title)+'</h2><div class="grid">'+rowsHtml+'</div>';
-      }).join('');
-      var html = '<html><head><title>'+esc(showTitle)+'</title><style>'
-        +'body{font-family:Arial,sans-serif;color:#000;padding:28px;line-height:1.55;}'
-        +'h1,h2,h3{margin:0;}h2{margin-top:24px;font-size:18px;}h3{font-size:12px;}'
-        +'.muted{color:#572e88;margin-top:8px;font-size:13px;}'
-        +'.grid{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;}'
-        +'.card{border:1px solid rgba(87,46,136,0.18);border-radius:12px;padding:14px;min-width:180px;}'
-        +'.box{border:1px solid rgba(87,46,136,0.18);border-radius:12px;padding:14px;margin-top:4px;white-space:pre-wrap;width:100%;box-sizing:border-box;}'
-        +'.label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#572e88;margin-bottom:4px;}'
-        +'.value{font-size:14px;font-weight:700;}'
-        +'</style></head><body>'
-        +'<h1>'+esc(showTitle)+'</h1>'
-        +'<div class="muted">'+esc(intakeTitle)+' &middot; Prepared for '+esc(orgName)+(submittedBy ? ' &middot; Submitted by '+esc(submittedBy) : '')+'</div>'
-        +sectionsHtml
+      var a = answers;
+      function v(id) { var x = a[id]; return (x === undefined || x === null) ? '' : x; }
+      function ev(id) { return esc(String(v(id))); }
+      function has(id) { var x = v(id); return x !== '' && x !== false && !(Array.isArray(x) && x.length === 0); }
+      function pills(id, color) {
+        var vals = v(id); if (!Array.isArray(vals)) vals = vals ? [vals] : []; if (!vals.length) return '';
+        return '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;">'
+          +vals.map(function(p){ return '<span style="background:'+color+';color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:3px 10px;">'+esc(String(p))+'</span>'; }).join('')+'</div>';
+      }
+      function fieldCard(label, val, icon) {
+        if (!val && val !== 0) return '';
+        return '<div class="fc"><div class="fc-icon">'+icon+'</div><div><div class="fc-label">'+label+'</div><div class="fc-val">'+val+'</div></div></div>';
+      }
+      function qaRow(label, id, color) {
+        if (!has(id)) return '';
+        var val = v(id); var display = Array.isArray(val) ? val.join(', ') : String(val);
+        return '<div class="qa-row"><div class="qa-dot" style="background:'+color+';"></div><div class="qa-body"><div class="qa-label">'+esc(label)+'</div><div class="qa-val">'+esc(display)+'</div></div></div>';
+      }
+      function secHead(title, color) {
+        return '<div class="sec-head" style="color:'+color+';border-bottom:2px solid '+color+';"><span class="sec-title">'+title+'</span></div>';
+      }
+      function card(content, extra) {
+        return '<div class="card" style="'+(extra||'')+'">' + content + '</div>';
+      }
+      function statBox(label, val) {
+        if (!has(val[0] ? undefined : val) && val === '') return '';
+        return '<div class="stat-box"><div class="stat-val">'+val+'</div><div class="stat-label">'+label+'</div></div>';
+      }
+
+      var coverUrl = v('sb_cover');
+      var isValidUrl = coverUrl && coverUrl.indexOf('http') === 0;
+      var posterHtml = isValidUrl
+        ? '<img src="'+esc(coverUrl)+'" style="width:100%;height:100%;object-fit:cover;border-radius:14px;" />'
+        : '<div style="width:100%;height:100%;background:linear-gradient(135deg,#572e88,#476aaa);border-radius:14px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.3);font-size:13px;font-weight:700;letter-spacing:0.05em;">NO POSTER</div>';
+
+      var showTitle = v('sb_title') || 'Untitled Proposal';
+      var synopsis = v('sb_synopsis');
+      var whyAudience = v('why_audience');
+      var contentWarnings = v('cs_warnings');
+
+      var showBasicsHtml = secHead('Show Basics','#572e88')
+        +'<div class="fc-grid">'
+        +fieldCard('Show Title', esc(showTitle), '<svg width="16" height="16" fill="none" stroke="#572e88" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>')
+        +fieldCard('Estimated Licensing Cost', has('sb_licensing_cost') ? '$'+esc(String(v('sb_licensing_cost'))) : '', '<svg width="16" height="16" fill="none" stroke="#769e7b" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>')
+        +fieldCard('Show Version / Edition', ev('sb_version'), '<svg width="16" height="16" fill="none" stroke="#572e88" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>')
+        +fieldCard('Runtime', ev('sb_runtime'), '<svg width="16" height="16" fill="none" stroke="#efab45" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>')
+        +fieldCard('Author / Composer / Playwright', ev('sb_author'), '<svg width="16" height="16" fill="none" stroke="#572e88" stroke-width="2" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>')
+        +fieldCard('Number of Acts', has('sb_acts') ? esc(String(v('sb_acts'))) : '', '<svg width="16" height="16" fill="none" stroke="#74a2b4" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h7"/></svg>')
+        +fieldCard('Licensing Company', ev('sb_licensing_co'), '<svg width="16" height="16" fill="none" stroke="#dd8233" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>')
+        +fieldCard('Licensing Link', has('sb_licensing_link') ? '<a href="'+esc(String(v('sb_licensing_link')))+'" style="color:#476aaa;">'+esc(String(v('sb_licensing_link')))+'</a>' : '', '<svg width="16" height="16" fill="none" stroke="#476aaa" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>')
+        +'</div>'
+        +(synopsis ? '<div class="synopsis-block"><div class="synopsis-icon">“”</div><div class="synopsis-text">'+esc(synopsis)+'</div></div>' : '');
+
+      var submitterHtml = secHead('Submitter Info','#476aaa')
+        +'<div class="fc-grid">'
+        +fieldCard('Your Name', ev('si_name'), '<svg width="16" height="16" fill="none" stroke="#476aaa" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>')
+        +fieldCard('Your Email', ev('si_email'), '<svg width="16" height="16" fill="none" stroke="#476aaa" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>')
+        +fieldCard('Your Phone Number', ev('si_phone'), '<svg width="16" height="16" fill="none" stroke="#476aaa" stroke-width="2" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.59 1.2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 8.2a16 16 0 0 0 5.92 5.92l.84-.84a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 21.8 15.5z"/></svg>')
+        +fieldCard('Your Role / Relationship', ev('si_role'), '<svg width="16" height="16" fill="none" stroke="#476aaa" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>')
+        +'</div>'
+        +(has('si_worked_before') ? '<div style="margin-top:10px;font-size:12px;font-weight:700;color:rgba(26,21,48,0.5);">HAVE YOU WORKED WITH THIS ORGANISATION BEFORE?</div>'
+          +'<div style="display:flex;gap:10px;margin-top:5px;">'
+          +'<label style="display:flex;align-items:center;gap:5px;font-size:13px;"><span style="width:16px;height:16px;border-radius:50%;border:2px solid #572e88;background:'+(v('si_worked_before')==='yes'?'#572e88':'#fff')+';display:inline-block;"></span> Yes</label>'
+          +'<label style="display:flex;align-items:center;gap:5px;font-size:13px;"><span style="width:16px;height:16px;border-radius:50%;border:2px solid rgba(87,46,136,0.3);background:'+(v('si_worked_before')==='no'?'#572e88':'#fff')+';display:inline-block;"></span> No</label>'
+          +'</div>' : '');
+
+      var castingHtml = secHead('Casting','#d1523d')
+        +(has('cast_named_roles') ? '<div class="stat-row">'+statBox('Named Roles', esc(String(v('cast_named_roles'))))+'</div>' : '<div style="padding:16px 0;color:rgba(26,21,48,0.3);font-size:13px;">No casting information provided.</div>');
+
+      var whyHtml = secHead('Why This Show?','#ca7ea7')
+        +qaRow('Why are you pitching this show?','why_pitching','#ca7ea7')
+        +qaRow('Why is this show a good fit for this organisation?','why_fit','#572e88')
+        +qaRow('Why is this the right time for this show?','why_now','#efab45')
+        +(Array.isArray(whyAudience) && whyAudience.length
+          ? '<div class="qa-row"><div class="qa-dot" style="background:#769e7b;"></div><div class="qa-body"><div class="qa-label">Who is the audience for this show?</div>'+pills('why_audience','#769e7b')+'</div></div>' : '')
+        +qaRow('Why would audiences come see it?','why_appeal','#74a2b4')
+        +qaRow('What makes this show worth choosing over other options?','why_over_others','#dd8233');
+
+      var musicHtml = secHead('Music & Choreography','#769e7b')
+        +'<div class="fc-grid">'
+        +fieldCard('Type of Production', ev('mu_production_type'), '<svg width="16" height="16" fill="none" stroke="#769e7b" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>')
+        +fieldCard('Major Dance Numbers?', has('mu_dance_numbers') ? (v('mu_dance_numbers')==='yes' ? 'Yes' : 'No') : '', '<svg width="16" height="16" fill="none" stroke="#769e7b" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>')
+        +(has('mu_songs') ? fieldCard('Number of Songs', esc(String(v('mu_songs'))), '<svg width="16" height="16" fill="none" stroke="#769e7b" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/></svg>') : '')
+        +'</div>'
+        +(['mu_vocal_diff','mu_dance_diff','mu_music_diff'].some(function(id){ return has(id); })
+          ? '<div style="margin-top:10px;"><div class="fc-label" style="margin-bottom:6px;">Difficulty Ratings</div><div style="display:flex;gap:8px;flex-wrap:wrap;">'
+            +[['mu_vocal_diff','Vocal','#572e88'],['mu_dance_diff','Dance','#ca7ea7'],['mu_music_diff','Music','#769e7b']].map(function(r){
+              if (!has(r[0])) return '';
+              var stars = parseInt(v(r[0])) || 0;
+              return '<div style="background:rgba(87,46,136,0.06);border-radius:10px;padding:8px 12px;"><div style="font-size:10px;font-weight:700;color:'+r[2]+';text-transform:uppercase;letter-spacing:0.05em;margin-bottom:3px;">'+r[1]+'</div>'
+                +'<div>'+'&#9733;'.repeat(stars)+'<span style="color:rgba(87,46,136,0.2);">'+'&#9733;'.repeat(5-stars)+'</span></div></div>';
+            }).join('')
+            +'</div></div>' : '');
+
+      var contentHtml = secHead('Content & Suitability','#769e7b')
+        +(Array.isArray(contentWarnings) && contentWarnings.length
+          ? '<div class="fc-label" style="margin-top:10px;margin-bottom:6px;">Content Warnings</div>'+pills('cs_warnings','#d1523d') : '')
+        +'<div class="fc-grid" style="margin-top:12px;">'
+        +fieldCard('Audience Age Suitability', ev('cs_age'), '<svg width="16" height="16" fill="none" stroke="#769e7b" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>')
+        +fieldCard('Is the Show Family Friendly?', ev('cs_family_friendly'), '<svg width="16" height="16" fill="none" stroke="#769e7b" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>')
+        +'</div>'
+        +(has('cs_notes') ? '<div class="fc-label" style="margin-top:10px;margin-bottom:4px;">Suitability Notes</div><div class="long-text">'+esc(String(v('cs_notes')))+'</div>' : '');
+
+      var risksHtml = secHead('Risks & Challenges','#efab45')
+        +'<div style="display:flex;gap:12px;flex-wrap:wrap;">'
+        +(has('ri_challenge') ? '<div style="flex:1;min-width:160px;"><div class="fc-label">What is the biggest challenge?</div><div class="long-text">'+esc(String(v('ri_challenge')))+'</div></div>' : '')
+        +(has('ri_difficult') ? '<div style="flex:1;min-width:160px;"><div class="fc-label">What could make this difficult for this organisation?</div><div class="long-text">'+esc(String(v('ri_difficult')))+'</div></div>' : '')
+        +'</div>';
+
+      var attachUrl = v('at_files');
+      var attachHtml = secHead('Attachments','#74a2b4')
+        +(attachUrl && attachUrl.indexOf('http') === 0
+          ? '<div style="display:flex;align-items:center;gap:8px;margin-top:10px;padding:10px 14px;background:rgba(71,106,170,0.07);border-radius:10px;">'
+            +'<svg width="18" height="18" fill="none" stroke="#74a2b4" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
+            +'<a href="'+esc(attachUrl)+'" style="color:#476aaa;font-size:13px;font-weight:700;">View Attachment</a></div>'
+          : '<div style="padding:12px 0;color:rgba(26,21,48,0.3);font-size:13px;">No files attached.</div>');
+
+      var css = [
+        '*{box-sizing:border-box;margin:0;padding:0;}',
+        'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;color:#1a1530;background:#f0eff5;padding:20px;font-size:13px;line-height:1.5;}',
+        '@media print{body{background:#fff;padding:0;}@page{margin:15mm;}}',
+        '.page{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:12px;}',
+        '.top-row{display:flex;gap:12px;align-items:stretch;}',
+        '.poster-wrap{width:220px;flex-shrink:0;min-height:280px;}',
+        '.mid-row{display:flex;gap:12px;}',
+        '.card{background:#fff;border-radius:16px;padding:18px;flex:1;min-width:0;box-shadow:0 1px 4px rgba(0,0,0,0.07);}',
+        '.sec-head{display:flex;align-items:center;gap:8px;padding-bottom:10px;margin-bottom:12px;}',
+        '.sec-title{font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:0.08em;}',
+        '.fc-grid{display:flex;flex-wrap:wrap;gap:10px;}',
+        '.fc{display:flex;align-items:flex-start;gap:8px;background:rgba(87,46,136,0.04);border-radius:10px;padding:10px 12px;min-width:160px;flex:1;}',
+        '.fc-icon{flex-shrink:0;margin-top:1px;}',
+        '.fc-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:rgba(26,21,48,0.45);margin-bottom:2px;}',
+        '.fc-val{font-size:13px;font-weight:700;color:#1a1530;line-height:1.35;}',
+        '.synopsis-block{display:flex;gap:10px;margin-top:14px;padding:14px;background:rgba(87,46,136,0.05);border-radius:12px;}',
+        '.synopsis-icon{font-size:22px;color:#572e88;line-height:1;flex-shrink:0;font-weight:900;}',
+        '.synopsis-text{font-size:13px;color:#1a1530;line-height:1.6;}',
+        '.stat-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;}',
+        '.stat-box{background:rgba(87,46,136,0.07);border-radius:12px;padding:14px 20px;text-align:center;min-width:100px;}',
+        '.stat-val{font-size:28px;font-weight:900;color:#1a1530;line-height:1;}',
+        '.stat-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:rgba(26,21,48,0.45);margin-top:4px;}',
+        '.qa-row{display:flex;gap:10px;margin-bottom:12px;align-items:flex-start;}',
+        '.qa-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px;}',
+        '.qa-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:rgba(26,21,48,0.45);margin-bottom:3px;}',
+        '.qa-val{font-size:13px;color:#1a1530;line-height:1.55;}',
+        '.long-text{font-size:12px;color:#1a1530;line-height:1.6;padding:8px 10px;background:rgba(87,46,136,0.04);border-radius:8px;margin-top:4px;white-space:pre-wrap;}',
+        '.full-card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 1px 4px rgba(0,0,0,0.07);}',
+      ].join('');
+
+      var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+esc(showTitle)+'</title><style>'+css+'</style></head><body>'
+        +'<div class="page">'
+        // Top row: poster + show basics
+        +'<div class="top-row">'
+        +'<div class="poster-wrap">'+posterHtml+'</div>'
+        +'<div class="card" style="flex:1;">'+showBasicsHtml+'</div>'
+        +'</div>'
+        // Row 2: submitter + casting
+        +'<div class="mid-row">'
+        +'<div class="card" style="flex:2;">'+submitterHtml+'</div>'
+        +'<div class="card" style="flex:1;">'+castingHtml+'</div>'
+        +'</div>'
+        // Row 3: why + music
+        +'<div class="mid-row">'
+        +'<div class="card" style="flex:1;">'+whyHtml+'</div>'
+        +'<div class="card" style="flex:1;">'+musicHtml+'</div>'
+        +'</div>'
+        // Row 4: content + risks
+        +'<div class="mid-row">'
+        +'<div class="card" style="flex:1;">'+contentHtml+'</div>'
+        +'<div class="card" style="flex:1;">'+risksHtml+'</div>'
+        +'</div>'
+        // Attachments
+        +'<div class="full-card">'+attachHtml+'</div>'
+        +'</div>'
+        +'<script>window.onload=function(){window.print();}<\/script>'
         +'</body></html>';
+
       var win = window.open('', '_blank', 'noopener');
       if (!win) return;
-      win.document.open(); win.document.write(html); win.document.close(); win.focus(); win.print();
+      win.document.open(); win.document.write(html); win.document.close(); win.focus();
     }
 
     async function loadProposalPage() {
