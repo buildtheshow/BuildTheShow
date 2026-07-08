@@ -282,7 +282,8 @@
       .pp-table tbody td.pp-col-num { color:rgba(26,21,48,0.6); font-weight:600; }
       .pp-table tbody td.pp-col-menu { text-align:right; padding-right:0.75rem; }
       .pp-show-cell { display:flex; align-items:center; gap:0.75rem; }
-      .pp-show-thumb { width:44px; height:44px; border-radius:8px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:1rem; font-weight:900; color:#fff; }
+      .pp-show-thumb { height:44px; width:44px; border-radius:8px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:1rem; font-weight:900; color:#fff; }
+      .pp-show-thumb img { height:44px; width:auto; max-width:72px; border-radius:6px; object-fit:contain; display:block; background:#f0eff5; }
       .pp-show-name { font-weight:800; color:#000; font-size:0.86rem; line-height:1.25; }
       .pp-show-sub { font-size:0.74rem; color:rgba(26,21,48,0.45); margin-top:0.1rem; }
       .pp-submitter-cell { display:flex; align-items:center; gap:0.6rem; }
@@ -903,12 +904,16 @@
     const submitterInitials = initialsOf(proposal.pitch_submitted_by);
     const licensor = proposal.licensing_company || proposal.show_version || '';
     const intake = proposalIntakeById(proposal.intake_id) || proposal.production_proposal_intakes || null;
+    const posterUrl = proposal.form_answers && proposal.form_answers.sb_cover;
+    const thumbHtml = posterUrl
+      ? `<div class="pp-show-thumb" style="background:transparent;width:auto;"><img src="${esc(posterUrl)}" alt="" onerror="this.parentElement.innerHTML='${esc(letter)}';this.parentElement.style.background='${thumb}';this.parentElement.style.width='44px'"></div>`
+      : `<div class="pp-show-thumb" style="background:${thumb};">${esc(letter)}</div>`;
     return `
       <tr onclick="openProposalModal('${proposal.id}')">
         <td>${intake ? `<div class="pp-show-name" style="font-size:0.8rem;">${esc(intake.title || 'Season')}</div><div class="pp-show-sub">${esc(intake.season_label || '')}</div>` : '<span style="color:rgba(26,21,48,0.4);">—</span>'}</td>
         <td>
           <div class="pp-show-cell">
-            <div class="pp-show-thumb" style="background:${thumb};">${esc(letter)}</div>
+            ${thumbHtml}
             <div>
               <div class="pp-show-name">${esc(proposal.proposed_show_title || 'Untitled Proposal')}</div>
               ${licensor ? `<div class="pp-show-sub">${esc(licensor)}</div>` : ''}
