@@ -392,8 +392,8 @@
       .opp-modal-overlay { display:none; position:fixed; inset:0; background:rgba(26,21,48,0.55); z-index:3200; padding:1rem; align-items:center; justify-content:center; }
       .opp-modal-overlay.open { display:flex; }
       .opp-modal { width:min(1080px,100%); max-height:92vh; overflow:auto; background:#fff; border-radius:18px; box-shadow:0 30px 80px rgba(26,21,48,0.28); }
-      .opp-modal.intake-modal-shell { width:min(560px,100%); max-height:94vh; }
-      .opp-modal.intake-modal-shell.pfb-wide { width:min(1060px,96vw); }
+      .opp-modal.intake-modal-shell { width:min(560px,96vw); max-height:94vh; }
+      .opp-modal.intake-modal-shell.pfb-wide { width:min(1100px,96vw) !important; max-width:none !important; }
       .opp-modal-head { padding:1rem 1.15rem; border-bottom:1px solid rgba(87,46,136,0.08); display:flex; align-items:center; justify-content:space-between; gap:0.75rem; position:sticky; top:0; background:#fff; z-index:2; }
       .opp-modal-body { padding:1rem 1.15rem 1.2rem; display:grid; gap:1rem; }
       .opp-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.8rem; }
@@ -477,7 +477,8 @@
       .pp-sub-intake-empty { font-size:0.84rem; color:#8f84a5; padding:0.5rem 0; }
 
       /* ---- form builder (Step 3) ---- */
-      .pfb-layout { display:flex; height:68vh; border:1px solid rgba(87,46,136,0.13); border-radius:14px; overflow:hidden; }
+      .pfb-layout { display:flex; height:72vh; min-height:420px; border:1px solid rgba(87,46,136,0.13); border-radius:14px; overflow:hidden; }
+      .pfb-sidebar { width:220px; }
       .pfb-sidebar { width:210px; flex-shrink:0; display:flex; flex-direction:column; border-right:1px solid rgba(87,46,136,0.1); background:#faf9fc; overflow-y:auto; }
       .pfb-sidebar-item { display:flex; align-items:center; gap:0.45rem; padding:0.65rem 0.85rem; cursor:pointer; border-bottom:1px solid rgba(87,46,136,0.07); user-select:none; transition:background 0.12s; }
       .pfb-sidebar-item:hover { background:rgba(87,46,136,0.06); }
@@ -494,7 +495,7 @@
       .pfb-section-title-input:focus { background:rgba(87,46,136,0.05); border-radius:4px; padding:0 4px; }
       .pfb-main-body { padding:0.7rem 0.9rem 1rem; display:flex; flex-direction:column; gap:0.3rem; }
       .pfb-q-count { font-size:0.62rem; font-weight:800; background:rgba(87,46,136,0.09); color:#572e88; border-radius:99px; padding:0.1rem 0.48rem; white-space:nowrap; flex-shrink:0; }
-      .pfb-question { background:#fff; border:1px solid rgba(87,46,136,0.1); border-radius:8px; overflow:hidden; }
+      .pfb-question { background:#fff; border:1px solid rgba(87,46,136,0.1); border-radius:8px; }
       .pfb-question--disabled { opacity:0.42; }
       .pfb-q-row { display:flex; align-items:center; gap:0.45rem; padding:0.48rem 0.6rem; }
       .pfb-q-move-btns { display:flex; flex-direction:column; gap:0; flex-shrink:0; }
@@ -637,7 +638,7 @@
       const intakeWrap = document.createElement('div');
       intakeWrap.innerHTML = `
         <div class="opp-modal-overlay" id="proposal-intake-modal">
-          <div class="opp-modal intake-modal-shell" style="max-width:560px;">
+          <div class="opp-modal intake-modal-shell">
             <div class="opp-modal-head" style="padding-bottom:0.5rem;">
               <div class="opp-panel-title" id="proposal-intake-modal-title">Add Season</div>
               <button type="button" class="btn-secondary" onclick="closeProposalIntakeModal()">Close</button>
