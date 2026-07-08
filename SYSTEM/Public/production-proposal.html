@@ -969,6 +969,12 @@
         }).join('')+'</div></div>';
     }
 
+    function pfSelectOther(sel, otherId) {
+      var inp = document.getElementById(otherId);
+      if (inp) inp.style.display = sel.value === 'Other' ? 'block' : 'none';
+    }
+    window.pfSelectOther = pfSelectOther;
+
     function pfMoneyInput(el) {
       var raw = el.value.replace(/[^\d]/g, '');
       el.value = raw ? parseInt(raw, 10).toLocaleString('en') : '';
@@ -1337,9 +1343,15 @@
               return '<label class="proposal-radio-item"><input type="radio" name="pq_'+esc(id)+'" value="'+esc(p.name||p)+'" onchange="applyConditionalLogic()"'+req+'> '+esc(p.name||p)+'</label>';
             }).join('')+'</div>';
         }
-        case 'dropdown':
+        case 'dropdown': {
           var opts = (q.options||[]).map(function(o){ return '<option value="'+esc(o)+'">'+esc(o)+'</option>'; }).join('');
-          return '<select class="proposal-select" id="pq_'+esc(id)+'"'+req+'><option value="">-- Select --</option>'+opts+'</select>';
+          var hasOther = (q.options||[]).indexOf('Other') !== -1;
+          var otherId  = 'pq_'+esc(id)+'_other';
+          return '<select class="proposal-select" id="pq_'+esc(id)+'"'+req
+            +' onchange="pfSelectOther(this,\''+otherId+'\');applyConditionalLogic();">'
+            +'<option value="">-- Select --</option>'+opts+'</select>'
+            +(hasOther ? '<input class="proposal-input" id="'+otherId+'" type="text" placeholder="Please specify..." style="margin-top:0.5rem;display:none;">' : '');
+        }
         case 'checkbox':
           return '<div class="proposal-checkbox-group" id="pq_'+esc(id)+'">'
             +(q.options||[]).map(function(o){
@@ -1411,6 +1423,15 @@
         case 'currency': {
           var el = document.getElementById('pq_'+q.id);
           return el ? el.value.replace(/[^\d.]/g, '') : '';
+        }
+        case 'dropdown': {
+          var el = document.getElementById('pq_'+q.id);
+          if (!el) return '';
+          if (el.value === 'Other') {
+            var otherEl = document.getElementById('pq_'+q.id+'_other');
+            return (otherEl && otherEl.value.trim()) ? otherEl.value.trim() : 'Other';
+          }
+          return el.value;
         }
         case 'divider':
         case 'info_text':
