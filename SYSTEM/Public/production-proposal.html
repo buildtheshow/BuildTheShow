@@ -353,6 +353,20 @@
       line-height: 1.6;
     }
 
+    .proposal-file-input {
+      display: block;
+      width: 100%;
+      padding: 0.65rem 0.8rem;
+      border: 1px dashed rgba(87,46,136,0.3);
+      border-radius: 10px;
+      background: rgba(87,46,136,0.03);
+      font: inherit;
+      font-size: 0.84rem;
+      color: #1a1530;
+      cursor: pointer;
+      box-sizing: border-box;
+    }
+    .proposal-file-input:hover { border-color: #572e88; background: rgba(87,46,136,0.06); }
     .proposal-note {
       margin-top: 1rem;
       border-radius: 12px;
@@ -806,8 +820,11 @@
             +[1,2,3,4,5].map(function(n){
               return '<button type="button" class="proposal-rating-btn" data-val="'+n+'" onclick="pfRatingPick(\''+esc(id)+'\','+n+')">'+n+'</button>';
             }).join('')+'</div>';
-        case 'file_upload':
-          return '<div class="proposal-note">File uploads are not yet available on this form. Please describe or link to your attachment in an adjacent notes field.</div>';
+        case 'file_upload': {
+          var isImage = id.indexOf('cover') !== -1 || id.indexOf('poster') !== -1 || id.indexOf('image') !== -1;
+          var accept = isImage ? 'image/*' : '*/*';
+          return '<input class="proposal-file-input" id="pq_'+esc(id)+'" type="file" accept="'+accept+'" data-qid="'+esc(id)+'">';
+        }
         case 'agreement_checkbox':
           return '<label class="proposal-agreement"><input type="checkbox" id="pq_'+esc(id)+'"'+req+'> '+esc(q.label)+'</label>';
         default:
@@ -847,8 +864,11 @@
         }
         case 'divider':
         case 'info_text':
-        case 'file_upload':
           return null;
+        case 'file_upload': {
+          var fileEl = document.getElementById('pq_'+q.id);
+          return (fileEl && fileEl.files && fileEl.files[0]) ? '__pending_upload__' : null;
+        }
         default: {
           var el = document.getElementById('pq_'+q.id);
           return el ? el.value : '';
@@ -1024,6 +1044,24 @@
       }
     }
 
+    async function uploadProposalFiles() {
+      var fileInputs = document.querySelectorAll('.proposal-file-input');
+      var uploaded = {};
+      for (var i = 0; i < fileInputs.length; i++) {
+        var input = fileInputs[i];
+        if (!input.files || !input.files[0]) continue;
+        var file = input.files[0];
+        var qid = input.dataset.qid;
+        var ext = file.name.split('.').pop();
+        var path = 'proposals/' + (pageState.intakeKey||'unknown') + '/' + qid + '-' + Date.now() + '.' + ext;
+        var res = await sb.storage.from('proposal-attachments').upload(path, file, { upsert: true });
+        if (res.error) { console.warn('[BTS] file upload failed for', qid, res.error); continue; }
+        var urlRes = sb.storage.from('proposal-attachments').getPublicUrl(path);
+        uploaded[qid] = urlRes.data && urlRes.data.publicUrl ? urlRes.data.publicUrl : path;
+      }
+      return uploaded;
+    }
+
     async function submitProposal(event) {
       event.preventDefault();
       clearStatus();
@@ -1040,6 +1078,9 @@
       pageState.submitting = true;
       var submitBtn = document.getElementById('submit-btn');
       submitBtn.disabled = true;
+      submitBtn.textContent = 'Uploading files...';
+      var uploadedUrls = await uploadProposalFiles();
+      Object.assign(answers, uploadedUrls);
       submitBtn.textContent = 'Submitting...';
       var payload = Object.assign({}, flat, { form_answers: answers });
       try {
