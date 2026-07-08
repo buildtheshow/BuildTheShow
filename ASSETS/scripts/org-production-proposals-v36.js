@@ -1756,6 +1756,22 @@
     const shell = document.querySelector('.intake-modal-shell');
     if (shell) shell.classList.remove('pfb-wide');
     currentFormConfig = intake && intake.form_config ? JSON.parse(JSON.stringify(intake.form_config)) : JSON.parse(JSON.stringify(DEFAULT_FORM_CONFIG));
+    if (intake && intake.form_config) {
+      var defCopy = JSON.parse(JSON.stringify(DEFAULT_FORM_CONFIG));
+      defCopy.sections.forEach(function(defSec) {
+        var savedSec = currentFormConfig.sections.find(function(s) { return s.id === defSec.id; });
+        if (!savedSec) {
+          var newSec = Object.assign({}, defSec, { enabled: false });
+          newSec.questions = defSec.questions.map(function(q) { return Object.assign({}, q, { enabled: false }); });
+          currentFormConfig.sections.push(newSec);
+        } else {
+          defSec.questions.forEach(function(defQ) {
+            var exists = savedSec.questions.some(function(q) { return q.id === defQ.id; });
+            if (!exists) savedSec.questions.push(Object.assign({}, defQ, { enabled: false }));
+          });
+        }
+      });
+    }
     pfbOpenQuestions = new Set();
     pfbSelectedSectionId = null;
 
