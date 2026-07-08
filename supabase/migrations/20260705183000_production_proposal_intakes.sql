@@ -190,7 +190,8 @@ begin
       'slug', v_org.slug,
       'abbreviation', v_org.abbreviation,
       'logo_url', v_org.logo_url,
-      'logo_white_url', v_org.logo_white_url
+      'logo_white_url', v_org.logo_white_url,
+      'payment_settings', coalesce(v_org.payment_settings, '{}'::jsonb)
     ),
     'intake', jsonb_build_object(
       'id', v_intake.id,

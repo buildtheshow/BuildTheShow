@@ -593,6 +593,11 @@
     .pf-manage-lbl { font-size:0.66rem; font-weight:900; text-transform:uppercase; letter-spacing:0.065em; color:#dd8233; }
     .pf-manage-opt { font-size:0.59rem; color:rgba(221,130,51,0.55); font-weight:700; margin-left:0.25rem; }
 
+    /* Currency input */
+    .pf-currency-wrap { position:relative; display:flex; align-items:center; }
+    .pf-currency-sym { position:absolute; left:0.95rem; font-size:0.94rem; font-weight:600; color:rgba(0,0,0,0.38); pointer-events:none; z-index:1; }
+    .pf-currency-inp { padding-left:1.85rem !important; }
+
     /* Attachments */
     .pf-attach-layout { display:grid; grid-template-columns:1fr 1fr; gap:1rem; align-items:start; }
     .pf-drop-area { border:1.5px dashed rgba(71,106,170,0.28); border-radius:12px; padding:1.4rem 1rem; display:flex; flex-direction:column; align-items:center; gap:0.5rem; text-align:center; position:relative; cursor:pointer; min-height:140px; justify-content:center; }
@@ -853,6 +858,13 @@
       'si_role':           '/ASSETS/Images/Icons/Volunteer Roles.svg',
       'si_worked_before':  '/ASSETS/Images/Icons/volunteer-HEART.svg',
     };
+
+    function pfCurrencySymbol(code) {
+      try {
+        var s = (0).toLocaleString('en', {style:'currency', currency:code||'CAD', minimumFractionDigits:0}).replace(/[\d,.\s]+/g,'').trim();
+        return s || '$';
+      } catch(e) { return '$'; }
+    }
 
     function pfHd(sId, title) {
       var m = PF_SECTION_META[sId] || { color:'#572e88', icon:'/ASSETS/Images/Icons/Checklist.svg' };
@@ -1183,8 +1195,13 @@
           return '<input class="proposal-input" id="pq_'+esc(id)+'" type="tel" placeholder="'+ph+'"'+req+'>';
         case 'number':
           return '<input class="proposal-input" id="pq_'+esc(id)+'" type="number" min="0" step="1" placeholder="'+ph+'"'+req+'>';
-        case 'currency':
-          return '<input class="proposal-input" id="pq_'+esc(id)+'" type="number" min="0" step="0.01" placeholder="'+ph+'"'+req+'>';
+        case 'currency': {
+          var sym = esc(pageState.currencySymbol || '$');
+          return '<div class="pf-currency-wrap">'
+            +'<span class="pf-currency-sym">'+sym+'</span>'
+            +'<input class="proposal-input pf-currency-inp" id="pq_'+esc(id)+'" type="number" min="0" step="1" placeholder="0" inputmode="numeric"'+req+'>'
+            +'</div>';
+        }
         case 'date':
           return '<input class="proposal-input" id="pq_'+esc(id)+'" type="date"'+req+'>';
         case 'date_range':
@@ -1556,6 +1573,7 @@
     function renderPage() {
       const org = pageState.organization;
       const intake = pageState.intake;
+      pageState.currencySymbol = pfCurrencySymbol((org.payment_settings && org.payment_settings.currency) || 'CAD');
       const orgName = org.name || 'Organization';
       const seasonLabel = intake.season_label || intake.title || 'this season pitch';
       const deadlineText = intake.closes_at ? formatPublicDate(intake.closes_at) : 'No deadline has been set yet.';
