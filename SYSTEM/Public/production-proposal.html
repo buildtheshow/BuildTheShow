@@ -564,7 +564,28 @@
       border-color: rgba(255,255,255,0.7);
       box-shadow: 0 0 0 3px rgba(255,255,255,0.15);
     }
+    .pf-card .proposal-select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='7' viewBox='0 0 12 7'%3E%3Cpath d='M1 1l5 5 5-5' stroke='rgba(255,255,255,0.65)' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.9rem center;
+      padding-right: 2.4rem;
+    }
     .pf-card .proposal-select option { background:#1a1530; color:#fff; }
+
+    /* Field sub-headers (within-card) */
+    .pf-hd-desc { font-size:0.8rem; color:rgba(255,255,255,0.62); line-height:1.5; margin-top:-0.55rem; font-weight:500; }
+    .pf-fdivider { border:none; border-top:1px dashed rgba(255,255,255,0.22); margin:1.1rem 0; }
+    .pf-fhd { display:flex; align-items:center; gap:0.55rem; margin-bottom:0.6rem; flex-wrap:wrap; }
+    .pf-fhd-icon-wrap { width:26px; height:26px; border-radius:50%; background:rgba(255,255,255,0.2); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .pf-fhd-icon { width:13px; height:13px; filter:brightness(0) invert(1); }
+    .pf-fhd-label { font-size:0.72rem; font-weight:900; letter-spacing:0.055em; text-transform:uppercase; color:#fff; }
+    .pf-fhd-suffix { font-size:0.7rem; color:rgba(255,255,255,0.5); font-weight:500; }
+
+    /* 4-column content warnings grid */
+    .pf-warn-grid4 { display:grid; grid-template-columns:repeat(4,1fr); gap:0.45rem 0.6rem; margin-top:0.5rem; }
+    .pf-warn-item { display:flex; align-items:flex-start; gap:0.35rem; font-size:0.78rem; color:rgba(255,255,255,0.9); cursor:pointer; line-height:1.35; }
+    .pf-warn-item input[type=checkbox] { accent-color:#fff; width:13px; height:13px; flex-shrink:0; margin-top:0.1rem; }
+    @media (max-width:780px) { .pf-warn-grid4 { grid-template-columns:repeat(2,1fr); } }
 
     /* Show Basics */
     .pf-sb-layout { display:grid; grid-template-columns:240px 1fr; gap:1.2rem; }
@@ -860,7 +881,7 @@
       'sec_casting':      { color:'#d1523d', icon:'/ASSETS/Images/Icons/Casting Board.svg' },
       'sec_why':          { color:'#ca7ea7', icon:'/ASSETS/Images/Icons/volunteer-HEART.svg' },
       'sec_music':        { color:'#769e7b', icon:'/ASSETS/Images/Icons/script-music-songs.svg' },
-      'sec_content':      { color:'#769e7b', icon:'/ASSETS/Images/Icons/Information.svg' },
+      'sec_content':      { color:'#769e7b', icon:'/ASSETS/Images/Icons/Information.svg', description:'Tell us about the content and who this show is suitable for.' },
       'sec_risks':        { color:'#efab45', icon:'/ASSETS/Images/Icons/Danger Zone.svg' },
       'sec_attachments':  { color:'#476aaa', icon:'/ASSETS/Images/Icons/Files.svg' },
     };
@@ -896,7 +917,17 @@
     function pfHd(sId, title) {
       var m = PF_SECTION_META[sId] || { color:'#572e88', icon:'/ASSETS/Images/Icons/Checklist.svg' };
       return '<div class="pf-hd"><img class="pf-hd-icon" src="'+m.icon+'" alt="" onerror="this.style.display=\'none\'">'
-        +'<span class="pf-hd-title" style="color:'+m.color+'">'+esc(title)+'</span></div>';
+        +'<span class="pf-hd-title">'+esc(title)+'</span></div>'
+        +(m.description ? '<div class="pf-hd-desc">'+esc(m.description)+'</div><hr class="pf-fdivider" style="margin-top:0.9rem;">' : '');
+    }
+
+    function pfFHd(label, iconSrc, optTag, suffix) {
+      return '<div class="pf-fhd">'
+        +'<div class="pf-fhd-icon-wrap"><img class="pf-fhd-icon" src="'+esc(iconSrc)+'" alt="" onerror="this.style.display=\'none\'"></div>'
+        +'<span class="pf-fhd-label">'+esc(label)+'</span>'
+        +(optTag||'')
+        +(suffix ? '<span class="pf-fhd-suffix">'+esc(suffix)+'</span>' : '')
+        +'</div>';
     }
 
     function pfF(q, icon, cls) {
@@ -1116,26 +1147,54 @@
     function pfRenderContent(section, sIdx) {
       var qs = {};
       section.questions.filter(function(q){ return q.enabled !== false; }).forEach(function(q){ qs[q.id] = q; });
+
+      // Row 1: Age suitability + Family friendly
+      var ageQ = qs['cs_age'];
+      var ffQ  = qs['cs_family_friendly'];
+      var topHtml = '';
+      if (ageQ || ffQ) {
+        var ageHtml = ageQ
+          ? '<div class="pf-f" data-qid="cs_age">'
+            +pfFHd(ageQ.label, '/ASSETS/Images/Icons/Profiles.svg', ageQ.required?'<span class="pf-req"> *</span>':'<span class="pf-opt-tag">Optional</span>')
+            +renderPublicInput(ageQ)+'</div>' : '';
+        var ffHtml = ffQ
+          ? '<div class="pf-f" data-qid="cs_family_friendly">'
+            +pfFHd(ffQ.label, '/ASSETS/Images/Icons/volunteer-HEART.svg', ffQ.required?'<span class="pf-req"> *</span>':'<span class="pf-opt-tag">Optional</span>')
+            +renderPublicInput(ffQ)+'</div>' : '';
+        topHtml = '<div class="pf-grid">'+ageHtml+ffHtml+'</div>';
+      }
+
+      // Row 2: Content warnings 4-col grid
       var warnQ = qs['cs_warnings'];
       var warnHtml = '';
       if (warnQ) {
-        var cAttr = warnQ.conditions && warnQ.conditions.length ? ' data-conditions="'+esc(JSON.stringify(warnQ.conditions))+'"' : '';
-        warnHtml = '<div class="pf-f" data-qid="'+esc(warnQ.id)+'"'+cAttr+'>'
-          +'<div class="pf-lbl">'+esc(warnQ.label)+' <span style="font-size:0.6rem;font-weight:600;color:rgba(26,21,48,0.3);margin-left:0.2rem;">(Select all that apply)</span></div>'
-          +'<div class="pf-warn-grid" id="pq_'+esc(warnQ.id)+'">'
-          +(warnQ.options||[]).map(function(o){ return '<label class="pf-warn-item"><input type="checkbox" value="'+esc(o)+'" onchange="applyConditionalLogic()"> '+esc(o)+'</label>'; }).join('')
+        warnHtml = '<hr class="pf-fdivider">'
+          +'<div class="pf-f" data-qid="cs_warnings">'
+          +pfFHd(warnQ.label, '/ASSETS/Images/Icons/Danger Zone.svg', '', '(Select all that apply)')
+          +'<div class="pf-warn-grid4" id="pq_'+esc(warnQ.id)+'">'
+          +(warnQ.options||[]).map(function(o){ return '<label class="pf-warn-item"><input type="checkbox" value="'+esc(o)+'"> '+esc(o)+'</label>'; }).join('')
           +'</div></div>';
       }
-      var dropHtml = '<div class="pf-grid" style="margin-top:0.8rem;">'
-        +(qs['cs_age']?pfF(qs['cs_age'],'',''):'')
-        +(qs['cs_family_friendly']?pfF(qs['cs_family_friendly'],'',''):'')
-        +'</div>';
+
+      // Row 3: Suitability notes textarea
       var notesQ = qs['cs_notes'];
-      var notesHtml = notesQ ? '<div style="margin-top:0.75rem;">'+pfF(notesQ,'','')+'</div>' : '';
+      var notesHtml = '';
+      if (notesQ) {
+        notesHtml = '<hr class="pf-fdivider">'
+          +'<div class="pf-f" data-qid="cs_notes">'
+          +pfFHd(notesQ.label, '/ASSETS/Images/Icons/Checklist.svg', notesQ.required?'<span class="pf-req"> *</span>':'<span class="pf-opt-tag">Optional</span>')
+          +(notesQ.help_text?'<div class="pf-help">'+esc(notesQ.help_text)+'</div>':'')
+          +renderPublicInput(notesQ)
+          +'<div class="pf-cc" id="pf-cc-cs_notes">0 / 500</div></div>';
+      }
+
       var handledContentIds = ['cs_warnings','cs_age','cs_family_friendly','cs_notes'];
       var extraContentIds = Object.keys(qs).filter(function(id){ return handledContentIds.indexOf(id)===-1; });
-      var extraContentHtml = extraContentIds.length ? '<div style="display:flex;flex-direction:column;gap:0.75rem;margin-top:0.75rem;">'+extraContentIds.map(function(id){ return pfF(qs[id],'',''); }).join('')+'</div>' : '';
-      return pfCardOpen('sec_content')+pfHd('sec_content', section.title || 'Content & Suitability')+warnHtml+dropHtml+notesHtml+extraContentHtml+'</div>';
+      var extraContentHtml = extraContentIds.length
+        ? '<div style="display:flex;flex-direction:column;gap:0.75rem;margin-top:0.75rem;">'+extraContentIds.map(function(id){ return pfF(qs[id],'',''); }).join('')+'</div>'
+        : '';
+
+      return pfCardOpen('sec_content')+pfHd('sec_content', section.title || 'Content & Suitability')+topHtml+warnHtml+notesHtml+extraContentHtml+'</div>';
     }
 
     function pfRenderRisks(section, sIdx) {
