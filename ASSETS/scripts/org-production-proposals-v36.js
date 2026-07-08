@@ -846,7 +846,8 @@
     const sel = proposalIntakeById(intakeId);
     if (sel && intakeIsYear(sel)) {
       const subIds = subIntakesOf(sel.id).map(function(s) { return s.id; });
-      return state.proposals.filter(function(p) { return subIds.includes(p.intake_id); });
+      // Always include the intake itself — flat intakes have no children but proposals link directly to them
+      return state.proposals.filter(function(p) { return p.intake_id === intakeId || subIds.includes(p.intake_id); });
     }
     return state.proposals.filter(function(p) { return p.intake_id === intakeId; });
   }
