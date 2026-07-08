@@ -73,7 +73,6 @@
       mkQ('why_pitching','Why are you pitching this show?','long_answer'),
       mkQ('why_fit','Why is this show a good fit for this organisation?','long_answer',{field_key:'organization_fit'}),
       mkQ('why_now','Why is this the right time for this show?','long_answer'),
-      mkQ('why_audience','Who is the audience for this show?','checkbox',{options:['Families','Adults','Kids','Seniors','Schools']}),
       mkQ('why_appeal','Why would audiences come see it?','long_answer'),
       mkQ('why_over_others','What makes this show worth choosing over other options?','long_answer'),
     ]},
@@ -96,8 +95,7 @@
     ]},
     { id:'sec_content', title:'Content and Suitability', enabled:true, questions:[
       mkQ('cs_warnings','Content warnings','checkbox',{options:['Language','Violence','Alcohol','Drugs','Smoking','Death','Grief','Bullying','Mental health themes','Sexual references','Religious themes','Racism','Discrimination','Scary scenes','None known','Other'],field_key:'content_warnings'}),
-      mkQ('cs_age','Audience age suitability','dropdown',{options:['All ages','6+','8+','10+','12+','14+','16+','Adults only','Unsure']}),
-      mkQ('cs_family_friendly','Is the show family friendly?','dropdown',{options:['Yes','No','Somewhat']}),
+      mkQ('why_audience','Who is the audience for this show?','checkbox',{options:['Families','Adults','Kids','Seniors','Schools']}),
       mkQ('cs_notes','Suitability notes','long_answer'),
     ]},
     { id:'sec_risks', title:'Risks and Challenges', enabled:true, questions:[
