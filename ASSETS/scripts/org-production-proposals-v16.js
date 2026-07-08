@@ -1157,12 +1157,10 @@
 
 
         ${hasSeasons ? `
-        <div class="pp-stat-row">
+        <div class="pp-stat-row" style="grid-template-columns:repeat(3,minmax(0,1fr));">
           ${renderStatCard('Total Proposals', total, statSubtitle, 'rgba(87,46,136,0.12)')}
-          ${renderStatCard('Under Review', underReviewCt, selectedIntake ? 'Inside this season' : 'Across all seasons', 'rgba(239,171,69,0.2)')}
           ${renderStatCard('Shortlisted', shortlistedCt, selectedIntake ? 'Inside this season' : 'Across all seasons', 'rgba(120,187,212,0.2)')}
           ${renderStatCard('Selected', selectedCt, selectedIntake ? 'Inside this season' : 'Across all seasons', 'rgba(118,158,123,0.2)')}
-          ${renderStatCard('Archived', archivedCt, selectedIntake ? 'Inside this season' : 'Across all seasons', 'rgba(90,99,112,0.12)')}
         </div>
 
         <div class="pp-toolbar">
