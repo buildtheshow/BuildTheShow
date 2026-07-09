@@ -47018,22 +47018,26 @@ See you soon!
       const data = activeItems.map(item => {
         const id = String(item.assignment?.id || '');
         const ef = rptEffectiveFee(item, settings);
-        const records = _rptPaymentRecords[id] || [];
-        const rawPaid = records.filter(r => r.paid).reduce((sum, r) => sum + (ef.installments[r.installment_index]?.amount || 0), 0);
-        const paid = Math.min(rawPaid, ef.total); // cap at member's total so overshoot discounts don't zero the balance
-        return { item, id, ef, records, paid };
+        return { item, id, ef };
       });
       const hasFee = (settings.mode === 'flat' || settings.mode === 'split') && data.some(d => d.ef.total > 0);
       if (!hasFee) return `<div class="rsc-stmt-empty">No fee configured for this household.</div>`;
       const totalFee = data.reduce((sum, d) => sum + d.ef.total, 0);
-      const totalPaid = data.reduce((sum, d) => sum + d.paid, 0);
+
+      // Household is one account — track payments against the primary member only
+      const primaryMid = data[0]?.id || '';
+      const primaryPaid = (_rptPaymentRecords[primaryMid] || []).filter(r => r.paid);
+      const settingsInsts = rptGetInstallments(settings);
+      const totalPaid = primaryPaid.reduce((sum, r) => {
+        const amt = r.amount_cents != null ? r.amount_cents / 100 : (settingsInsts[r.installment_index]?.amount || 0);
+        return sum + amt;
+      }, 0);
       const balance = Math.max(0, totalFee - totalPaid);
-      // allPaid: all installments across all members must be marked paid
-      const maxInstCount = Math.max(0, ...data.map(d => d.ef.installments.length));
-      const allPaid = maxInstCount > 0 && data.every(d => d.ef.installments.every((inst, idx) => inst.amount === 0 || !!d.records.find(r => r.installment_index === idx && r.paid)));
+      const allPaid = totalFee > 0 && balance <= 0;
       const stateClass = allPaid ? 'full' : totalPaid > 0 ? 'partial' : 'unpaid';
       const statusLabel = allPaid ? 'Paid in Full' : totalPaid > 0 ? 'Partially Paid' : 'Unpaid';
-      const hhEf = { baseTotal: totalFee, total: totalFee, adjustments: [] };
+
+      // Fee breakdown display
       const feeLines = data.map(d => {
         const firstName = (d.item.app?.name || '').trim().split(/\s+/)[0].toUpperCase() || 'MEMBER';
         return `<div class="rsc-stmt-row">
@@ -47072,46 +47076,32 @@ See you soon!
       const feeBreakdownHtml = feeLines + discountLines + `<div class="rsc-stmt-row rsc-stmt-total rsc-stmt-hh-total">
         <span>Total Due</span><span>${esc(fmt(totalFee))}</span>
       </div>`;
-      // Sum all members' (capped) amounts for each installment index to show the real household payment
-      const instMap = {};
-      data.forEach(d => d.records.filter(r => r.paid).forEach(r => {
-        const amt = Math.min(d.ef.installments[r.installment_index]?.amount || 0, d.ef.total);
-        if (!instMap[r.installment_index]) instMap[r.installment_index] = { paid_at: r.paid_at, amount: 0, installment_index: r.installment_index };
-        instMap[r.installment_index].amount += amt;
-      }));
-      const allRecords = Object.values(instMap);
-      allRecords.sort((a, b) => new Date(a.paid_at || 0) - new Date(b.paid_at || 0));
-      const ledgerHtml = allRecords.length
-        ? allRecords.map(r => `<div class="rsc-stmt-row rsc-stmt-paid-row">
-            <span>${esc(rptFormatDate(r.paid_at) || '')}</span><span>${esc(fmt(r.amount))}<button class="rsc-remove-pay" onclick="rscRemoveHouseholdPayment('${esc(household.id)}',${r.installment_index})" title="Remove payment">&times;</button></span>
-          </div>`).join('')
+
+      // Ledger: one line per payment logged, using the actual amount Shelley paid
+      const sortedPaid = [...primaryPaid].sort((a, b) => new Date(a.paid_at || 0) - new Date(b.paid_at || 0));
+      const ledgerHtml = sortedPaid.length
+        ? sortedPaid.map(r => {
+            const amt = r.amount_cents != null ? r.amount_cents / 100 : (settingsInsts[r.installment_index]?.amount || 0);
+            return `<div class="rsc-stmt-row rsc-stmt-paid-row">
+              <span>${esc(rptFormatDate(r.paid_at) || '')}</span><span>${esc(fmt(amt))}<button class="rsc-remove-pay" onclick="rscRemoveHouseholdPayment('${esc(household.id)}',${r.installment_index})" title="Remove payment">&times;</button></span>
+            </div>`;
+          }).join('')
         : `<div class="rsc-stmt-row rsc-stmt-none">No payments yet</div>`;
-      const maxInst = Math.max(0, ...data.map(d => d.ef.installments.length));
-      const firstUnpaid = (() => {
-        for (let idx = 0; idx < maxInst; idx++) {
-          if (data.some(d => d.ef.installments[idx] && !d.records.find(r => r.installment_index === idx && r.paid))) return idx;
-        }
-        return 0;
-      })();
-      const cardsHtml = Array.from({ length: maxInst }, (_, idx) => {
-        const parts = data.map(d => {
-          const inst = d.ef.installments[idx];
-          if (!inst || inst.amount <= 0) return null;
-          const rec = d.records.find(r => r.installment_index === idx);
-          return { inst, rec, isPaid: !!rec?.paid };
-        }).filter(Boolean);
-        if (!parts.length) return '';
-        const isPaid = parts.every(p => p.isPaid);
-        const firstDue = parts.find(p => p.inst.dueDate)?.inst.dueDate || '';
-        const isOverdue = !isPaid && firstDue && new Date(firstDue) < new Date(new Date().toDateString());
-        const label = (parts[0].inst.label || '').replace(/\s*\(.*\)$/, '') || `Payment ${idx + 1}`;
-        const sub = isPaid ? 'Paid' : (firstDue ? `Due ${rptFormatDate(firstDue)}` : 'Due date not set');
+
+      // Installment tiles are milestone indicators only — paid = any payment logged at that index
+      const firstUnpaidIdx = settingsInsts.findIndex((_, idx) => !primaryPaid.find(r => r.installment_index === idx));
+      const logToIdx = firstUnpaidIdx >= 0 ? firstUnpaidIdx : 0;
+      const cardsHtml = settingsInsts.map((inst, idx) => {
+        const isPaid = !!primaryPaid.find(r => r.installment_index === idx);
+        const isOverdue = !isPaid && inst.dueDate && new Date(`${inst.dueDate}T00:00:00`) < new Date(new Date().toDateString());
+        const label = inst.label || (settingsInsts.length === 1 ? 'Payment' : idx === 0 ? 'First Payment' : idx === settingsInsts.length - 1 ? 'Final Payment' : `Payment ${idx + 1}`);
+        const sub = isPaid ? 'Paid' : (inst.dueDate ? `Due ${rptFormatDate(inst.dueDate)}` : 'Due date not set');
         return `<button type="button" class="rsc-inst-card ${isPaid ? 'paid' : isOverdue ? 'overdue' : ''}" id="rsc-hh-inst-${esc(household.id)}-${idx}" onclick="${isPaid ? '' : `rscOpenHouseholdPayModal('${esc(household.id)}',${idx})`}">
           <div class="rsc-inst-label">${esc(label)}</div>
           <div class="rsc-inst-sub">${esc(sub)}</div>
         </button>`;
       }).join('');
-      const logBtnHtml = allPaid ? '' : `<button type="button" class="rsc-log-btn" onclick="rscOpenHouseholdPayModal('${esc(household.id)}',${firstUnpaid})">Log Payment</button>`;
+      const logBtnHtml = allPaid ? '' : `<button type="button" class="rsc-log-btn" onclick="rscOpenHouseholdPayModal('${esc(household.id)}',${logToIdx})">Log Payment</button>`;
       return buildStmtHtml({ totalFee, totalPaid, balance, allPaid, stateClass, statusLabel, feeBreakdownHtml, ledgerHtml, cardsHtml, logBtnHtml });
     }
 
@@ -48570,14 +48560,8 @@ See you soon!
     const settingsInsts = rptGetInstallments(settings);
     const count = settingsInsts.length || 1;
     const label = count === 1 ? 'Full Payment' : idx === 0 ? 'First Payment' : idx === count - 1 ? 'Final Payment' : `Payment ${idx + 1}`;
-    // Compute household-level installment amount for this index (sum of member amounts)
-    const hhInstAmt = (() => {
-      const memberData = (hh.member_ids || []).map(mid => {
-        const item = _rptCastItems.find(i => String(i.assignment?.id) === String(mid));
-        return item ? rptEffectiveFee(item, settings) : null;
-      }).filter(Boolean);
-      return memberData.reduce((sum, ef) => sum + (ef.installments[idx]?.amount || 0), 0);
-    })();
+    // Pre-fill amount from settings installment — household pays this as one payment
+    const hhInstAmt = settingsInsts[idx]?.amount || 0;
     const today = new Date().toISOString().split('T')[0];
     // Find existing record from first member that has one
     const firstMid = (hh.member_ids || [])[0];
@@ -48634,15 +48618,15 @@ See you soon!
     if (!hh) return;
     document.getElementById('rsc-mark-paid-modal')?.remove();
     try {
-      await Promise.all((hh.member_ids || []).map(mid =>
-        sb.from('registration_payment_records')
+      // Household is one account — only clear the primary member's record
+      const primaryMid = (hh.member_ids || [])[0];
+      if (primaryMid) {
+        await sb.from('registration_payment_records')
           .update({ paid: false, paid_at: null, payment_method: null, amount_cents: null, transaction_ref: null, paid_by: null, payment_notes: null, updated_at: new Date().toISOString() })
-          .eq('casting_assignment_id', mid).eq('installment_index', idx)
-      ));
-      (hh.member_ids || []).forEach(mid => {
-        const rec = (_rptPaymentRecords[mid] || []).find(r => r.installment_index === idx);
-        if (rec) { rec.paid = false; rec.paid_at = null; }
-      });
+          .eq('casting_assignment_id', primaryMid).eq('installment_index', idx);
+        const rec = (_rptPaymentRecords[primaryMid] || []).find(r => r.installment_index === idx);
+        if (rec) { rec.paid = false; rec.paid_at = null; rec.amount_cents = null; }
+      }
       const groupEl = document.getElementById(`rsc-hh-group-${householdId}`);
       if (groupEl) {
         const hhItems = (hh.member_ids || []).map(mid => _rptCastItems.find(i => String(i.assignment?.id) === String(mid))).filter(Boolean);
@@ -48674,18 +48658,17 @@ See you soon!
     const btn = document.getElementById('rsc-mp-save-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
     try {
-      await Promise.all((hh.member_ids || []).map(async mid => {
-        const existing = (_rptPaymentRecords[mid] || []).find(r => r.installment_index === idx);
-        if (existing?.paid) return;
-        const { data, error } = await sb.from('registration_payment_records')
-          .upsert({ production_id: prodId, casting_assignment_id: mid, installment_index: idx, paid: true, paid_at: paidAt, payment_method: method || null, amount_cents: amountCents, transaction_ref: ref || null, paid_by: paidBy || null, payment_notes: notes || null, updated_at: new Date().toISOString() }, { onConflict: 'casting_assignment_id,installment_index' })
-          .select().single();
-        if (error) throw error;
-        if (!_rptPaymentRecords[mid]) _rptPaymentRecords[mid] = [];
-        const recIdx = _rptPaymentRecords[mid].findIndex(r => r.installment_index === idx);
-        if (recIdx >= 0) _rptPaymentRecords[mid][recIdx] = data;
-        else _rptPaymentRecords[mid].push(data);
-      }));
+      // Household is one account — only write against the primary member
+      const primaryMid = (hh.member_ids || [])[0];
+      if (!primaryMid) throw new Error('No members in household');
+      const { data, error } = await sb.from('registration_payment_records')
+        .upsert({ production_id: prodId, casting_assignment_id: primaryMid, installment_index: idx, paid: true, paid_at: paidAt, payment_method: method || null, amount_cents: amountCents, transaction_ref: ref || null, paid_by: paidBy || null, payment_notes: notes || null, updated_at: new Date().toISOString() }, { onConflict: 'casting_assignment_id,installment_index' })
+        .select().single();
+      if (error) throw error;
+      if (!_rptPaymentRecords[primaryMid]) _rptPaymentRecords[primaryMid] = [];
+      const recIdx = _rptPaymentRecords[primaryMid].findIndex(r => r.installment_index === idx);
+      if (recIdx >= 0) _rptPaymentRecords[primaryMid][recIdx] = data;
+      else _rptPaymentRecords[primaryMid].push(data);
       document.getElementById('rsc-mark-paid-modal')?.remove();
       const groupEl = document.getElementById(`rsc-hh-group-${householdId}`);
       if (groupEl) {
