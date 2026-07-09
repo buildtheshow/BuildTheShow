@@ -47088,7 +47088,7 @@ See you soon!
         const isOverdue = !isPaid && firstDue && new Date(firstDue) < new Date(new Date().toDateString());
         const label = (parts[0].inst.label || '').replace(/\s*\(.*\)$/, '') || `Payment ${idx + 1}`;
         const sub = isPaid ? 'Paid' : (firstDue ? `Due ${rptFormatDate(firstDue)}` : 'Due date not set');
-        return `<button type="button" class="rsc-inst-card ${isPaid ? 'paid' : isOverdue ? 'overdue' : ''}" id="rsc-hh-inst-${esc(household.id)}-${idx}" onclick="${isPaid ? '' : `rscOpenHouseholdPayModal('${esc(household.id)}',${idx})`}">
+        return `<button type="button" class="rsc-inst-card ${isPaid ? 'paid' : isOverdue ? 'overdue' : ''}" id="rsc-hh-inst-${esc(household.id)}-${idx}" onclick="rscOpenHouseholdPayModal('${esc(household.id)}',${idx})">
           <div class="rsc-inst-label">${esc(label)}</div>
           <div class="rsc-inst-sub">${esc(sub)}</div>
         </button>`;
@@ -48526,52 +48526,86 @@ See you soon!
     const count = hh.installments?.length || 1;
     const label = hh.installments?.[idx]?.label || (count === 1 ? 'Full Payment' : idx === 0 ? 'First Payment' : idx === count - 1 ? 'Final Payment' : `Payment ${idx + 1}`);
     const today = new Date().toISOString().split('T')[0];
+    // Find existing record from first member that has one
+    const firstMid = (hh.member_ids || [])[0];
+    const existing = firstMid ? (_rptPaymentRecords[firstMid] || []).find(r => r.installment_index === idx && r.paid) : null;
+    const isEdit = !!existing;
+    const methodOptions = ['', 'e_transfer', 'cheque', 'cash', 'square', 'other'];
+    const methodLabels = { '': '— Select —', e_transfer: 'E-Transfer', cheque: 'Cheque', cash: 'Cash', square: 'Square / Card', other: 'Other' };
+    const methodHtml = methodOptions.map(v => `<option value="${v}"${existing?.payment_method === v ? ' selected' : ''}>${methodLabels[v]}</option>`).join('');
+    const existingDate = existing?.paid_at ? existing.paid_at.split('T')[0] : today;
+    const existingAmount = existing?.amount_cents != null ? (existing.amount_cents / 100).toFixed(2) : '';
     document.getElementById('rsc-mark-paid-modal')?.remove();
     const modal = document.createElement('div');
     modal.id = 'rsc-mark-paid-modal';
     modal.className = 'rpt-household-modal';
     modal.innerHTML = `<div class="rpt-household-modal-box" style="max-width:400px;">
-      <div class="rpt-household-modal-title">Log Payment — ${esc(label)}</div>
+      <div class="rpt-household-modal-title">${isEdit ? 'Edit Payment' : 'Log Payment'} — ${esc(label)}</div>
       <div style="font-size:0.8rem;color:rgba(87,46,136,0.5);margin-bottom:0.1rem;">${esc(names)}</div>
       <div class="rsc-modal-row">
         <div class="rsc-modal-label">How was it paid?</div>
-        <select class="rpt-household-modal-input" id="rsc-mp-method">
-          <option value="">— Select —</option>
-          <option value="e_transfer">E-Transfer</option>
-          <option value="cheque">Cheque</option>
-          <option value="cash">Cash</option>
-          <option value="square">Square / Card</option>
-          <option value="other">Other</option>
-        </select>
+        <select class="rpt-household-modal-input" id="rsc-mp-method">${methodHtml}</select>
       </div>
       <div class="rsc-modal-row">
         <div class="rsc-modal-label">Amount Paid</div>
-        <input class="rpt-household-modal-input" type="number" min="0" step="0.01" id="rsc-mp-amount" placeholder="e.g. 250.00" />
+        <input class="rpt-household-modal-input" type="number" min="0" step="0.01" id="rsc-mp-amount" placeholder="e.g. 250.00" value="${esc(existingAmount)}" />
       </div>
       <div class="rsc-modal-row">
         <div class="rsc-modal-label">Reference / Confirmation #</div>
-        <input class="rpt-household-modal-input" type="text" id="rsc-mp-ref" placeholder="Confirmation number, cheque #, etc." />
+        <input class="rpt-household-modal-input" type="text" id="rsc-mp-ref" placeholder="Confirmation number, cheque #, etc." value="${esc(existing?.transaction_ref || '')}" />
       </div>
       <div class="rsc-modal-row">
         <div class="rsc-modal-label">Date Paid</div>
-        <input class="rpt-household-modal-input" type="date" id="rsc-mp-date" value="${today}" />
+        <input class="rpt-household-modal-input" type="date" id="rsc-mp-date" value="${existingDate}" />
       </div>
       <div class="rsc-modal-row">
         <div class="rsc-modal-label">Who Paid</div>
-        <input class="rpt-household-modal-input" type="text" id="rsc-mp-paidby" placeholder="Name of the person who made the payment" />
+        <input class="rpt-household-modal-input" type="text" id="rsc-mp-paidby" placeholder="Name of the person who made the payment" value="${esc(existing?.paid_by || '')}" />
       </div>
       <div class="rsc-modal-row">
         <div class="rsc-modal-label">Notes</div>
-        <textarea class="rsc-modal-textarea" id="rsc-mp-notes" placeholder="Any notes about this payment…"></textarea>
+        <textarea class="rsc-modal-textarea" id="rsc-mp-notes" placeholder="Any notes about this payment…">${esc(existing?.payment_notes || '')}</textarea>
       </div>
       <div class="rpt-household-modal-actions">
-        <button class="rpt-modal-cancel-btn" onclick="document.getElementById('rsc-mark-paid-modal')?.remove()">Cancel</button>
-        <button class="rpt-modal-save-btn" id="rsc-mp-save-btn" onclick="rscSaveHouseholdPaid('${esc(householdId)}',${idx})">Log Payment</button>
+        ${isEdit ? `<button class="rpt-modal-cancel-btn" style="color:#d1523d;border-color:#d1523d;" onclick="rscRemoveHouseholdPayment('${esc(householdId)}',${idx})">Remove Payment</button>` : `<button class="rpt-modal-cancel-btn" onclick="document.getElementById('rsc-mark-paid-modal')?.remove()">Cancel</button>`}
+        <button class="rpt-modal-save-btn" id="rsc-mp-save-btn" onclick="rscSaveHouseholdPaid('${esc(householdId)}',${idx})">${isEdit ? 'Save Changes' : 'Log Payment'}</button>
       </div>
     </div>`;
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
     document.body.appendChild(modal);
   }
+
+  async function rscRemoveHouseholdPayment(householdId, idx) {
+    if (!confirm('Remove this payment for the whole household?')) return;
+    const hh = _rptHouseholds.find(h => String(h.id) === String(householdId));
+    if (!hh) return;
+    document.getElementById('rsc-mark-paid-modal')?.remove();
+    try {
+      await Promise.all((hh.member_ids || []).map(mid =>
+        sb.from('registration_payment_records')
+          .update({ paid: false, paid_at: null, payment_method: null, amount_cents: null, transaction_ref: null, paid_by: null, payment_notes: null, updated_at: new Date().toISOString() })
+          .eq('casting_assignment_id', mid).eq('installment_index', idx)
+      ));
+      (hh.member_ids || []).forEach(mid => {
+        const rec = (_rptPaymentRecords[mid] || []).find(r => r.installment_index === idx);
+        if (rec) { rec.paid = false; rec.paid_at = null; }
+      });
+      const groupEl = document.getElementById(`rsc-hh-group-${householdId}`);
+      if (groupEl) {
+        const hhItems = (hh.member_ids || []).map(mid => _rptCastItems.find(i => String(i.assignment?.id) === String(mid))).filter(Boolean);
+        const temp = document.createElement('div');
+        temp.innerHTML = renderHouseholdGroupCard(hh, hhItems, registrationCurrentPaymentSettings());
+        const newEl = temp.firstElementChild;
+        if (newEl) groupEl.replaceWith(newEl);
+      }
+      rptRerenderSummary();
+      window.AutoSave?.showSaved?.();
+    } catch (err) {
+      console.error('[BTS] rscRemoveHouseholdPayment failed', err);
+      showToast(err?.message || 'Could not remove payment.', true);
+    }
+  }
+  window.rscRemoveHouseholdPayment = rscRemoveHouseholdPayment;
 
   async function rscSaveHouseholdPaid(householdId, idx) {
     const hh = _rptHouseholds.find(h => String(h.id) === String(householdId));
