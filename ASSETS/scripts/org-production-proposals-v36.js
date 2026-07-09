@@ -472,6 +472,49 @@
       .pfb-toggle-small input:checked ~ .pfb-toggle-track { background:#572e88; }
       .pfb-toggle-thumb { position:absolute; width:11px; height:11px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.22); top:3px; left:3px; transition:transform 0.16s; pointer-events:none; }
       .pfb-toggle-small input:checked ~ .pfb-toggle-thumb { transform:translateX(13px); }
+
+      /* ---- full-page pitch view overlay ---- */
+      .ppv-overlay { display:none; position:fixed; inset:0; z-index:3600; background:#f0eff5; flex-direction:column; }
+      .ppv-overlay.open { display:flex; }
+      .ppv-topbar { display:flex; align-items:center; gap:0.75rem; padding:0.7rem 1.25rem; background:#fff; border-bottom:1px solid rgba(87,46,136,0.1); flex-shrink:0; position:sticky; top:0; z-index:2; }
+      .ppv-topbar-org { font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:0.07em; color:rgba(26,21,48,0.4); }
+      .ppv-topbar-title { font-size:1rem; font-weight:900; color:#1a1530; flex:1; }
+      .ppv-topbar-intake { font-size:0.78rem; font-weight:700; color:#572e88; }
+      .ppv-body { display:flex; flex:1; overflow:hidden; }
+      .ppv-main { flex:1; overflow-y:auto; padding:1.5rem 1.75rem; display:flex; flex-direction:column; gap:1rem; }
+      .ppv-scoring { width:320px; flex-shrink:0; border-left:1px solid rgba(87,46,136,0.1); background:#fff; overflow-y:auto; display:flex; flex-direction:column; }
+      .ppv-scoring-head { padding:1rem 1.1rem 0.75rem; border-bottom:1px solid rgba(87,46,136,0.08); position:sticky; top:0; background:#fff; z-index:1; }
+      .ppv-scoring-title { font-size:0.92rem; font-weight:900; color:#1a1530; }
+      .ppv-scoring-sub { font-size:0.74rem; color:rgba(26,21,48,0.45); margin-top:0.2rem; }
+      .ppv-scoring-body { padding:1rem 1.1rem; flex:1; display:flex; flex-direction:column; gap:0.75rem; }
+      .ppv-score-placeholder { background:rgba(87,46,136,0.04); border:1px dashed rgba(87,46,136,0.18); border-radius:12px; padding:1.5rem 1rem; text-align:center; color:rgba(26,21,48,0.35); font-size:0.82rem; line-height:1.5; }
+      /* pitch view cards */
+      .ppv-top-row { display:grid; grid-template-columns:180px 1fr; gap:1rem; align-items:start; }
+      .ppv-poster { width:100%; aspect-ratio:2/3; border-radius:14px; overflow:hidden; background:linear-gradient(135deg,#572e88,#476aaa); display:flex; align-items:center; justify-content:center; color:rgba(255,255,255,0.35); font-size:0.78rem; font-weight:700; letter-spacing:0.04em; }
+      .ppv-poster img { width:100%; height:100%; object-fit:cover; display:block; }
+      .ppv-card { border-radius:16px; padding:1.15rem 1.25rem; color:#fff; }
+      .ppv-card-hd { display:flex; align-items:center; gap:0.55rem; margin-bottom:0.9rem; }
+      .ppv-card-icon { width:22px; height:22px; flex-shrink:0; filter:brightness(0) invert(1); opacity:0.85; }
+      .ppv-card-title { font-size:0.92rem; font-weight:900; letter-spacing:0.05em; text-transform:uppercase; }
+      .ppv-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:0.6rem; }
+      .ppv-grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.6rem; }
+      .ppv-field { background:rgba(255,255,255,0.14); border-radius:10px; padding:0.6rem 0.75rem; }
+      .ppv-field-lbl { font-size:0.62rem; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; color:rgba(255,255,255,0.55); margin-bottom:0.2rem; }
+      .ppv-field-val { font-size:0.88rem; font-weight:700; color:#fff; line-height:1.35; }
+      .ppv-field-val.empty { color:rgba(255,255,255,0.3); font-style:italic; font-weight:400; }
+      .ppv-divider { border:none; border-top:1px dashed rgba(255,255,255,0.2); margin:0.85rem 0; }
+      .ppv-synopsis { background:rgba(255,255,255,0.12); border-radius:10px; padding:0.75rem 0.85rem; font-size:0.84rem; color:rgba(255,255,255,0.9); line-height:1.6; white-space:pre-wrap; }
+      .ppv-qa { margin-bottom:0.7rem; }
+      .ppv-qa-lbl { font-size:0.62rem; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; color:rgba(255,255,255,0.5); margin-bottom:0.3rem; }
+      .ppv-qa-val { font-size:0.84rem; color:rgba(255,255,255,0.9); line-height:1.55; white-space:pre-wrap; }
+      .ppv-pill-row { display:flex; flex-wrap:wrap; gap:0.35rem; margin-top:0.3rem; }
+      .ppv-pill { background:rgba(255,255,255,0.2); border-radius:99px; padding:0.22rem 0.65rem; font-size:0.72rem; font-weight:700; color:#fff; }
+      .ppv-rating-row { display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.5rem; }
+      .ppv-rating-box { background:rgba(255,255,255,0.14); border-radius:10px; padding:0.5rem 0.75rem; text-align:center; min-width:80px; }
+      .ppv-rating-lbl { font-size:0.6rem; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; color:rgba(255,255,255,0.5); margin-bottom:0.25rem; }
+      .ppv-rating-stars { font-size:0.9rem; letter-spacing:0.05em; }
+      .ppv-sections-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+      .ppv-full { grid-column:1/-1; }
     `;
     document.head.appendChild(style);
   }
@@ -909,7 +952,7 @@
       ? `<div class="pp-show-thumb" style="background:transparent;width:auto;"><img src="${esc(posterUrl)}" alt="" onerror="this.parentElement.innerHTML='${esc(letter)}';this.parentElement.style.background='${thumb}';this.parentElement.style.width='44px'"></div>`
       : `<div class="pp-show-thumb" style="background:${thumb};">${esc(letter)}</div>`;
     return `
-      <tr onclick="openProposalModal('${proposal.id}')">
+      <tr onclick="openProposalView('${proposal.id}')">
         <td>${intake ? `<div class="pp-show-name" style="font-size:0.8rem;">${esc(intake.title || 'Season')}</div><div class="pp-show-sub">${esc(intake.season_label || '')}</div>` : '<span style="color:rgba(26,21,48,0.4);">—</span>'}</td>
         <td>
           <div class="pp-show-cell">
@@ -1394,6 +1437,205 @@
       internal_notes: document.getElementById('pp-internal-notes').value.trim() || null,
     };
   }
+
+  // ---- Pitch View (read-only full-page overlay) ----
+
+  function ensurePitchViewShell() {
+    if (document.getElementById('ppv-overlay')) return;
+    const el = document.createElement('div');
+    el.id = 'ppv-overlay';
+    el.className = 'ppv-overlay';
+    el.innerHTML = `
+      <div class="ppv-topbar">
+        <div style="flex:1;min-width:0;">
+          <div class="ppv-topbar-org" id="ppv-org-name"></div>
+          <div style="display:flex;align-items:baseline;gap:0.6rem;flex-wrap:wrap;">
+            <div class="ppv-topbar-title" id="ppv-show-title"></div>
+            <div class="ppv-topbar-intake" id="ppv-intake-label"></div>
+          </div>
+        </div>
+        <button class="btn-secondary" style="font-size:0.8rem;padding:0.4rem 0.85rem;" onclick="openProposalModal(document.getElementById('ppv-overlay').dataset.proposalId)">Edit</button>
+        <button class="btn-secondary" style="font-size:0.8rem;padding:0.4rem 0.85rem;" onclick="closePitchView()">Close</button>
+      </div>
+      <div class="ppv-body">
+        <div class="ppv-main" id="ppv-main"></div>
+        <div class="ppv-scoring">
+          <div class="ppv-scoring-head">
+            <div class="ppv-scoring-title">Score This Pitch</div>
+            <div class="ppv-scoring-sub">Scoring criteria coming soon</div>
+          </div>
+          <div class="ppv-scoring-body" id="ppv-scoring-body">
+            <div class="ppv-score-placeholder">Scoring criteria will appear here.<br>Katie is setting up the categories.</div>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(el);
+    el.addEventListener('keydown', function(e) { if (e.key === 'Escape') closePitchView(); });
+  }
+
+  function openProposalView(id) {
+    injectStyles();
+    ensurePitchViewShell();
+    const proposal = proposalById(id);
+    if (!proposal) return;
+    const overlay = document.getElementById('ppv-overlay');
+    overlay.dataset.proposalId = id;
+    const org = currentOrg();
+    const intake = proposalIntakeById(proposal.intake_id) || proposal.production_proposal_intakes || null;
+    document.getElementById('ppv-org-name').textContent = org?.name || '';
+    document.getElementById('ppv-show-title').textContent = proposal.proposed_show_title || 'Untitled Proposal';
+    const intakeLabel = [intake?.season_label, intake?.title].filter(Boolean).join(' — ');
+    document.getElementById('ppv-intake-label').textContent = intakeLabel ? intakeLabel : '';
+    document.getElementById('ppv-main').innerHTML = renderPitchViewMain(proposal, intake);
+    overlay.classList.add('open');
+    document.getElementById('ppv-main').scrollTop = 0;
+  }
+
+  function closePitchView() {
+    document.getElementById('ppv-overlay')?.classList.remove('open');
+  }
+  window.closePitchView = closePitchView;
+
+  function pvCard(color, iconSrc, title, bodyHtml) {
+    return `<div class="ppv-card" style="background:${color}">
+      <div class="ppv-card-hd">
+        <img class="ppv-card-icon" src="${iconSrc}" alt="" onerror="this.style.display='none'">
+        <span class="ppv-card-title">${esc(title)}</span>
+      </div>
+      ${bodyHtml}
+    </div>`;
+  }
+
+  function pvField(label, value, span2) {
+    const empty = !value && value !== 0;
+    return `<div class="ppv-field"${span2 ? ' style="grid-column:1/-1"' : ''}>
+      <div class="ppv-field-lbl">${esc(label)}</div>
+      <div class="ppv-field-val${empty ? ' empty' : ''}">${empty ? 'Not provided' : esc(String(value))}</div>
+    </div>`;
+  }
+
+  function pvQa(label, value) {
+    if (!value) return '';
+    return `<div class="ppv-qa">
+      <div class="ppv-qa-lbl">${esc(label)}</div>
+      <div class="ppv-qa-val">${esc(String(value))}</div>
+    </div>`;
+  }
+
+  function pvPills(values) {
+    const arr = Array.isArray(values) ? values : (values ? String(values).split(',').map(s => s.trim()).filter(Boolean) : []);
+    if (!arr.length) return '';
+    return `<div class="ppv-pill-row">${arr.map(p => `<span class="ppv-pill">${esc(p)}</span>`).join('')}</div>`;
+  }
+
+  function pvStars(n) {
+    const num = parseInt(n) || 0;
+    return '★'.repeat(num) + '<span style="opacity:0.25">' + '★'.repeat(Math.max(0, 5 - num)) + '</span>';
+  }
+
+  function renderPitchViewMain(proposal, intake) {
+    const fa = proposal.form_answers || {};
+
+    // Poster
+    const posterUrl = fa.sb_cover || '';
+    const posterHtml = posterUrl
+      ? `<div class="ppv-poster"><img src="${esc(posterUrl)}" alt="Show poster"></div>`
+      : `<div class="ppv-poster" style="font-size:0.72rem;">No poster uploaded</div>`;
+
+    // Show Basics card
+    const licCost = proposal.estimated_licensing_fee != null ? fmtCurrency(proposal.estimated_licensing_fee) : '';
+    const basicsBody = `
+      <div class="ppv-grid2">
+        ${pvField('Show Title', proposal.proposed_show_title)}
+        ${pvField('Version / Edition', proposal.show_version)}
+        ${pvField('Licensing Company', proposal.licensing_company)}
+        ${pvField('Est. Licensing Cost', licCost)}
+        ${pvField('Author / Composer / Playwright', fa.sb_author)}
+        ${pvField('Number of Acts', fa.sb_acts)}
+        ${pvField('Runtime', proposal.runtime_minutes ? proposal.runtime_minutes + ' min' : '')}
+        ${pvField('Licensing Link', fa.sb_licensing_link)}
+      </div>
+      ${proposal.short_synopsis ? `<hr class="ppv-divider"><div class="ppv-synopsis">${esc(proposal.short_synopsis)}</div>` : ''}`;
+
+    const basicsCard = pvCard('#572e88', '/ASSETS/Images/Icons/Star.svg', 'Show Basics', basicsBody);
+
+    // Submitter card
+    const workedBefore = fa.si_worked_before;
+    const submitterBody = `
+      <div class="ppv-grid2">
+        ${pvField('Name', fa.si_name || proposal.pitch_submitted_by)}
+        ${pvField('Email', fa.si_email || proposal.submitter_email)}
+        ${pvField('Phone', fa.si_phone || proposal.submitter_phone)}
+        ${pvField('Role / Relationship', fa.si_role)}
+        ${workedBefore ? pvField('Worked with us before?', workedBefore === 'yes' ? 'Yes' : 'No') : ''}
+      </div>`;
+    const submitterCard = pvCard('#476aaa', '/ASSETS/Images/Icons/Profiles.svg', 'Submitter', submitterBody);
+
+    // Casting card
+    const castBody = `
+      <div class="ppv-grid3">
+        ${pvField('Named Roles', proposal.named_roles)}
+        ${pvField('Ensemble Opportunities', proposal.named_roles != null ? (fa.cast_ensemble || proposal.ensemble_opportunities) : '')}
+        ${pvField('Featured Dancers', fa.cast_featured_dancers)}
+      </div>
+      ${fa.cast_notes || proposal.character_list ? `<hr class="ppv-divider">${pvQa('Casting Notes', fa.cast_notes || proposal.character_list)}` : ''}`;
+    const castCard = pvCard('#d1523d', '/ASSETS/Images/Icons/Casting Board.svg', 'Casting', castBody);
+
+    // Why This Show card
+    const whyBody = pvQa('Why are you pitching this show?', fa.why_pitching)
+      + pvQa('Why is this a good fit for this organisation?', fa.why_fit || proposal.organization_fit)
+      + pvQa('Why is this the right time?', fa.why_now)
+      + pvQa('Why would audiences come see it?', fa.why_appeal)
+      + pvQa('What makes this worth choosing over other options?', fa.why_over_others);
+    const whyCard = pvCard('#ca7ea7', '/ASSETS/Images/Icons/volunteer-HEART.svg', 'Why This Show?', whyBody || '<div style="color:rgba(255,255,255,0.4);font-size:0.84rem;">No answers provided.</div>');
+
+    // Music card
+    const hasDiff = fa.mu_vocal_diff || fa.mu_dance_diff || fa.mu_music_diff;
+    const musicBody = `
+      <div class="ppv-grid2">
+        ${pvField('Type of Production', fa.mu_production_type || proposal.production_type)}
+        ${pvField('Number of Songs', fa.mu_songs || proposal.number_of_songs)}
+        ${pvField('Major Dance Numbers?', fa.mu_dance_numbers ? (fa.mu_dance_numbers === 'yes' ? 'Yes' : 'No') : '')}
+      </div>
+      ${hasDiff ? `<div class="ppv-rating-row">
+        ${fa.mu_vocal_diff ? `<div class="ppv-rating-box"><div class="ppv-rating-lbl">Vocal</div><div class="ppv-rating-stars">${pvStars(fa.mu_vocal_diff)}</div></div>` : ''}
+        ${fa.mu_dance_diff ? `<div class="ppv-rating-box"><div class="ppv-rating-lbl">Dance</div><div class="ppv-rating-stars">${pvStars(fa.mu_dance_diff)}</div></div>` : ''}
+        ${fa.mu_music_diff ? `<div class="ppv-rating-box"><div class="ppv-rating-lbl">Music</div><div class="ppv-rating-stars">${pvStars(fa.mu_music_diff)}</div></div>` : ''}
+      </div>` : ''}
+      ${pvQa('Music Style', fa.mu_music_style)}
+      ${pvQa('Key Musical Numbers', fa.mu_key_numbers)}`;
+    const musicCard = pvCard('#769e7b', '/ASSETS/Images/Icons/script-music-songs.svg', 'Music & Choreography', musicBody);
+
+    // Content & Suitability card
+    const warnings = fa.cs_warnings || proposal.content_warnings;
+    const audience = fa.why_audience;
+    const contentBody = (audience ? `<div class="ppv-qa-lbl" style="margin-bottom:0.3rem;">Who is the audience?</div>${pvPills(audience)}<hr class="ppv-divider">` : '')
+      + (warnings ? `<div class="ppv-qa-lbl" style="margin-bottom:0.3rem;">Content Warnings</div>${pvPills(warnings)}<hr class="ppv-divider">` : '')
+      + pvQa('Suitability Notes', fa.cs_notes);
+    const contentCard = pvCard('#769e7b', '/ASSETS/Images/Icons/Information.svg', 'Content & Suitability', contentBody || '<div style="color:rgba(255,255,255,0.4);font-size:0.84rem;">No content information provided.</div>');
+
+    // Risks card
+    const risksBody = pvQa('What is the biggest challenge?', fa.ri_challenge || proposal.biggest_challenge)
+      + pvQa('What could make this difficult?', fa.ri_difficult)
+      + (fa.ri_manage ? `<hr class="ppv-divider">${pvQa('How we will manage it', fa.ri_manage)}` : '');
+    const risksCard = pvCard('#efab45', '/ASSETS/Images/Icons/Danger Zone.svg', 'Risks & Challenges', risksBody || '<div style="color:rgba(255,255,255,0.4);font-size:0.84rem;">No risk information provided.</div>');
+
+    return `
+      <div class="ppv-top-row">
+        ${posterHtml}
+        ${basicsCard}
+      </div>
+      <div class="ppv-sections-grid">
+        ${submitterCard}
+        ${castCard}
+        <div class="ppv-full">${whyCard}</div>
+        ${musicCard}
+        ${contentCard}
+        <div class="ppv-full">${risksCard}</div>
+      </div>`;
+  }
+
+  window.openProposalView = openProposalView;
 
   function openProposalModal(id) {
     ensureModalShell();
