@@ -1441,7 +1441,58 @@
 
   // ---- Pitch View (read-only full-page overlay) ----
 
+  function injectPitchViewStyles() {
+    if (document.getElementById('ppv-styles')) return;
+    const s = document.createElement('style');
+    s.id = 'ppv-styles';
+    s.textContent = `
+      .ppv-overlay { display:none; position:fixed; inset:0; z-index:3600; background:rgba(26,21,48,0.55); align-items:center; justify-content:center; padding:2vh 2vw; }
+      .ppv-overlay.open { display:flex; }
+      .ppv-shell { width:100%; height:100%; max-width:1400px; background:#f0eff5; border-radius:18px; box-shadow:0 30px 80px rgba(26,21,48,0.3); display:flex; flex-direction:column; overflow:hidden; }
+      .ppv-topbar { display:flex; align-items:center; gap:0.75rem; padding:0.8rem 1.25rem; background:#fff; border-bottom:1px solid rgba(87,46,136,0.1); flex-shrink:0; border-radius:18px 18px 0 0; }
+      .ppv-topbar-org { font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:0.07em; color:rgba(26,21,48,0.4); }
+      .ppv-topbar-title { font-size:1rem; font-weight:900; color:#1a1530; }
+      .ppv-topbar-intake { font-size:0.78rem; font-weight:700; color:#572e88; }
+      .ppv-body { display:flex; flex:1; overflow:hidden; border-radius:0 0 18px 18px; }
+      .ppv-main { flex:1; overflow-y:auto; padding:1.5rem 1.75rem; display:flex; flex-direction:column; gap:1rem; background:#f0eff5; }
+      .ppv-scoring { width:320px; flex-shrink:0; border-left:1px solid rgba(87,46,136,0.1); background:#fff; overflow-y:auto; display:flex; flex-direction:column; }
+      .ppv-scoring-head { padding:1rem 1.1rem 0.75rem; border-bottom:1px solid rgba(87,46,136,0.08); position:sticky; top:0; background:#fff; z-index:1; }
+      .ppv-scoring-title { font-size:0.92rem; font-weight:900; color:#1a1530; }
+      .ppv-scoring-sub { font-size:0.74rem; color:rgba(26,21,48,0.45); margin-top:0.2rem; }
+      .ppv-scoring-body { padding:1rem 1.1rem; flex:1; display:flex; flex-direction:column; gap:0.75rem; }
+      .ppv-score-placeholder { background:rgba(87,46,136,0.04); border:1px dashed rgba(87,46,136,0.18); border-radius:12px; padding:1.5rem 1rem; text-align:center; color:rgba(26,21,48,0.35); font-size:0.82rem; line-height:1.5; }
+      .ppv-top-row { display:grid; grid-template-columns:180px 1fr; gap:1rem; align-items:start; }
+      .ppv-poster { width:100%; aspect-ratio:2/3; border-radius:14px; overflow:hidden; background:linear-gradient(135deg,#572e88,#476aaa); display:flex; align-items:center; justify-content:center; color:rgba(255,255,255,0.35); font-size:0.78rem; font-weight:700; }
+      .ppv-poster img { width:100%; height:100%; object-fit:cover; display:block; }
+      .ppv-card { border-radius:16px; padding:1.15rem 1.25rem; color:#fff; }
+      .ppv-card-hd { display:flex; align-items:center; gap:0.55rem; margin-bottom:0.9rem; }
+      .ppv-card-icon { width:22px; height:22px; flex-shrink:0; filter:brightness(0) invert(1); opacity:0.85; }
+      .ppv-card-title { font-size:0.92rem; font-weight:900; letter-spacing:0.05em; text-transform:uppercase; }
+      .ppv-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:0.6rem; }
+      .ppv-grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.6rem; }
+      .ppv-field { background:rgba(255,255,255,0.14); border-radius:10px; padding:0.6rem 0.75rem; }
+      .ppv-field-lbl { font-size:0.62rem; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; color:rgba(255,255,255,0.55); margin-bottom:0.2rem; }
+      .ppv-field-val { font-size:0.88rem; font-weight:700; color:#fff; line-height:1.35; }
+      .ppv-field-val.empty { color:rgba(255,255,255,0.3); font-style:italic; font-weight:400; }
+      .ppv-divider { border:none; border-top:1px dashed rgba(255,255,255,0.2); margin:0.85rem 0; }
+      .ppv-synopsis { background:rgba(255,255,255,0.12); border-radius:10px; padding:0.75rem 0.85rem; font-size:0.84rem; color:rgba(255,255,255,0.9); line-height:1.6; white-space:pre-wrap; }
+      .ppv-qa { margin-bottom:0.7rem; }
+      .ppv-qa-lbl { font-size:0.62rem; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; color:rgba(255,255,255,0.5); margin-bottom:0.3rem; }
+      .ppv-qa-val { font-size:0.84rem; color:rgba(255,255,255,0.9); line-height:1.55; white-space:pre-wrap; }
+      .ppv-pill-row { display:flex; flex-wrap:wrap; gap:0.35rem; margin-top:0.3rem; }
+      .ppv-pill { background:rgba(255,255,255,0.2); border-radius:99px; padding:0.22rem 0.65rem; font-size:0.72rem; font-weight:700; color:#fff; }
+      .ppv-rating-row { display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.5rem; }
+      .ppv-rating-box { background:rgba(255,255,255,0.14); border-radius:10px; padding:0.5rem 0.75rem; text-align:center; min-width:80px; }
+      .ppv-rating-lbl { font-size:0.6rem; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; color:rgba(255,255,255,0.5); margin-bottom:0.25rem; }
+      .ppv-rating-stars { font-size:0.9rem; letter-spacing:0.05em; }
+      .ppv-sections-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+      .ppv-full { grid-column:1/-1; }
+    `;
+    document.head.appendChild(s);
+  }
+
   function ensurePitchViewShell() {
+    injectPitchViewStyles();
     if (document.getElementById('ppv-overlay')) return;
     const el = document.createElement('div');
     el.id = 'ppv-overlay';
