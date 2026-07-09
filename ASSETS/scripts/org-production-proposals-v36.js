@@ -1517,39 +1517,44 @@
       .ppvl-basic-icon { width:18px; height:18px; flex-shrink:0; opacity:0.28; }
       .ppvl-basic-value { font-size:0.9rem; font-weight:900; color:#1a1530; line-height:1.1; }
       .ppvl-basic-label { font-size:0.68rem; font-weight:500; color:rgba(26,21,48,0.38); }
-      .ppvl-content { flex:1; min-width:0; display:flex; flex-direction:column; gap:1.5rem; }
+      .ppvl-content { flex:1; min-width:0; display:flex; flex-direction:column; gap:1.5rem; overflow-wrap:break-word; }
       .ppvl-kicker { font-size:0.72rem; font-weight:600; color:rgba(26,21,48,0.35); margin-bottom:0.1rem; }
-      .ppvl-title { font-size:2.1rem; font-weight:900; color:#1a1530; line-height:1; letter-spacing:-0.01em; }
-      .ppvl-genre { font-size:0.82rem; font-weight:600; color:rgba(26,21,48,0.45); margin-top:0.25rem; font-style:italic; }
-      .ppvl-logline { font-size:0.97rem; font-weight:700; color:#1a1530; line-height:1.6; margin:0; }
-      .ppvl-synopsis { font-size:0.86rem; color:rgba(26,21,48,0.65); line-height:1.85; white-space:pre-wrap; }
-      .ppvl-review-row { display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; }
-      .ppvl-review-col { background:rgba(26,21,48,0.03); border-radius:12px; padding:0.9rem 1rem; display:flex; flex-direction:column; gap:0.5rem; }
-      .ppvl-review-col-title { font-size:0.78rem; font-weight:800; display:flex; align-items:center; gap:0.35rem; margin-bottom:0.15rem; }
-      .ppvl-review-col-title.love { color:#5a8060; }
-      .ppvl-review-col-title.challenge { color:#c0621a; }
-      .ppvl-review-col-icon { width:14px; height:14px; }
-      .ppvl-review-list { display:flex; flex-direction:column; gap:0.42rem; }
+      .ppvl-title { font-size:2.1rem; font-weight:900; color:#1a1530; line-height:1.05; letter-spacing:-0.01em; word-break:break-word; }
+      .ppvl-genre { font-size:0.84rem; font-weight:600; color:rgba(26,21,48,0.45); margin-top:0.25rem; font-style:italic; }
+      .ppvl-logline { font-size:0.97rem; font-weight:700; color:#1a1530; line-height:1.65; margin:0; }
+      .ppvl-synopsis { font-size:0.86rem; color:rgba(26,21,48,0.65); line-height:1.85; white-space:pre-wrap; overflow-wrap:break-word; }
+      .ppvl-review-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+      .ppvl-review-col { border-radius:14px; overflow:hidden; }
+      .ppvl-review-col-head { padding:0.65rem 1rem; display:flex; align-items:center; gap:0.4rem; }
+      .ppvl-review-col-head.love { background:#769e7b; }
+      .ppvl-review-col-head.challenge { background:#dd8233; }
+      .ppvl-review-col-title { font-size:0.8rem; font-weight:900; color:#fff; }
+      .ppvl-review-col-icon { width:14px; height:14px; filter:brightness(0) invert(1); opacity:0.9; }
+      .ppvl-review-col-body { background:rgba(26,21,48,0.03); padding:0.75rem 1rem; }
+      .ppvl-review-list { display:flex; flex-direction:column; gap:0.45rem; }
       .ppvl-review-list-item { display:flex; align-items:flex-start; gap:0.4rem; font-size:0.83rem; color:#1a1530; line-height:1.45; }
       .ppvl-review-list-icon { width:15px; height:15px; flex-shrink:0; margin-top:0.1rem; }
       .ppvl-footer-fields { display:flex; gap:2rem; flex-wrap:wrap; border-top:1px solid rgba(26,21,48,0.08); padding-top:1.25rem; }
-      .ppvl-footer-field { display:flex; flex-direction:column; gap:0.25rem; max-width:280px; }
+      .ppvl-footer-field { display:flex; flex-direction:column; gap:0.25rem; }
       .ppvl-footer-lbl { font-size:0.7rem; font-weight:500; color:rgba(26,21,48,0.38); }
-      .ppvl-footer-val { font-size:0.83rem; font-weight:600; color:#1a1530; word-break:break-all; }
+      .ppvl-footer-val { font-size:0.83rem; font-weight:600; color:#1a1530; overflow-wrap:break-word; word-break:break-all; }
       .ppvl-footer-val.empty { color:rgba(26,21,48,0.28); font-style:italic; }
-      .ppvl-details { display:flex; flex-direction:column; gap:0.75rem; border-top:1px solid rgba(26,21,48,0.08); padding-top:1.5rem; margin-top:0.25rem; }
-      .ppvl-detail-section { background:rgba(26,21,48,0.025); border-radius:14px; padding:1rem 1.2rem; display:flex; flex-direction:column; gap:0.75rem; }
-      .ppvl-detail-title { font-size:0.82rem; font-weight:800; color:#1a1530; display:flex; align-items:center; gap:0.4rem; }
-      .ppvl-detail-icon { width:14px; height:14px; opacity:0.45; }
-      .ppvl-detail-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:0.65rem; }
+      .ppvl-details { display:flex; flex-direction:column; gap:1rem; border-top:1px solid rgba(26,21,48,0.08); padding-top:1.5rem; margin-top:0.25rem; }
+      .ppvl-detail-section { border-radius:14px; overflow:hidden; }
+      .ppvl-detail-section-head { padding:0.75rem 1.1rem; display:flex; align-items:center; gap:0.5rem; }
+      .ppvl-detail-section-icon { width:16px; height:16px; filter:brightness(0) invert(1); opacity:0.9; }
+      .ppvl-detail-section-title { font-size:0.86rem; font-weight:900; color:#fff; }
+      .ppvl-detail-section-body { background:#fff; border:1px solid rgba(26,21,48,0.07); border-top:none; border-radius:0 0 14px 14px; padding:1.1rem 1.2rem; display:flex; flex-direction:column; gap:0.75rem; }
+      .ppvl-detail-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:0.75rem; }
       .ppvl-detail-field { display:flex; flex-direction:column; gap:0.2rem; }
       .ppvl-detail-field-lbl { font-size:0.7rem; font-weight:500; color:rgba(26,21,48,0.4); }
-      .ppvl-detail-field-val { font-size:0.85rem; font-weight:700; color:#1a1530; }
-      .ppvl-detail-qa { display:flex; flex-direction:column; gap:0.3rem; }
+      .ppvl-detail-field-val { font-size:0.86rem; font-weight:700; color:#1a1530; }
+      .ppvl-detail-qa { display:flex; flex-direction:column; gap:0.3rem; padding-bottom:0.65rem; border-bottom:1px solid rgba(26,21,48,0.06); }
+      .ppvl-detail-qa:last-child { padding-bottom:0; border-bottom:none; }
       .ppvl-detail-qa-lbl { font-size:0.72rem; font-weight:600; color:rgba(26,21,48,0.45); }
-      .ppvl-detail-qa-val { font-size:0.86rem; color:#1a1530; line-height:1.7; }
-      .ppvl-detail-pills { display:flex; flex-wrap:wrap; gap:0.28rem; margin-top:0.2rem; }
-      .ppvl-detail-pill { background:rgba(26,21,48,0.07); border-radius:99px; padding:0.2rem 0.6rem; font-size:0.72rem; font-weight:600; color:rgba(26,21,48,0.65); }
+      .ppvl-detail-qa-val { font-size:0.87rem; color:#1a1530; line-height:1.75; overflow-wrap:break-word; }
+      .ppvl-detail-pills { display:flex; flex-wrap:wrap; gap:0.3rem; }
+      .ppvl-detail-pill { background:rgba(26,21,48,0.07); border-radius:99px; padding:0.22rem 0.65rem; font-size:0.72rem; font-weight:600; color:rgba(26,21,48,0.65); }
       .ppvl-detail-pill.warning { background:rgba(209,82,61,0.09); color:#d1523d; }
     `;
     document.head.appendChild(s);
@@ -1817,12 +1822,12 @@
       }).join('');
       reviewHtml = `<div class="ppvl-review-row">
         ${loves.length ? `<div class="ppvl-review-col">
-          <div class="ppvl-review-col-title love"><img class="ppvl-review-col-icon" src="/ASSETS/Images/Icons/volunteer-HEART.svg" alt="">What We Love</div>
-          <div class="ppvl-review-list">${loveItems}</div>
+          <div class="ppvl-review-col-head love"><img class="ppvl-review-col-icon" src="/ASSETS/Images/Icons/volunteer-HEART.svg" alt=""><span class="ppvl-review-col-title">What We Love</span></div>
+          <div class="ppvl-review-col-body"><div class="ppvl-review-list">${loveItems}</div></div>
         </div>` : ''}
         ${challenges.length ? `<div class="ppvl-review-col">
-          <div class="ppvl-review-col-title challenge"><img class="ppvl-review-col-icon" src="/ASSETS/Images/Icons/Alert.svg" alt="">Things to Consider</div>
-          <div class="ppvl-review-list">${challengeItems}</div>
+          <div class="ppvl-review-col-head challenge"><img class="ppvl-review-col-icon" src="/ASSETS/Images/Icons/Alert.svg" alt=""><span class="ppvl-review-col-title">Things to Consider</span></div>
+          <div class="ppvl-review-col-body"><div class="ppvl-review-list">${challengeItems}</div></div>
         </div>` : ''}
       </div>`;
     }
@@ -1842,11 +1847,15 @@
     </div>`;
 
     // Detail sections (scrollable below)
-    function detailSection(iconPath, title, bodyHtml) {
+    function detailSection(iconPath, title, bodyHtml, color) {
       if (!bodyHtml) return '';
+      const bg = color || '#572e88';
       return `<div class="ppvl-detail-section">
-        <div class="ppvl-detail-title"><img class="ppvl-detail-icon" src="${iconPath}" alt="">${esc(title)}</div>
-        <div class="ppvl-detail-body">${bodyHtml}</div>
+        <div class="ppvl-detail-section-head" style="background:${bg}">
+          <img class="ppvl-detail-section-icon" src="${iconPath}" alt="">
+          <span class="ppvl-detail-section-title">${esc(title)}</span>
+        </div>
+        <div class="ppvl-detail-section-body">${bodyHtml}</div>
       </div>`;
     }
     function dField(label, value) {
@@ -1914,12 +1923,12 @@
         ${reviewHtml}
         ${footerHtml}
         <div class="ppvl-details">
-          ${detailSection('/ASSETS/Images/Icons/Profiles.svg', 'Submitter', submitterBody)}
-          ${detailSection('/ASSETS/Images/Icons/Casting Board.svg', 'Casting', castBody)}
-          ${whyBody ? detailSection('/ASSETS/Images/Icons/volunteer-HEART.svg', 'Why This Show?', whyBody) : ''}
-          ${detailSection('/ASSETS/Images/Icons/script-music-songs.svg', 'Music & Choreography', musicBody)}
-          ${contentBody ? detailSection('/ASSETS/Images/Icons/Information.svg', 'Content & Suitability', contentBody) : ''}
-          ${risksBody ? detailSection('/ASSETS/Images/Icons/Alert.svg', 'Risks & Challenges', risksBody) : ''}
+          ${detailSection('/ASSETS/Images/Icons/Profiles.svg', 'Submitter', submitterBody, '#476aaa')}
+          ${detailSection('/ASSETS/Images/Icons/Casting Board.svg', 'Casting', castBody, '#d1523d')}
+          ${whyBody ? detailSection('/ASSETS/Images/Icons/volunteer-HEART.svg', 'Why This Show?', whyBody, '#ca7ea7') : ''}
+          ${detailSection('/ASSETS/Images/Icons/script-music-songs.svg', 'Music & Choreography', musicBody, '#769e7b')}
+          ${contentBody ? detailSection('/ASSETS/Images/Icons/Information.svg', 'Content & Suitability', contentBody, '#769e7b') : ''}
+          ${risksBody ? detailSection('/ASSETS/Images/Icons/Alert.svg', 'Risks & Challenges', risksBody, '#efab45') : ''}
         </div>
       </div>
     </div>`;
