@@ -1489,11 +1489,17 @@
       .ppv-full { grid-column:1/-1; }
       .ppv-review-section { display:flex; flex-direction:column; gap:0.45rem; }
       .ppv-review-label { font-size:0.68rem; font-weight:900; text-transform:uppercase; letter-spacing:0.07em; color:rgba(26,21,48,0.4); }
-      .ppv-review-pills { display:flex; flex-wrap:wrap; gap:0.3rem; }
-      .ppv-review-pill { background:none; border:1.5px solid rgba(26,21,48,0.13); border-radius:99px; padding:0.25rem 0.6rem; font-size:0.69rem; font-weight:700; color:rgba(26,21,48,0.45); cursor:pointer; transition:all 0.14s; line-height:1.3; text-align:left; font-family:inherit; }
-      .ppv-review-pill:hover { border-color:rgba(26,21,48,0.28); color:rgba(26,21,48,0.65); }
-      .ppv-review-pill.love.active { background:#769e7b; border-color:#769e7b; color:#fff; }
-      .ppv-review-pill.challenge.active { background:#efab45; border-color:#efab45; color:#1a1530; }
+      .ppv-review-tags { display:flex; flex-wrap:wrap; gap:0.25rem; min-height:4px; }
+      .ppv-review-tag { display:inline-flex; align-items:center; gap:0.28rem; border-radius:99px; padding:0.26rem 0.5rem 0.26rem 0.65rem; font-size:0.7rem; font-weight:700; line-height:1.2; }
+      .ppv-review-tag.love { background:#769e7b; color:#fff; }
+      .ppv-review-tag.challenge { background:#efab45; color:#1a1530; }
+      .ppv-review-tag-x { background:none; border:none; cursor:pointer; color:inherit; opacity:0.55; font-size:0.95rem; line-height:1; padding:0; font-weight:900; font-family:inherit; }
+      .ppv-review-tag-x:hover { opacity:1; }
+      .ppv-review-add-row { display:flex; gap:0.35rem; margin-top:0.2rem; }
+      .ppv-review-add-input { flex:1; border:1.5px solid rgba(26,21,48,0.12); border-radius:8px; padding:0.35rem 0.55rem; font-size:0.76rem; font-family:inherit; outline:none; color:#1a1530; background:#fff; min-width:0; }
+      .ppv-review-add-input:focus { border-color:#572e88; }
+      .ppv-review-add-btn { background:#572e88; color:#fff; border:none; border-radius:8px; padding:0.35rem 0.7rem; font-size:0.72rem; font-weight:800; cursor:pointer; font-family:inherit; white-space:nowrap; }
+      .ppv-review-add-btn:hover { background:#3d2066; }
       .ppv-review-notes { width:100%; min-height:72px; border:1.5px solid rgba(26,21,48,0.12); border-radius:10px; padding:0.55rem 0.7rem; font-size:0.78rem; color:#1a1530; resize:vertical; font-family:inherit; outline:none; transition:border-color 0.14s; box-sizing:border-box; }
       .ppv-review-notes:focus { border-color:#572e88; }
       .ppv-save-row { display:flex; justify-content:flex-end; padding-top:0.1rem; }
@@ -1502,50 +1508,66 @@
     document.head.appendChild(s);
   }
 
-  var PROPOSAL_LOVES = [
-    'Strong audience appeal', 'Excellent opportunities for performers', 'Great ensemble opportunities',
-    'Educational value', 'Fits our organisation\'s mission', 'Flexible casting',
-    'Exciting artistic opportunities', 'Strong marketing potential', 'Good fit for our venue',
-    'Complements the rest of the proposed season', 'Makes good use of existing resources', 'Fills a programming gap'
-  ];
-
-  var PROPOSAL_CHALLENGES = [
-    'Difficult to cast', 'Volunteer intensive', 'Complex scenery', 'High licensing costs',
-    'Large orchestra required', 'Heavy costume requirements', 'Significant technical demands',
-    'Rights availability concerns', 'Similar productions staged recently', 'Limited audience appeal',
-    'Long rehearsal commitment', 'Venue limitations'
-  ];
-
   var pvSaveTimer = null;
 
   function pvScheduleSave(proposalId) {
     clearTimeout(pvSaveTimer);
-    pvSaveTimer = setTimeout(function() { pvSaveScoring(proposalId); }, 1000);
+    pvSaveTimer = setTimeout(function() { pvSaveScoring(proposalId); }, 800);
   }
+  window.pvScheduleSave = pvScheduleSave;
 
   async function pvSaveScoring(proposalId) {
+    const proposal = proposalById(proposalId);
+    if (!proposal) return;
     const status = document.getElementById('ppv-save-status');
     if (status) status.textContent = 'Saving...';
-    const loves = [], challenges = [];
-    document.querySelectorAll('.ppv-review-pill.active.love').forEach(function(el) { loves.push(el.dataset.value); });
-    document.querySelectorAll('.ppv-review-pill.active.challenge').forEach(function(el) { challenges.push(el.dataset.value); });
+    const scoring = proposal.scoring || {};
     const notes = (document.getElementById('ppv-review-notes')?.value || '').trim();
-    const scoring = { loves, challenges, notes };
-    const proposal = proposalById(proposalId);
-    if (proposal) proposal.scoring = scoring;
+    scoring.notes = notes;
+    proposal.scoring = scoring;
     const { error } = await sb().from('production_proposals').update({ scoring }).eq('id', proposalId);
     if (status) {
       status.textContent = error ? 'Error saving' : 'Saved';
       setTimeout(function() { if (status) status.textContent = ''; }, 2000);
     }
+    const sub = document.getElementById('ppv-scoring-sub');
+    if (sub) {
+      const loveCount = (scoring.loves || []).length;
+      const challengeCount = (scoring.challenges || []).length;
+      sub.textContent = (loveCount || challengeCount) ? `${loveCount} love${loveCount !== 1 ? 's' : ''} · ${challengeCount} challenge${challengeCount !== 1 ? 's' : ''}` : 'Select what applies';
+    }
   }
   window.pvSaveScoring = pvSaveScoring;
 
-  function pvToggleReviewPill(el, proposalId) {
-    el.classList.toggle('active');
-    pvScheduleSave(proposalId);
+  function pvReRenderScoring(proposalId) {
+    const proposal = proposalById(proposalId);
+    if (!proposal) return;
+    document.getElementById('ppv-scoring-body').innerHTML = renderScoringPanel(proposal);
+    pvSaveScoring(proposalId);
   }
-  window.pvToggleReviewPill = pvToggleReviewPill;
+
+  function pvAddReviewItem(type, proposalId) {
+    const input = document.getElementById('ppv-add-' + type);
+    if (!input) return;
+    const val = input.value.trim();
+    if (!val) return;
+    const proposal = proposalById(proposalId);
+    if (!proposal) return;
+    if (!proposal.scoring) proposal.scoring = {};
+    const key = type === 'love' ? 'loves' : 'challenges';
+    proposal.scoring[key] = (proposal.scoring[key] || []).concat([val]);
+    pvReRenderScoring(proposalId);
+  }
+  window.pvAddReviewItem = pvAddReviewItem;
+
+  function pvRemoveReviewItem(type, index, proposalId) {
+    const proposal = proposalById(proposalId);
+    if (!proposal || !proposal.scoring) return;
+    const key = type === 'love' ? 'loves' : 'challenges';
+    proposal.scoring[key] = (proposal.scoring[key] || []).filter(function(_, i) { return i !== index; });
+    pvReRenderScoring(proposalId);
+  }
+  window.pvRemoveReviewItem = pvRemoveReviewItem;
 
   function renderScoringPanel(proposal) {
     const scoring = proposal.scoring || {};
@@ -1554,22 +1576,29 @@
     const notes = scoring.notes || '';
     const pid = proposal.id;
 
-    function pillRow(items, type, active) {
-      return items.map(function(item) {
-        const isActive = active.includes(item);
-        const safeVal = item.replace(/'/g, '&#39;');
-        return `<button class="ppv-review-pill ${type}${isActive ? ' active' : ''}" data-value="${safeVal}" onclick="pvToggleReviewPill(this,'${pid}')">${esc(item)}</button>`;
+    function tagRow(items, type) {
+      return items.map(function(item, i) {
+        return `<span class="ppv-review-tag ${type}">${esc(item)}<button class="ppv-review-tag-x" onclick="pvRemoveReviewItem('${type}',${i},'${pid}')" title="Remove">&times;</button></span>`;
       }).join('');
+    }
+
+    function addRow(type, placeholder) {
+      return `<div class="ppv-review-add-row">
+        <input class="ppv-review-add-input" id="ppv-add-${type}" type="text" placeholder="${placeholder}" onkeydown="if(event.key==='Enter'){pvAddReviewItem('${type}','${pid}');event.preventDefault();}">
+        <button class="ppv-review-add-btn" onclick="pvAddReviewItem('${type}','${pid}')">+ Add</button>
+      </div>`;
     }
 
     return `
       <div class="ppv-review-section">
         <div class="ppv-review-label">&#10084;&#65039; What We Love</div>
-        <div class="ppv-review-pills">${pillRow(PROPOSAL_LOVES, 'love', loves)}</div>
+        <div class="ppv-review-tags">${tagRow(loves, 'love')}</div>
+        ${addRow('love', 'e.g. Strong audience appeal')}
       </div>
       <div class="ppv-review-section">
         <div class="ppv-review-label">&#9888;&#65039; Challenges</div>
-        <div class="ppv-review-pills">${pillRow(PROPOSAL_CHALLENGES, 'challenge', challenges)}</div>
+        <div class="ppv-review-tags">${tagRow(challenges, 'challenge')}</div>
+        ${addRow('challenge', 'e.g. High licensing costs')}
       </div>
       <div class="ppv-review-section">
         <div class="ppv-review-label">Notes</div>
@@ -1577,7 +1606,6 @@
       </div>
       <div class="ppv-save-row"><span class="ppv-save-status" id="ppv-save-status"></span></div>`;
   }
-  window.pvScheduleSave = pvScheduleSave;
 
   function ensurePitchViewShell() {
     injectPitchViewStyles();
