@@ -10,7 +10,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>Production Workspace - Build The Show</title>
-  <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260709i" />
+  <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260709j" />
   <link rel="stylesheet" href="/ASSETS/styles/production-sidebar.css?v=sidebar-v51-20260704" />
   <link rel="stylesheet" href="/ASSETS/styles/casting-card.css?v=inshow-template-20260529" />
   <link rel="stylesheet" href="/ASSETS/styles/production-team-card.css?v=volunteer-left-text-20260511" />
@@ -48261,6 +48261,34 @@ See you soon!
     if (wrap) wrap.innerHTML = rptRenderSummaryBar(_rptCastItems, registrationCurrentPaymentSettings());
   }
 
+  let _rptRealtimeChannel = null;
+  function rptStartRealtimePayments() {
+    if (_rptRealtimeChannel) return; // already subscribed
+    if (!prodId) return;
+    _rptRealtimeChannel = sb.channel(`rpt-payments-${prodId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'registration_payment_records',
+        filter: `production_id=eq.${prodId}`
+      }, async () => {
+        await loadRegistrationPaymentRecords();
+        const settings = registrationCurrentPaymentSettings();
+        const list = document.getElementById('rpt-list');
+        if (list) {
+          const head = list.querySelector('.rsc-status-head');
+          list.innerHTML = '';
+          if (head) list.appendChild(head);
+          list.insertAdjacentHTML('beforeend', rptBuildGridHtml(_rptCastItems, settings));
+        }
+        rptRerenderSummary();
+      })
+      .subscribe();
+  }
+  function rptStopRealtimePayments() {
+    if (_rptRealtimeChannel) { sb.removeChannel(_rptRealtimeChannel); _rptRealtimeChannel = null; }
+  }
+
   function rptRerenderHouseholdsSection() {
     const card = document.getElementById('rpt-households-card');
     if (!card) return;
@@ -49524,6 +49552,7 @@ See you soon!
         <div class="rsc-head-cell"><div class="rsc-head-title">Connections</div></div>
         <div class="rsc-head-cell"><div class="rsc-head-title">Notes &amp; Actions</div></div>
       </div>${gridHtml}</div>`;
+      rptStartRealtimePayments();
       requestAnimationFrame(() => requestAnimationFrame(() => { try { fitBrandTileTitles(root); } catch (_) {} }));
     } catch (err) {
       console.error('[BTS] loadRegistrationPayments failed', err);
