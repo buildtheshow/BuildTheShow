@@ -10,7 +10,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>Production Workspace - Build The Show</title>
-  <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260709d" />
+  <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260709e" />
   <link rel="stylesheet" href="/ASSETS/styles/production-sidebar.css?v=sidebar-v51-20260704" />
   <link rel="stylesheet" href="/ASSETS/styles/casting-card.css?v=inshow-template-20260529" />
   <link rel="stylesheet" href="/ASSETS/styles/production-team-card.css?v=volunteer-left-text-20260511" />
@@ -74404,12 +74404,20 @@ See you soon!
 	    const oppsByEvent = {};
 	    opportunities.forEach(opp => {
 	      if (opp.event_id) { if (!oppsByEvent[opp.event_id]) oppsByEvent[opp.event_id] = []; oppsByEvent[opp.event_id].push(opp); }
-	    });
-
-	    // ── Signups by opportunity_id ───────────────────────────
-	    const signupsByOpp = {};
+	    }	    // ── Approved signups by role+date ───────────────────────
+	    // volunteer_signups uses role_name + shift_date/required_dates, not opportunity_id
+	    const approvedByRoleDate = {};
 	    (volunteerSignups || []).forEach(s => {
-	      if (s.status !== 'cancelled' && s.opportunity_id) signupsByOpp[s.opportunity_id] = (signupsByOpp[s.opportunity_id] || 0) + 1;
+	      if (s.status === 'cancelled' || s.status === 'declined') return;
+	      const role = (s.role_name || '').toLowerCase().trim();
+	      if (!role) return;
+	      const dates = [];
+	      if (s.shift_date) dates.push(String(s.shift_date).slice(0, 10));
+	      if (Array.isArray(s.required_dates)) s.required_dates.forEach(d => { if (d) dates.push(String(d).slice(0, 10)); });
+	      dates.forEach(d => {
+	        const k = `${role}|${d}`;
+	        approvedByRoleDate[k] = (approvedByRoleDate[k] || 0) + 1;
+	      });
 	    });
 
 	    // ── Stats this week — from plan × events ────────────────
@@ -74420,9 +74428,8 @@ See you soon!
 	    thisWeekEvents.forEach(ev => {
 	      const planRoles = plannedRolesForType(volCalendarEventType(ev));
 	      planRoles.forEach(pr => {
-	        // Check if there's a matching opportunity with signups
-	        const linkedOpp = (oppsByEvent[ev.id] || []).find(o => (o.production_title||'').toLowerCase() === pr.name.toLowerCase());
-	        const filled = linkedOpp ? (signupsByOpp[linkedOpp.id] || 0) : 0;
+	        const evDate1 = (ev.start_time || '').slice(0, 10);
+	        const filled = approvedByRoleDate[`${pr.name.toLowerCase()}|${evDate1}`] || 0;
 	        const needed = pr.needed;
 	        totalNeeded += needed;
 	        totalFilled += filled;
@@ -74456,8 +74463,8 @@ See you soon!
 	      const planRoles = plannedRolesForType(normalizedType);
 
 	      const rolesHtml = planRoles.map(pr => {
-	        const linkedOpp = (oppsByEvent[ev.id] || []).find(o => (o.production_title||'').toLowerCase() === pr.name.toLowerCase());
-	        const filled = linkedOpp ? (signupsByOpp[linkedOpp.id] || 0) : 0;
+	        const evDate2 = (ev.start_time || '').slice(0, 10);
+	        const filled = approvedByRoleDate[`${pr.name.toLowerCase()}|${evDate2}`] || 0;
 	        const needed = pr.needed;
 	        const dot = filled >= needed ? '#22c55e' : filled > 0 ? '#f59e0b' : '#ef4444';
 	        const cls = filled >= needed ? 'filled' : filled > 0 ? 'partial' : 'empty';
@@ -74517,8 +74524,8 @@ See you soon!
 	          const color = eventColor(normalizedType);
 	          const planRoles = plannedRolesForType(normalizedType);
 	          const { filled: evFilled, needed: evNeeded } = planRoles.reduce((acc, pr) => {
-	            const linkedOpp = (oppsByEvent[ev.id]||[]).find(o=>(o.production_title||'').toLowerCase()===pr.name.toLowerCase());
-	            acc.filled += linkedOpp ? (signupsByOpp[linkedOpp.id]||0) : 0;
+	            const evDateM = (ev.start_time || '').slice(0, 10);
+	            acc.filled += approvedByRoleDate[`${pr.name.toLowerCase()}|${evDateM}`] || 0;
 	            acc.needed += pr.needed;
 	            return acc;
 	          }, { filled:0, needed:0 });
