@@ -46557,7 +46557,7 @@ See you soon!
     const credits = Math.round((baseTotal - total) * 100) / 100;
     const adjusted = base.map(inst => ({ ...inst, label: labelSuffix ? `${inst.label} (${labelSuffix})` : inst.label, amount: Number(inst.amount || 0) }));
     let remaining = Math.max(0, credits);
-    for (let i = adjusted.length - 1; i >= 1 && remaining > 0; i--) {
+    for (let i = adjusted.length - 1; i >= 0 && remaining > 0; i--) {
       const applied = Math.min(adjusted[i].amount, remaining);
       adjusted[i].amount = Math.round((adjusted[i].amount - applied) * 100) / 100;
       remaining = Math.round((remaining - applied) * 100) / 100;
@@ -47072,16 +47072,14 @@ See you soon!
       const feeBreakdownHtml = feeLines + discountLines + `<div class="rsc-stmt-row rsc-stmt-total rsc-stmt-hh-total">
         <span>Total Due</span><span>${esc(fmt(totalFee))}</span>
       </div>`;
-      const seenIdx = new Set();
-      const allRecords = data.flatMap(d => d.records.filter(r => r.paid).map(r => ({
-        paid_at: r.paid_at,
-        amount: d.ef.installments[r.installment_index]?.amount || 0,
-        installment_index: r.installment_index
-      }))).filter(r => {
-        if (seenIdx.has(r.installment_index)) return false;
-        seenIdx.add(r.installment_index);
-        return true;
-      });
+      // Sum all members' (capped) amounts for each installment index to show the real household payment
+      const instMap = {};
+      data.forEach(d => d.records.filter(r => r.paid).forEach(r => {
+        const amt = Math.min(d.ef.installments[r.installment_index]?.amount || 0, d.ef.total);
+        if (!instMap[r.installment_index]) instMap[r.installment_index] = { paid_at: r.paid_at, amount: 0, installment_index: r.installment_index };
+        instMap[r.installment_index].amount += amt;
+      }));
+      const allRecords = Object.values(instMap);
       allRecords.sort((a, b) => new Date(a.paid_at || 0) - new Date(b.paid_at || 0));
       const ledgerHtml = allRecords.length
         ? allRecords.map(r => `<div class="rsc-stmt-row rsc-stmt-paid-row">
@@ -48567,12 +48565,19 @@ See you soon!
   function rscOpenHouseholdPayModal(householdId, idx) {
     const hh = _rptHouseholds.find(h => String(h.id) === String(householdId));
     if (!hh) return;
-    const names = (hh.member_ids || []).map(mid => {
-      const item = _rptCastItems.find(i => String(i.assignment?.id) === String(mid));
-      return item?.name || mid;
-    }).filter(Boolean).join(', ');
-    const count = hh.installments?.length || 1;
-    const label = hh.installments?.[idx]?.label || (count === 1 ? 'Full Payment' : idx === 0 ? 'First Payment' : idx === count - 1 ? 'Final Payment' : `Payment ${idx + 1}`);
+    const names = hh.name || 'Household';
+    const settings = registrationCurrentPaymentSettings();
+    const settingsInsts = rptGetInstallments(settings);
+    const count = settingsInsts.length || 1;
+    const label = count === 1 ? 'Full Payment' : idx === 0 ? 'First Payment' : idx === count - 1 ? 'Final Payment' : `Payment ${idx + 1}`;
+    // Compute household-level installment amount for this index (sum of member amounts)
+    const hhInstAmt = (() => {
+      const memberData = (hh.member_ids || []).map(mid => {
+        const item = _rptCastItems.find(i => String(i.assignment?.id) === String(mid));
+        return item ? rptEffectiveFee(item, settings) : null;
+      }).filter(Boolean);
+      return memberData.reduce((sum, ef) => sum + (ef.installments[idx]?.amount || 0), 0);
+    })();
     const today = new Date().toISOString().split('T')[0];
     // Find existing record from first member that has one
     const firstMid = (hh.member_ids || [])[0];
@@ -48582,7 +48587,7 @@ See you soon!
     const methodLabels = { '': '— Select —', e_transfer: 'E-Transfer', cheque: 'Cheque', cash: 'Cash', square: 'Square / Card', other: 'Other' };
     const methodHtml = methodOptions.map(v => `<option value="${v}"${existing?.payment_method === v ? ' selected' : ''}>${methodLabels[v]}</option>`).join('');
     const existingDate = existing?.paid_at ? existing.paid_at.split('T')[0] : today;
-    const existingAmount = existing?.amount_cents != null ? (existing.amount_cents / 100).toFixed(2) : '';
+    const existingAmount = existing?.amount_cents != null ? (existing.amount_cents / 100).toFixed(2) : (hhInstAmt > 0 ? hhInstAmt.toFixed(2) : '');
     document.getElementById('rsc-mark-paid-modal')?.remove();
     const modal = document.createElement('div');
     modal.id = 'rsc-mark-paid-modal';
