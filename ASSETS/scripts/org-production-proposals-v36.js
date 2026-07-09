@@ -474,14 +474,15 @@
       .pfb-toggle-small input:checked ~ .pfb-toggle-thumb { transform:translateX(13px); }
 
       /* ---- full-page pitch view overlay ---- */
-      .ppv-overlay { display:none; position:fixed; inset:0; z-index:3600; background:#f0eff5; flex-direction:column; }
+      .ppv-overlay { display:none; position:fixed; inset:0; z-index:3600; background:rgba(26,21,48,0.55); align-items:center; justify-content:center; padding:2vh 2vw; }
       .ppv-overlay.open { display:flex; }
-      .ppv-topbar { display:flex; align-items:center; gap:0.75rem; padding:0.7rem 1.25rem; background:#fff; border-bottom:1px solid rgba(87,46,136,0.1); flex-shrink:0; position:sticky; top:0; z-index:2; }
+      .ppv-shell { width:100%; height:100%; max-width:1400px; background:#f0eff5; border-radius:18px; box-shadow:0 30px 80px rgba(26,21,48,0.3); display:flex; flex-direction:column; overflow:hidden; }
+      .ppv-topbar { display:flex; align-items:center; gap:0.75rem; padding:0.8rem 1.25rem; background:#fff; border-bottom:1px solid rgba(87,46,136,0.1); flex-shrink:0; border-radius:18px 18px 0 0; }
       .ppv-topbar-org { font-size:0.7rem; font-weight:800; text-transform:uppercase; letter-spacing:0.07em; color:rgba(26,21,48,0.4); }
       .ppv-topbar-title { font-size:1rem; font-weight:900; color:#1a1530; flex:1; }
       .ppv-topbar-intake { font-size:0.78rem; font-weight:700; color:#572e88; }
-      .ppv-body { display:flex; flex:1; overflow:hidden; }
-      .ppv-main { flex:1; overflow-y:auto; padding:1.5rem 1.75rem; display:flex; flex-direction:column; gap:1rem; }
+      .ppv-body { display:flex; flex:1; overflow:hidden; border-radius:0 0 18px 18px; }
+      .ppv-main { flex:1; overflow-y:auto; padding:1.5rem 1.75rem; display:flex; flex-direction:column; gap:1rem; background:#f0eff5; }
       .ppv-scoring { width:320px; flex-shrink:0; border-left:1px solid rgba(87,46,136,0.1); background:#fff; overflow-y:auto; display:flex; flex-direction:column; }
       .ppv-scoring-head { padding:1rem 1.1rem 0.75rem; border-bottom:1px solid rgba(87,46,136,0.08); position:sticky; top:0; background:#fff; z-index:1; }
       .ppv-scoring-title { font-size:0.92rem; font-weight:900; color:#1a1530; }
@@ -1446,29 +1447,32 @@
     el.id = 'ppv-overlay';
     el.className = 'ppv-overlay';
     el.innerHTML = `
-      <div class="ppv-topbar">
-        <div style="flex:1;min-width:0;">
-          <div class="ppv-topbar-org" id="ppv-org-name"></div>
-          <div style="display:flex;align-items:baseline;gap:0.6rem;flex-wrap:wrap;">
-            <div class="ppv-topbar-title" id="ppv-show-title"></div>
-            <div class="ppv-topbar-intake" id="ppv-intake-label"></div>
+      <div class="ppv-shell">
+        <div class="ppv-topbar">
+          <div style="flex:1;min-width:0;">
+            <div class="ppv-topbar-org" id="ppv-org-name"></div>
+            <div style="display:flex;align-items:baseline;gap:0.6rem;flex-wrap:wrap;">
+              <div class="ppv-topbar-title" id="ppv-show-title"></div>
+              <div class="ppv-topbar-intake" id="ppv-intake-label"></div>
+            </div>
           </div>
+          <button class="btn-secondary" style="font-size:0.8rem;padding:0.4rem 0.85rem;" onclick="openProposalModal(document.getElementById('ppv-overlay').dataset.proposalId);closePitchView()">Edit</button>
+          <button class="btn-secondary" style="font-size:0.8rem;padding:0.4rem 0.85rem;" onclick="closePitchView()">Close</button>
         </div>
-        <button class="btn-secondary" style="font-size:0.8rem;padding:0.4rem 0.85rem;" onclick="openProposalModal(document.getElementById('ppv-overlay').dataset.proposalId)">Edit</button>
-        <button class="btn-secondary" style="font-size:0.8rem;padding:0.4rem 0.85rem;" onclick="closePitchView()">Close</button>
-      </div>
-      <div class="ppv-body">
-        <div class="ppv-main" id="ppv-main"></div>
-        <div class="ppv-scoring">
-          <div class="ppv-scoring-head">
-            <div class="ppv-scoring-title">Score This Pitch</div>
-            <div class="ppv-scoring-sub">Scoring criteria coming soon</div>
-          </div>
-          <div class="ppv-scoring-body" id="ppv-scoring-body">
-            <div class="ppv-score-placeholder">Scoring criteria will appear here.<br>Katie is setting up the categories.</div>
+        <div class="ppv-body">
+          <div class="ppv-main" id="ppv-main"></div>
+          <div class="ppv-scoring">
+            <div class="ppv-scoring-head">
+              <div class="ppv-scoring-title">Score This Pitch</div>
+              <div class="ppv-scoring-sub">Scoring criteria coming soon</div>
+            </div>
+            <div class="ppv-scoring-body" id="ppv-scoring-body">
+              <div class="ppv-score-placeholder">Scoring criteria will appear here.<br>Katie is setting up the categories.</div>
+            </div>
           </div>
         </div>
       </div>`;
+    el.addEventListener('click', function(e) { if (e.target === el) closePitchView(); });
     document.body.appendChild(el);
     el.addEventListener('keydown', function(e) { if (e.key === 'Escape') closePitchView(); });
   }
