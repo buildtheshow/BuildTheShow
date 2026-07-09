@@ -1488,7 +1488,8 @@
       .ppv-sections-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
       .ppv-full { grid-column:1/-1; }
       .ppv-review-section { display:flex; flex-direction:column; gap:0.45rem; }
-      .ppv-review-label { font-size:0.68rem; font-weight:900; text-transform:uppercase; letter-spacing:0.07em; color:rgba(26,21,48,0.4); }
+      .ppv-review-label { font-size:0.68rem; font-weight:900; text-transform:uppercase; letter-spacing:0.07em; color:rgba(26,21,48,0.4); display:flex; align-items:center; gap:0.3rem; }
+      .ppv-label-icon { width:14px; height:14px; flex-shrink:0; }
       .ppv-review-tags { display:flex; flex-wrap:wrap; gap:0.25rem; min-height:4px; }
       .ppv-review-tag { display:inline-flex; align-items:center; gap:0.3rem; border-radius:99px; padding:0.26rem 0.55rem 0.26rem 0.45rem; font-size:0.7rem; font-weight:700; line-height:1.2; }
       .ppv-review-tag.love { background:#769e7b; color:#fff; }
@@ -1599,12 +1600,12 @@
 
     return `
       <div class="ppv-review-section">
-        <div class="ppv-review-label">&#10084;&#65039; What We Love</div>
+        <div class="ppv-review-label"><img src="/ASSETS/Images/Icons/volunteer-HEART.svg" class="ppv-label-icon" alt="" style="filter:none;"> What We Love</div>
         <div class="ppv-review-tags">${tagRow(loves, 'love')}</div>
         ${addRow('love', 'e.g. Strong audience appeal')}
       </div>
       <div class="ppv-review-section">
-        <div class="ppv-review-label">&#9888;&#65039; Challenges</div>
+        <div class="ppv-review-label"><img src="/ASSETS/Images/Icons/Alert.svg" class="ppv-label-icon" alt=""> Challenges</div>
         <div class="ppv-review-tags">${tagRow(challenges, 'challenge')}</div>
         ${addRow('challenge', 'e.g. High licensing costs')}
       </div>
