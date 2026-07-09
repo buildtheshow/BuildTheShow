@@ -10,7 +10,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>Production Workspace - Build The Show</title>
-  <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260709f" />
+  <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260709g" />
   <link rel="stylesheet" href="/ASSETS/styles/production-sidebar.css?v=sidebar-v51-20260704" />
   <link rel="stylesheet" href="/ASSETS/styles/casting-card.css?v=inshow-template-20260529" />
   <link rel="stylesheet" href="/ASSETS/styles/production-team-card.css?v=volunteer-left-text-20260511" />
@@ -47019,7 +47019,8 @@ See you soon!
         const id = String(item.assignment?.id || '');
         const ef = rptEffectiveFee(item, settings);
         const records = _rptPaymentRecords[id] || [];
-        const paid = records.filter(r => r.paid).reduce((sum, r) => sum + (ef.installments[r.installment_index]?.amount || 0), 0);
+        const rawPaid = records.filter(r => r.paid).reduce((sum, r) => sum + (ef.installments[r.installment_index]?.amount || 0), 0);
+        const paid = Math.min(rawPaid, ef.total); // cap at member's total so overshoot discounts don't zero the balance
         return { item, id, ef, records, paid };
       });
       const hasFee = (settings.mode === 'flat' || settings.mode === 'split') && data.some(d => d.ef.total > 0);
@@ -47027,7 +47028,9 @@ See you soon!
       const totalFee = data.reduce((sum, d) => sum + d.ef.total, 0);
       const totalPaid = data.reduce((sum, d) => sum + d.paid, 0);
       const balance = Math.max(0, totalFee - totalPaid);
-      const allPaid = balance === 0 && totalPaid > 0;
+      // allPaid: all installments across all members must be marked paid
+      const maxInstCount = Math.max(0, ...data.map(d => d.ef.installments.length));
+      const allPaid = maxInstCount > 0 && data.every(d => d.ef.installments.every((inst, idx) => inst.amount === 0 || !!d.records.find(r => r.installment_index === idx && r.paid)));
       const stateClass = allPaid ? 'full' : totalPaid > 0 ? 'partial' : 'unpaid';
       const statusLabel = allPaid ? 'Paid in Full' : totalPaid > 0 ? 'Partially Paid' : 'Unpaid';
       const hhEf = { baseTotal: totalFee, total: totalFee, adjustments: [] };
