@@ -1488,7 +1488,7 @@
       .ppv-sections-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
       .ppv-full { grid-column:1/-1; }
       .ppv-review-section { display:flex; flex-direction:column; gap:0.45rem; }
-      .ppv-review-label { font-size:0.68rem; font-weight:900; text-transform:uppercase; letter-spacing:0.07em; color:rgba(26,21,48,0.4); display:flex; align-items:center; gap:0.3rem; }
+      .ppv-review-label { font-size:0.74rem; font-weight:700; color:rgba(26,21,48,0.5); display:flex; align-items:center; gap:0.3rem; }
       .ppv-label-icon { width:14px; height:14px; flex-shrink:0; }
       .ppv-review-tags { display:flex; flex-wrap:wrap; gap:0.25rem; min-height:4px; }
       .ppv-review-tag { display:inline-flex; align-items:center; gap:0.3rem; border-radius:99px; padding:0.26rem 0.55rem 0.26rem 0.45rem; font-size:0.7rem; font-weight:700; line-height:1.2; }
@@ -1516,40 +1516,40 @@
       .ppvl-basic-item { display:flex; align-items:center; gap:0.55rem; }
       .ppvl-basic-icon { width:18px; height:18px; flex-shrink:0; opacity:0.28; }
       .ppvl-basic-value { font-size:0.9rem; font-weight:900; color:#1a1530; line-height:1.1; }
-      .ppvl-basic-label { font-size:0.56rem; font-weight:800; text-transform:uppercase; letter-spacing:0.09em; color:rgba(26,21,48,0.32); }
+      .ppvl-basic-label { font-size:0.68rem; font-weight:500; color:rgba(26,21,48,0.38); }
       .ppvl-content { flex:1; min-width:0; display:flex; flex-direction:column; gap:1.5rem; }
-      .ppvl-kicker { font-size:0.63rem; font-weight:900; text-transform:uppercase; letter-spacing:0.15em; color:rgba(26,21,48,0.35); margin-bottom:0.1rem; }
+      .ppvl-kicker { font-size:0.72rem; font-weight:600; color:rgba(26,21,48,0.35); margin-bottom:0.1rem; }
       .ppvl-title { font-size:2.1rem; font-weight:900; color:#1a1530; line-height:1; letter-spacing:-0.01em; }
-      .ppvl-genre { font-size:0.78rem; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:rgba(26,21,48,0.38); margin-top:0.25rem; }
-      .ppvl-logline { font-size:0.97rem; font-weight:700; color:#1a1530; line-height:1.55; margin:0; }
-      .ppvl-synopsis { font-size:0.84rem; color:rgba(26,21,48,0.65); line-height:1.8; white-space:pre-wrap; }
-      .ppvl-review-row { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; }
-      .ppvl-review-col { display:flex; flex-direction:column; gap:0.45rem; }
-      .ppvl-review-col-title { font-size:0.67rem; font-weight:900; text-transform:uppercase; letter-spacing:0.09em; display:flex; align-items:center; gap:0.35rem; margin-bottom:0.1rem; }
-      .ppvl-review-col-title.love { color:#769e7b; }
-      .ppvl-review-col-title.challenge { color:#dd8233; }
-      .ppvl-review-col-icon { width:13px; height:13px; }
-      .ppvl-review-list { display:flex; flex-direction:column; gap:0.38rem; }
-      .ppvl-review-list-item { display:flex; align-items:flex-start; gap:0.4rem; font-size:0.81rem; color:#1a1530; line-height:1.4; }
-      .ppvl-review-list-icon { width:15px; height:15px; flex-shrink:0; margin-top:0.08rem; }
+      .ppvl-genre { font-size:0.82rem; font-weight:600; color:rgba(26,21,48,0.45); margin-top:0.25rem; font-style:italic; }
+      .ppvl-logline { font-size:0.97rem; font-weight:700; color:#1a1530; line-height:1.6; margin:0; }
+      .ppvl-synopsis { font-size:0.86rem; color:rgba(26,21,48,0.65); line-height:1.85; white-space:pre-wrap; }
+      .ppvl-review-row { display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; }
+      .ppvl-review-col { background:rgba(26,21,48,0.03); border-radius:12px; padding:0.9rem 1rem; display:flex; flex-direction:column; gap:0.5rem; }
+      .ppvl-review-col-title { font-size:0.78rem; font-weight:800; display:flex; align-items:center; gap:0.35rem; margin-bottom:0.15rem; }
+      .ppvl-review-col-title.love { color:#5a8060; }
+      .ppvl-review-col-title.challenge { color:#c0621a; }
+      .ppvl-review-col-icon { width:14px; height:14px; }
+      .ppvl-review-list { display:flex; flex-direction:column; gap:0.42rem; }
+      .ppvl-review-list-item { display:flex; align-items:flex-start; gap:0.4rem; font-size:0.83rem; color:#1a1530; line-height:1.45; }
+      .ppvl-review-list-icon { width:15px; height:15px; flex-shrink:0; margin-top:0.1rem; }
       .ppvl-footer-fields { display:flex; gap:2rem; flex-wrap:wrap; border-top:1px solid rgba(26,21,48,0.08); padding-top:1.25rem; }
-      .ppvl-footer-field { display:flex; flex-direction:column; gap:0.2rem; max-width:280px; }
-      .ppvl-footer-lbl { font-size:0.57rem; font-weight:900; text-transform:uppercase; letter-spacing:0.1em; color:rgba(26,21,48,0.32); }
-      .ppvl-footer-val { font-size:0.79rem; font-weight:600; color:#1a1530; word-break:break-all; }
+      .ppvl-footer-field { display:flex; flex-direction:column; gap:0.25rem; max-width:280px; }
+      .ppvl-footer-lbl { font-size:0.7rem; font-weight:500; color:rgba(26,21,48,0.38); }
+      .ppvl-footer-val { font-size:0.83rem; font-weight:600; color:#1a1530; word-break:break-all; }
       .ppvl-footer-val.empty { color:rgba(26,21,48,0.28); font-style:italic; }
-      .ppvl-details { display:flex; flex-direction:column; gap:1.25rem; border-top:1px solid rgba(26,21,48,0.08); padding-top:1.5rem; margin-top:0.5rem; }
-      .ppvl-detail-section { display:flex; flex-direction:column; gap:0.55rem; }
-      .ppvl-detail-title { font-size:0.67rem; font-weight:900; text-transform:uppercase; letter-spacing:0.1em; color:rgba(26,21,48,0.4); display:flex; align-items:center; gap:0.38rem; }
-      .ppvl-detail-icon { width:13px; height:13px; opacity:0.38; }
-      .ppvl-detail-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:0.55rem; }
-      .ppvl-detail-field { display:flex; flex-direction:column; gap:0.15rem; }
-      .ppvl-detail-field-lbl { font-size:0.57rem; font-weight:800; text-transform:uppercase; letter-spacing:0.07em; color:rgba(26,21,48,0.32); }
-      .ppvl-detail-field-val { font-size:0.81rem; font-weight:700; color:#1a1530; }
-      .ppvl-detail-qa { display:flex; flex-direction:column; gap:0.2rem; }
-      .ppvl-detail-qa-lbl { font-size:0.58rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:rgba(26,21,48,0.32); }
-      .ppvl-detail-qa-val { font-size:0.81rem; color:#1a1530; line-height:1.65; }
+      .ppvl-details { display:flex; flex-direction:column; gap:0.75rem; border-top:1px solid rgba(26,21,48,0.08); padding-top:1.5rem; margin-top:0.25rem; }
+      .ppvl-detail-section { background:rgba(26,21,48,0.025); border-radius:14px; padding:1rem 1.2rem; display:flex; flex-direction:column; gap:0.75rem; }
+      .ppvl-detail-title { font-size:0.82rem; font-weight:800; color:#1a1530; display:flex; align-items:center; gap:0.4rem; }
+      .ppvl-detail-icon { width:14px; height:14px; opacity:0.45; }
+      .ppvl-detail-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:0.65rem; }
+      .ppvl-detail-field { display:flex; flex-direction:column; gap:0.2rem; }
+      .ppvl-detail-field-lbl { font-size:0.7rem; font-weight:500; color:rgba(26,21,48,0.4); }
+      .ppvl-detail-field-val { font-size:0.85rem; font-weight:700; color:#1a1530; }
+      .ppvl-detail-qa { display:flex; flex-direction:column; gap:0.3rem; }
+      .ppvl-detail-qa-lbl { font-size:0.72rem; font-weight:600; color:rgba(26,21,48,0.45); }
+      .ppvl-detail-qa-val { font-size:0.86rem; color:#1a1530; line-height:1.7; }
       .ppvl-detail-pills { display:flex; flex-wrap:wrap; gap:0.28rem; margin-top:0.2rem; }
-      .ppvl-detail-pill { background:rgba(26,21,48,0.07); border-radius:99px; padding:0.18rem 0.55rem; font-size:0.69rem; font-weight:700; color:rgba(26,21,48,0.6); }
+      .ppvl-detail-pill { background:rgba(26,21,48,0.07); border-radius:99px; padding:0.2rem 0.6rem; font-size:0.72rem; font-weight:600; color:rgba(26,21,48,0.65); }
       .ppvl-detail-pill.warning { background:rgba(209,82,61,0.09); color:#d1523d; }
     `;
     document.head.appendChild(s);
