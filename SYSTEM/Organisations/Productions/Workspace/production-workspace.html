@@ -10,7 +10,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>Production Workspace - Build The Show</title>
-  <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260709e" />
+  <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260709f" />
   <link rel="stylesheet" href="/ASSETS/styles/production-sidebar.css?v=sidebar-v51-20260704" />
   <link rel="stylesheet" href="/ASSETS/styles/casting-card.css?v=inshow-template-20260529" />
   <link rel="stylesheet" href="/ASSETS/styles/production-team-card.css?v=volunteer-left-text-20260511" />
@@ -46617,8 +46617,10 @@ See you soon!
     const currency = registrationPaymentCurrency(settings);
     const symbol = { CAD: '$', USD: '$', GBP: '£' }[currency] || '$';
     const castCount = items.length;
-    let totalDue = 0, totalPaid = 0, countBalance = 0;
+    let totalDue = 0, totalPaid = 0;
+    let pastDueOwing = 0, pastDueCount = 0;
     const dueDates = [];
+    const todayStartMs = new Date(new Date().toDateString()).getTime();
     items.forEach(item => {
       const ef = rptEffectiveFee(item, settings);
       const assignmentId = item.assignment?.id;
@@ -46626,20 +46628,26 @@ See you soon!
       const paid = rptPaidTotal(assignmentId, ef.installments);
       totalDue += ef.total;
       totalPaid += paid;
-      if (ef.total - paid > 0) countBalance++;
+      let itemPastDue = 0;
       ef.installments.forEach((inst, idx) => {
         const paidRecord = records.find(r => r.installment_index === idx && r.paid);
-        if (!paidRecord && inst.dueDate) dueDates.push(inst.dueDate);
+        if (!paidRecord && inst.dueDate) {
+          dueDates.push(inst.dueDate);
+          const dueDateMs = new Date(`${inst.dueDate}T00:00:00`).getTime();
+          if (Number.isFinite(dueDateMs) && dueDateMs < todayStartMs) {
+            itemPastDue += inst.amount || 0;
+          }
+        }
       });
+      if (itemPastDue > 0) { pastDueOwing += itemPastDue; pastDueCount++; }
     });
     const registeredCount = items.filter(item => registrationFormsComplete(item.app)).length;
     const registeredPct = castCount ? Math.round((registeredCount / castCount) * 100) : 0;
-    const outstanding = Math.max(0, totalDue - totalPaid);
     const nextDueRaw = dueDates
       .map(date => ({ raw: date, time: new Date(`${date}T00:00:00`).getTime() }))
-      .filter(entry => Number.isFinite(entry.time))
+      .filter(entry => Number.isFinite(entry.time) && entry.time >= todayStartMs)
       .sort((a, b) => a.time - b.time)[0]?.raw || '';
-    const nextDueLabel = nextDueRaw ? rptFormatDate(nextDueRaw) : 'No due date';
+    const nextDueLabel = nextDueRaw ? rptFormatDate(nextDueRaw) : 'No upcoming deadlines';
     const dueOnNext = nextDueRaw ? dueDates.filter(d => d === nextDueRaw).length : 0;
     const money = amount => `${symbol}${Number(amount || 0).toLocaleString('en-CA', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
     const renderSummaryTile = ({ label, value, note, color, ink, icon }) => {
@@ -46671,7 +46679,7 @@ See you soon!
       <div class="registration-payment-summary rpt-summary-3">
         ${renderSummaryTile({ label: 'Registered', value: String(registeredCount), note: `${registeredPct}% of cast`, color: '#74a2b4', ink: '#ffffff', icon: '/ASSETS/Images/Icons/Budgeting-Registration.svg' })}
         ${renderSummaryTile({ label: 'Collected', value: money(totalPaid), note: currency, color: '#769e7b', ink: '#ffffff', icon: '/ASSETS/Images/Icons/Budgeting-Fundraising.svg' })}
-        ${renderSummaryTile({ label: 'Owing', value: money(outstanding), note: `${countBalance} with a balance`, color: '#d1523d', ink: '#ffffff', icon: owingIcon })}
+        ${renderSummaryTile({ label: 'Overdue', value: pastDueOwing > 0 ? money(pastDueOwing) : money(0), note: pastDueCount > 0 ? `${pastDueCount} past current deadline` : 'All caught up', color: '#d1523d', ink: '#ffffff', icon: owingIcon })}
         ${renderSummaryTile({ label: 'Next Due Date', value: nextDueLabel, note: dueOnNext ? `${dueOnNext} due on this date` : 'No unpaid instalments', color: '#476aaa', ink: '#ffffff', icon: '/ASSETS/Images/Icons/Finance - Schedule.svg' })}
       </div>
       <div style="display:flex;flex-direction:column;gap:0.5rem;">
@@ -49434,10 +49442,29 @@ See you soon!
     return hh ? rptLastName(hh.name) : rptLastName(item.app?.name || '');
   }
 
+  function rptFeeStatusRank(item, settings) {
+    const ef = rptEffectiveFee(item, settings);
+    const assignId = String(item.assignment?.id || '');
+    const records = _rptPaymentRecords[assignId] || [];
+    const paid = rptPaidTotal(assignId, ef.installments);
+    const balance = ef.total - paid;
+    if (balance <= 0 && ef.total > 0) return 4; // paid in full
+    if (ef.total === 0) return 5; // no fee
+    const todayMs = new Date(new Date().toDateString()).getTime();
+    const hasOverdue = ef.installments.some((inst, idx) => {
+      const pr = records.find(r => r.installment_index === idx && r.paid);
+      return !pr && inst.dueDate && new Date(`${inst.dueDate}T00:00:00`).getTime() < todayMs;
+    });
+    if (hasOverdue) return 1; // overdue — worst first
+    if (paid > 0) return 2; // partially paid
+    return 3; // unpaid
+  }
+
   function rptBuildGridHtml(items, settings) {
     let sorted = [...items];
     if (_rptSortOrder === 'az') sorted.sort((a, b) => rptSortKey(a).localeCompare(rptSortKey(b)));
     else if (_rptSortOrder === 'za') sorted.sort((a, b) => rptSortKey(b).localeCompare(rptSortKey(a)));
+    else if (_rptSortOrder === 'fee') sorted.sort((a, b) => rptFeeStatusRank(a, settings) - rptFeeStatusRank(b, settings) || rptSortKey(a).localeCompare(rptSortKey(b)));
     const renderedHouseholdIds = new Set();
     return sorted.map(item => {
       const assignId = String(item.assignment?.id || '');
@@ -49452,10 +49479,18 @@ See you soon!
     }).join('');
   }
 
-  function rptToggleSort() {
-    _rptSortOrder = _rptSortOrder === 'az' ? 'za' : 'az';
-    const btn = document.getElementById('rpt-sort-btn');
-    if (btn) btn.textContent = _rptSortOrder === 'az' ? 'A → Z' : 'Z → A';
+  function rptToggleSort(col) {
+    if (col === 'fee') {
+      _rptSortOrder = _rptSortOrder === 'fee' ? 'az' : 'fee';
+    } else {
+      _rptSortOrder = _rptSortOrder === 'az' ? 'za' : 'az';
+    }
+    const nameBtn = document.getElementById('rpt-sort-btn');
+    const feeBtn = document.getElementById('rpt-fee-sort-btn');
+    if (nameBtn) nameBtn.textContent = _rptSortOrder === 'za' ? 'Z \u2192 A' : 'A \u2192 Z';
+    if (feeBtn) feeBtn.textContent = _rptSortOrder === 'fee' ? 'Worst first \u2713' : 'Worst first';
+    if (nameBtn) nameBtn.style.fontWeight = _rptSortOrder === 'az' || _rptSortOrder === 'za' ? '700' : '';
+    if (feeBtn) feeBtn.style.fontWeight = _rptSortOrder === 'fee' ? '700' : '';
     const list = document.getElementById('rpt-list');
     if (!list || !_rptCastItems.length) return;
     const settings = registrationCurrentPaymentSettings();
@@ -49481,8 +49516,8 @@ See you soon!
       }
       const gridHtml = rptBuildGridHtml(items, settings);
       root.innerHTML = `<div id="rpt-summary-wrap">${rptRenderSummaryBar(items, settings)}</div><div class="rsc-status-table" id="rpt-list"><div class="rsc-status-head">
-        <div class="rsc-head-cell" style="display:flex;align-items:center;gap:0.6rem;"><div class="rsc-head-title">Cast Member</div><button id="rpt-sort-btn" class="rsc-sort-btn" onclick="rptToggleSort()">${_rptSortOrder === 'az' ? 'A → Z' : 'Z → A'}</button></div>
-        <div class="rsc-head-cell"><div class="rsc-head-title">Fee Status</div></div>
+        <div class="rsc-head-cell" style="display:flex;align-items:center;gap:0.6rem;"><div class="rsc-head-title">Cast Member</div><button id="rpt-sort-btn" class="rsc-sort-btn" onclick="rptToggleSort('name')" style="${_rptSortOrder === 'az' || _rptSortOrder === 'za' ? 'font-weight:700' : ''}">${_rptSortOrder === 'za' ? 'Z → A' : 'A → Z'}</button></div>
+        <div class="rsc-head-cell" style="display:flex;align-items:center;gap:0.6rem;"><div class="rsc-head-title">Fee Status</div><button id="rpt-fee-sort-btn" class="rsc-sort-btn" onclick="rptToggleSort('fee')" style="${_rptSortOrder === 'fee' ? 'font-weight:700' : ''}">Worst first${_rptSortOrder === 'fee' ? ' ✓' : ''}</button></div>
         <div class="rsc-head-cell"><div class="rsc-head-title">Connections</div></div>
         <div class="rsc-head-cell"><div class="rsc-head-title">Notes &amp; Actions</div></div>
       </div>${gridHtml}</div>`;
