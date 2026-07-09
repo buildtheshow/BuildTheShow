@@ -1579,7 +1579,7 @@
 
     var TAG_ICONS = {
       love: '/ASSETS/Images/Icons/volunteer-HEART.svg',
-      challenge: '/ASSETS/Images/Icons/Danger Zone.svg'
+      challenge: '/ASSETS/Images/Icons/Alert.svg'
     };
 
     function tagRow(items, type) {
