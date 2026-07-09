@@ -49467,11 +49467,29 @@ See you soon!
     return 3; // unpaid
   }
 
+  function rptBalanceAmount(item, settings) {
+    const assignId = String(item.assignment?.id || '');
+    const hh = rptHouseholdFor(assignId);
+    if (hh) {
+      const logs = _rptHouseholdPaymentLogs[hh.id] || [];
+      const totalFee = (hh.member_ids || []).reduce((s, mid) => {
+        const mi = _rptCastItems.find(i => String(i.assignment?.id) === String(mid));
+        return s + (mi ? rptEffectiveFee(mi, settings).total : 0);
+      }, 0);
+      const totalPaid = logs.reduce((s, l) => s + ((l.amount_cents || 0) / 100), 0);
+      return Math.max(0, totalFee - totalPaid);
+    }
+    const ef = rptEffectiveFee(item, settings);
+    const paid = rptPaidTotal(assignId, ef.installments);
+    return Math.max(0, ef.total - paid);
+  }
+
   function rptBuildGridHtml(items, settings) {
     let sorted = [...items];
     if (_rptSortOrder === 'az') sorted.sort((a, b) => rptSortKey(a).localeCompare(rptSortKey(b)));
     else if (_rptSortOrder === 'za') sorted.sort((a, b) => rptSortKey(b).localeCompare(rptSortKey(a)));
-    else if (_rptSortOrder === 'fee') sorted.sort((a, b) => rptFeeStatusRank(a, settings) - rptFeeStatusRank(b, settings) || rptSortKey(a).localeCompare(rptSortKey(b)));
+    else if (_rptSortOrder === 'fee-desc') sorted.sort((a, b) => rptBalanceAmount(b, settings) - rptBalanceAmount(a, settings) || rptSortKey(a).localeCompare(rptSortKey(b)));
+    else if (_rptSortOrder === 'fee-asc') sorted.sort((a, b) => rptBalanceAmount(a, settings) - rptBalanceAmount(b, settings) || rptSortKey(a).localeCompare(rptSortKey(b)));
     const renderedHouseholdIds = new Set();
     return sorted.map(item => {
       const assignId = String(item.assignment?.id || '');
@@ -49488,16 +49506,19 @@ See you soon!
 
   function rptToggleSort(col) {
     if (col === 'fee') {
-      _rptSortOrder = _rptSortOrder === 'fee' ? 'az' : 'fee';
+      if (_rptSortOrder === 'fee-desc') _rptSortOrder = 'fee-asc';
+      else if (_rptSortOrder === 'fee-asc') _rptSortOrder = 'az';
+      else _rptSortOrder = 'fee-desc';
     } else {
       _rptSortOrder = _rptSortOrder === 'az' ? 'za' : 'az';
     }
     const nameBtn = document.getElementById('rpt-sort-btn');
     const feeBtn = document.getElementById('rpt-fee-sort-btn');
     if (nameBtn) nameBtn.textContent = _rptSortOrder === 'za' ? 'Z \u2192 A' : 'A \u2192 Z';
-    if (feeBtn) feeBtn.textContent = _rptSortOrder === 'fee' ? 'Amount Due \u2713' : 'Amount Due';
+    const feeLabel = _rptSortOrder === 'fee-desc' ? 'Amount Due \u2193' : _rptSortOrder === 'fee-asc' ? 'Amount Due \u2191' : 'Amount Due';
+    if (feeBtn) feeBtn.textContent = feeLabel;
     if (nameBtn) nameBtn.style.fontWeight = _rptSortOrder === 'az' || _rptSortOrder === 'za' ? '700' : '';
-    if (feeBtn) feeBtn.style.fontWeight = _rptSortOrder === 'fee' ? '700' : '';
+    if (feeBtn) feeBtn.style.fontWeight = _rptSortOrder === 'fee-desc' || _rptSortOrder === 'fee-asc' ? '700' : '';
     const list = document.getElementById('rpt-list');
     if (!list || !_rptCastItems.length) return;
     const settings = registrationCurrentPaymentSettings();
@@ -49524,7 +49545,7 @@ See you soon!
       const gridHtml = rptBuildGridHtml(items, settings);
       root.innerHTML = `<div id="rpt-summary-wrap">${rptRenderSummaryBar(items, settings)}</div><div class="rsc-status-table" id="rpt-list"><div class="rsc-status-head">
         <div class="rsc-head-cell" style="display:flex;align-items:center;gap:0.6rem;"><div class="rsc-head-title">Cast Member</div><button id="rpt-sort-btn" class="rsc-sort-btn" onclick="rptToggleSort('name')" style="${_rptSortOrder === 'az' || _rptSortOrder === 'za' ? 'font-weight:700' : ''}">${_rptSortOrder === 'za' ? 'Z → A' : 'A → Z'}</button></div>
-        <div class="rsc-head-cell" style="display:flex;align-items:center;gap:0.6rem;"><div class="rsc-head-title">Fee Status</div><button id="rpt-fee-sort-btn" class="rsc-sort-btn" onclick="rptToggleSort('fee')" style="${_rptSortOrder === 'fee' ? 'font-weight:700' : ''}">Amount Due${_rptSortOrder === 'fee' ? ' ✓' : ''}</button></div>
+        <div class="rsc-head-cell" style="display:flex;align-items:center;gap:0.6rem;"><div class="rsc-head-title">Fee Status</div><button id="rpt-fee-sort-btn" class="rsc-sort-btn" onclick="rptToggleSort('fee')" style="${_rptSortOrder === 'fee-desc' || _rptSortOrder === 'fee-asc' ? 'font-weight:700' : ''}">Amount Due${_rptSortOrder === 'fee-desc' ? ' ↓' : _rptSortOrder === 'fee-asc' ? ' ↑' : ''}</button></div>
         <div class="rsc-head-cell"><div class="rsc-head-title">Connections</div></div>
         <div class="rsc-head-cell"><div class="rsc-head-title">Notes &amp; Actions</div></div>
       </div>${gridHtml}</div>`;
