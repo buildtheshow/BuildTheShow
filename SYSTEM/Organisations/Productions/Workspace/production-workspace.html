@@ -46622,11 +46622,39 @@ See you soon!
     let pastDueOwing = 0, pastDueCount = 0;
     const dueDates = [];
     const todayStartMs = new Date(new Date().toDateString()).getTime();
+    const seenHouseholds = new Set();
     items.forEach(item => {
+      const assignmentId = String(item.assignment?.id || '');
+      const hh = rptHouseholdFor(assignmentId);
+      if (hh) {
+        if (seenHouseholds.has(hh.id)) return;
+        seenHouseholds.add(hh.id);
+        const hhMembers = (hh.member_ids || []).map(mid => _rptCastItems.find(i => String(i.assignment?.id) === String(mid))).filter(Boolean);
+        const hhTotalFee = hhMembers.reduce((s, mi) => s + rptEffectiveFee(mi, settings).total, 0);
+        const logs = _rptHouseholdPaymentLogs[hh.id] || [];
+        const hhPaid = logs.reduce((s, l) => s + ((l.amount_cents || 0) / 100), 0);
+        totalDue += hhTotalFee;
+        totalPaid += hhPaid;
+        const settingsInsts = rptGetInstallments(settings);
+        const totalInstAmt = settingsInsts.reduce((s, i) => s + (i.amount || 0), 0);
+        let pastDueTarget = 0;
+        settingsInsts.forEach(inst => {
+          if (inst.dueDate) {
+            dueDates.push(inst.dueDate);
+            const dueDateMs = new Date(`${inst.dueDate}T00:00:00`).getTime();
+            if (Number.isFinite(dueDateMs) && dueDateMs < todayStartMs) {
+              const proportion = totalInstAmt > 0 ? (inst.amount || 0) / totalInstAmt : 0;
+              pastDueTarget += proportion * hhTotalFee;
+            }
+          }
+        });
+        const shortfall = Math.max(0, pastDueTarget - hhPaid);
+        if (shortfall > 0) { pastDueOwing += shortfall; pastDueCount++; }
+        return;
+      }
       const ef = rptEffectiveFee(item, settings);
-      const assignmentId = item.assignment?.id;
-      const records = _rptPaymentRecords[String(assignmentId)] || [];
-      const paid = rptPaidTotal(assignmentId, ef.installments);
+      const records = _rptPaymentRecords[assignmentId] || [];
+      const paid = records.filter(r => r.paid).reduce((s, r) => s + (r.amount_cents ? r.amount_cents / 100 : (ef.installments[r.installment_index]?.amount || 0)), 0);
       totalDue += ef.total;
       totalPaid += paid;
       let itemPastDue = 0;
