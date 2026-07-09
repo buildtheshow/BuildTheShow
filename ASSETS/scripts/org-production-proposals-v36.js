@@ -482,7 +482,7 @@
       .ppv-topbar-title { font-size:1rem; font-weight:900; color:#1a1530; flex:1; }
       .ppv-topbar-intake { font-size:0.78rem; font-weight:700; color:#572e88; }
       .ppv-body { display:flex; flex:1; overflow:hidden; border-radius:0 0 18px 18px; }
-      .ppv-main { flex:1; overflow-y:auto; padding:1.5rem 1.75rem; display:flex; flex-direction:column; gap:1rem; background:#f0eff5; }
+      .ppv-main { flex:1; overflow-y:auto; padding:2rem 2.5rem; background:#fff; }
       .ppv-scoring { width:320px; flex-shrink:0; border-left:1px solid rgba(87,46,136,0.1); background:#fff; overflow-y:auto; display:flex; flex-direction:column; }
       .ppv-scoring-head { padding:1rem 1.1rem 0.75rem; border-bottom:1px solid rgba(87,46,136,0.08); position:sticky; top:0; background:#fff; z-index:1; }
       .ppv-scoring-title { font-size:0.92rem; font-weight:900; color:#1a1530; }
@@ -1454,7 +1454,7 @@
       .ppv-topbar-title { font-size:1rem; font-weight:900; color:#1a1530; }
       .ppv-topbar-intake { font-size:0.78rem; font-weight:700; color:#572e88; }
       .ppv-body { display:flex; flex:1; overflow:hidden; border-radius:0 0 18px 18px; }
-      .ppv-main { flex:1; overflow-y:auto; padding:1.5rem 1.75rem; display:flex; flex-direction:column; gap:1rem; background:#f0eff5; }
+      .ppv-main { flex:1; overflow-y:auto; padding:2rem 2.5rem; background:#fff; }
       .ppv-scoring { width:320px; flex-shrink:0; border-left:1px solid rgba(87,46,136,0.1); background:#fff; overflow-y:auto; display:flex; flex-direction:column; }
       .ppv-scoring-head { padding:1rem 1.1rem 0.75rem; border-bottom:1px solid rgba(87,46,136,0.08); position:sticky; top:0; background:#fff; z-index:1; }
       .ppv-scoring-title { font-size:0.92rem; font-weight:900; color:#1a1530; }
@@ -1506,6 +1506,51 @@
       .ppv-review-notes:focus { border-color:#572e88; }
       .ppv-save-row { display:flex; justify-content:flex-end; padding-top:0.1rem; }
       .ppv-save-status { font-size:0.7rem; color:rgba(26,21,48,0.3); font-weight:600; transition:opacity 0.2s; }
+      .ppvl-layout { display:flex; gap:2rem; align-items:flex-start; }
+      .ppvl-sidebar { width:190px; flex-shrink:0; display:flex; flex-direction:column; gap:1.25rem; }
+      .ppvl-poster { border-radius:14px; overflow:hidden; background:#1a1530; }
+      .ppvl-poster img { width:100%; display:block; }
+      .ppvl-poster-fallback { aspect-ratio:2/3; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#572e88,#476aaa); color:rgba(255,255,255,0.35); font-size:2.5rem; font-weight:900; }
+      .ppvl-basics { display:flex; flex-direction:column; gap:0.75rem; }
+      .ppvl-basics-title { font-size:0.6rem; font-weight:900; text-transform:uppercase; letter-spacing:0.12em; color:rgba(26,21,48,0.3); margin-bottom:0.1rem; }
+      .ppvl-basic-item { display:flex; align-items:center; gap:0.55rem; }
+      .ppvl-basic-icon { width:18px; height:18px; flex-shrink:0; opacity:0.28; }
+      .ppvl-basic-value { font-size:0.9rem; font-weight:900; color:#1a1530; line-height:1.1; }
+      .ppvl-basic-label { font-size:0.56rem; font-weight:800; text-transform:uppercase; letter-spacing:0.09em; color:rgba(26,21,48,0.32); }
+      .ppvl-content { flex:1; min-width:0; display:flex; flex-direction:column; gap:1.5rem; }
+      .ppvl-kicker { font-size:0.63rem; font-weight:900; text-transform:uppercase; letter-spacing:0.15em; color:rgba(26,21,48,0.35); margin-bottom:0.1rem; }
+      .ppvl-title { font-size:2.1rem; font-weight:900; color:#1a1530; line-height:1; letter-spacing:-0.01em; }
+      .ppvl-genre { font-size:0.78rem; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:rgba(26,21,48,0.38); margin-top:0.25rem; }
+      .ppvl-logline { font-size:0.97rem; font-weight:700; color:#1a1530; line-height:1.55; margin:0; }
+      .ppvl-synopsis { font-size:0.84rem; color:rgba(26,21,48,0.65); line-height:1.8; white-space:pre-wrap; }
+      .ppvl-review-row { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; }
+      .ppvl-review-col { display:flex; flex-direction:column; gap:0.45rem; }
+      .ppvl-review-col-title { font-size:0.67rem; font-weight:900; text-transform:uppercase; letter-spacing:0.09em; display:flex; align-items:center; gap:0.35rem; margin-bottom:0.1rem; }
+      .ppvl-review-col-title.love { color:#769e7b; }
+      .ppvl-review-col-title.challenge { color:#dd8233; }
+      .ppvl-review-col-icon { width:13px; height:13px; }
+      .ppvl-review-list { display:flex; flex-direction:column; gap:0.38rem; }
+      .ppvl-review-list-item { display:flex; align-items:flex-start; gap:0.4rem; font-size:0.81rem; color:#1a1530; line-height:1.4; }
+      .ppvl-review-list-icon { width:15px; height:15px; flex-shrink:0; margin-top:0.08rem; }
+      .ppvl-footer-fields { display:flex; gap:2rem; flex-wrap:wrap; border-top:1px solid rgba(26,21,48,0.08); padding-top:1.25rem; }
+      .ppvl-footer-field { display:flex; flex-direction:column; gap:0.2rem; max-width:280px; }
+      .ppvl-footer-lbl { font-size:0.57rem; font-weight:900; text-transform:uppercase; letter-spacing:0.1em; color:rgba(26,21,48,0.32); }
+      .ppvl-footer-val { font-size:0.79rem; font-weight:600; color:#1a1530; word-break:break-all; }
+      .ppvl-footer-val.empty { color:rgba(26,21,48,0.28); font-style:italic; }
+      .ppvl-details { display:flex; flex-direction:column; gap:1.25rem; border-top:1px solid rgba(26,21,48,0.08); padding-top:1.5rem; margin-top:0.5rem; }
+      .ppvl-detail-section { display:flex; flex-direction:column; gap:0.55rem; }
+      .ppvl-detail-title { font-size:0.67rem; font-weight:900; text-transform:uppercase; letter-spacing:0.1em; color:rgba(26,21,48,0.4); display:flex; align-items:center; gap:0.38rem; }
+      .ppvl-detail-icon { width:13px; height:13px; opacity:0.38; }
+      .ppvl-detail-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:0.55rem; }
+      .ppvl-detail-field { display:flex; flex-direction:column; gap:0.15rem; }
+      .ppvl-detail-field-lbl { font-size:0.57rem; font-weight:800; text-transform:uppercase; letter-spacing:0.07em; color:rgba(26,21,48,0.32); }
+      .ppvl-detail-field-val { font-size:0.81rem; font-weight:700; color:#1a1530; }
+      .ppvl-detail-qa { display:flex; flex-direction:column; gap:0.2rem; }
+      .ppvl-detail-qa-lbl { font-size:0.58rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; color:rgba(26,21,48,0.32); }
+      .ppvl-detail-qa-val { font-size:0.81rem; color:#1a1530; line-height:1.65; }
+      .ppvl-detail-pills { display:flex; flex-wrap:wrap; gap:0.28rem; margin-top:0.2rem; }
+      .ppvl-detail-pill { background:rgba(26,21,48,0.07); border-radius:99px; padding:0.18rem 0.55rem; font-size:0.69rem; font-weight:700; color:rgba(26,21,48,0.6); }
+      .ppvl-detail-pill.warning { background:rgba(209,82,61,0.09); color:#d1523d; }
     `;
     document.head.appendChild(s);
   }
@@ -1719,104 +1764,165 @@
 
   function renderPitchViewMain(proposal, intake) {
     const fa = proposal.form_answers || {};
+    const scoring = proposal.scoring || {};
+    const loves = scoring.loves || [];
+    const challenges = scoring.challenges || [];
 
     // Poster
     const posterUrl = fa.sb_cover || '';
     const posterHtml = posterUrl
-      ? `<div class="ppv-poster"><img src="${esc(posterUrl)}" alt="Show poster"></div>`
-      : `<div class="ppv-poster" style="font-size:0.72rem;">No poster uploaded</div>`;
+      ? `<div class="ppvl-poster"><img src="${esc(posterUrl)}" alt="Show poster"></div>`
+      : `<div class="ppvl-poster"><div class="ppvl-poster-fallback">${esc((proposal.proposed_show_title || 'S').charAt(0).toUpperCase())}</div></div>`;
 
-    // Show Basics card
-    const licCost = proposal.estimated_licensing_fee != null ? fmtCurrency(proposal.estimated_licensing_fee) : '';
-    const basicsBody = `
-      <div class="ppv-grid2">
-        ${pvField('Show Title', proposal.proposed_show_title)}
-        ${pvField('Version / Edition', proposal.show_version)}
-        ${pvField('Licensing Company', proposal.licensing_company)}
-        ${pvField('Est. Licensing Cost', licCost)}
-        ${pvField('Author / Composer / Playwright', fa.sb_author)}
-        ${pvField('Number of Acts', fa.sb_acts)}
-        ${pvField('Runtime', proposal.runtime_minutes ? proposal.runtime_minutes + ' min' : '')}
-        ${pvField('Licensing Link', fa.sb_licensing_link)}
-      </div>
-      ${proposal.short_synopsis ? `<hr class="ppv-divider"><div class="ppv-synopsis">${esc(proposal.short_synopsis)}</div>` : ''}`;
+    // Sidebar basics
+    const licCost = proposal.estimated_licensing_fee != null ? fmtCurrency(proposal.estimated_licensing_fee) : null;
+    const runtime = proposal.runtime_minutes || fa.sb_runtime;
+    const acts = fa.sb_acts;
+    const edition = proposal.show_version;
 
-    const basicsCard = pvCard('#572e88', '/ASSETS/Images/Icons/Star.svg', 'Show Basics', basicsBody);
-
-    // Submitter card
-    const workedBefore = fa.si_worked_before;
-    const submitterBody = `
-      <div class="ppv-grid2">
-        ${pvField('Name', fa.si_name || proposal.pitch_submitted_by)}
-        ${pvField('Email', fa.si_email || proposal.submitter_email)}
-        ${pvField('Phone', fa.si_phone || proposal.submitter_phone)}
-        ${pvField('Role / Relationship', fa.si_role)}
-        ${workedBefore ? pvField('Worked with us before?', workedBefore === 'yes' ? 'Yes' : 'No') : ''}
+    function basicItem(iconPath, value, label) {
+      if (!value && value !== 0) return '';
+      return `<div class="ppvl-basic-item">
+        <img class="ppvl-basic-icon" src="${iconPath}" alt="">
+        <div>
+          <div class="ppvl-basic-value">${esc(String(value))}</div>
+          <div class="ppvl-basic-label">${esc(label)}</div>
+        </div>
       </div>`;
-    const submitterCard = pvCard('#476aaa', '/ASSETS/Images/Icons/Profiles.svg', 'Submitter', submitterBody);
+    }
 
-    // Casting card
-    const castBody = `
-      <div class="ppv-grid3">
-        ${pvField('Named Roles', proposal.named_roles)}
-        ${pvField('Ensemble Opportunities', proposal.named_roles != null ? (fa.cast_ensemble || proposal.ensemble_opportunities) : '')}
-        ${pvField('Featured Dancers', fa.cast_featured_dancers)}
-      </div>
-      ${fa.cast_notes || proposal.character_list ? `<hr class="ppv-divider">${pvQa('Casting Notes', fa.cast_notes || proposal.character_list)}` : ''}`;
-    const castCard = pvCard('#d1523d', '/ASSETS/Images/Icons/Casting Board.svg', 'Casting', castBody);
+    const sidebarHtml = `
+      ${posterHtml}
+      <div class="ppvl-basics">
+        <div class="ppvl-basics-title">The Basics</div>
+        ${basicItem('/ASSETS/Images/Icons/History.svg', runtime ? runtime + ' min' : null, 'Runtime')}
+        ${basicItem('/ASSETS/Images/Icons/script-scene.svg', acts ? acts + (acts == 1 ? ' Act' : ' Acts') : null, 'Number of Acts')}
+        ${basicItem('/ASSETS/Images/Icons/Files.svg', edition, 'Version / Edition')}
+        ${basicItem('/ASSETS/Images/Icons/Finance - Final.svg', licCost, 'Est. Licensing Cost')}
+      </div>`;
 
-    // Why This Show card
-    const whyBody = pvQa('Why are you pitching this show?', fa.why_pitching)
-      + pvQa('Why is this a good fit for this organisation?', fa.why_fit || proposal.organization_fit)
-      + pvQa('Why is this the right time?', fa.why_now)
-      + pvQa('Why would audiences come see it?', fa.why_appeal)
-      + pvQa('What makes this worth choosing over other options?', fa.why_over_others);
-    const whyCard = pvCard('#ca7ea7', '/ASSETS/Images/Icons/volunteer-HEART.svg', 'Why This Show?', whyBody || '<div style="color:rgba(255,255,255,0.4);font-size:0.84rem;">No answers provided.</div>');
+    // Hero content
+    const genre = proposal.genre_type || fa.sb_genre || '';
+    const logline = fa.why_pitching || '';
+    const synopsis = proposal.short_synopsis || '';
 
-    // Music card
+    // Inline review block (shows scoring data if available)
+    let reviewHtml = '';
+    if (loves.length || challenges.length) {
+      const loveItems = loves.map(function(item) {
+        return `<div class="ppvl-review-list-item"><img class="ppvl-review-list-icon" src="/ASSETS/Images/Icons/volunteer-approved.svg" alt=""><span>${esc(item)}</span></div>`;
+      }).join('');
+      const challengeItems = challenges.map(function(item) {
+        return `<div class="ppvl-review-list-item"><img class="ppvl-review-list-icon" src="/ASSETS/Images/Icons/Alert.svg" alt=""><span>${esc(item)}</span></div>`;
+      }).join('');
+      reviewHtml = `<div class="ppvl-review-row">
+        ${loves.length ? `<div class="ppvl-review-col">
+          <div class="ppvl-review-col-title love"><img class="ppvl-review-col-icon" src="/ASSETS/Images/Icons/volunteer-HEART.svg" alt="">What We Love</div>
+          <div class="ppvl-review-list">${loveItems}</div>
+        </div>` : ''}
+        ${challenges.length ? `<div class="ppvl-review-col">
+          <div class="ppvl-review-col-title challenge"><img class="ppvl-review-col-icon" src="/ASSETS/Images/Icons/Alert.svg" alt="">Things to Consider</div>
+          <div class="ppvl-review-list">${challengeItems}</div>
+        </div>` : ''}
+      </div>`;
+    }
+
+    // Footer fields
+    function footerField(label, value) {
+      return `<div class="ppvl-footer-field">
+        <div class="ppvl-footer-lbl">${esc(label)}</div>
+        <div class="ppvl-footer-val${value ? '' : ' empty'}">${value ? esc(value) : 'Not provided'}</div>
+      </div>`;
+    }
+
+    const footerHtml = `<div class="ppvl-footer-fields">
+      ${footerField('Licensing Company', proposal.licensing_company)}
+      ${footerField('Author / Composer / Playwright', fa.sb_author)}
+      ${fa.sb_licensing_link ? `<div class="ppvl-footer-field"><div class="ppvl-footer-lbl">Licensing Link</div><div class="ppvl-footer-val" style="font-size:0.7rem;">${esc(fa.sb_licensing_link)}</div></div>` : ''}
+    </div>`;
+
+    // Detail sections (scrollable below)
+    function detailSection(iconPath, title, bodyHtml) {
+      if (!bodyHtml) return '';
+      return `<div class="ppvl-detail-section">
+        <div class="ppvl-detail-title"><img class="ppvl-detail-icon" src="${iconPath}" alt="">${esc(title)}</div>
+        <div class="ppvl-detail-body">${bodyHtml}</div>
+      </div>`;
+    }
+    function dField(label, value) {
+      if (!value && value !== 0) return '';
+      return `<div class="ppvl-detail-field"><div class="ppvl-detail-field-lbl">${esc(label)}</div><div class="ppvl-detail-field-val">${esc(String(value))}</div></div>`;
+    }
+    function dQ(label, value) {
+      if (!value) return '';
+      return `<div class="ppvl-detail-qa"><div class="ppvl-detail-qa-lbl">${esc(label)}</div><div class="ppvl-detail-qa-val">${esc(String(value))}</div></div>`;
+    }
+    function dPills(values) {
+      const arr = Array.isArray(values) ? values : (values ? String(values).split(',').map(function(s){return s.trim();}).filter(Boolean) : []);
+      return arr.length ? `<div class="ppvl-detail-pills">${arr.map(function(p){return `<span class="ppvl-detail-pill">${esc(p)}</span>`;}).join('')}</div>` : '';
+    }
+
+    const submitterBody = `<div class="ppvl-detail-grid">
+      ${dField('Name', fa.si_name || proposal.pitch_submitted_by)}
+      ${dField('Email', fa.si_email || proposal.submitter_email)}
+      ${dField('Phone', fa.si_phone || proposal.submitter_phone)}
+      ${dField('Role / Relationship', fa.si_role)}
+    </div>`;
+
+    const castBody = `<div class="ppvl-detail-grid">
+      ${dField('Named Roles', proposal.named_roles)}
+      ${dField('Ensemble Opportunities', fa.cast_ensemble || proposal.ensemble_opportunities)}
+      ${dField('Featured Dancers', fa.cast_featured_dancers)}
+    </div>${dQ('Casting Notes', fa.cast_notes || proposal.character_list)}`;
+
+    const whyBody = dQ('Why are you pitching this show?', fa.why_pitching)
+      + dQ('Why is this a good fit?', fa.why_fit || proposal.organization_fit)
+      + dQ('Why is this the right time?', fa.why_now)
+      + dQ('Why would audiences come?', fa.why_appeal)
+      + dQ('Why choose this over others?', fa.why_over_others);
+
     const hasDiff = fa.mu_vocal_diff || fa.mu_dance_diff || fa.mu_music_diff;
-    const musicBody = `
-      <div class="ppv-grid2">
-        ${pvField('Type of Production', fa.mu_production_type || proposal.production_type)}
-        ${pvField('Number of Songs', fa.mu_songs || proposal.number_of_songs)}
-        ${pvField('Major Dance Numbers?', fa.mu_dance_numbers ? (fa.mu_dance_numbers === 'yes' ? 'Yes' : 'No') : '')}
-      </div>
-      ${hasDiff ? `<div class="ppv-rating-row">
-        ${fa.mu_vocal_diff ? `<div class="ppv-rating-box"><div class="ppv-rating-lbl">Vocal</div><div class="ppv-rating-stars">${pvStars(fa.mu_vocal_diff)}</div></div>` : ''}
-        ${fa.mu_dance_diff ? `<div class="ppv-rating-box"><div class="ppv-rating-lbl">Dance</div><div class="ppv-rating-stars">${pvStars(fa.mu_dance_diff)}</div></div>` : ''}
-        ${fa.mu_music_diff ? `<div class="ppv-rating-box"><div class="ppv-rating-lbl">Music</div><div class="ppv-rating-stars">${pvStars(fa.mu_music_diff)}</div></div>` : ''}
-      </div>` : ''}
-      ${pvQa('Music Style', fa.mu_music_style)}
-      ${pvQa('Key Musical Numbers', fa.mu_key_numbers)}`;
-    const musicCard = pvCard('#769e7b', '/ASSETS/Images/Icons/script-music-songs.svg', 'Music & Choreography', musicBody);
+    const musicBody = `<div class="ppvl-detail-grid">
+      ${dField('Type of Production', fa.mu_production_type || proposal.production_type)}
+      ${dField('Number of Songs', fa.mu_songs || proposal.number_of_songs)}
+      ${dField('Major Dance Numbers', fa.mu_dance_numbers === 'yes' ? 'Yes' : fa.mu_dance_numbers === 'no' ? 'No' : '')}
+      ${hasDiff ? dField('Vocal Difficulty', fa.mu_vocal_diff ? '★'.repeat(fa.mu_vocal_diff) : '') : ''}
+      ${hasDiff ? dField('Dance Difficulty', fa.mu_dance_diff ? '★'.repeat(fa.mu_dance_diff) : '') : ''}
+      ${hasDiff ? dField('Music Difficulty', fa.mu_music_diff ? '★'.repeat(fa.mu_music_diff) : '') : ''}
+    </div>${dQ('Music Style', fa.mu_music_style)}${dQ('Key Numbers', fa.mu_key_numbers)}`;
 
-    // Content & Suitability card
-    const warnings = fa.cs_warnings || proposal.content_warnings;
     const audience = fa.why_audience;
-    const contentBody = (audience ? `<div class="ppv-qa-lbl" style="margin-bottom:0.3rem;">Who is the audience?</div>${pvPills(audience)}<hr class="ppv-divider">` : '')
-      + (warnings ? `<div class="ppv-qa-lbl" style="margin-bottom:0.3rem;">Content Warnings</div>${pvPills(warnings)}<hr class="ppv-divider">` : '')
-      + pvQa('Suitability Notes', fa.cs_notes);
-    const contentCard = pvCard('#769e7b', '/ASSETS/Images/Icons/Information.svg', 'Content & Suitability', contentBody || '<div style="color:rgba(255,255,255,0.4);font-size:0.84rem;">No content information provided.</div>');
+    const warnings = fa.cs_warnings || proposal.content_warnings;
+    const contentBody = (audience ? `<div class="ppvl-detail-qa-lbl">Audience</div>${dPills(audience)}` : '')
+      + (warnings ? `<div class="ppvl-detail-qa-lbl" style="margin-top:0.6rem;">Content Warnings</div><div class="ppvl-detail-pills">${String(warnings).split(',').map(function(s){return `<span class="ppvl-detail-pill warning">${esc(s.trim())}</span>`;}).join('')}</div>` : '')
+      + dQ('Suitability Notes', fa.cs_notes);
 
-    // Risks card
-    const risksBody = pvQa('What is the biggest challenge?', fa.ri_challenge || proposal.biggest_challenge)
-      + pvQa('What could make this difficult?', fa.ri_difficult)
-      + (fa.ri_manage ? `<hr class="ppv-divider">${pvQa('How we will manage it', fa.ri_manage)}` : '');
-    const risksCard = pvCard('#efab45', '/ASSETS/Images/Icons/Danger Zone.svg', 'Risks & Challenges', risksBody || '<div style="color:rgba(255,255,255,0.4);font-size:0.84rem;">No risk information provided.</div>');
+    const risksBody = dQ('Biggest Challenge', fa.ri_challenge || proposal.biggest_challenge)
+      + dQ('What could make this difficult?', fa.ri_difficult)
+      + dQ('How we will manage it', fa.ri_manage);
 
-    return `
-      <div class="ppv-top-row">
-        ${posterHtml}
-        ${basicsCard}
+    return `<div class="ppvl-layout">
+      <div class="ppvl-sidebar">${sidebarHtml}</div>
+      <div class="ppvl-content">
+        <div>
+          <div class="ppvl-kicker">Show Pitch</div>
+          <div class="ppvl-title">${esc((proposal.proposed_show_title || 'Untitled').toUpperCase())}</div>
+          ${genre ? `<div class="ppvl-genre">${esc(genre.toUpperCase())}</div>` : ''}
+        </div>
+        ${logline ? `<p class="ppvl-logline">${esc(logline)}</p>` : ''}
+        ${synopsis ? `<div class="ppvl-synopsis">${esc(synopsis)}</div>` : ''}
+        ${reviewHtml}
+        ${footerHtml}
+        <div class="ppvl-details">
+          ${detailSection('/ASSETS/Images/Icons/Profiles.svg', 'Submitter', submitterBody)}
+          ${detailSection('/ASSETS/Images/Icons/Casting Board.svg', 'Casting', castBody)}
+          ${whyBody ? detailSection('/ASSETS/Images/Icons/volunteer-HEART.svg', 'Why This Show?', whyBody) : ''}
+          ${detailSection('/ASSETS/Images/Icons/script-music-songs.svg', 'Music & Choreography', musicBody)}
+          ${contentBody ? detailSection('/ASSETS/Images/Icons/Information.svg', 'Content & Suitability', contentBody) : ''}
+          ${risksBody ? detailSection('/ASSETS/Images/Icons/Alert.svg', 'Risks & Challenges', risksBody) : ''}
+        </div>
       </div>
-      <div class="ppv-sections-grid">
-        ${submitterCard}
-        ${castCard}
-        <div class="ppv-full">${whyCard}</div>
-        ${musicCard}
-        ${contentCard}
-        <div class="ppv-full">${risksCard}</div>
-      </div>`;
+    </div>`;
   }
 
   window.openProposalView = openProposalView;
