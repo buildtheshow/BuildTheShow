@@ -1512,7 +1512,8 @@
       .ppvl-poster img { width:100%; display:block; }
       .ppvl-poster-fallback { aspect-ratio:2/3; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#572e88,#476aaa); color:rgba(255,255,255,0.35); font-size:2.5rem; font-weight:900; }
       .ppvl-basics { display:flex; flex-direction:column; gap:0.75rem; }
-      .ppvl-basics-title { font-size:0.6rem; font-weight:900; text-transform:uppercase; letter-spacing:0.12em; color:rgba(26,21,48,0.3); margin-bottom:0.1rem; }
+      .ppvl-basics-title { font-size:0.7rem; font-weight:600; color:rgba(26,21,48,0.35); margin-bottom:0.1rem; }
+      .ppvl-content-label { font-size:0.72rem; font-weight:600; color:rgba(26,21,48,0.4); margin-bottom:0.2rem; }
       .ppvl-basic-item { display:flex; align-items:center; gap:0.55rem; }
       .ppvl-basic-icon { width:18px; height:18px; flex-shrink:0; opacity:0.28; }
       .ppvl-basic-value { font-size:0.9rem; font-weight:900; color:#1a1530; line-height:1.1; }
@@ -1918,8 +1919,8 @@
           <div class="ppvl-title">${esc((proposal.proposed_show_title || 'Untitled').toUpperCase())}</div>
           ${genre ? `<div class="ppvl-genre">${esc(genre.toUpperCase())}</div>` : ''}
         </div>
-        ${logline ? `<p class="ppvl-logline">${esc(logline)}</p>` : ''}
-        ${synopsis ? `<div class="ppvl-synopsis">${esc(synopsis)}</div>` : ''}
+        ${logline ? `<div><div class="ppvl-content-label">Why we're pitching this</div><p class="ppvl-logline">${esc(logline)}</p></div>` : ''}
+        ${synopsis ? `<div><div class="ppvl-content-label">Synopsis</div><div class="ppvl-synopsis">${esc(synopsis)}</div></div>` : ''}
         ${reviewHtml}
         ${footerHtml}
         <div class="ppvl-details">
