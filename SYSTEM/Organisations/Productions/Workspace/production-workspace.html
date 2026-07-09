@@ -41186,7 +41186,8 @@ See you soon!
   // Payment Tracker state
   let _rptPaymentRecords = {}; // { [assignmentId]: [{ installment_index, paid, paid_at, id }] }
   window._rscModalData = {}; // modal data registry — populated per-card to avoid inline JS injection
-  let _rptHouseholds = [];     // [{ id, name, member_ids }]
+  let _rptHouseholds = [];              // [{ id, name, member_ids }]
+  let _rptHouseholdPaymentLogs = {};   // { [householdId]: [{id, amount_cents, paid_at, payment_method, paid_by, transaction_ref, payment_notes, installment_index}] }
   let _rptCastItems = [];      // cached accepted cast for re-renders
   let _rptNotesTimers = {};    // debounce per assignment
   let _rptVolunteerSignups = []; // cached volunteer rows for registration discount linking
@@ -47024,14 +47025,10 @@ See you soon!
       if (!hasFee) return `<div class="rsc-stmt-empty">No fee configured for this household.</div>`;
       const totalFee = data.reduce((sum, d) => sum + d.ef.total, 0);
 
-      // Household is one account — track payments against the primary member only
-      const primaryMid = data[0]?.id || '';
-      const primaryPaid = (_rptPaymentRecords[primaryMid] || []).filter(r => r.paid);
+      // Household is one account — track via household_payment_logs (one row per payment, unlimited)
       const settingsInsts = rptGetInstallments(settings);
-      const totalPaid = primaryPaid.reduce((sum, r) => {
-        const amt = r.amount_cents != null ? r.amount_cents / 100 : (settingsInsts[r.installment_index]?.amount || 0);
-        return sum + amt;
-      }, 0);
+      const logs = _rptHouseholdPaymentLogs[household.id] || [];
+      const totalPaid = logs.reduce((sum, l) => sum + ((l.amount_cents || 0) / 100), 0);
       const balance = Math.max(0, totalFee - totalPaid);
       const allPaid = totalFee > 0 && balance <= 0;
       const stateClass = allPaid ? 'full' : totalPaid > 0 ? 'partial' : 'unpaid';
@@ -47077,22 +47074,19 @@ See you soon!
         <span>Total Due</span><span>${esc(fmt(totalFee))}</span>
       </div>`;
 
-      // Ledger: one line per payment logged, using the actual amount Shelley paid
-      const sortedPaid = [...primaryPaid].sort((a, b) => new Date(a.paid_at || 0) - new Date(b.paid_at || 0));
-      const ledgerHtml = sortedPaid.length
-        ? sortedPaid.map(r => {
-            const amt = r.amount_cents != null ? r.amount_cents / 100 : (settingsInsts[r.installment_index]?.amount || 0);
-            return `<div class="rsc-stmt-row rsc-stmt-paid-row">
-              <span>${esc(rptFormatDate(r.paid_at) || '')}</span><span>${esc(fmt(amt))}<button class="rsc-remove-pay" onclick="rscRemoveHouseholdPayment('${esc(household.id)}',${r.installment_index})" title="Remove payment">&times;</button></span>
-            </div>`;
-          }).join('')
+      // Ledger: one line per payment — × removes that specific log entry by UUID
+      const sortedLogs = [...logs].sort((a, b) => new Date(a.paid_at || 0) - new Date(b.paid_at || 0));
+      const ledgerHtml = sortedLogs.length
+        ? sortedLogs.map(l => `<div class="rsc-stmt-row rsc-stmt-paid-row">
+              <span>${esc(rptFormatDate(l.paid_at) || '')}</span><span>${esc(fmt((l.amount_cents || 0) / 100))}<button class="rsc-remove-pay" onclick="rscRemoveHouseholdPayment('${esc(household.id)}','${esc(l.id)}')" title="Remove payment">&times;</button></span>
+            </div>`).join('')
         : `<div class="rsc-stmt-row rsc-stmt-none">No payments yet</div>`;
 
-      // Installment tiles are milestone indicators only — paid = any payment logged at that index
-      const firstUnpaidIdx = settingsInsts.findIndex((_, idx) => !primaryPaid.find(r => r.installment_index === idx));
+      // Installment tiles are milestone indicators only — paid = any log entry tagged to that index
+      const firstUnpaidIdx = settingsInsts.findIndex((_, idx) => !logs.some(l => l.installment_index === idx));
       const logToIdx = firstUnpaidIdx >= 0 ? firstUnpaidIdx : 0;
       const cardsHtml = settingsInsts.map((inst, idx) => {
-        const isPaid = !!primaryPaid.find(r => r.installment_index === idx);
+        const isPaid = logs.some(l => l.installment_index === idx);
         const isOverdue = !isPaid && inst.dueDate && new Date(`${inst.dueDate}T00:00:00`) < new Date(new Date().toDateString());
         const label = inst.label || (settingsInsts.length === 1 ? 'Payment' : idx === 0 ? 'First Payment' : idx === settingsInsts.length - 1 ? 'Final Payment' : `Payment ${idx + 1}`);
         const sub = isPaid ? 'Paid' : (inst.dueDate ? `Due ${rptFormatDate(inst.dueDate)}` : 'Due date not set');
@@ -48100,14 +48094,22 @@ See you soon!
   async function loadRegistrationPaymentRecords() {
     if (!prodId) return;
     try {
-      const { data } = await sb.from('registration_payment_records').select('*').eq('production_id', prodId);
+      const [{ data: recData }, { data: hhData }] = await Promise.all([
+        sb.from('registration_payment_records').select('*').eq('production_id', prodId),
+        sb.from('household_payment_logs').select('*').eq('production_id', prodId)
+      ]);
       _rptPaymentRecords = {};
-      (data || []).forEach(r => {
+      (recData || []).forEach(r => {
         const key = String(r.casting_assignment_id);
         if (!_rptPaymentRecords[key]) _rptPaymentRecords[key] = [];
         _rptPaymentRecords[key].push(r);
       });
-    } catch { _rptPaymentRecords = {}; }
+      _rptHouseholdPaymentLogs = {};
+      (hhData || []).forEach(log => {
+        if (!_rptHouseholdPaymentLogs[log.household_id]) _rptHouseholdPaymentLogs[log.household_id] = [];
+        _rptHouseholdPaymentLogs[log.household_id].push(log);
+      });
+    } catch { _rptPaymentRecords = {}; _rptHouseholdPaymentLogs = {}; }
   }
 
   function rptLoadHouseholds() {
@@ -48251,26 +48253,23 @@ See you soon!
 
   let _rptRealtimeChannel = null;
   function rptStartRealtimePayments() {
-    if (_rptRealtimeChannel) return; // already subscribed
+    if (_rptRealtimeChannel) return;
     if (!prodId) return;
+    const rerender = async () => {
+      await loadRegistrationPaymentRecords();
+      const settings = registrationCurrentPaymentSettings();
+      const list = document.getElementById('rpt-list');
+      if (list) {
+        const head = list.querySelector('.rsc-status-head');
+        list.innerHTML = '';
+        if (head) list.appendChild(head);
+        list.insertAdjacentHTML('beforeend', rptBuildGridHtml(_rptCastItems, settings));
+      }
+      rptRerenderSummary();
+    };
     _rptRealtimeChannel = sb.channel(`rpt-payments-${prodId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'registration_payment_records',
-        filter: `production_id=eq.${prodId}`
-      }, async () => {
-        await loadRegistrationPaymentRecords();
-        const settings = registrationCurrentPaymentSettings();
-        const list = document.getElementById('rpt-list');
-        if (list) {
-          const head = list.querySelector('.rsc-status-head');
-          list.innerHTML = '';
-          if (head) list.appendChild(head);
-          list.insertAdjacentHTML('beforeend', rptBuildGridHtml(_rptCastItems, settings));
-        }
-        rptRerenderSummary();
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'registration_payment_records', filter: `production_id=eq.${prodId}` }, rerender)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'household_payment_logs', filter: `production_id=eq.${prodId}` }, rerender)
       .subscribe();
   }
   function rptStopRealtimePayments() {
@@ -48560,24 +48559,17 @@ See you soon!
     const settingsInsts = rptGetInstallments(settings);
     const count = settingsInsts.length || 1;
     const label = count === 1 ? 'Full Payment' : idx === 0 ? 'First Payment' : idx === count - 1 ? 'Final Payment' : `Payment ${idx + 1}`;
-    // Pre-fill amount from settings installment — household pays this as one payment
-    const hhInstAmt = settingsInsts[idx]?.amount || 0;
+    const suggestedAmt = settingsInsts[idx]?.amount || 0;
     const today = new Date().toISOString().split('T')[0];
-    // Find existing record from first member that has one
-    const firstMid = (hh.member_ids || [])[0];
-    const existing = firstMid ? (_rptPaymentRecords[firstMid] || []).find(r => r.installment_index === idx && r.paid) : null;
-    const isEdit = !!existing;
     const methodOptions = ['', 'e_transfer', 'cheque', 'cash', 'square', 'other'];
     const methodLabels = { '': '— Select —', e_transfer: 'E-Transfer', cheque: 'Cheque', cash: 'Cash', square: 'Square / Card', other: 'Other' };
-    const methodHtml = methodOptions.map(v => `<option value="${v}"${existing?.payment_method === v ? ' selected' : ''}>${methodLabels[v]}</option>`).join('');
-    const existingDate = existing?.paid_at ? existing.paid_at.split('T')[0] : today;
-    const existingAmount = existing?.amount_cents != null ? (existing.amount_cents / 100).toFixed(2) : (hhInstAmt > 0 ? hhInstAmt.toFixed(2) : '');
+    const methodHtml = methodOptions.map(v => `<option value="${v}">${methodLabels[v]}</option>`).join('');
     document.getElementById('rsc-mark-paid-modal')?.remove();
     const modal = document.createElement('div');
     modal.id = 'rsc-mark-paid-modal';
     modal.className = 'rpt-household-modal';
     modal.innerHTML = `<div class="rpt-household-modal-box" style="max-width:400px;">
-      <div class="rpt-household-modal-title">${isEdit ? 'Edit Payment' : 'Log Payment'} — ${esc(label)}</div>
+      <div class="rpt-household-modal-title">Log Payment &mdash; ${esc(label)}</div>
       <div style="font-size:0.8rem;color:rgba(87,46,136,0.5);margin-bottom:0.1rem;">${esc(names)}</div>
       <div class="rsc-modal-row">
         <div class="rsc-modal-label">How was it paid?</div>
@@ -48585,47 +48577,43 @@ See you soon!
       </div>
       <div class="rsc-modal-row">
         <div class="rsc-modal-label">Amount Paid</div>
-        <input class="rpt-household-modal-input" type="number" min="0" step="0.01" id="rsc-mp-amount" placeholder="e.g. 250.00" value="${esc(existingAmount)}" />
+        <input class="rpt-household-modal-input" type="number" min="0" step="0.01" id="rsc-mp-amount" placeholder="e.g. ${suggestedAmt > 0 ? suggestedAmt.toFixed(2) : '250.00'}" value="${suggestedAmt > 0 ? suggestedAmt.toFixed(2) : ''}" />
       </div>
       <div class="rsc-modal-row">
         <div class="rsc-modal-label">Reference / Confirmation #</div>
-        <input class="rpt-household-modal-input" type="text" id="rsc-mp-ref" placeholder="Confirmation number, cheque #, etc." value="${esc(existing?.transaction_ref || '')}" />
+        <input class="rpt-household-modal-input" type="text" id="rsc-mp-ref" placeholder="Confirmation number, cheque #, etc." />
       </div>
       <div class="rsc-modal-row">
         <div class="rsc-modal-label">Date Paid</div>
-        <input class="rpt-household-modal-input" type="date" id="rsc-mp-date" value="${existingDate}" />
+        <input class="rpt-household-modal-input" type="date" id="rsc-mp-date" value="${today}" />
       </div>
       <div class="rsc-modal-row">
         <div class="rsc-modal-label">Who Paid</div>
-        <input class="rpt-household-modal-input" type="text" id="rsc-mp-paidby" placeholder="Name of the person who made the payment" value="${esc(existing?.paid_by || '')}" />
+        <input class="rpt-household-modal-input" type="text" id="rsc-mp-paidby" placeholder="Name of the person who made the payment" />
       </div>
       <div class="rsc-modal-row">
         <div class="rsc-modal-label">Notes</div>
-        <textarea class="rsc-modal-textarea" id="rsc-mp-notes" placeholder="Any notes about this payment…">${esc(existing?.payment_notes || '')}</textarea>
+        <textarea class="rsc-modal-textarea" id="rsc-mp-notes" placeholder="Any notes about this payment…"></textarea>
       </div>
       <div class="rpt-household-modal-actions">
-        ${isEdit ? `<button class="rpt-modal-cancel-btn" style="color:#d1523d;border-color:#d1523d;" onclick="rscRemoveHouseholdPayment('${esc(householdId)}',${idx})">Remove Payment</button>` : `<button class="rpt-modal-cancel-btn" onclick="document.getElementById('rsc-mark-paid-modal')?.remove()">Cancel</button>`}
-        <button class="rpt-modal-save-btn" id="rsc-mp-save-btn" onclick="rscSaveHouseholdPaid('${esc(householdId)}',${idx})">${isEdit ? 'Save Changes' : 'Log Payment'}</button>
+        <button class="rpt-modal-cancel-btn" onclick="document.getElementById('rsc-mark-paid-modal')?.remove()">Cancel</button>
+        <button class="rpt-modal-save-btn" id="rsc-mp-save-btn" onclick="rscSaveHouseholdPaid('${esc(householdId)}',${idx})">Log Payment</button>
       </div>
     </div>`;
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
     document.body.appendChild(modal);
   }
 
-  async function rscRemoveHouseholdPayment(householdId, idx) {
-    if (!confirm('Remove this payment for the whole household?')) return;
+  async function rscRemoveHouseholdPayment(householdId, logId) {
+    if (!confirm('Remove this payment?')) return;
     const hh = _rptHouseholds.find(h => String(h.id) === String(householdId));
     if (!hh) return;
     document.getElementById('rsc-mark-paid-modal')?.remove();
     try {
-      // Household is one account — only clear the primary member's record
-      const primaryMid = (hh.member_ids || [])[0];
-      if (primaryMid) {
-        await sb.from('registration_payment_records')
-          .update({ paid: false, paid_at: null, payment_method: null, amount_cents: null, transaction_ref: null, paid_by: null, payment_notes: null, updated_at: new Date().toISOString() })
-          .eq('casting_assignment_id', primaryMid).eq('installment_index', idx);
-        const rec = (_rptPaymentRecords[primaryMid] || []).find(r => r.installment_index === idx);
-        if (rec) { rec.paid = false; rec.paid_at = null; rec.amount_cents = null; }
+      const { error } = await sb.from('household_payment_logs').delete().eq('id', logId);
+      if (error) throw error;
+      if (_rptHouseholdPaymentLogs[householdId]) {
+        _rptHouseholdPaymentLogs[householdId] = _rptHouseholdPaymentLogs[householdId].filter(l => String(l.id) !== String(logId));
       }
       const groupEl = document.getElementById(`rsc-hh-group-${householdId}`);
       if (groupEl) {
@@ -48649,7 +48637,7 @@ See you soon!
     if (!hh) return;
     const method = document.getElementById('rsc-mp-method')?.value || '';
     const amountRaw = document.getElementById('rsc-mp-amount')?.value || '';
-    const amountCents = amountRaw ? Math.round(parseFloat(amountRaw) * 100) : null;
+    const amountCents = amountRaw ? Math.round(parseFloat(amountRaw) * 100) : 0;
     const ref = document.getElementById('rsc-mp-ref')?.value?.trim() || '';
     const dateVal = document.getElementById('rsc-mp-date')?.value || '';
     const paidBy = document.getElementById('rsc-mp-paidby')?.value?.trim() || '';
@@ -48658,17 +48646,13 @@ See you soon!
     const btn = document.getElementById('rsc-mp-save-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
     try {
-      // Household is one account — only write against the primary member
-      const primaryMid = (hh.member_ids || [])[0];
-      if (!primaryMid) throw new Error('No members in household');
-      const { data, error } = await sb.from('registration_payment_records')
-        .upsert({ production_id: prodId, casting_assignment_id: primaryMid, installment_index: idx, paid: true, paid_at: paidAt, payment_method: method || null, amount_cents: amountCents, transaction_ref: ref || null, paid_by: paidBy || null, payment_notes: notes || null, updated_at: new Date().toISOString() }, { onConflict: 'casting_assignment_id,installment_index' })
+      // Each payment is its own row in household_payment_logs — no unique constraint, log as many as needed
+      const { data: newLog, error } = await sb.from('household_payment_logs')
+        .insert({ production_id: prodId, household_id: householdId, amount_cents: amountCents, payment_method: method || null, paid_at: paidAt, paid_by: paidBy || null, transaction_ref: ref || null, payment_notes: notes || null, installment_index: idx })
         .select().single();
       if (error) throw error;
-      if (!_rptPaymentRecords[primaryMid]) _rptPaymentRecords[primaryMid] = [];
-      const recIdx = _rptPaymentRecords[primaryMid].findIndex(r => r.installment_index === idx);
-      if (recIdx >= 0) _rptPaymentRecords[primaryMid][recIdx] = data;
-      else _rptPaymentRecords[primaryMid].push(data);
+      if (!_rptHouseholdPaymentLogs[householdId]) _rptHouseholdPaymentLogs[householdId] = [];
+      _rptHouseholdPaymentLogs[householdId].push(newLog);
       document.getElementById('rsc-mark-paid-modal')?.remove();
       const groupEl = document.getElementById(`rsc-hh-group-${householdId}`);
       if (groupEl) {
