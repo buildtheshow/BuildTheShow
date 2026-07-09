@@ -7038,6 +7038,7 @@
       const datesHtml = requireAll
         ? `<div>
             <div class="vp-detail-label">You're signing up for all of these dates</div>
+            <div style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem;line-height:1.4;">This role is needed at every one of these events. Signing up means committing to the full list — you can't pick individual dates.</div>
             <div class="vp-date-list">${openDates.map(o => {
               const location = eventMap[o.event_id]?.venue || '';
               const date = o.shift_date ? fmtDate(o.shift_date, { short: true }) : 'Flexible';
@@ -7297,7 +7298,21 @@
       renderRows(); renderCart();
     }
     function cancelConflictAdd() { conflictPendingOpp = null; cartErrorMessage = null; renderCart(); }
-    function removeSchedule(id) { schedule = schedule.filter(s => s.id !== id); addingPersonToGroup = null; conflictPendingOpp = null; cartErrorMessage = null; renderRows(); renderCart(); }
+    function removeSchedule(id) {
+      const opp = schedule.find(s => s.id === id);
+      if (opp?.require_all) {
+        const key = cartGroupKey(opp);
+        const removing = schedule.filter(s => cartGroupKey(s) === key);
+        removing.forEach(item => { const k = spotsKey(item); const n = 1 + (item.people?.length || 0); signupCounts[k] = Math.max(0, (signupCounts[k] || n) - n); });
+        schedule = schedule.filter(s => cartGroupKey(s) !== key);
+      } else {
+        const removing = schedule.filter(s => s.id === id);
+        removing.forEach(item => { const k = spotsKey(item); const n = 1 + (item.people?.length || 0); signupCounts[k] = Math.max(0, (signupCounts[k] || n) - n); });
+        schedule = schedule.filter(s => s.id !== id);
+      }
+      addingPersonToGroup = null; conflictPendingOpp = null; cartErrorMessage = null;
+      renderRows(); renderCart();
+    }
     function setForPersonOnGroup(groupKey, name) {
       const trimmed = name?.trim() || null;
       schedule.forEach(s => { if (cartGroupKey(s) === groupKey) s.forPerson = trimmed; });
