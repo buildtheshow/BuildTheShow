@@ -3038,6 +3038,7 @@
     let schedule = [], openCards = new Set(), openTimingGroups = new Set(), timingGroupsTouched = false, discountRequested = false, discountPerformer = '', paymentSettings = {}, currentPortalData = null, activePortalTab = '';
     let addingPersonToGroup = null, conflictPendingOpp = null, assigningForGroup = null, cartErrorMessage = null;
     let addDropdownOppId = null, addDropdownError = null;
+    let addAllGroupKey = null, addAllGroupError = null;
     let _portalOverviewMode = 'calendar', _portalCalOffset = 0, _portalCalView = 'month', _portalCalItems = [], _portalFcCalendar = null, _portalFcFallbackTimer = null;
     function portalOverviewSetMode(mode) {
       _portalOverviewMode = mode === 'breakdown' ? 'breakdown' : 'calendar';
@@ -6238,6 +6239,14 @@
       const ids = scopes.flatMap(scope => scope.ids).map(String);
       return ids.includes(String(eventId || ''));
     }
+    function planEntryRequiresAll(key, entry) {
+      if (planEntryCountMode(key, entry) !== 'per_event') return false;
+      const appliesTo = planEntryAppliesTo(key, entry);
+      return appliesTo.every(type => !planTypeAliases(type).some(alias => {
+        const scope = entry.eventScope?.[alias] || entry.event_scope?.[alias];
+        return scope && scope.mode === 'specific';
+      }));
+    }
     function requiredDateEvents(entry, events) {
       const types = new Set(planEntryAppliesTo('', entry).filter(type => type && !STAFFING_MAP[type]?.perProd && type !== 'other'));
       return events
@@ -6292,7 +6301,8 @@
         required_dates: requiredDates,
         required_date_hours: requiredDateHours,
         required_date_timings: requiredTimings,
-        timing_group: entry.timingGroup || entry.timing_group || null
+        timing_group: entry.timingGroup || entry.timing_group || null,
+        require_all: ev ? planEntryRequiresAll(entryKey, entry) : false
       };
     }
 
@@ -6862,6 +6872,7 @@
       const openDates = openRoleDates(items);
       const totalLeft = openDates.reduce((sum, opp) => sum + spotsLeft(opp), 0);
       if (!totalLeft) return '<span class="vp-spots full">Full</span>';
+      if (openDates.length > 1 && openDates.every(o => o.require_all)) return `<span class="vp-spots">${openDates.length} dates &mdash; all required</span>`;
       if (openDates.length > 1) return `<span class="vp-spots">${openDates.length} open dates</span>`;
       if (totalLeft === 1) return '<span class="vp-spots last">1 spot left</span>';
       if (totalLeft <= 3) return `<span class="vp-spots low">${totalLeft} spots left</span>`;
@@ -6981,7 +6992,12 @@
           </div>
         </div>
         <div class="vp-card-actions">
-          ${isSingle ? addDropdownHtml(single.id, isAdded, isFull, 'vp-add-btn', `Add to My Schedule ${ICONS.plus}`, 'Added') : `<button class="vp-add-btn" type="button" ${isFull ? 'disabled' : `onclick="toggleDetails(decodeURIComponent('${jsArg(groupId)}'))"`}>${isFull ? 'Full' : 'Choose Dates'}</button>`}
+          ${(() => {
+            const requireAll = !isSingle && openDates.every(o => o.require_all);
+            const isAllAdded = requireAll && openDates.every(o => schedule.some(s => s.id === o.id));
+            if (requireAll) return `<button class="vp-add-btn${isAllAdded ? ' added' : ''}" type="button" ${isFull ? 'disabled' : `onclick="toggleDetails(decodeURIComponent('${jsArg(groupId)}'))"`}>${isFull ? 'Full' : isAllAdded ? 'Added' : `Add to My Schedule ${ICONS.plus}`}</button>`;
+            return isSingle ? addDropdownHtml(single.id, isAdded, isFull, 'vp-add-btn', `Add to My Schedule ${ICONS.plus}`, 'Added') : `<button class="vp-add-btn" type="button" ${isFull ? 'disabled' : `onclick="toggleDetails(decodeURIComponent('${jsArg(groupId)}'))"`}>${isFull ? 'Full' : 'Choose Dates'}</button>`;
+          })()}
         </div>
         ${isOpen ? renderRoleDetails(items, detailsTarget) : ''}
       </article>`;
@@ -7015,6 +7031,33 @@
     function renderRoleDetails(items, targetId) {
       const openDates = openRoleDates(items);
       const opp = items[0];
+      const requireAll = openDates.length > 1 && openDates.every(o => o.require_all);
+      const groupKey = roleGroupKey(opp);
+      const isFull = !openDates.length;
+      const isAllAdded = requireAll && openDates.every(o => schedule.some(s => s.id === o.id));
+      const datesHtml = requireAll
+        ? `<div>
+            <div class="vp-detail-label">You're signing up for all of these dates</div>
+            <div class="vp-date-list">${openDates.map(o => {
+              const location = eventMap[o.event_id]?.venue || '';
+              const date = o.shift_date ? fmtDate(o.shift_date, { short: true }) : 'Flexible';
+              const time = fmtTimeRange(o.shift_start_time, o.shift_end_time) || '';
+              return `<div class="vp-date-row" style="pointer-events:none;">
+                <div class="vp-date-main">
+                  <div class="vp-date-primary">${esc(date)}</div>
+                  <div class="vp-date-secondary">
+                    ${time ? `<span>${ICONS.clock}${esc(time)}</span>` : ''}
+                    ${location ? `<span>${ICONS.pin}${esc(location)}</span>` : ''}
+                  </div>
+                </div>
+              </div>`;
+            }).join('')}</div>
+            <div style="margin-top:0.85rem;">${addAllGroupDropdownHtml(groupKey, isAllAdded, isFull)}</div>
+          </div>`
+        : `<div>
+            <div class="vp-detail-label">Open Dates</div>
+            <div class="vp-date-list">${openDates.length ? openDates.map(renderRoleDateRow).join('') : '<div class="vp-cart-empty">This role is currently full.</div>'}</div>
+          </div>`;
       return `<div class="vp-card-details">
         <div>
           <div class="vp-detail-label">Role Description</div>
@@ -7026,10 +7069,7 @@
             ${opp.check_in_with ? `<span class="vp-detail-check">${ICONS.users} Checks in with ${esc(opp.check_in_with)}</span>` : ''}
           </div>
         </div>
-        <div>
-          <div class="vp-detail-label">Open Dates</div>
-          <div class="vp-date-list">${openDates.length ? openDates.map(renderRoleDateRow).join('') : '<div class="vp-cart-empty">This role is currently full.</div>'}</div>
-        </div>
+        ${datesHtml}
         ${showLessHtml(targetId)}
       </div>`;
     }
@@ -7176,6 +7216,50 @@
       const btnLabel = isAdded ? (spotsRemain ? `Add another ${ICONS.plus}` : (btnAddedContent || 'Added')) : btnAddContent;
       const btnStyle = isAdded && !spotsRemain ? `${btnClass} added` : btnClass;
       return `<div class="vp-add-dropdown-wrap"><button class="${btnStyle}" type="button" onclick="openAddDropdown('${safeId}',event)">${btnLabel}</button>${ddHtml}</div>`;
+    }
+    function addAllGroupToScheduleFor(groupKey, forPerson) {
+      if (!forPerson) return;
+      const groupOpps = opps.filter(o => roleGroupKey(o) === groupKey && o.require_all && spotsLeft(o) > 0);
+      for (const o of groupOpps) {
+        if (schedule.some(s => s.id === o.id && (s.forPerson || '').toLowerCase() === forPerson.toLowerCase())) continue;
+        schedule.push({ ...o, people: [], forPerson });
+        const k = spotsKey(o); signupCounts[k] = (signupCounts[k] || 0) + 1;
+      }
+      addAllGroupKey = null; addAllGroupError = null;
+      renderRows(); renderCart();
+    }
+    function openAddAllGroupDropdown(groupKey, event) {
+      event?.stopPropagation();
+      addAllGroupKey = addAllGroupKey === groupKey ? null : groupKey;
+      addAllGroupError = null;
+      addDropdownOppId = null; addDropdownError = null;
+      renderRows();
+    }
+    function confirmAddAllGroupPerson() {
+      const input = document.getElementById('vp-add-all-input-open');
+      const name = input?.value?.trim();
+      if (!name) { input?.focus(); return; }
+      addAllGroupToScheduleFor(addAllGroupKey, name);
+    }
+    function addAllGroupDropdownHtml(groupKey, isAllAdded, isFull) {
+      if (isFull) return `<button class="vp-add-btn" type="button" disabled>Full</button>`;
+      if (isAllAdded) return `<button class="vp-add-btn added" type="button" disabled>Added</button>`;
+      const isOpen = addAllGroupKey === groupKey;
+      const people = cartPeopleNames();
+      const errHtml = isOpen && addAllGroupError ? `<div class="vp-add-dropdown-error">${esc(addAllGroupError)}</div>` : '';
+      const ddHtml = isOpen ? `<div class="vp-add-dropdown" onclick="event.stopPropagation()">
+        <div class="vp-add-dropdown-head">Who is signing up for all these dates?</div>
+        ${people.length ? `<div class="vp-add-dropdown-opts">${people.map(n => `<button class="vp-add-dropdown-option" type="button" onclick="addAllGroupToScheduleFor('${esc(groupKey)}','${esc(n)}')"><span class="vp-dd-avatar vp-dd-avatar-other">${esc(n.charAt(0).toUpperCase())}</span>${esc(n)}</button>`).join('')}</div><hr class="vp-add-dropdown-divider">` : ''}
+        <div class="vp-add-dropdown-new">
+          <div class="vp-add-dropdown-new-label">${people.length ? 'Someone new' : 'Enter their name'}</div>
+          <div class="vp-add-dropdown-new-row">
+            <input id="vp-add-all-input-open" class="vp-add-dropdown-input" type="text" placeholder="Full name" autocomplete="name" onkeydown="if(event.key==='Enter')confirmAddAllGroupPerson();if(event.key==='Escape'){event.stopPropagation();addAllGroupKey=null;renderRows();}" onclick="event.stopPropagation()" />
+            <button class="vp-add-dropdown-confirm" type="button" onclick="confirmAddAllGroupPerson()">Add</button>
+          </div>
+          ${errHtml}
+        </div>
+      </div>` : '';
+      return `<div class="vp-add-dropdown-wrap"><button class="vp-add-btn" type="button" onclick="openAddAllGroupDropdown('${esc(groupKey)}',event)">Add all dates to my schedule ${ICONS.plus}</button>${ddHtml}</div>`;
     }
     function personConflictsWithSchedule(name, targetItems, excludeGroupKey = null) {
       const n = name.toLowerCase();
@@ -8037,9 +8121,11 @@
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && !document.getElementById('vp-modal-overlay').classList.contains('hidden')) closeModal();
       if (e.key === 'Escape' && addDropdownOppId) closeAddDropdown();
+      if (e.key === 'Escape' && addAllGroupKey) { addAllGroupKey = null; renderRows(); }
     });
     document.addEventListener('mousedown', e => {
       if (addDropdownOppId && !e.target.closest('.vp-add-dropdown-wrap')) closeAddDropdown();
+      if (addAllGroupKey && !e.target.closest('.vp-add-dropdown-wrap')) { addAllGroupKey = null; renderRows(); }
     });
     document.addEventListener('click', e => {
       const deptTile = e.target.closest('.role-tile[data-department]');
