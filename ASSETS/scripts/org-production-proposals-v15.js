@@ -476,20 +476,23 @@
       .pp-sub-intake-empty { font-size:0.84rem; color:#8f84a5; padding:0.5rem 0; }
 
       /* ---- form builder (Step 3) ---- */
-      .pfb-section { border:1px solid rgba(87,46,136,0.13); border-radius:12px; background:#fff; overflow:hidden; transition:box-shadow 0.15s; }
-      .pfb-section--open { box-shadow:0 4px 18px rgba(87,46,136,0.1); }
-      .pfb-section-head { display:flex; align-items:center; gap:0.55rem; padding:0.7rem 0.85rem; cursor:pointer; user-select:none; transition:background 0.12s; }
-      .pfb-section-head:hover { background:rgba(87,46,136,0.04); }
-      .pfb-section--open .pfb-section-head { background:rgba(87,46,136,0.06); border-bottom:1px solid rgba(87,46,136,0.1); }
-      .pfb-section--disabled .pfb-section-head { opacity:0.55; }
-      .pfb-chevron { font-size:0.65rem; color:rgba(87,46,136,0.35); transition:transform 0.18s; flex-shrink:0; }
-      .pfb-section--open .pfb-chevron { transform:rotate(90deg); }
-      .pfb-section-title-input { flex:1; min-width:80px; border:none; background:transparent; font:inherit; font-weight:800; font-size:0.92rem; color:#1a1530; outline:none; padding:0; }
-      .pfb-section-title-input:focus { background:rgba(87,46,136,0.06); border-radius:4px; padding:0 4px; }
-      .pfb-q-count { font-size:0.68rem; font-weight:800; background:rgba(87,46,136,0.09); color:#572e88; border-radius:99px; padding:0.12rem 0.55rem; white-space:nowrap; flex-shrink:0; }
-      .pfb-section-actions { display:flex; align-items:center; gap:0.12rem; flex-shrink:0; }
-      .pfb-section-body { display:none; padding:0.55rem 0.7rem 0.65rem; background:#f7f5fb; flex-direction:column; gap:0.3rem; }
-      .pfb-section--open .pfb-section-body { display:flex; }
+      .pfb-layout { display:flex; height:58vh; border:1px solid rgba(87,46,136,0.13); border-radius:14px; overflow:hidden; }
+      .pfb-sidebar { width:210px; flex-shrink:0; display:flex; flex-direction:column; border-right:1px solid rgba(87,46,136,0.1); background:#faf9fc; overflow-y:auto; }
+      .pfb-sidebar-item { display:flex; align-items:center; gap:0.45rem; padding:0.65rem 0.85rem; cursor:pointer; border-bottom:1px solid rgba(87,46,136,0.07); user-select:none; transition:background 0.12s; }
+      .pfb-sidebar-item:hover { background:rgba(87,46,136,0.06); }
+      .pfb-sidebar-item--active { background:rgba(87,46,136,0.11); border-left:3px solid #572e88; padding-left:calc(0.85rem - 3px); }
+      .pfb-sidebar-item--active .pfb-sidebar-name { color:#572e88; }
+      .pfb-sidebar-item--disabled { opacity:0.5; }
+      .pfb-sidebar-name { flex:1; font-size:0.8rem; font-weight:700; color:#1a1530; line-height:1.3; }
+      .pfb-sidebar-footer { margin-top:auto; padding:0.55rem; border-top:1px dashed rgba(87,46,136,0.15); }
+      .pfb-sidebar-add-btn { width:100%; appearance:none; border:none; background:transparent; color:rgba(87,46,136,0.5); font:inherit; font-size:0.76rem; font-weight:700; padding:0.4rem 0.5rem; cursor:pointer; border-radius:8px; transition:background 0.12s,color 0.12s; }
+      .pfb-sidebar-add-btn:hover { background:rgba(87,46,136,0.08); color:#572e88; }
+      .pfb-main { flex:1; overflow-y:auto; background:#fff; }
+      .pfb-main-head { display:flex; align-items:center; gap:0.5rem; padding:0.85rem 0.9rem 0.7rem; border-bottom:1px solid rgba(87,46,136,0.09); background:#fff; position:sticky; top:0; z-index:1; }
+      .pfb-section-title-input { flex:1; min-width:80px; border:none; background:transparent; font:inherit; font-weight:800; font-size:0.98rem; color:#1a1530; outline:none; padding:0; }
+      .pfb-section-title-input:focus { background:rgba(87,46,136,0.05); border-radius:4px; padding:0 4px; }
+      .pfb-main-body { padding:0.7rem 0.9rem 1rem; display:flex; flex-direction:column; gap:0.3rem; }
+      .pfb-q-count { font-size:0.62rem; font-weight:800; background:rgba(87,46,136,0.09); color:#572e88; border-radius:99px; padding:0.1rem 0.48rem; white-space:nowrap; flex-shrink:0; }
       .pfb-question { background:#fff; border:1px solid rgba(87,46,136,0.1); border-radius:8px; overflow:hidden; }
       .pfb-question--disabled { opacity:0.42; }
       .pfb-q-row { display:flex; align-items:center; gap:0.45rem; padding:0.48rem 0.6rem; }
@@ -692,9 +695,10 @@
 
               <!-- step 3: form builder -->
               <div id="ppi-step-3" style="display:none;">
-                <p style="font-size:0.83rem;color:rgba(26,21,48,0.42);margin:0 0 1rem;">Configure which sections and questions appear in the public pitch form. Toggle, reorder, rename, or add your own.</p>
-                <div id="ppi-fb-sections" style="display:flex;flex-direction:column;gap:0.6rem;max-height:54vh;overflow-y:auto;padding-right:3px;margin-bottom:0.75rem;"></div>
-                <button type="button" class="pfb-add-q-btn" style="margin-bottom:1.25rem;" onclick="pfbAddSection()">+ Add Section</button>
+                <div class="pfb-layout" style="margin-bottom:1rem;">
+                  <div id="ppi-fb-sidebar" class="pfb-sidebar"></div>
+                  <div id="ppi-fb-main" class="pfb-main"></div>
+                </div>
                 <div class="opp-form-actions">
                   <button type="button" class="btn-secondary" onclick="proposalIntakePrevStep()">Back</button>
                   <button type="button" class="btn-primary" id="ppi-save-btn" onclick="saveProposalIntakeForm()">Save Season</button>
@@ -1580,18 +1584,11 @@
   }
 
   // ---- Form Builder ----
-  var pfbOpenSections = new Set();
   var pfbOpenQuestions = new Set();
+  var pfbSelectedSectionId = null;
 
   function pfbGetSection(sId) { return currentFormConfig && currentFormConfig.sections.find(function(s){ return s.id === sId; }); }
   function pfbGetQuestion(sId, qId) { var s = pfbGetSection(sId); return s ? s.questions.find(function(q){ return q.id === qId; }) : null; }
-
-  function pfbToggleSectionOpen(sId) {
-    if (pfbOpenSections.has(sId)) pfbOpenSections.delete(sId);
-    else pfbOpenSections.add(sId);
-    var el = document.querySelector('.pfb-section[data-sid="'+sId+'"]');
-    if (el) el.classList.toggle('pfb-section--open', pfbOpenSections.has(sId));
-  }
 
   function pfbToggleQuestionSettings(sId, qId) {
     var key = sId+'|'+qId;
@@ -1601,46 +1598,69 @@
     if (el) el.classList.toggle('pfb-q--settings-open', pfbOpenQuestions.has(key));
   }
 
+  function pfbSelectSection(sId) {
+    pfbSelectedSectionId = sId;
+    renderFBSidebar();
+    renderFBMain();
+  }
+
   function renderFormBuilder() {
-    var container = document.getElementById('ppi-fb-sections');
-    if (!container || !currentFormConfig) return;
-    container.innerHTML = currentFormConfig.sections.map(function(section, sIdx) {
-      return renderFBSection(section, sIdx, currentFormConfig.sections.length);
+    if (!currentFormConfig || !currentFormConfig.sections.length) return;
+    if (!pfbSelectedSectionId || !pfbGetSection(pfbSelectedSectionId)) {
+      pfbSelectedSectionId = currentFormConfig.sections[0].id;
+    }
+    renderFBSidebar();
+    renderFBMain();
+  }
+
+  function renderFBSidebar() {
+    var sidebar = document.getElementById('ppi-fb-sidebar');
+    if (!sidebar || !currentFormConfig) return;
+    sidebar.innerHTML = currentFormConfig.sections.map(function(section) {
+      var isActive = section.id === pfbSelectedSectionId;
+      var qOn = section.questions.filter(function(q){ return q.enabled !== false; }).length;
+      return '<div class="pfb-sidebar-item'+(isActive?' pfb-sidebar-item--active':'')+(section.enabled?'':' pfb-sidebar-item--disabled')+'" onclick="pfbSelectSection(\''+esc(section.id)+'\')">'
+        +'<span class="pfb-sidebar-name">'+esc(section.title)+'</span>'
+        +'<span class="pfb-q-count">'+qOn+'</span>'
+        +'<label class="pfb-toggle-small" onclick="event.stopPropagation()">'
+        +'<input type="checkbox" '+(section.enabled?'checked':'')+' onchange="pfbToggleSection(\''+esc(section.id)+'\',this.checked);renderFBSidebar();">'
+        +'<span class="pfb-toggle-track"></span><span class="pfb-toggle-thumb"></span></label>'
+        +'</div>';
+    }).join('')
+    +'<div class="pfb-sidebar-footer"><button type="button" class="pfb-sidebar-add-btn" onclick="pfbAddSection()">+ Add Section</button></div>';
+  }
+
+  function renderFBMain() {
+    var main = document.getElementById('ppi-fb-main');
+    if (!main || !currentFormConfig) return;
+    var section = pfbGetSection(pfbSelectedSectionId);
+    if (!section) { main.innerHTML = '<div style="padding:2rem 1rem;color:rgba(87,46,136,0.35);font-size:0.84rem;">Select a section on the left.</div>'; return; }
+    var sIdx = currentFormConfig.sections.indexOf(section);
+    var total = currentFormConfig.sections.length;
+    var questionsHtml = section.questions.map(function(q, qIdx) {
+      return renderFBQuestion(q, section.id, qIdx, section.questions.length);
     }).join('');
-    pfbOpenSections.forEach(function(sId) {
-      var el = container.querySelector('.pfb-section[data-sid="'+sId+'"]');
-      if (el) el.classList.add('pfb-section--open');
-    });
+    main.innerHTML = '<div class="pfb-main-head">'
+      +'<input class="pfb-section-title-input" value="'+esc(section.title)+'" onchange="pfbRenameSectionSync(\''+esc(section.id)+'\',this.value)" />'
+      +'<button type="button" class="pfb-btn" onclick="pfbMoveSection(\''+esc(section.id)+'\',-1)" '+(sIdx===0?'disabled':'')+' title="Move up">↑</button>'
+      +'<button type="button" class="pfb-btn" onclick="pfbMoveSection(\''+esc(section.id)+'\',1)" '+(sIdx===total-1?'disabled':'')+' title="Move down">↓</button>'
+      +'<button type="button" class="pfb-btn pfb-btn--danger" onclick="pfbDeleteSection(\''+esc(section.id)+'\')" title="Remove section">✕</button>'
+      +'<label class="pfb-toggle-small"><input type="checkbox" '+(section.enabled?'checked':'')+' onchange="pfbToggleSection(\''+esc(section.id)+'\',this.checked);renderFBSidebar();"><span class="pfb-toggle-track"></span><span class="pfb-toggle-thumb"></span></label>'
+      +'</div>'
+      +'<div class="pfb-main-body">'+questionsHtml
+      +'<button type="button" class="pfb-add-q-btn" onclick="pfbAddQuestion(\''+esc(section.id)+'\')">+ Add Question</button>'
+      +'</div>';
     pfbOpenQuestions.forEach(function(key) {
+      if (key.split('|')[0] !== section.id) return;
       var qId = key.split('|')[1];
-      var el = container.querySelector('.pfb-question[data-qid="'+qId+'"]');
+      var el = main.querySelector('.pfb-question[data-qid="'+qId+'"]');
       if (el) el.classList.add('pfb-q--settings-open');
     });
   }
 
-  function renderFBSection(section, sIdx, totalSections) {
-    var enabledCount = section.questions.filter(function(q){ return q.enabled !== false; }).length;
-    var totalCount = section.questions.length;
-    var countLabel = enabledCount === totalCount ? totalCount+' question'+(totalCount===1?'':'s') : enabledCount+' / '+totalCount+' on';
-    var questionsHtml = section.questions.map(function(q, qIdx) {
-      return renderFBQuestion(q, section.id, qIdx, section.questions.length);
-    }).join('');
-    return '<div class="pfb-section'+(section.enabled?'':' pfb-section--disabled')+'" data-sid="'+esc(section.id)+'">'
-      +'<div class="pfb-section-head" onclick="pfbToggleSectionOpen(\''+esc(section.id)+'\')">'
-      +'<span class="pfb-chevron">&#9658;</span>'
-      +'<input class="pfb-section-title-input" value="'+esc(section.title)+'" onclick="event.stopPropagation()" onchange="pfbRenameSection(\''+esc(section.id)+'\',this.value)" />'
-      +'<span class="pfb-q-count">'+esc(countLabel)+'</span>'
-      +'<div class="pfb-section-actions" onclick="event.stopPropagation()">'
-      +'<button type="button" class="pfb-btn" onclick="pfbMoveSection(\''+esc(section.id)+'\',-1)" '+(sIdx===0?'disabled':'')+' title="Move up">↑</button>'
-      +'<button type="button" class="pfb-btn" onclick="pfbMoveSection(\''+esc(section.id)+'\',1)" '+(sIdx===totalSections-1?'disabled':'')+' title="Move down">↓</button>'
-      +'<button type="button" class="pfb-btn pfb-btn--danger" onclick="pfbDeleteSection(\''+esc(section.id)+'\')" title="Remove">✕</button>'
-      +'<label class="pfb-toggle-small" title="Show / hide on form" onclick="event.stopPropagation()">'
-      +'<input type="checkbox" '+(section.enabled?'checked':'')+' onchange="pfbToggleSection(\''+esc(section.id)+'\',this.checked)">'
-      +'<span class="pfb-toggle-track"></span><span class="pfb-toggle-thumb"></span></label>'
-      +'</div></div>'
-      +'<div class="pfb-section-body">'+questionsHtml
-      +'<button type="button" class="pfb-add-q-btn" onclick="pfbAddQuestion(\''+esc(section.id)+'\')">+ Add Question</button>'
-      +'</div></div>';
+  function pfbRenameSectionSync(sId, v) {
+    pfbRenameSection(sId, v);
+    renderFBSidebar();
   }
 
   function renderFBQuestion(q, sId, qIdx, totalQ) {
@@ -1702,10 +1722,14 @@
   }
   function pfbDeleteSection(sId) {
     if(!window.confirm('Delete this section and all its questions?')) return;
-    currentFormConfig.sections=currentFormConfig.sections.filter(function(s){return s.id!==sId;}); renderFormBuilder();
+    currentFormConfig.sections=currentFormConfig.sections.filter(function(s){return s.id!==sId;});
+    if (pfbSelectedSectionId === sId) pfbSelectedSectionId = currentFormConfig.sections.length ? currentFormConfig.sections[0].id : null;
+    renderFormBuilder();
   }
   function pfbAddSection() {
-    currentFormConfig.sections.push({id:'sec_'+Date.now(),title:'New Section',enabled:true,questions:[]});
+    var newId = 'sec_'+Date.now();
+    currentFormConfig.sections.push({id:newId,title:'New Section',enabled:true,questions:[]});
+    pfbSelectedSectionId = newId;
     renderFormBuilder();
   }
   function pfbUpdateQ(sId, qId, field, value) {
@@ -1783,8 +1807,8 @@
     const shell = document.querySelector('.intake-modal-shell');
     if (shell) shell.style.maxWidth = '560px';
     currentFormConfig = intake && intake.form_config ? JSON.parse(JSON.stringify(intake.form_config)) : JSON.parse(JSON.stringify(DEFAULT_FORM_CONFIG));
-    pfbOpenSections = new Set();
     pfbOpenQuestions = new Set();
+    pfbSelectedSectionId = null;
 
     document.getElementById('ppi-title').value = intake?.title || '';
     document.getElementById('ppi-season-year').value = intake?.season_label || '';
@@ -2384,8 +2408,11 @@
   window.changeProposalStatus = changeProposalStatus;
   window.saveProposalInternalNotes = saveProposalInternalNotes;
   window.renderFormBuilder = renderFormBuilder;
-  window.pfbToggleSectionOpen = pfbToggleSectionOpen;
+  window.renderFBSidebar = renderFBSidebar;
+  window.renderFBMain = renderFBMain;
+  window.pfbSelectSection = pfbSelectSection;
   window.pfbToggleQuestionSettings = pfbToggleQuestionSettings;
+  window.pfbRenameSectionSync = pfbRenameSectionSync;
   window.pfbToggleSection = pfbToggleSection;
   window.pfbRenameSection = pfbRenameSection;
   window.pfbMoveSection = pfbMoveSection;

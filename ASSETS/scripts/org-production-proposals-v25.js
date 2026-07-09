@@ -84,11 +84,7 @@
       mkQ('mu_vocal_diff','Vocal difficulty','rating',{conditions:[{question_id:'mu_is_musical',operator:'equals',value:'yes'}]}),
       mkQ('mu_dance_diff','Dance difficulty','rating',{conditions:[{question_id:'mu_is_musical',operator:'equals',value:'yes'}]}),
       mkQ('mu_music_diff','Music difficulty','rating',{conditions:[{question_id:'mu_is_musical',operator:'equals',value:'yes'}]}),
-      mkQ('mu_live_musicians','Does it require live musicians?','yes_no_unsure',{conditions:[{question_id:'mu_is_musical',operator:'equals',value:'yes'}]}),
-      mkQ('mu_tracks','Can tracks be used?','yes_no_unsure',{conditions:[{question_id:'mu_is_musical',operator:'equals',value:'yes'}]}),
-      mkQ('mu_orchestra','Estimated orchestra size','number',{conditions:[{question_id:'mu_is_musical',operator:'equals',value:'yes'}]}),
       mkQ('mu_dance_numbers','Are there major dance numbers?','yes_no'),
-      mkQ('mu_choreo_notes','Choreography notes','long_answer'),
     ]},
     { id:'sec_production', title:'Production Requirements', enabled:true, questions:[
       mkQ('pr_sets','Set complexity','rating'),

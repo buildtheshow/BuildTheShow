@@ -92,20 +92,6 @@
       mkQ('cs_family_friendly','Is the show family friendly?','dropdown',{options:['Yes','No','Somewhat']}),
       mkQ('cs_notes','Suitability notes','long_answer'),
     ]},
-    { id:'sec_vision', title:'Creative Vision', enabled:true, questions:[
-      mkQ('vi_vision','What is your vision for this production?','long_answer'),
-      mkQ('vi_tone','What tone or style do you imagine?','long_answer'),
-      mkQ('vi_design','Are there design ideas you already have?','long_answer'),
-      mkQ('vi_feel','What should the audience feel or take away?','long_answer'),
-      mkQ('vi_inspiration','Upload inspiration images / mood board / poster','file_upload'),
-    ]},
-    { id:'sec_creative_team', title:'Creative Team', enabled:true, questions:[
-      mkQ('ct_self_director','Are you proposing yourself as director?','yes_no_unsure'),
-      mkQ('ct_director_name','Proposed director name','short_answer'),
-      mkQ('ct_has_team','Do you have a creative team in mind?','yes_no'),
-      mkQ('ct_team','Creative team list','long_answer',{help_text:'Name, role, and whether they are confirmed.'}),
-      mkQ('ct_experience','What experience does the proposed team have?','long_answer'),
-    ]},
     { id:'sec_schedule', title:'Schedule Fit', enabled:true, questions:[
       mkQ('sc_window','Preferred production window','short_answer',{placeholder:'e.g. Spring 2027, Summer'}),
       mkQ('sc_concerns','Known scheduling concerns','long_answer'),

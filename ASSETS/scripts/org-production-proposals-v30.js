@@ -58,7 +58,8 @@
     { id:'sec_show_basics', title:'Show Basics', enabled:true, questions:[
       mkQ('sb_title','Show title','short_answer',{required:true,field_key:'proposed_show_title'}),
       mkQ('sb_cover','Show poster / cover image','file_upload'),
-      mkQ('sb_version','Show version / edition','dropdown',{options:['Full','JR','Kid','Sr','Student','Young Performer'],field_key:'show_version'}),
+      mkQ('sb_version','Show version / edition','dropdown',{options:['Full','JR','Kid','Sr','Student','Young Performer','Other'],field_key:'show_version'}),
+      mkQ('sb_version_other','Please specify version','short_answer',{placeholder:'e.g. Teen Edition, School Edition',conditions:[{question_id:'sb_version',operator:'equals',value:'Other'}]}),
       mkQ('sb_author','Author / composer / playwright','short_answer'),
       mkQ('sb_licensing_co','Licensing company','dropdown',{options:['Musical Theatre International (MTI)','Concord Theatricals','Original Work','Other'],field_key:'licensing_company'}),
       mkQ('sb_licensing_link','Licensing link','url'),

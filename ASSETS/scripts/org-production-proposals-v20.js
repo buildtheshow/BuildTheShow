@@ -58,6 +58,7 @@
     ]},
     { id:'sec_show_basics', title:'Show Basics', enabled:true, questions:[
       mkQ('sb_title','Show title','short_answer',{required:true,field_key:'proposed_show_title'}),
+      mkQ('sb_cover','Show poster / cover image','file_upload'),
       mkQ('sb_version','Show version / edition','short_answer',{placeholder:'JR, Teen Edition, School Edition, Full Version',field_key:'show_version'}),
       mkQ('sb_author','Author / composer / playwright','short_answer'),
       mkQ('sb_licensing_co','Licensing company','dropdown',{options:['Musical Theatre International (MTI)','Concord Theatricals','Original Work','Other'],field_key:'licensing_company'}),
@@ -502,7 +503,9 @@
       .pfb-q-label-input { flex:1; min-width:100px; border:none; background:transparent; font:inherit; font-size:0.85rem; font-weight:700; color:#1a1530; outline:none; padding:0; }
       .pfb-q-label-input:focus { background:rgba(87,46,136,0.05); border-radius:4px; padding:0 4px; }
       .pfb-q-type-pill { font-size:0.63rem; font-weight:800; background:rgba(87,46,136,0.09); color:#572e88; border-radius:6px; padding:0.13rem 0.42rem; white-space:nowrap; flex-shrink:0; letter-spacing:0.01em; }
-      .pfb-q-req-dot { width:6px; height:6px; border-radius:50%; background:#d1523d; flex-shrink:0; }
+      .pfb-q-req-pill { appearance:none; border:none; border-radius:99px; font:inherit; font-size:0.62rem; font-weight:900; letter-spacing:0.04em; text-transform:uppercase; padding:0.13rem 0.5rem; cursor:pointer; flex-shrink:0; transition:background 0.12s,color 0.12s; }
+      .pfb-q-req-pill--required { background:#d1523d; color:#fff; }
+      .pfb-q-req-pill--optional { background:rgba(87,46,136,0.09); color:rgba(87,46,136,0.5); }
       .pfb-q-btns { display:flex; align-items:center; gap:0.14rem; flex-shrink:0; }
       .pfb-q-settings { display:none; padding:0.6rem 0.7rem 0.65rem; border-top:1px solid rgba(87,46,136,0.08); background:rgba(87,46,136,0.02); flex-direction:column; gap:0.5rem; }
       .pfb-q--settings-open .pfb-q-settings { display:flex; }
@@ -1691,7 +1694,7 @@
       +'</div>'
       +'<input class="pfb-q-label-input" value="'+esc(q.label)+'" placeholder="Question label" onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'label\',this.value)" />'
       +'<span class="pfb-q-type-pill">'+esc(typeLabel)+'</span>'
-      +(q.required?'<span class="pfb-q-req-dot" title="Required"></span>':'')
+      +'<button type="button" class="pfb-q-req-pill '+(q.required?'pfb-q-req-pill--required':'pfb-q-req-pill--optional')+'" onclick="pfbToggleRequired(\''+esc(sId)+'\',\''+esc(q.id)+'\')">'+(q.required?'Required':'Optional')+'</button>'
       +'<div class="pfb-q-btns">'
       +'<button type="button" class="pfb-btn pfb-btn--gear" onclick="pfbToggleQuestionSettings(\''+esc(sId)+'\',\''+esc(q.id)+'\')" title="More settings"><img src="/ASSETS/Images/Icons/navsettings.svg" alt="Settings"></button>'
       +'<label class="pfb-toggle-small" title="Show / hide question"><input type="checkbox" '+(q.enabled?'checked':'')+' onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'enabled\',this.checked)"><span class="pfb-toggle-track"></span><span class="pfb-toggle-thumb"></span></label>'
@@ -1711,6 +1714,7 @@
       +'</div></div>';
   }
 
+  function pfbToggleRequired(sId, qId) { var q=pfbGetQuestion(sId,qId); if(q){ q.required=!q.required; renderFBMain(); } }
   function pfbToggleSection(sId, enabled) { var s=pfbGetSection(sId); if(s){s.enabled=enabled; renderFormBuilder();} }
   function pfbRenameSection(sId, v) { var s=pfbGetSection(sId); if(s) s.title=v; }
   function pfbMoveSection(sId, dir) {
@@ -2418,6 +2422,7 @@
   window.renderFBMain = renderFBMain;
   window.pfbSelectSection = pfbSelectSection;
   window.pfbToggleQuestionSettings = pfbToggleQuestionSettings;
+  window.pfbToggleRequired = pfbToggleRequired;
   window.pfbRenameSectionSync = pfbRenameSectionSync;
   window.pfbToggleSection = pfbToggleSection;
   window.pfbRenameSection = pfbRenameSection;

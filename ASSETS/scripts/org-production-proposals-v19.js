@@ -60,7 +60,7 @@
       mkQ('sb_title','Show title','short_answer',{required:true,field_key:'proposed_show_title'}),
       mkQ('sb_version','Show version / edition','short_answer',{placeholder:'JR, Teen Edition, School Edition, Full Version',field_key:'show_version'}),
       mkQ('sb_author','Author / composer / playwright','short_answer'),
-      mkQ('sb_licensing_co','Licensing company','dropdown',{options:['MTI','Concord Theatricals','Playscripts','Broadway Licensing','Stage Rights','Theatrical Rights Worldwide','Public domain','Original work','Unknown','Other'],field_key:'licensing_company'}),
+      mkQ('sb_licensing_co','Licensing company','dropdown',{options:['Musical Theatre International (MTI)','Concord Theatricals','Original Work','Other'],field_key:'licensing_company'}),
       mkQ('sb_licensing_link','Licensing link','url'),
       mkQ('sb_licensing_cost','Estimated licensing cost','currency',{field_key:'estimated_licensing_fee'}),
       mkQ('sb_genre','Genre','checkbox',{options:['Musical','Play','Comedy','Drama','Family','Youth','Holiday','Shakespeare','New work','Other'],field_key:'genre_type'}),

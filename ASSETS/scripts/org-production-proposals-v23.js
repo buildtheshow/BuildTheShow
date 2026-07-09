@@ -63,7 +63,6 @@
       mkQ('sb_licensing_co','Licensing company','dropdown',{options:['Musical Theatre International (MTI)','Concord Theatricals','Original Work','Other'],field_key:'licensing_company'}),
       mkQ('sb_licensing_link','Licensing link','url'),
       mkQ('sb_licensing_cost','Estimated licensing cost','currency',{field_key:'estimated_licensing_fee'}),
-      mkQ('sb_genre','Genre','checkbox',{options:['Musical','Play','Comedy','Drama','Family','Youth','Holiday','Shakespeare','New work','Other'],field_key:'genre_type'}),
       mkQ('sb_runtime','Runtime','short_answer',{placeholder:'e.g. 2 hours 15 minutes',field_key:'runtime_minutes'}),
       mkQ('sb_acts','Number of acts','number'),
       mkQ('sb_synopsis','Synopsis','long_answer',{field_key:'short_synopsis'}),

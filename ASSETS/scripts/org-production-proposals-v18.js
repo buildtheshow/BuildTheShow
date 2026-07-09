@@ -520,7 +520,9 @@
       .pfb-btn:hover:not(:disabled) { background:rgba(87,46,136,0.1); color:#572e88; }
       .pfb-btn:disabled { opacity:0.2; cursor:not-allowed; }
       .pfb-btn--danger:hover:not(:disabled) { background:rgba(209,82,61,0.08); color:#d1523d; }
-      .pfb-btn--gear { font-size:0.65rem; }
+      .pfb-btn--gear { padding:0.15rem 0.28rem; }
+      .pfb-btn--gear img { width:17px; height:17px; display:block; opacity:0.4; transition:opacity 0.12s; filter:brightness(0) saturate(100%) invert(16%) sepia(55%) saturate(800%) hue-rotate(240deg); }
+      .pfb-btn--gear:hover img { opacity:1; }
       .pfb-add-q-btn { appearance:none; border:1px dashed rgba(87,46,136,0.2); border-radius:8px; background:transparent; color:rgba(87,46,136,0.5); font:inherit; font-size:0.76rem; font-weight:700; padding:0.38rem 0.7rem; cursor:pointer; width:100%; margin-top:0.1rem; transition:background 0.12s,color 0.12s; }
       .pfb-add-q-btn:hover { background:rgba(87,46,136,0.06); color:#572e88; }
       .pfb-toggle-small { position:relative; display:inline-flex; align-items:center; cursor:pointer; width:30px; height:17px; flex-shrink:0; }
@@ -1691,7 +1693,7 @@
       +'<span class="pfb-q-type-pill">'+esc(typeLabel)+'</span>'
       +(q.required?'<span class="pfb-q-req-dot" title="Required"></span>':'')
       +'<div class="pfb-q-btns">'
-      +'<button type="button" class="pfb-btn pfb-btn--gear" onclick="pfbToggleQuestionSettings(\''+esc(sId)+'\',\''+esc(q.id)+'\')" title="More settings">&#9881;</button>'
+      +'<button type="button" class="pfb-btn pfb-btn--gear" onclick="pfbToggleQuestionSettings(\''+esc(sId)+'\',\''+esc(q.id)+'\')" title="More settings"><img src="/ASSETS/Images/Icons/navsettings.svg" alt="Settings"></button>'
       +'<label class="pfb-toggle-small" title="Show / hide question"><input type="checkbox" '+(q.enabled?'checked':'')+' onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'enabled\',this.checked)"><span class="pfb-toggle-track"></span><span class="pfb-toggle-thumb"></span></label>'
       +'<button type="button" class="pfb-btn pfb-btn--danger" onclick="pfbDeleteQuestion(\''+esc(sId)+'\',\''+esc(q.id)+'\')">✕</button>'
       +'</div></div>'

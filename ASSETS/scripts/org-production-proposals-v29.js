@@ -94,9 +94,7 @@
     ]},
     { id:'sec_risks', title:'Risks and Challenges', enabled:true, questions:[
       mkQ('ri_challenge','What is the biggest challenge with producing this show?','long_answer'),
-      mkQ('ri_solution','How would you solve or reduce that challenge?','long_answer'),
       mkQ('ri_difficult','What could make this show difficult for this organisation?','long_answer'),
-      mkQ('ri_support','What support would this show need?','long_answer'),
     ]},
     { id:'sec_attachments', title:'Attachments', enabled:true, questions:[
       mkQ('at_files','Supporting files','file_upload',{help_text:'Script sample, licensing quote, budget notes, mood board, poster, director résumé, etc.'}),

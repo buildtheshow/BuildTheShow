@@ -512,6 +512,7 @@
       .pfb-q-type-sel { border:1px solid rgba(87,46,136,0.15); border-radius:6px; padding:0.26rem 0.42rem; font:inherit; font-size:0.8rem; color:#572e88; background:#fff; }
       .pfb-q-help-input,.pfb-q-placeholder-input,.pfb-q-option-input { border:1px solid rgba(87,46,136,0.14); border-radius:6px; padding:0.26rem 0.42rem; font:inherit; font-size:0.8rem; color:rgba(26,21,48,0.7); background:#fff; width:100%; box-sizing:border-box; }
       .pfb-q-req-lbl { font-size:0.76rem; font-weight:700; color:rgba(26,21,48,0.55); display:flex; align-items:center; gap:0.28rem; cursor:pointer; white-space:nowrap; padding-top:1.1rem; }
+      .pfb-q-options-inline { padding:0.5rem 0.7rem 0.6rem; border-top:1px solid rgba(87,46,136,0.08); background:rgba(87,46,136,0.02); display:flex; flex-direction:column; gap:0.25rem; }
       .pfb-q-options { display:flex; flex-direction:column; gap:0.22rem; width:100%; }
       .pfb-q-options-label { font-size:0.62rem; font-weight:900; letter-spacing:0.07em; text-transform:uppercase; color:rgba(87,46,136,0.5); margin-bottom:0.1rem; }
       .pfb-q-option-row { display:flex; gap:0.3rem; align-items:center; }
@@ -1666,17 +1667,20 @@
   function renderFBQuestion(q, sId, qIdx, totalQ) {
     var typeLabel = (QUESTION_TYPES.find(function(t){ return t.value===q.type; })||{label:q.type}).label;
     var hasOptions = q.type === 'dropdown' || q.type === 'checkbox';
-    var optionsHtml = hasOptions ? (
-      '<div class="pfb-q-options"><div class="pfb-q-options-label">Options</div>'
+    var typeSelOpts = QUESTION_TYPES.map(function(t){ return '<option value="'+t.value+'"'+(q.type===t.value?' selected':'')+'>'+esc(t.label)+'</option>'; }).join('');
+
+    var inlineOptionsHtml = hasOptions ? (
+      '<div class="pfb-q-options-inline">'
+      +'<div class="pfb-q-options-label">Options</div>'
       +(q.options||[]).map(function(opt, oIdx){
         return '<div class="pfb-q-option-row">'
           +'<input class="pfb-q-option-input" value="'+esc(opt)+'" onchange="pfbUpdateOption(\''+esc(sId)+'\',\''+esc(q.id)+'\','+oIdx+',this.value)" />'
           +'<button type="button" class="pfb-btn pfb-btn--danger" onclick="pfbDeleteOption(\''+esc(sId)+'\',\''+esc(q.id)+'\','+oIdx+')">✕</button></div>';
       }).join('')
-      +'<button type="button" class="pfb-btn" style="margin-top:0.3rem;" onclick="pfbAddOption(\''+esc(sId)+'\',\''+esc(q.id)+'\')">+ Add Option</button>'
+      +'<button type="button" class="pfb-btn" style="margin-top:0.25rem;align-self:flex-start;" onclick="pfbAddOption(\''+esc(sId)+'\',\''+esc(q.id)+'\')">+ Add Option</button>'
       +'</div>'
     ) : '';
-    var typeSelOpts = QUESTION_TYPES.map(function(t){ return '<option value="'+t.value+'"'+(q.type===t.value?' selected':'')+'>'+esc(t.label)+'</option>'; }).join('');
+
     return '<div class="pfb-question'+(q.enabled?'':' pfb-question--disabled')+'" data-qid="'+esc(q.id)+'">'
       +'<div class="pfb-q-row">'
       +'<div class="pfb-q-move-btns">'
@@ -1687,10 +1691,11 @@
       +'<span class="pfb-q-type-pill">'+esc(typeLabel)+'</span>'
       +(q.required?'<span class="pfb-q-req-dot" title="Required"></span>':'')
       +'<div class="pfb-q-btns">'
-      +'<button type="button" class="pfb-btn pfb-btn--gear" onclick="pfbToggleQuestionSettings(\''+esc(sId)+'\',\''+esc(q.id)+'\')" title="Settings">&#9881;</button>'
+      +'<button type="button" class="pfb-btn pfb-btn--gear" onclick="pfbToggleQuestionSettings(\''+esc(sId)+'\',\''+esc(q.id)+'\')" title="More settings">&#9881;</button>'
       +'<label class="pfb-toggle-small" title="Show / hide question"><input type="checkbox" '+(q.enabled?'checked':'')+' onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'enabled\',this.checked)"><span class="pfb-toggle-track"></span><span class="pfb-toggle-thumb"></span></label>'
       +'<button type="button" class="pfb-btn pfb-btn--danger" onclick="pfbDeleteQuestion(\''+esc(sId)+'\',\''+esc(q.id)+'\')">✕</button>'
       +'</div></div>'
+      +inlineOptionsHtml
       +'<div class="pfb-q-settings">'
       +'<div class="pfb-q-settings-row">'
       +'<div class="pfb-q-field-wrap"><span class="pfb-q-settings-label">Type</span>'
@@ -1701,7 +1706,6 @@
       +'<input class="pfb-q-placeholder-input" value="'+esc(q.placeholder||'')+'" placeholder="Input placeholder" onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'placeholder\',this.value)" /></div>'
       +'<label class="pfb-q-req-lbl"><input type="checkbox" '+(q.required?'checked':'')+' onchange="pfbUpdateQ(\''+esc(sId)+'\',\''+esc(q.id)+'\',\'required\',this.checked)"> Required</label>'
       +'</div>'
-      +optionsHtml
       +'</div></div>';
   }
 

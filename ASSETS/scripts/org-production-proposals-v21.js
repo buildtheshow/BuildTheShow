@@ -54,7 +54,6 @@
       mkQ('si_phone','Your phone number','phone',{field_key:'submitter_phone'}),
       mkQ('si_role','Your role / relationship to the organisation','dropdown',{options:['Director','Producer','Board member','Volunteer','Parent','Performer','Community member','Other']}),
       mkQ('si_worked_before','Have you worked with this organisation before?','yes_no'),
-      mkQ('si_experience','Tell us about your experience','long_answer'),
     ]},
     { id:'sec_show_basics', title:'Show Basics', enabled:true, questions:[
       mkQ('sb_title','Show title','short_answer',{required:true,field_key:'proposed_show_title'}),

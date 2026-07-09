@@ -79,11 +79,11 @@
       mkQ('cast_named_roles','Number of named roles','number',{field_key:'named_roles'}),
     ]},
     { id:'sec_music', title:'Music and Choreography', enabled:true, questions:[
-      mkQ('mu_is_musical','Is this a musical?','yes_no',{required:true}),
-      mkQ('mu_songs','Number of songs','number',{conditions:[{question_id:'mu_is_musical',operator:'equals',value:'yes'}],field_key:'number_of_songs'}),
-      mkQ('mu_vocal_diff','Vocal difficulty','rating',{conditions:[{question_id:'mu_is_musical',operator:'equals',value:'yes'}]}),
-      mkQ('mu_dance_diff','Dance difficulty','rating',{conditions:[{question_id:'mu_is_musical',operator:'equals',value:'yes'}]}),
-      mkQ('mu_music_diff','Music difficulty','rating',{conditions:[{question_id:'mu_is_musical',operator:'equals',value:'yes'}]}),
+      mkQ('mu_production_type','Type of production','dropdown',{required:true,options:['Musical','Play','Operetta','Revue','Cabaret','One-Act Play','Dance Show','Variety Show','Original Work','Other'],field_key:'production_type'}),
+      mkQ('mu_songs','Number of songs','number',{conditions:[{question_id:'mu_production_type',operator:'equals',value:'Musical'}],field_key:'number_of_songs'}),
+      mkQ('mu_vocal_diff','Vocal difficulty','rating',{conditions:[{question_id:'mu_production_type',operator:'equals',value:'Musical'}]}),
+      mkQ('mu_dance_diff','Dance difficulty','rating',{conditions:[{question_id:'mu_production_type',operator:'equals',value:'Musical'}]}),
+      mkQ('mu_music_diff','Music difficulty','rating',{conditions:[{question_id:'mu_production_type',operator:'equals',value:'Musical'}]}),
       mkQ('mu_dance_numbers','Are there major dance numbers?','yes_no'),
     ]},
     { id:'sec_content', title:'Content and Suitability', enabled:true, questions:[

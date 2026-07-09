@@ -92,13 +92,6 @@
       mkQ('cs_family_friendly','Is the show family friendly?','dropdown',{options:['Yes','No','Somewhat']}),
       mkQ('cs_notes','Suitability notes','long_answer'),
     ]},
-    { id:'sec_schedule', title:'Schedule Fit', enabled:true, questions:[
-      mkQ('sc_window','Preferred production window','short_answer',{placeholder:'e.g. Spring 2027, Summer'}),
-      mkQ('sc_concerns','Known scheduling concerns','long_answer'),
-      mkQ('sc_long_rehearsal','Does this show require a long rehearsal period?','yes_no_unsure'),
-      mkQ('sc_rehearsal_needs','Estimated rehearsal needs','long_answer'),
-      mkQ('sc_blackouts','Any blackout dates?','long_answer'),
-    ]},
     { id:'sec_risks', title:'Risks and Challenges', enabled:true, questions:[
       mkQ('ri_challenge','What is the biggest challenge with producing this show?','long_answer'),
       mkQ('ri_solution','How would you solve or reduce that challenge?','long_answer'),

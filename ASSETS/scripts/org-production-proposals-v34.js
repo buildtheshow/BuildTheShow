@@ -41,6 +41,7 @@
     { value:'info_text',         label:'Info Text' },
     { value:'divider',           label:'Divider' },
     { value:'agreement_checkbox',label:'Agreement Checkbox' },
+    { value:'project_select',   label:'Project Select' },
   ];
 
   function mkQ(id, label, type, overrides) {
@@ -56,6 +57,7 @@
       mkQ('si_worked_before','Have you worked with this organisation before?','yes_no'),
     ]},
     { id:'sec_show_basics', title:'Show Basics', enabled:true, questions:[
+      mkQ('sb_project','Which project is this pitch for?','project_select',{required:true,field_key:'project_name'}),
       mkQ('sb_title','Show title','short_answer',{required:true,field_key:'proposed_show_title'}),
       mkQ('sb_cover','Show poster / cover image','file_upload'),
       mkQ('sb_version','Show version / edition','dropdown',{options:['Full','JR','Kid','Sr','Student','Young Performer','Other'],field_key:'show_version'}),

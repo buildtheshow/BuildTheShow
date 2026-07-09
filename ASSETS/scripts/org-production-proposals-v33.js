@@ -71,7 +71,7 @@
       mkQ('why_pitching','Why are you pitching this show?','long_answer'),
       mkQ('why_fit','Why is this show a good fit for this organisation?','long_answer',{field_key:'organization_fit'}),
       mkQ('why_now','Why is this the right time for this show?','long_answer'),
-      mkQ('why_audience','Who is the audience for this show?','checkbox',{options:['Families','Adults','Teens','Children','Seniors','Schools','General audience','Existing theatre audience','New audience','Other']}),
+      mkQ('why_audience','Who is the audience for this show?','checkbox',{options:['Families','Adults','Kids','Seniors','Schools']}),
       mkQ('why_appeal','Why would audiences come see it?','long_answer'),
       mkQ('why_over_others','What makes this show worth choosing over other options?','long_answer'),
     ]},
