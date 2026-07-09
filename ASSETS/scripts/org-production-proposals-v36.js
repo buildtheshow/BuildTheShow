@@ -1490,9 +1490,10 @@
       .ppv-review-section { display:flex; flex-direction:column; gap:0.45rem; }
       .ppv-review-label { font-size:0.68rem; font-weight:900; text-transform:uppercase; letter-spacing:0.07em; color:rgba(26,21,48,0.4); }
       .ppv-review-tags { display:flex; flex-wrap:wrap; gap:0.25rem; min-height:4px; }
-      .ppv-review-tag { display:inline-flex; align-items:center; gap:0.28rem; border-radius:99px; padding:0.26rem 0.5rem 0.26rem 0.65rem; font-size:0.7rem; font-weight:700; line-height:1.2; }
+      .ppv-review-tag { display:inline-flex; align-items:center; gap:0.3rem; border-radius:99px; padding:0.26rem 0.55rem 0.26rem 0.45rem; font-size:0.7rem; font-weight:700; line-height:1.2; }
       .ppv-review-tag.love { background:#769e7b; color:#fff; }
       .ppv-review-tag.challenge { background:#efab45; color:#1a1530; }
+      .ppv-review-tag-icon { width:13px; height:13px; flex-shrink:0; }
       .ppv-review-tag-x { background:none; border:none; cursor:pointer; color:inherit; opacity:0.55; font-size:0.95rem; line-height:1; padding:0; font-weight:900; font-family:inherit; }
       .ppv-review-tag-x:hover { opacity:1; }
       .ppv-review-add-row { display:flex; gap:0.35rem; margin-top:0.2rem; }
@@ -1576,9 +1577,16 @@
     const notes = scoring.notes || '';
     const pid = proposal.id;
 
+    var TAG_ICONS = {
+      love: '/ASSETS/Images/Icons/volunteer-HEART.svg',
+      challenge: '/ASSETS/Images/Icons/Danger Zone.svg'
+    };
+
     function tagRow(items, type) {
+      const iconSrc = TAG_ICONS[type];
+      const filterStyle = type === 'love' ? 'brightness(0) invert(1)' : 'brightness(0)';
       return items.map(function(item, i) {
-        return `<span class="ppv-review-tag ${type}">${esc(item)}<button class="ppv-review-tag-x" onclick="pvRemoveReviewItem('${type}',${i},'${pid}')" title="Remove">&times;</button></span>`;
+        return `<span class="ppv-review-tag ${type}"><img class="ppv-review-tag-icon" src="${iconSrc}" alt="" style="filter:${filterStyle};opacity:0.85;">${esc(item)}<button class="ppv-review-tag-x" onclick="pvRemoveReviewItem('${type}',${i},'${pid}')" title="Remove">&times;</button></span>`;
       }).join('');
     }
 
