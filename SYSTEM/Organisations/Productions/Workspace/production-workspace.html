@@ -71344,7 +71344,20 @@ See you soon!
 	        const perLabel = cfg.perLabel || (type === 'performance' ? 'per performance' : 'per event');
 	        const allRoles = cfg.roles;
 	        const rolesHtml = `<div class="vol-suggestion-grid">
-	          ${allRoles.map((role, ri) => { const key = `${type}-${ri}`; const saved = _staffingPlan[key] || {}; if (saved.hidden) return ''; const roleName = saved.roleName || role.name; const deptName = saved.department || role.dept; _volStaffingRoleMeta[key] = { roleName, department: deptName, description: saved.description || volDefaultRoleDescription(deptName, roleName), checkInWith: saved.checkInWith || saved.check_in_with || role.checkInWith || '', typeLabel: cfg.label, eventType: type, color: DEPT_COLOURS[deptName] || cfg.color }; const savedCount = saved.count ?? role.default; const savedPerLabel = volCountModeLabel(saved.countMode || saved.count_mode || volCountModeFromLabel(saved.perLabel || perLabel, type)); return `
+	          ${allRoles
+	            .map((role, ri) => ri)
+	            .filter(ri => !(_staffingPlan[`${type}-${ri}`]?.hidden))
+	            .sort((ri_a, ri_b) => {
+	              const sA = _staffingPlan[`${type}-${ri_a}`] || {};
+	              const sB = _staffingPlan[`${type}-${ri_b}`] || {};
+	              const dA = (sA.department || allRoles[ri_a].dept || '').toLowerCase();
+	              const dB = (sB.department || allRoles[ri_b].dept || '').toLowerCase();
+	              if (dA !== dB) return dA.localeCompare(dB);
+	              const nA = (sA.roleName || allRoles[ri_a].name || '').toLowerCase();
+	              const nB = (sB.roleName || allRoles[ri_b].name || '').toLowerCase();
+	              return nA.localeCompare(nB);
+	            })
+	            .map(ri => { const role = allRoles[ri]; const key = `${type}-${ri}`; const saved = _staffingPlan[key] || {}; const key = `${type}-${ri}`; const saved = _staffingPlan[key] || {}; const roleName = saved.roleName || role.name; const deptName = saved.department || role.dept; _volStaffingRoleMeta[key] = { roleName, department: deptName, description: saved.description || volDefaultRoleDescription(deptName, roleName), checkInWith: saved.checkInWith || saved.check_in_with || role.checkInWith || '', typeLabel: cfg.label, eventType: type, color: DEPT_COLOURS[deptName] || cfg.color }; const savedCount = saved.count ?? role.default; const savedPerLabel = volCountModeLabel(saved.countMode || saved.count_mode || volCountModeFromLabel(saved.perLabel || perLabel, type)); return `
 	            <div class="template-brand-card template-brand-card--square template-brand-card--content vol-staffing-tile${savedCount === 0 ? ' vol-staffing-tile--inactive' : ''}" id="vsq-tile-${esc(type)}-${ri}" style="--brand-tile-bg:${esc(DEPT_COLOURS[deptName] || cfg.color)};--brand-tile-ink:#fff;">
 	              <div class="template-brand-card-inner">
 	                <div class="template-brand-tile-content">
@@ -71374,7 +71387,15 @@ See you soon!
 	                </div>
 	              </div>
 	            </div>`; }).join('')}
-	          ${Object.entries(_staffingPlan).filter(([k, v]) => k.startsWith(type + '-custom-') && v.roleName).map(([k, v]) => { const ri = k.replace(type + '-', ''); _volStaffingRoleMeta[k] = { roleName: v.roleName, department: v.department || 'Other', description: v.description || volDefaultRoleDescription(v.department || 'Other', v.roleName), checkInWith: v.checkInWith || v.check_in_with || '', typeLabel: cfg.label, eventType: type, color: DEPT_COLOURS[v.department] || cfg.color }; const savedCount = v.count ?? 0; const savedPerLabel = volCountModeLabel(v.countMode || v.count_mode || volCountModeFromLabel(v.perLabel || perLabel, type)); const tileColor = DEPT_COLOURS[v.department] || cfg.color; return `
+	          ${Object.entries(_staffingPlan)
+	            .filter(([k, v]) => k.startsWith(type + '-custom-') && v.roleName)
+	            .sort(([ka, va], [kb, vb]) => {
+	              const dA = (va.department || '').toLowerCase();
+	              const dB = (vb.department || '').toLowerCase();
+	              if (dA !== dB) return dA.localeCompare(dB);
+	              return (va.roleName || '').toLowerCase().localeCompare((vb.roleName || '').toLowerCase());
+	            })
+	            .map(([k, v]) => { const ri = k.replace(type + '-', ''); _volStaffingRoleMeta[k] = { roleName: v.roleName, department: v.department || 'Other', description: v.description || volDefaultRoleDescription(v.department || 'Other', v.roleName), checkInWith: v.checkInWith || v.check_in_with || '', typeLabel: cfg.label, eventType: type, color: DEPT_COLOURS[v.department] || cfg.color }; const savedCount = v.count ?? 0; const savedPerLabel = volCountModeLabel(v.countMode || v.count_mode || volCountModeFromLabel(v.perLabel || perLabel, type)); const tileColor = DEPT_COLOURS[v.department] || cfg.color; return `
 	            <div class="template-brand-card template-brand-card--square template-brand-card--content vol-staffing-tile${savedCount === 0 ? ' vol-staffing-tile--inactive' : ''}" id="vsq-tile-${esc(type)}-${ri}" style="--brand-tile-bg:${tileColor};--brand-tile-ink:#fff;">
 	              <div class="template-brand-card-inner">
 	                <div class="template-brand-tile-content">
@@ -71403,7 +71424,7 @@ See you soon!
 	                  </div>
 	                </div>
 	              </div>
-	            </div>`; }).join('')}
+	            </div>`; } }).join('')}
 	          <button type="button" class="vol-staffing-add-tile" onclick="volAddRole('${esc(type)}')">
 	            <span class="vol-staffing-add-tile-icon">+</span>
 	            <span>Add role</span>
@@ -72117,23 +72138,29 @@ See you soon!
       const declinedShifts = personShifts.filter(s => s.status === 'declined');
 
       // Hours calc
-      function shiftHrs(s) {
+      function shiftTimedHrs(s) {
         if (!s.shift_start_time || !s.shift_end_time) return 0;
         const [sh,sm] = s.shift_start_time.slice(0,5).split(':').map(Number);
         const [eh,em] = s.shift_end_time.slice(0,5).split(':').map(Number);
         return Math.max(0, (eh*60+em - sh*60-sm) / 60);
       }
-      const totalRequestedHrs = personShifts.reduce((sum,s) => sum + shiftHrs(s), 0);
-      const totalApprovedHrs  = personShifts.filter(s => s.status === 'approved').reduce((sum,s) => sum + (parseFloat(s.approved_hours) || shiftHrs(s)), 0);
+      function shiftRequestedHrs(s) {
+        const stored = parseFloat(s.approved_hours);
+        if (Number.isFinite(stored) && stored > 0) return stored;
+        return shiftTimedHrs(s);
+      }
+      const totalRequestedHrs = personShifts.reduce((sum,s) => sum + shiftRequestedHrs(s), 0);
+      const totalApprovedHrs  = personShifts.filter(s => s.status === 'approved').reduce((sum,s) => sum + (parseFloat(s.approved_hours) || shiftTimedHrs(s)), 0);
       const discountRequested = personShifts.some(s => s.discount_requested);
       const discountPerformer = personShifts.find(s => s.discount_performer)?.discount_performer || '';
       const anyFlexible = personShifts.some(s => !s.shift_start_time && !s.shift_end_time);
+      const anyUnquantifiedFlexible = personShifts.some(s => !s.shift_start_time && !s.shift_end_time && shiftRequestedHrs(s) <= 0);
       const anyFixed    = personShifts.some(s => s.shift_start_time || s.shift_end_time);
       const fmtHourNumber = h => Number.isInteger(h) ? String(h) : h.toFixed(2).replace(/\.?0+$/,'');
       const fmtHrs = (h, forApproved = false) => {
         if (h === 0 && anyFlexible && !anyFixed && !forApproved) return 'Flexible';
         if (h === 0 && anyFlexible && !anyFixed && forApproved) return '—';
-        if (anyFlexible && anyFixed) return (h > 0 ? fmtHourNumber(h) + ' hr' + (h===1?'':'s') : '0 hrs') + ' + flexible';
+        if (anyUnquantifiedFlexible) return (h > 0 ? fmtHourNumber(h) + ' hr' + (h===1?'':'s') : '0 hrs') + ' + flexible';
         return fmtHourNumber(h) + ' hr' + (h===1?'':'s');
       };
 
@@ -72183,7 +72210,7 @@ See you soon!
         const startFmt = fmtTime(s.shift_start_time);
         const endFmt   = fmtTime(s.shift_end_time);
         const timeStr  = startFmt && endFmt ? startFmt + ' – ' + endFmt : startFmt || '';
-        const hrs      = shiftHrs(s);
+        const hrs      = shiftRequestedHrs(s);
         const hrsStr   = hrs > 0 ? fmtHourNumber(hrs) + ' hr' + (hrs===1?'':'s') : '';
         const opp      = opportunities.find(o => o.id === s.opportunity_id);
         const desc     = s.description || opp?.description || opp?.summary || '';
