@@ -13047,12 +13047,26 @@
     .add-wiz-zeus-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
     .add-wiz-zeus-time { font-size:0.73rem; color:rgba(26,21,48,0.45); margin-left:auto; flex-shrink:0; }
     .add-wiz-zeus-empty { font-size:0.8rem; color:rgba(26,21,48,0.38); }
-    /* step 3 — slots */
-    .add-wiz-slot-opts { display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; margin-bottom:1.1rem; }
-    .add-wiz-slot-opt { border:2px solid rgba(87,46,136,0.12); border-radius:12px; padding:1rem 1.1rem; cursor:pointer; transition:border-color 0.15s,background 0.15s; background:#fff; text-align:left; width:100%; font-family:var(--bts-font); }
-    .add-wiz-slot-opt.selected { border-color:#572e88; background:rgba(87,46,136,0.04); }
-    .add-wiz-slot-opt-name { font-size:0.88rem; font-weight:850; color:#000; margin-bottom:0.2rem; }
-    .add-wiz-slot-opt-desc { font-size:0.74rem; color:rgba(26,21,48,0.5); line-height:1.4; }
+    /* step 3 — booking mode cards */
+    .add-wiz-mode-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:0.75rem; margin-bottom:1.25rem; }
+    .add-wiz-mode-card { border:2px solid rgba(87,46,136,0.13); border-radius:14px; cursor:pointer; transition:border-color 0.15s,background 0.15s; background:#fff; text-align:left; font-family:var(--bts-font); padding:0; overflow:hidden; display:flex; flex-direction:column; width:100%; }
+    .add-wiz-mode-card.selected { border-color:#572e88; background:rgba(87,46,136,0.025); }
+    .add-wiz-mode-card-main { padding:1rem 1rem 0.85rem; flex:1; display:flex; flex-direction:column; }
+    .add-wiz-mode-card-top { display:flex; align-items:center; gap:0.5rem; margin-bottom:0.65rem; }
+    .add-wiz-mode-radio { width:16px; height:16px; border-radius:50%; border:2px solid rgba(87,46,136,0.3); flex-shrink:0; transition:border-color 0.15s; }
+    .add-wiz-mode-card.selected .add-wiz-mode-radio { border-color:#572e88; background:#572e88; box-shadow:inset 0 0 0 3px #fff; }
+    .add-wiz-mode-card-icon { width:22px; height:22px; object-fit:contain; }
+    .add-wiz-mode-card-title { font-size:0.88rem; font-weight:850; color:#1a1530; margin-bottom:0.35rem; }
+    .add-wiz-mode-card-desc { font-size:0.74rem; color:rgba(26,21,48,0.55); line-height:1.45; margin-bottom:0.65rem; flex:1; }
+    .add-wiz-mode-card-for { font-size:0.66rem; font-weight:800; color:rgba(87,46,136,0.55); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.28rem; }
+    .add-wiz-mode-card-list { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:0.2rem; }
+    .add-wiz-mode-card-list li { font-size:0.74rem; color:#1a1530; display:flex; align-items:center; gap:0.35rem; }
+    .add-wiz-mode-card-list li::before { content:''; width:6px; height:6px; border-radius:50%; background:#769e7b; flex-shrink:0; }
+    .add-wiz-mode-card-example { background:rgba(87,46,136,0.04); border-top:1px solid rgba(87,46,136,0.08); padding:0.65rem 1rem; }
+    .add-wiz-mode-ex-label { font-size:0.63rem; font-weight:800; color:rgba(87,46,136,0.5); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.3rem; }
+    .add-wiz-mode-ex-row { font-size:0.72rem; font-weight:600; color:#1a1530; line-height:1.75; }
+    .add-wiz-mode-ex-muted { font-size:0.7rem; color:rgba(26,21,48,0.4); line-height:1.6; }
+    @media(max-width:680px) { .add-wiz-mode-cards { grid-template-columns:1fr; } }
     .add-wiz-dur-row { display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.5rem; }
     .add-wiz-dur-btn { border:2px solid rgba(87,46,136,0.15); border-radius:8px; padding:0.5rem 0.95rem; font-size:0.84rem; font-weight:700; color:#572e88; background:#fff; cursor:pointer; font-family:var(--bts-font); transition:border-color 0.12s,background 0.12s,color 0.12s; }
     .add-wiz-dur-btn.selected { border-color:#572e88; background:#572e88; color:#fff; }
@@ -54010,7 +54024,7 @@ See you soon!
       multiDay: !!(session.end_date),
       startTime: session.start_time ? session.start_time.slice(0, 5) : '',
       endTime: session.end_time ? session.end_time.slice(0, 5) : '',
-      slotMode: session.booking_mode === 'open' ? 'open' : 'timed',
+      slotMode: session.booking_mode === 'open' ? 'open' : (session.booking_mode === 'grouped' ? 'grouped' : 'timed'),
       slotDuration: session.slot_length || 15,
       selfTape: !!(accessOpts && accessOpts.self_tape),
       location: session.location || '',
@@ -54297,18 +54311,79 @@ See you soon!
     const countMsg = count > 0
       ? '<div class="add-wiz-slot-calc">Based on your time window, ' + count + ' slot' + (count === 1 ? '' : 's') + ' of ' + _audWiz.slotDuration + ' minutes each.</div>'
       : (_audWiz.startTime && _audWiz.endTime ? '<div class="add-wiz-slot-calc" style="color:#d1523d;">Set your start and end times on the previous step to see slot count.</div>' : '');
+    const m = _audWiz.slotMode;
     return `
-      <div class="add-wiz-slot-opts">
-        <button class="add-wiz-slot-opt${_audWiz.slotMode === 'timed' ? ' selected' : ''}" onclick="_audWizSlotMode('timed')">
-          <div class="add-wiz-slot-opt-name">Individual Time Slots</div>
-          <div class="add-wiz-slot-opt-desc">Performers book a specific time. You control how long each slot is.</div>
+      <div class="add-wiz-mode-cards">
+        <button class="add-wiz-mode-card${m === 'timed' ? ' selected' : ''}" onclick="_audWizSlotMode('timed')">
+          <div class="add-wiz-mode-card-main">
+            <div class="add-wiz-mode-card-top">
+              <div class="add-wiz-mode-radio"></div>
+              <img src="/ASSETS/Images/Icons/navproductioncalendar.svg" class="add-wiz-mode-card-icon" alt="" aria-hidden="true">
+            </div>
+            <div class="add-wiz-mode-card-title">Book an exact time</div>
+            <div class="add-wiz-mode-card-desc">Each performer chooses one specific audition time. You control how long each slot is.</div>
+            <div class="add-wiz-mode-card-for">Great for:</div>
+            <ul class="add-wiz-mode-card-list">
+              <li>Auditions</li>
+              <li>Callbacks</li>
+              <li>Vocal auditions</li>
+            </ul>
+          </div>
+          <div class="add-wiz-mode-card-example">
+            <div class="add-wiz-mode-ex-label">Example</div>
+            <div class="add-wiz-mode-ex-row">9:00 AM</div>
+            <div class="add-wiz-mode-ex-row">9:10 AM</div>
+            <div class="add-wiz-mode-ex-row">9:20 AM</div>
+            <div class="add-wiz-mode-ex-row">9:30 AM</div>
+            <div class="add-wiz-mode-ex-muted">...</div>
+          </div>
         </button>
-        <button class="add-wiz-slot-opt${_audWiz.slotMode === 'open' ? ' selected' : ''}" onclick="_audWizSlotMode('open')">
-          <div class="add-wiz-slot-opt-name">Open Call</div>
-          <div class="add-wiz-slot-opt-desc">No individual booking. Performers just show up during the audition window.</div>
+        <button class="add-wiz-mode-card${m === 'grouped' ? ' selected' : ''}" onclick="_audWizSlotMode('grouped')">
+          <div class="add-wiz-mode-card-main">
+            <div class="add-wiz-mode-card-top">
+              <div class="add-wiz-mode-radio"></div>
+              <img src="/ASSETS/Images/Icons/Shifts.svg" class="add-wiz-mode-card-icon" alt="" aria-hidden="true">
+            </div>
+            <div class="add-wiz-mode-card-title">Book a time window</div>
+            <div class="add-wiz-mode-card-desc">Performers choose a window of time. You decide the order when they arrive.</div>
+            <div class="add-wiz-mode-card-for">Great for:</div>
+            <ul class="add-wiz-mode-card-list">
+              <li>Dance calls</li>
+              <li>Group auditions</li>
+              <li>Large auditions</li>
+            </ul>
+          </div>
+          <div class="add-wiz-mode-card-example">
+            <div class="add-wiz-mode-ex-label">Example</div>
+            <div class="add-wiz-mode-ex-row">12:00 PM - 12:30 PM</div>
+            <div class="add-wiz-mode-ex-muted">17 booked</div>
+            <div class="add-wiz-mode-ex-muted">Capacity 30</div>
+          </div>
+        </button>
+        <button class="add-wiz-mode-card${m === 'open' ? ' selected' : ''}" onclick="_audWizSlotMode('open')">
+          <div class="add-wiz-mode-card-main">
+            <div class="add-wiz-mode-card-top">
+              <div class="add-wiz-mode-radio"></div>
+              <img src="/ASSETS/Images/Icons/Volunteers.svg" class="add-wiz-mode-card-icon" alt="" aria-hidden="true">
+            </div>
+            <div class="add-wiz-mode-card-title">Just show up</div>
+            <div class="add-wiz-mode-card-desc">No booking. Performers arrive during the audition window. You decide the order when they arrive.</div>
+            <div class="add-wiz-mode-card-for">Great for:</div>
+            <ul class="add-wiz-mode-card-list">
+              <li>Open auditions</li>
+              <li>Walk-ins</li>
+              <li>Drop-in auditions</li>
+            </ul>
+          </div>
+          <div class="add-wiz-mode-card-example">
+            <div class="add-wiz-mode-ex-label">Example</div>
+            <div class="add-wiz-mode-ex-row">Audition open</div>
+            <div class="add-wiz-mode-ex-row">9:00 AM - 10:00 AM</div>
+            <div class="add-wiz-mode-ex-muted">Anyone can arrive.</div>
+          </div>
         </button>
       </div>
-      ${_audWiz.slotMode === 'timed' ? `
+      ${m === 'timed' || m === 'grouped' ? `
         <div class="add-wiz-label">Slot Length</div>
         <div class="add-wiz-dur-row">
           ${[5, 10, 15, 20, 30].map(function(d) {
@@ -54408,7 +54483,8 @@ See you soon!
           start_time: _audWiz.startTime || null,
           end_time: _audWiz.endTime || null,
           location: _audWiz.location || null,
-          slot_length: _audWiz.slotMode === 'timed' ? _audWiz.slotDuration : null,
+          slot_length: _audWiz.slotMode === 'timed' || _audWiz.slotMode === 'grouped' ? _audWiz.slotDuration : null,
+          booking_mode: _audWiz.slotMode === 'open' ? 'open' : (_audWiz.slotMode === 'grouped' ? 'grouped' : 'timed'),
         }).eq('id', sessionId);
         if (updErr) throw new Error(updErr.message);
 
@@ -54484,7 +54560,8 @@ See you soon!
         start_time: _audWiz.startTime || null,
         end_time: _audWiz.endTime || null,
         location: _audWiz.location || null,
-        slot_length: _audWiz.slotMode === 'timed' ? _audWiz.slotDuration : null,
+        slot_length: _audWiz.slotMode === 'timed' || _audWiz.slotMode === 'grouped' ? _audWiz.slotDuration : null,
+        booking_mode: _audWiz.slotMode === 'open' ? 'open' : (_audWiz.slotMode === 'grouped' ? 'grouped' : 'timed'),
       };
 
       const { data: sessionData, error: sessionErr } = await sb.from('audition_sessions')
