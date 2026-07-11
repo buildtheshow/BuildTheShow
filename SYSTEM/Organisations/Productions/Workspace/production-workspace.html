@@ -13083,7 +13083,7 @@
     .add-wiz-zeus-time { font-size:0.73rem; color:rgba(26,21,48,0.45); margin-left:auto; flex-shrink:0; }
     .add-wiz-zeus-empty { font-size:0.8rem; color:rgba(26,21,48,0.38); }
     /* step 3 — booking mode cards */
-    .add-wiz-mode-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:0.75rem; margin-bottom:1.25rem; }
+    .add-wiz-mode-cards { display:grid; grid-template-columns:repeat(2,1fr); gap:0.75rem; margin-bottom:1.25rem; }
     .add-wiz-mode-card { border:2px solid rgba(87,46,136,0.13); border-radius:14px; cursor:pointer; transition:border-color 0.15s,background 0.15s; background:#fff; text-align:left; font-family:var(--bts-font); padding:0; overflow:hidden; display:flex; flex-direction:column; width:100%; }
     .add-wiz-mode-card.selected { border-color:#572e88; background:rgba(87,46,136,0.025); }
     .add-wiz-mode-card-main { padding:1rem 1rem 0.85rem; flex:1; display:flex; flex-direction:column; }
@@ -53308,7 +53308,7 @@ See you soon!
     const slots = audSlots[session.id] || [];
     const blocks = audBlocks[session.id] || [];
     const showToApplicants = session.show_to_applicants || session.is_visible || false;
-    const bookingMode = session.booking_mode || 'timed';
+    const bookingMode = session.booking_mode || 'appointment';
     const curFmt = session.format === 'open_call' ? 'in_person' : (session.format || 'in_person');
     const formatSelection = getSessionAccessOptions({ ...session, format: curFmt });
     const blocksHTML = blocks.length ? blocks.map(b => buildBlockCardHTML(session, b, slots)).join('') : '';
@@ -53339,9 +53339,10 @@ See you soon!
     const isCollapsed = audCollapsed.has(session.id);
     const sid = session.id;
     const modeCards = [
-      { key:'timed',   icon:'navproductioncalendar.svg', title:'Book an exact time',  desc:'Each performer chooses one specific audition time.',                         forItems:['Auditions','Callbacks','Vocal auditions'] },
-      { key:'grouped', icon:'Shifts.svg',                title:'Book a time window',  desc:'Performers choose a window of time. You decide the order when they arrive.', forItems:['Dance calls','Group auditions','Large auditions'] },
-      { key:'open',    icon:'Volunteers.svg',            title:'Just show up',         desc:'No booking needed. Performers arrive during the audition window.',            forItems:['Open auditions','Walk-ins','Drop-in auditions'] },
+      { key:'appointment',    icon:'calendar-date.svg', title:'Appointment',    desc:'Each performer books one exact audition time.',                             forItems:['Auditions','Callbacks','Vocal auditions'] },
+      { key:'arrival_window', icon:'time.svg',           title:'Arrival Window', desc:'Performers book an arrival window. You decide the order after check-in.',      forItems:['Large auditions','Busy call days','Dance calls'] },
+      { key:'group_session',  icon:'Performer.svg',      title:'Group Session',  desc:'Everyone signs up for and attends the full session together.',                  forItems:['Dance calls','Movement workshops','Ensemble workshops'] },
+      { key:'open_call',      icon:'Auditions.svg',      title:'Open Call',      desc:'No booking. Performers show up anytime during the advertised hours.',           forItems:['Open auditions','Walk-ins','Drop-in auditions'] },
     ];
     return `
       <div class="aud-session-card${isCollapsed ? ' collapsed' : ''}" data-session-id="${sid}" style="${buildAudSessionThemeStyle(session.type || 'audition')}">
@@ -53415,7 +53416,7 @@ See you soon!
             </div>
           </div>
           <!-- 03 Build schedule -->
-          <div class="aud-card-section" id="blocks-section-${sid}" style="display:${bookingMode === 'open' ? 'none' : 'block'};">
+          <div class="aud-card-section" id="blocks-section-${sid}" style="display:${bookingMode === 'open_call' ? 'none' : 'block'};">
             <div class="aud-card-section-head">
               <div class="aud-card-section-num">03</div>
               <div>
@@ -53427,7 +53428,7 @@ See you soon!
             <button class="aud-add-block-btn" onclick="addBlock('${sid}')">+ Add another block</button>
           </div>
           <!-- 03 Open call note -->
-          <div class="aud-card-section" id="opencall-section-${sid}" style="display:${bookingMode === 'open' ? 'block' : 'none'};">
+          <div class="aud-card-section" id="opencall-section-${sid}" style="display:${bookingMode === 'open_call' ? 'block' : 'none'};">
             <div class="aud-card-section-head">
               <div class="aud-card-section-num">03</div>
               <div>
@@ -53624,9 +53625,9 @@ See you soon!
     updateAudSession(sessionId, 'booking_mode', mode);
     const blocksEl = document.getElementById('blocks-section-' + sessionId);
     const openEl   = document.getElementById('opencall-section-' + sessionId);
-    if (blocksEl) blocksEl.style.display = mode === 'open' ? 'none' : 'block';
-    if (openEl)   openEl.style.display   = mode === 'open' ? 'block' : 'none';
-    ['timed','grouped','open'].forEach(m => {
+    if (blocksEl) blocksEl.style.display = mode === 'open_call' ? 'none' : 'block';
+    if (openEl)   openEl.style.display   = mode === 'open_call' ? 'block' : 'none';
+    ['appointment','arrival_window','group_session','open_call'].forEach(m => {
       const card = document.getElementById('aud-mode-card-' + sessionId + '-' + m);
       if (card) card.classList.toggle('selected', m === mode);
     });
@@ -54092,7 +54093,7 @@ See you soon!
     return dt.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   }
   function _wizSlotCount() {
-    if (!_audWiz || _audWiz.slotMode !== 'timed') return 0;
+    if (!_audWiz || _audWiz.slotMode !== 'appointment') return 0;
     const dur = _audWiz.slotDuration || 15;
     const total = _wizTimeToMins(_audWiz.endTime) - _wizTimeToMins(_audWiz.startTime);
     return total > 0 ? Math.floor(total / dur) : 0;
@@ -54100,7 +54101,7 @@ See you soon!
 
   function openAddAuditionWizard() {
     const _now = new Date();
-    _audWiz = { step: 1, type: null, date: '', endDate: '', multiDay: false, startTime: '', endTime: '', slotMode: 'timed', slotDuration: 15, selfTape: false, location: '', prepNotes: '', calYear: _now.getFullYear(), calMonth: _now.getMonth(), calEvents: {}, zeusEvents: [], saving: false, editingSessionId: null };
+    _audWiz = { step: 1, type: null, date: '', endDate: '', multiDay: false, startTime: '', endTime: '', slotMode: 'appointment', slotDuration: 15, selfTape: false, location: '', prepNotes: '', calYear: _now.getFullYear(), calMonth: _now.getMonth(), calEvents: {}, zeusEvents: [], saving: false, editingSessionId: null };
     _ensureAudWizShell();
     _renderAudWiz();
     const titleEl = document.getElementById('add-wiz-title');
@@ -54124,7 +54125,7 @@ See you soon!
       multiDay: !!(session.end_date),
       startTime: session.start_time ? session.start_time.slice(0, 5) : '',
       endTime: session.end_time ? session.end_time.slice(0, 5) : '',
-      slotMode: session.booking_mode === 'open' ? 'open' : (session.booking_mode === 'grouped' ? 'grouped' : 'timed'),
+      slotMode: (() => { const bm = session.booking_mode; const map = {timed:'appointment',grouped:'arrival_window',open:'open_call'}; return map[bm] || bm || 'appointment'; })(),
       slotDuration: session.slot_length || 15,
       selfTape: !!(accessOpts && accessOpts.self_tape),
       location: session.location || '',
@@ -54414,14 +54415,14 @@ See you soon!
     const m = _audWiz.slotMode;
     return `
       <div class="add-wiz-mode-cards">
-        <button class="add-wiz-mode-card${m === 'timed' ? ' selected' : ''}" onclick="_audWizSlotMode('timed')">
+        <button class="add-wiz-mode-card${m === 'appointment' ? ' selected' : ''}" onclick="_audWizSlotMode('appointment')">
           <div class="add-wiz-mode-card-main">
             <div class="add-wiz-mode-card-top">
               <div class="add-wiz-mode-radio"></div>
-              <img src="/ASSETS/Images/Icons/navproductioncalendar.svg" class="add-wiz-mode-card-icon" alt="" aria-hidden="true">
+              <img src="/ASSETS/Images/Icons/calendar-date.svg" class="add-wiz-mode-card-icon" alt="" aria-hidden="true">
               <div class="add-wiz-mode-card-text">
-                <div class="add-wiz-mode-card-title">Book an exact time</div>
-                <div class="add-wiz-mode-card-desc">Each performer chooses one specific audition time. You control how long each slot is.</div>
+                <div class="add-wiz-mode-card-title">Appointment</div>
+                <div class="add-wiz-mode-card-desc">Each performer books one exact audition time.</div>
               </div>
             </div>
             <div class="add-wiz-mode-card-for">Great for:</div>
@@ -54440,38 +54441,62 @@ See you soon!
             <div class="add-wiz-mode-ex-muted">...</div>
           </div>
         </button>
-        <button class="add-wiz-mode-card${m === 'grouped' ? ' selected' : ''}" onclick="_audWizSlotMode('grouped')">
+        <button class="add-wiz-mode-card${m === 'arrival_window' ? ' selected' : ''}" onclick="_audWizSlotMode('arrival_window')">
           <div class="add-wiz-mode-card-main">
             <div class="add-wiz-mode-card-top">
               <div class="add-wiz-mode-radio"></div>
-              <img src="/ASSETS/Images/Icons/Shifts.svg" class="add-wiz-mode-card-icon" alt="" aria-hidden="true">
+              <img src="/ASSETS/Images/Icons/time.svg" class="add-wiz-mode-card-icon" alt="" aria-hidden="true">
               <div class="add-wiz-mode-card-text">
-                <div class="add-wiz-mode-card-title">Book a time window</div>
-                <div class="add-wiz-mode-card-desc">Performers choose a window of time. You decide the order when they arrive.</div>
+                <div class="add-wiz-mode-card-title">Arrival Window</div>
+                <div class="add-wiz-mode-card-desc">Performers book an arrival window. You decide the order after check-in.</div>
               </div>
             </div>
             <div class="add-wiz-mode-card-for">Great for:</div>
             <ul class="add-wiz-mode-card-list">
-              <li>Dance calls</li>
-              <li>Group auditions</li>
               <li>Large auditions</li>
+              <li>Busy call days</li>
+              <li>Dance calls</li>
             </ul>
           </div>
           <div class="add-wiz-mode-card-example">
             <div class="add-wiz-mode-ex-label">Example</div>
             <div class="add-wiz-mode-ex-row">12:00 PM - 12:30 PM</div>
-            <div class="add-wiz-mode-ex-muted">17 booked</div>
-            <div class="add-wiz-mode-ex-muted">Capacity 30</div>
+            <div class="add-wiz-mode-ex-row">12:30 PM - 1:00 PM</div>
+            <div class="add-wiz-mode-ex-muted">17 booked &middot; Max 30</div>
           </div>
         </button>
-        <button class="add-wiz-mode-card${m === 'open' ? ' selected' : ''}" onclick="_audWizSlotMode('open')">
+        <button class="add-wiz-mode-card${m === 'group_session' ? ' selected' : ''}" onclick="_audWizSlotMode('group_session')">
           <div class="add-wiz-mode-card-main">
             <div class="add-wiz-mode-card-top">
               <div class="add-wiz-mode-radio"></div>
-              <img src="/ASSETS/Images/Icons/Volunteers.svg" class="add-wiz-mode-card-icon" alt="" aria-hidden="true">
+              <img src="/ASSETS/Images/Icons/Performer.svg" class="add-wiz-mode-card-icon" alt="" aria-hidden="true">
               <div class="add-wiz-mode-card-text">
-                <div class="add-wiz-mode-card-title">Just show up</div>
-                <div class="add-wiz-mode-card-desc">No booking. Performers arrive during the audition window. You decide the order when they arrive.</div>
+                <div class="add-wiz-mode-card-title">Group Session</div>
+                <div class="add-wiz-mode-card-desc">Everyone signs up for and attends the full session together.</div>
+              </div>
+            </div>
+            <div class="add-wiz-mode-card-for">Great for:</div>
+            <ul class="add-wiz-mode-card-list">
+              <li>Dance calls</li>
+              <li>Movement workshops</li>
+              <li>Ensemble workshops</li>
+            </ul>
+          </div>
+          <div class="add-wiz-mode-card-example">
+            <div class="add-wiz-mode-ex-label">Example</div>
+            <div class="add-wiz-mode-ex-row">Dance Call</div>
+            <div class="add-wiz-mode-ex-muted">2:00 PM - 4:00 PM</div>
+            <div class="add-wiz-mode-ex-muted">12 registered &middot; Max 20</div>
+          </div>
+        </button>
+        <button class="add-wiz-mode-card${m === 'open_call' ? ' selected' : ''}" onclick="_audWizSlotMode('open_call')">
+          <div class="add-wiz-mode-card-main">
+            <div class="add-wiz-mode-card-top">
+              <div class="add-wiz-mode-radio"></div>
+              <img src="/ASSETS/Images/Icons/Auditions.svg" class="add-wiz-mode-card-icon" alt="" aria-hidden="true">
+              <div class="add-wiz-mode-card-text">
+                <div class="add-wiz-mode-card-title">Open Call</div>
+                <div class="add-wiz-mode-card-desc">No booking. Performers show up anytime during the advertised hours.</div>
               </div>
             </div>
             <div class="add-wiz-mode-card-for">Great for:</div>
@@ -54489,7 +54514,7 @@ See you soon!
           </div>
         </button>
       </div>
-      ${m === 'timed' || m === 'grouped' ? `
+      ${m === 'appointment' || m === 'arrival_window' ? `
         <div class="add-wiz-label">Slot Length</div>
         <div class="add-wiz-dur-row">
           ${[5, 10, 15, 20, 30].map(function(d) {
@@ -54529,7 +54554,7 @@ See you soon!
   function _wizStep6() {
     const typeObj = AUD_WIZ_TYPES.find(function(t) { return t.key === _audWiz.type; }) || AUD_WIZ_TYPES[0];
     const slotCount = _wizSlotCount();
-    const slotSummary = _audWiz.slotMode === 'open'
+    const slotSummary = _audWiz.slotMode === 'open_call'
       ? 'Open call (no individual booking)'
       : slotCount + ' slot' + (slotCount === 1 ? '' : 's') + ' of ' + _audWiz.slotDuration + ' min each';
     return `
@@ -54589,8 +54614,8 @@ See you soon!
           start_time: _audWiz.startTime || null,
           end_time: _audWiz.endTime || null,
           location: _audWiz.location || null,
-          slot_length: _audWiz.slotMode === 'timed' || _audWiz.slotMode === 'grouped' ? _audWiz.slotDuration : null,
-          booking_mode: _audWiz.slotMode === 'open' ? 'open' : (_audWiz.slotMode === 'grouped' ? 'grouped' : 'timed'),
+          slot_length: (_audWiz.slotMode === 'appointment' || _audWiz.slotMode === 'arrival_window') ? _audWiz.slotDuration : null,
+          booking_mode: _audWiz.slotMode,
         }).eq('id', sessionId);
         if (updErr) throw new Error(updErr.message);
 
@@ -54627,7 +54652,7 @@ See you soon!
           session.start_time = _audWiz.startTime || null;
           session.end_time = _audWiz.endTime || null;
           session.location = _audWiz.location || null;
-          session.slot_length = _audWiz.slotMode === 'timed' ? _audWiz.slotDuration : null;
+          session.slot_length = _audWiz.slotMode === 'appointment' ? _audWiz.slotDuration : null;
           session.prepare_text = _audWiz.prepNotes || '';
         }
 
@@ -54666,8 +54691,8 @@ See you soon!
         start_time: _audWiz.startTime || null,
         end_time: _audWiz.endTime || null,
         location: _audWiz.location || null,
-        slot_length: _audWiz.slotMode === 'timed' || _audWiz.slotMode === 'grouped' ? _audWiz.slotDuration : null,
-        booking_mode: _audWiz.slotMode === 'open' ? 'open' : (_audWiz.slotMode === 'grouped' ? 'grouped' : 'timed'),
+        slot_length: (_audWiz.slotMode === 'appointment' || _audWiz.slotMode === 'arrival_window') ? _audWiz.slotDuration : null,
+        booking_mode: _audWiz.slotMode,
       };
 
       const { data: sessionData, error: sessionErr } = await sb.from('audition_sessions')
@@ -54684,7 +54709,7 @@ See you soon!
       await sb.from('productions').update({ wizard_data: prod.wizard_data }).eq('id', prodId);
 
       // Generate time slots if timed mode
-      if (_audWiz.slotMode === 'timed' && _audWiz.date && _audWiz.startTime && _audWiz.endTime) {
+      if (_audWiz.slotMode === 'appointment' && _audWiz.date && _audWiz.startTime && _audWiz.endTime) {
         const dur = _audWiz.slotDuration || 15;
         let cur = _wizTimeToMins(_audWiz.startTime);
         const end = _wizTimeToMins(_audWiz.endTime);
