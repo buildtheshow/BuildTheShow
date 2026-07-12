@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: remove-hours-tile-20260712');
+  console.log('[BTS] production-workspace.js version: date-badge-tile-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -26145,6 +26145,35 @@ See you soon!
     });
   }
 
+  function _makeAudDateBadge(dateStr) {
+    if (!dateStr) return '';
+    const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const p = String(dateStr).slice(0,10).split('-');
+    return `<div class="cal-badge"><div class="cal-badge-month">${M[parseInt(p[1],10)-1]||''}</div><div class="cal-badge-day">${parseInt(p[2],10)}</div></div>`;
+  }
+
+  function _buildAudHeaderChipsHtml(session, formatSelection, bookingMode) {
+    const _esc = v => String(v||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const chips = [];
+    if (session.date) {
+      const dc = session.end_date
+        ? `${formatAuditionScheduleSessionDate(session.date)} – ${formatAuditionScheduleSessionDate(session.end_date)}`
+        : formatAuditionScheduleSessionDate(session.date);
+      chips.push({ icon:'navproductioncalendar.svg', label:dc });
+    }
+    if (session.start_time) {
+      const tc = `${formatSlotTime(session.start_time)}${session.end_time ? ` – ${formatSlotTime(session.end_time)}` : ''}`;
+      chips.push({ icon:'time.svg', label:tc });
+    }
+    const fmtOpts = { in_person:{ label:'In Person', icon:'navprofile.svg' }, video_call:{ label:'Video Call', icon:'VideoCall.svg' }, self_tape:{ label:'Self Tape', icon:'SelfTape.svg' } };
+    Object.entries(formatSelection||{}).forEach(([k,v]) => { if (v && fmtOpts[k]) chips.push({ icon:fmtOpts[k].icon, label:fmtOpts[k].label }); });
+    const modeIcon = { appointment:'time.svg', group_session:'organisation-members.svg', open_call:'Volunteers.svg' };
+    const modeLabel = { appointment:'Individual Appointment', group_session:'Group Session', open_call:'Open Call' };
+    chips.push({ icon:modeIcon[bookingMode]||'time.svg', label:modeLabel[bookingMode]||'Individual Appointment' });
+    if (bookingMode === 'appointment' && session.slot_length) chips.push({ icon:'time.svg', label:`${session.slot_length} min slots` });
+    return chips.map(c => `<span class="aud-header-chip"><img src="/ASSETS/Images/Icons/${_esc(c.icon)}" alt="" class="aud-header-chip-icon">${_esc(c.label)}</span>`).join('');
+  }
+
   function buildAudSessionCardHTML(session) {
     const slots = audSlots[session.id] || [];
     const blocks = audBlocks[session.id] || [];
@@ -26166,23 +26195,8 @@ See you soon!
     const collapsedMeta = `${collapsedDate}${collapsedTime ? ` · ${collapsedTime}` : ''}`;
     const _modeLabels = { appointment:'Individual Appointment', group_session:'Group Session', open_call:'Open Call' };
     const s03Summary = totalSlotCount ? `${totalSlotCount} slot${totalSlotCount !== 1 ? 's' : ''} created` : 'No slots yet';
-    // Header summary chips — only include fields that have been set
-    const _headerChips = [];
-    if (session.date) {
-      const _dc = session.end_date
-        ? `${formatAuditionScheduleSessionDate(session.date)} – ${formatAuditionScheduleSessionDate(session.end_date)}`
-        : formatAuditionScheduleSessionDate(session.date);
-      _headerChips.push({ icon:'navproductioncalendar.svg', label:_dc });
-    }
-    if (session.start_time) {
-      const _tc = `${formatSlotTime(session.start_time)}${session.end_time ? ` – ${formatSlotTime(session.end_time)}` : ''}`;
-      _headerChips.push({ icon:'time.svg', label:_tc });
-    }
-    const _fmtOpts = { in_person:{ label:'In Person', icon:'navprofile.svg' }, video_call:{ label:'Video Call', icon:'VideoCall.svg' }, self_tape:{ label:'Self Tape', icon:'SelfTape.svg' } };
-    Object.entries(formatSelection).forEach(([k,v]) => { if (v && _fmtOpts[k]) _headerChips.push({ icon:_fmtOpts[k].icon, label:_fmtOpts[k].label }); });
-    const _modeChipIcon = { appointment:'time.svg', group_session:'organisation-members.svg', open_call:'Volunteers.svg' };
-    _headerChips.push({ icon:_modeChipIcon[bookingMode]||'time.svg', label:_modeLabels[bookingMode]||'Individual Appointment' });
-    if (bookingMode === 'appointment' && session.slot_length) _headerChips.push({ icon:'time.svg', label:`${session.slot_length} min slots` });
+    const _headerChipsHtml = _buildAudHeaderChipsHtml(session, formatSelection, bookingMode);
+    const _dateBadgeHtml = _makeAudDateBadge(session.date);
     const typeCards = [
       { value:'audition',   label:'General Audition', desc:'The main audition for your production.<br>Use this for the first round of auditions.',           color:'#476aaa', icon:'template.svg' },
       { value:'dance_call', label:'Dance Call',        desc:'Focused on dance and movement.<br>Use this to assess choreography or movement skills.',          color:'#efab45', icon:'Choreography.svg' },
@@ -26220,7 +26234,7 @@ See you soon!
           <div class="aud-card-type-pill"><img src="/ASSETS/Images/Icons/${typeStyle.icon}" alt="" aria-hidden="true" /></div>
           <div class="aud-card-identity">
             <div class="aud-card-name">${esc(session.name || collapsedTitle)}</div>
-            <div class="aud-card-chips">${_headerChips.map(c => `<span class="aud-header-chip"><img src="/ASSETS/Images/Icons/${esc(c.icon)}" alt="" class="aud-header-chip-icon">${esc(c.label)}</span>`).join('')}</div>
+            <div class="aud-card-chips" id="aud-header-chips-${sid}">${_headerChipsHtml}</div>
           </div>
           <div class="aud-card-vis-badge ${showToApplicants ? 'is-visible' : 'is-hidden'}" id="aud-vis-badge-${sid}">${showToApplicants ? 'Visible' : 'Hidden'}</div>
           <button class="aud-action-btn danger" onclick="event.stopPropagation();deleteAudSession('${sid}')" title="Delete">×</button>
@@ -26309,7 +26323,10 @@ See you soon!
                   <div class="aud-block-step-icon-wrap"><img src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt=""></div>
                   <div><div class="aud-block-step-title">Which day?</div><div class="aud-block-step-sub">The date of this audition.</div></div>
                 </div>
-                <input type="date" class="form-input aud-block-step-input" value="${session.date||''}" style="margin-top:auto;" onchange="updateAudSession('${sid}','date',this.value);_updateSDateSummary('${sid}')">
+                <div style="display:flex;align-items:center;gap:0.55rem;margin-top:auto;">
+                  <span id="aud-date-badge-${sid}">${_dateBadgeHtml}</span>
+                  <input type="date" class="form-input aud-block-step-input" value="${session.date||''}" style="flex:1;min-width:0;" onchange="updateAudSession('${sid}','date',this.value);_updateSDateSummary('${sid}')">
+                </div>
               </div>
               <div class="aud-block-step" style="background:#efab45;border-color:#efab45;">
                 <div class="aud-block-step-head">
@@ -26540,16 +26557,17 @@ See you soon!
   function _updateSDateSummary(sessionId) {
     const session = audSessions.find(s => s.id === sessionId);
     if (!session) return;
-    const dateStr = session.date
-      ? (session.end_date
-          ? `${formatAuditionScheduleSessionDate(session.date)} - ${formatAuditionScheduleSessionDate(session.end_date)}`
-          : formatAuditionScheduleSessionDate(session.date))
-      : 'No date booked';
-    const timeStr = session.start_time
-      ? `${formatSlotTime(session.start_time)}${session.end_time ? ` - ${formatSlotTime(session.end_time)}` : ''}`
-      : '';
-    const whenEl = document.querySelector(`.aud-session-card[data-session-id="${sessionId}"] .aud-card-when`);
-    if (whenEl) whenEl.textContent = dateStr + (timeStr ? ` · ${timeStr}` : '');
+    // Update header chips
+    const chipsEl = document.getElementById(`aud-header-chips-${sessionId}`);
+    if (chipsEl) {
+      const bm = session.booking_mode || 'appointment';
+      const curFmt = session.format === 'open_call' ? 'in_person' : (session.format || 'in_person');
+      const fmtSel = getSessionAccessOptions({ ...session, format: curFmt });
+      chipsEl.innerHTML = _buildAudHeaderChipsHtml(session, fmtSel, bm);
+    }
+    // Update date badge inside the tile
+    const badgeEl = document.getElementById(`aud-date-badge-${sessionId}`);
+    if (badgeEl) badgeEl.innerHTML = _makeAudDateBadge(session.date);
   }
 
   function switchAudStepTab(sessionId, key) {
