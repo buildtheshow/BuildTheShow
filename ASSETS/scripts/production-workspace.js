@@ -1,3 +1,4 @@
+  console.log('[BTS] production-workspace.js version: card-wording-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
