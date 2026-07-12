@@ -26244,6 +26244,7 @@ See you soon!
 
           <!-- Panel 2: Audition format -->
           <div id="aud-panel-s01-${sid}" class="aud-tab-panel" style="${activeTab === 's01' ? '' : 'display:none;'}">
+            <p style="font-size:0.78rem;color:rgba(26,21,48,0.5);margin:0 0 0.75rem;font-weight:500;">Select all that apply.</p>
             <div class="add-wiz-mode-cards" style="margin-bottom:1rem;">
               ${[
                 { key:'in_person',  color:'#476aaa', icon:'navprofile.svg',  title:'In Person',  desc:'Performers come to a physical location to audition.' },
