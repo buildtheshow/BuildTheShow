@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: auto-gen-step6-20260712');
+  console.log('[BTS] production-workspace.js version: type-cards-full-width-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -26241,7 +26241,7 @@ See you soon!
 
           <!-- Panel 1: Audition type -->
           <div id="aud-panel-stype-${sid}" class="aud-tab-panel" style="${activeTab === 'stype' ? '' : 'display:none;'}">
-            <div class="add-wiz-mode-cards" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:0.5rem;">
+            <div class="add-wiz-mode-cards" style="grid-template-columns:repeat(4,1fr);margin-bottom:0.5rem;">
               ${typeCards.map(t => `
                 <button class="add-wiz-mode-card aud-mode-v2-card${(session.type||'audition') === t.value ? ' selected' : ''}" style="--card-color:${t.color};background:${t.color};border:none" onclick="updateAudSessionType('${sid}','${t.value}')">
                   <div class="aud-mode-v2-top">
