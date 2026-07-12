@@ -26074,13 +26074,26 @@ See you soon!
     const previousLabel = sessionTypeLabel(previousType);
     const currentName = String(session.name || '').trim();
     session.type = value;
-    if (!currentName || currentName === previousLabel || currentName === 'Audition') {
+    if (value === 'other') {
+      session.name = 'Other';
+    } else if (!currentName || currentName === previousLabel || currentName === 'Audition' || currentName === 'Other') {
       session.name = sessionTypeLabel(value);
     }
     showSaveStatus('saving');
     clearTimeout(audSaveTimers[id]);
     audSaveTimers[id] = setTimeout(() => persistAudSession(id), 700);
     renderAudSessions();
+  }
+
+  function updateAudCustomName(id, value) {
+    const session = audSessions.find(s => s.id === id);
+    if (!session) return;
+    session.name = value.trim() || 'Other';
+    const nameEl = document.querySelector(`.aud-session-card[data-session-id="${id}"] .aud-card-name`);
+    if (nameEl) nameEl.textContent = session.name;
+    showSaveStatus('saving');
+    clearTimeout(audSaveTimers[id]);
+    audSaveTimers[id] = setTimeout(() => persistAudSession(id), 700);
   }
 
   function sessionFormatSelection(formatValue) {
@@ -26240,6 +26253,11 @@ See you soon!
                   </div>
                 </button>`).join('')}
             </div>
+            ${(session.type === 'other') ? `
+              <div style="margin-top:0.75rem;max-width:420px;">
+                <div class="aud-block-label" style="margin-bottom:0.4rem;">What would you like to call this audition?</div>
+                <input type="text" class="form-input" placeholder="e.g. Table Read, Workshop, Sing-through..." value="${esc(session.name && session.name !== 'Other' ? session.name : '')}" oninput="updateAudCustomName('${sid}', this.value)">
+              </div>` : ''}
           </div>
 
           <!-- Panel 2: Audition format -->
