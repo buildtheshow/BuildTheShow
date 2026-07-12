@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: chip-no-cal-box-20260712');
+  console.log('[BTS] production-workspace.js version: no-x-tighter-gap-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -25969,9 +25969,6 @@ See you soon!
         ${isCallback ? `<div class="aud-block-top"><div class="aud-block-heading">${esc(callbackBlockTitle(block))}</div><button type="button" class="aud-block-delete-btn" onclick="deleteBlock('${sessionId}','${block.id}')" title="Remove this block">✕</button></div>` : ''}
         ${buildCallbackBlockConfigHTML(session, block)}
         ${isCallback ? '' : `
-        <div style="display:flex;justify-content:flex-end;padding:0 0 0.5rem;">
-          <button type="button" class="aud-block-delete-btn" onclick="deleteBlock('${sessionId}','${block.id}')" title="Remove this block">✕</button>
-        </div>
         <!-- Steps grid -->
         <div class="aud-block-steps-grid">
           <!-- Step 2: Appointment length -->
