@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: step6-unified-20260712');
+  console.log('[BTS] production-workspace.js version: step6-dow-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -25964,7 +25964,7 @@ See you soon!
           <div class="aud-sched-header">
             <div class="aud-sched-header-stats">
               ${_makeAudDateBadge(block.date, 'sm')}
-              <span class="aud-sched-stat" style="font-weight:800;color:#1a1530;">${esc(dateLabel)}</span>
+              <span class="aud-sched-stat" style="font-weight:800;color:#1a1530;">${_getAudDow(block.date)} ${esc(dateLabel)}</span>
               <span class="aud-sched-stat-sep">·</span>
               <span class="aud-sched-stat aud-sched-stat--open"><strong>${extraOpenCount}</strong> open</span>
               <span class="aud-sched-stat-sep">·</span>
@@ -26036,7 +26036,7 @@ See you soon!
           <div class="aud-sched-header">
             <div class="aud-sched-header-stats">
               ${_makeAudDateBadge(block.date || session?.date || '', 'sm')}
-              <span class="aud-sched-stat" style="font-weight:800;color:#1a1530;">${formatAuditionScheduleSessionDate(block.date || session?.date || '')}</span>
+              <span class="aud-sched-stat" style="font-weight:800;color:#1a1530;">${_getAudDow(block.date || session?.date || '')} ${formatAuditionScheduleSessionDate(block.date || session?.date || '')}</span>
               <span class="aud-sched-stat-sep">·</span>
               <span class="aud-sched-stat aud-sched-stat--open"><strong>${openSlotCount}</strong> open</span>
               <span class="aud-sched-stat-sep">·</span>
