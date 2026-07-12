@@ -26195,12 +26195,12 @@ See you soon!
       { key:'open_call',     icon:'Volunteers.svg',          color:'#dd8233', title:'Open Call',              desc:"Performers arrive during the advertised audition hours and wait until they're called." },
     ];
     const stepTiles = [
-      { key:'sdate',  num:1, label:'Audition Dates',      color:'#d1523d' },
-      { key:'stype',  num:2, label:'Audition Type',       color:'#769e7b' },
-      { key:'s01',    num:3, label:'Audition Format',     color:'#dd8233' },
-      { key:'s02',    num:4, label:'Scheduling Method',   color:'#476aaa' },
-      { key:'s03',    num:5, label:'Build Your Schedule', color:'#ca7ea7' },
-      { key:'sslots', num:6, label:'Generate Timeslots',  color:'#572e88' },
+      { key:'sdate',  num:1, label:'Audition Dates',      color:'#78bbd4' },
+      { key:'stype',  num:2, label:'Audition Type',       color:'#efab45' },
+      { key:'s01',    num:3, label:'Audition Format',     color:'#769e7b' },
+      { key:'s02',    num:4, label:'Scheduling Method',   color:'#d1523d' },
+      { key:'s03',    num:5, label:'Build Your Schedule', color:'#476aaa' },
+      { key:'sslots', num:6, label:'Generate Timeslots',  color:'#dd8233' },
     ];
     const onScheduleTab = activeTab === 's03' || activeTab === 'sslots';
     return `
