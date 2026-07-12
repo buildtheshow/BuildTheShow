@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: gen-step6-only-20260712');
+  console.log('[BTS] production-workspace.js version: auto-gen-step6-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -26008,13 +26008,6 @@ See you soon!
             </select>
           </div>
         </div>
-        <button class="aud-block-gen-main aud-block-gen-step6" onclick="generateBlockSlots('${sessionId}','${block.id}')">
-          <div class="aud-block-gen-btn-main">
-            <img src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt="">
-            ${slotCount ? 'Regenerate my time slots' : 'Create my time slots'}
-          </div>
-          <div class="aud-block-gen-sub">We'll build the bookable time slots using the settings above.</div>
-        </button>
         `}
         <!-- Schedule preview -->
         <div class="aud-block-calendar-wrap" id="block-slots-${block.id}">
@@ -26590,6 +26583,10 @@ See you soon!
     card.querySelectorAll('.aud-step-tile').forEach(t => {
       t.classList.toggle('active', t.dataset.stepKey === key);
     });
+    // Auto-generate slots for all blocks when entering Step 6
+    if (key === 'sslots' && !isOpenCall) {
+      (audBlocks[sessionId] || []).forEach(b => generateBlockSlots(sessionId, b.id));
+    }
   }
 
   function updateAudBookingMode(sessionId, mode) {
