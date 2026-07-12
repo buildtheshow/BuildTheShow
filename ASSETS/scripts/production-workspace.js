@@ -26074,7 +26074,7 @@ See you soon!
     const previousLabel = sessionTypeLabel(previousType);
     const currentName = String(session.name || '').trim();
     session.type = value;
-    if (!currentName || currentName === previousLabel) {
+    if (!currentName || currentName === previousLabel || currentName === 'Audition') {
       session.name = sessionTypeLabel(value);
     }
     showSaveStatus('saving');
