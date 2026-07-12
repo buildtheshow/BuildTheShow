@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: header-chips-20260712');
+  console.log('[BTS] production-workspace.js version: remove-hours-tile-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -25974,25 +25974,6 @@ See you soon!
         </div>
         <!-- Steps grid -->
         <div class="aud-block-steps-grid">
-          <!-- Step 1: Audition window -->
-          <div class="aud-block-step" style="background:#74a2b4;border-color:#74a2b4;">
-            <div class="aud-block-step-head">
-              <div class="aud-block-step-icon-wrap"><img src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt=""></div>
-              <div><div class="aud-block-step-title">Set your audition hours</div><div class="aud-block-step-sub">The window when auditions can happen.</div></div>
-            </div>
-            <div style="margin-top:auto;display:flex;flex-direction:column;gap:0.3rem;">
-              <div>
-                <div class="aud-block-time-sublabel" style="margin-bottom:0.2rem;">Start</div>
-                <input type="time" class="form-input aud-block-time-input aud-block-step-input" value="${esc((block.start_time || session?.start_time || '').slice(0,5))}"
-                       onchange="updateBlock('${sessionId}','${block.id}','start_time', this.value)" />
-              </div>
-              <div>
-                <div class="aud-block-time-sublabel" style="margin-bottom:0.2rem;">End</div>
-                <input type="time" class="form-input aud-block-time-input aud-block-step-input" value="${esc((block.end_time || session?.end_time || '').slice(0,5))}"
-                       onchange="updateBlock('${sessionId}','${block.id}','end_time', this.value)" />
-              </div>
-            </div>
-          </div>
           <!-- Step 2: Appointment length -->
           <div class="aud-block-step" style="background:#769e7b;border-color:#769e7b;">
             <div class="aud-block-step-head">
