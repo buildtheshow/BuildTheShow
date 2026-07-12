@@ -12408,6 +12408,15 @@
     .aud-add-block-card-icon { width:32px; height:32px; border-radius:50%; background:rgba(87,46,136,0.1); display:flex; align-items:center; justify-content:center; font-size:1.2rem; color:#572e88; font-weight:800; margin-bottom:0.5rem; }
     .aud-add-block-card-title { font-size:0.82rem; font-weight:850; color:#572e88; margin-bottom:0.2rem; }
     .aud-add-block-card-sub { font-size:0.68rem; color:rgba(26,21,48,0.45); line-height:1.4; }
+    .aud-days-strip { display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; padding:0.6rem 0.25rem; margin-bottom:0.75rem; }
+    .aud-days-strip-label { font-size:0.7rem; font-weight:800; color:rgba(26,21,48,0.45); text-transform:uppercase; letter-spacing:0.05em; margin-right:0.25rem; }
+    .aud-days-strip-pill { font-size:0.75rem; font-weight:700; color:#572e88; background:rgba(87,46,136,0.08); border-radius:20px; padding:0.25rem 0.75rem; }
+    .aud-extra-day-card { background:#fff; border:1px solid rgba(87,46,136,0.1); border-radius:14px; padding:0.9rem; }
+    .aud-extra-day-header { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:0.75rem; }
+    .aud-extra-day-header-left { display:flex; align-items:flex-start; gap:0.6rem; }
+    .aud-extra-day-header-icon { width:22px; height:22px; opacity:0.45; flex-shrink:0; margin-top:2px; }
+    .aud-extra-day-header-title { font-size:0.82rem; font-weight:850; color:#1a1530; margin-bottom:0.1rem; }
+    .aud-extra-day-header-sub { font-size:0.68rem; color:rgba(26,21,48,0.45); line-height:1.4; }
     @media(max-width:780px) { .aud-block-steps-grid { grid-template-columns:1fr 1fr; } }
     @media(max-width:520px) { .aud-block-steps-grid { grid-template-columns:1fr; } }
     .aud-block-time-edit {
@@ -53206,7 +53215,7 @@ See you soon!
       </div>`;
   }
 
-  function buildBlockCardHTML(session, block, allSessionSlots) {
+  function buildBlockCardHTML(session, block, allSessionSlots, blockIndex = 0) {
     const sessionId = session?.id;
     const blockSlots = allSessionSlots.filter(s => s.block_id === block.id);
     const slotCount = blockSlots.length;
@@ -53219,12 +53228,61 @@ See you soon!
     ].filter(Boolean).map(formatSlotTime).join(' - ');
 
     const isCallback = session?.type === 'callback';
+    const isExtraDay = !isCallback && blockIndex > 0;
     const emptySlotHTML = `
       <div class="aud-block-empty-state">
         <img src="/ASSETS/Images/Icons/navproductioncalendar.svg" class="aud-block-empty-state-icon" alt="">
         <div class="aud-block-empty-state-title">No time slots yet</div>
         <div class="aud-block-empty-state-sub">Click "Create my time slots" above to see your schedule.</div>
       </div>`;
+
+    // Extra day block — simplified: date picker + hours + generate only
+    if (isExtraDay) {
+      const extraSlots = allSessionSlots.filter(s => s.block_id === block.id);
+      const extraSlotCount = extraSlots.length;
+      return `
+      <div class="aud-block-card aud-extra-day-card" data-block-id="${block.id}">
+        <div class="aud-extra-day-header">
+          <div class="aud-extra-day-header-left">
+            <img src="/ASSETS/Images/Icons/navproductioncalendar.svg" class="aud-extra-day-header-icon" alt="">
+            <div>
+              <div class="aud-extra-day-header-title">Additional day</div>
+              <div class="aud-extra-day-header-sub">Same audition format — just different hours for this day.</div>
+            </div>
+          </div>
+          <button type="button" class="aud-block-delete-btn" onclick="deleteBlock('${sessionId}','${block.id}')" title="Remove this day">✕</button>
+        </div>
+        <div class="aud-block-steps-grid" style="grid-template-columns:1fr 1fr 0.6fr;margin-bottom:0.75rem;">
+          <div class="aud-block-step" style="background:#74a2b4;border-color:#74a2b4;">
+            <div class="aud-block-step-head">
+              <div class="aud-block-step-icon-wrap"><img src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt=""></div>
+              <div><div class="aud-block-step-title">Which day?</div><div class="aud-block-step-sub">Pick the date for this extra day.</div></div>
+            </div>
+            <input type="date" class="form-input aud-block-step-input" style="margin-top:auto;" value="${esc(block.date||'')}" onchange="updateBlock('${sessionId}','${block.id}','date',this.value)">
+          </div>
+          <div class="aud-block-step" style="background:#74a2b4;border-color:#74a2b4;">
+            <div class="aud-block-step-head">
+              <div class="aud-block-step-icon-wrap"><img src="/ASSETS/Images/Icons/time.svg" alt=""></div>
+              <div><div class="aud-block-step-title">Audition hours</div><div class="aud-block-step-sub">The window for this day.</div></div>
+            </div>
+            <div style="margin-top:auto;display:flex;flex-direction:column;gap:0.3rem;">
+              <div><div class="aud-block-time-sublabel" style="margin-bottom:0.2rem;">Start</div>
+              <input type="time" class="form-input aud-block-time-input aud-block-step-input" value="${esc((block.start_time||'').slice(0,5))}" onchange="updateBlock('${sessionId}','${block.id}','start_time',this.value)"></div>
+              <div><div class="aud-block-time-sublabel" style="margin-bottom:0.2rem;">End</div>
+              <input type="time" class="form-input aud-block-time-input aud-block-step-input" value="${esc((block.end_time||'').slice(0,5))}" onchange="updateBlock('${sessionId}','${block.id}','end_time',this.value)"></div>
+            </div>
+          </div>
+          <button class="aud-block-gen-main" onclick="generateBlockSlots('${sessionId}','${block.id}')">
+            <div class="aud-block-gen-btn-main"><img src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt="">${extraSlotCount ? 'Regenerate' : 'Create slots'}</div>
+            <div class="aud-block-gen-sub">Build time slots for this day.</div>
+          </button>
+        </div>
+        <div class="aud-block-calendar-wrap" id="block-slots-${block.id}">
+          ${extraSlotCount ? '' : emptySlotHTML}
+        </div>
+      </div>`;
+    }
+
     return `
       <div class="aud-block-card" data-block-id="${block.id}" style="${themeStyle}">
         ${isCallback ? `<div class="aud-block-top"><div class="aud-block-heading">${esc(callbackBlockTitle(block))}</div><button type="button" class="aud-block-delete-btn" onclick="deleteBlock('${sessionId}','${block.id}')" title="Remove this block">✕</button></div>` : ''}
@@ -53562,6 +53620,7 @@ See you soon!
               <div class="aud-section-chevron" id="s03-chevron-${sid}" style="${(_audSectionState[sid]&&_audSectionState[sid]['s03']) ? '' : 'transform:rotate(-90deg);'}">&#9660;</div>
             </div>
             <div id="s03-body-${sid}" style="${(_audSectionState[sid]&&_audSectionState[sid]['s03']) ? '' : 'display:none;'}">
+            <div id="aud-days-header-${sid}" style="display:none;"></div>
             <div class="aud-blocks-list" id="blocks-list-${sid}">${blocksHTML}</div>
             <div class="aud-add-block-card" onclick="addBlock('${sid}')">
               <div class="aud-add-block-card-icon">+</div>
@@ -53644,7 +53703,19 @@ See you soon!
     const slots = audSlots[sessionId] || [];
     const blocks = audBlocks[sessionId] || [];
     const session = audSessions.find(s => s.id === sessionId) || { id: sessionId, type: 'audition' };
-    container.innerHTML = blocks.map(b => buildBlockCardHTML(session, b, slots)).join('');
+    container.innerHTML = blocks.map((b, i) => buildBlockCardHTML(session, b, slots, i)).join('');
+    // Update days header
+    const daysEl = document.getElementById('aud-days-header-' + sessionId);
+    if (daysEl) {
+      const datedBlocks = blocks.filter(b => b.date);
+      if (datedBlocks.length > 1) {
+        daysEl.style.display = '';
+        daysEl.innerHTML = '<div class="aud-days-strip"><span class="aud-days-strip-label">Days selected:</span>' +
+          datedBlocks.map(b => '<span class="aud-days-strip-pill">' + formatAuditionScheduleSessionDate(b.date) + '</span>').join('') + '</div>';
+      } else {
+        daysEl.style.display = 'none';
+      }
+    }
     // Update total slot count note
     const section = document.getElementById('blocks-section-' + sessionId);
     if (section) {
@@ -53657,20 +53728,26 @@ See you soon!
     if (!(sessionId in audBlocks)) audBlocks[sessionId] = [];
     const session = audSessions.find(s => s.id === sessionId);
     const isCallback = session?.type === 'callback';
+    const existingBlocks = audBlocks[sessionId];
+    const firstBlock = existingBlocks[0];
+    // Find the latest date across all blocks and advance by 1 day
+    const latestDate = existingBlocks.reduce((latest, b) => b.date > latest ? b.date : latest, session?.date || '');
+    function _nextDay(d) { if (!d) return ''; const dt = new Date(d + 'T12:00:00'); dt.setDate(dt.getDate() + 1); return dt.toISOString().slice(0,10); }
+    const nextDate = existingBlocks.length ? _nextDay(latestDate) : (session?.date || '');
     audBlocks[sessionId].push({
       id: 'blk_' + Date.now(),
-      title: isCallback ? (audBlocks[sessionId].length ? 'Callback Block' : 'Individual Reads') : '',
+      title: isCallback ? (existingBlocks.length ? 'Callback Block' : 'Individual Reads') : '',
       callback_type: isCallback ? 'individual' : '',
       character_ids: [],
       material_types: isCallback ? ['sides'] : [],
       reschedule_allowed: true,
       instructions: '',
-      date: session?.date || '',
+      date: nextDate,
       start_time: session?.start_time || '',
       end_time: session?.end_time || '',
-      slot_length: 10,
-      buffer: 0,
-      capacity: 1,
+      slot_length: firstBlock?.slot_length || 10,
+      buffer: firstBlock?.buffer ?? 0,
+      capacity: firstBlock?.capacity || 1,
       visibility: 'public',
       breaks: [],
     });
