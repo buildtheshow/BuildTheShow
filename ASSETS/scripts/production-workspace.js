@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: step6-label-20260712');
+  console.log('[BTS] production-workspace.js version: slot-count-bookable-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -26019,7 +26019,7 @@ See you soon!
                 <div class="aud-block-preview-head-sub">Review your time slots. Click any slot to block it off.</div>
               </div>
             </div>
-            <div class="aud-block-slot-pill">${slotCount ? `${slotCount} slot${slotCount!==1?'s':''} in this block` : 'No slots created yet'}</div>
+            <div class="aud-block-slot-pill">${slotCount ? `${slotCount} slot${slotCount!==1?'s':''} total &nbsp;·&nbsp; ${openSlotCount} bookable` : 'No slots created yet'}</div>
           </div>
           ${slotCount ? `
           <div class="aud-block-legend">
