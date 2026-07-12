@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: step6-dow-20260712');
+  console.log('[BTS] production-workspace.js version: save-error-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -27011,7 +27011,7 @@ See you soon!
     if (!session) return;
 
     const _sessVisible = !!(session.show_to_applicants || session.is_visible);
-    await sb.from('audition_sessions').update({
+    const { error: sessionSaveError } = await sb.from('audition_sessions').update({
       name:               session.name?.trim() || 'Untitled Session',
       type:               session.type,
       format:             session.format,
@@ -27033,6 +27033,11 @@ See you soon!
       ...(audBlocks[id]               !== undefined && { slot_blocks:          audBlocks[id] }),
       prepare_text: String(session.prepare_text || '').trim() || null,
     }).eq('id', id);
+    if (sessionSaveError) {
+      console.error('[BTS] persistAudSession failed — check your Supabase columns:', sessionSaveError);
+      showToast('Autosave failed — check the console for details.', true);
+      return;
+    }
 
     if (!prod) prod = {};
     if (!prod.wizard_data) prod.wizard_data = {};
