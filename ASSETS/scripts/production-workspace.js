@@ -26197,7 +26197,7 @@ See you soon!
     const stepTiles = [
       { key:'stype',  num:1, label:'Audition Type',      color:'#d1523d' },
       { key:'s01',    num:2, label:'Audition Format',     color:'#769e7b' },
-      { key:'s02',    num:3, label:'Attendance',          color:'#dd8233' },
+      { key:'s02',    num:3, label:'Scheduling Method',     color:'#dd8233' },
       { key:'sdate',  num:4, label:'Audition Dates',      color:'#476aaa' },
       { key:'s03',    num:5, label:'Build Your Schedule', color:'#ca7ea7' },
       { key:'sslots', num:6, label:'Generate Timeslots',  color:'#572e88' },
