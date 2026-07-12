@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: extraday-slots-20260712');
+  console.log('[BTS] production-workspace.js version: dow-label-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -26148,6 +26148,13 @@ See you soon!
     });
   }
 
+  function _getAudDow(dateStr) {
+    if (!dateStr) return '';
+    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const d = new Date(String(dateStr).slice(0,10) + 'T12:00:00');
+    return days[d.getDay()] || '';
+  }
+
   function _makeAudDateBadge(dateStr) {
     if (!dateStr) return '';
     const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -26167,10 +26174,13 @@ See you soon!
           </div>
           <button onclick="removeAudDay('${esc(sid)}','${esc(block.id)}')" style="background:rgba(255,255,255,0.2);border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;color:#fff;font-size:0.9rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1;" title="Remove this day">&times;</button>
         </div>
-        <div style="display:flex;align-items:center;gap:0.55rem;margin-top:auto;">
-          <span id="blk-date-badge-${esc(block.id)}">${_makeAudDateBadge(block.date)}</span>
-          <input type="date" class="form-input aud-block-step-input" value="${esc(block.date||'')}" style="flex:1;min-width:0;"
-            onchange="updateBlockDate('${esc(sid)}','${esc(block.id)}','date',this.value)">
+        <div style="display:flex;flex-direction:column;gap:0.25rem;margin-top:auto;">
+          <div style="display:flex;align-items:center;gap:0.55rem;">
+            <span id="blk-date-badge-${esc(block.id)}">${_makeAudDateBadge(block.date)}</span>
+            <input type="date" class="form-input aud-block-step-input" value="${esc(block.date||'')}" style="flex:1;min-width:0;"
+              onchange="updateBlockDate('${esc(sid)}','${esc(block.id)}','date',this.value)">
+          </div>
+          <div id="blk-date-dow-${esc(block.id)}" class="aud-date-dow">${_getAudDow(block.date)}</div>
         </div>
       </div>
       <div class="aud-block-step" style="background:#efab45;border-color:#efab45;">
@@ -26207,6 +26217,8 @@ See you soon!
     if (field === 'date') {
       const badgeEl = document.getElementById(`blk-date-badge-${blockId}`);
       if (badgeEl) badgeEl.innerHTML = _makeAudDateBadge(value);
+      const dowEl = document.getElementById(`blk-date-dow-${blockId}`);
+      if (dowEl) dowEl.textContent = _getAudDow(value);
     }
   }
 
@@ -26395,9 +26407,12 @@ See you soon!
                   <div class="aud-block-step-icon-wrap"><img src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt=""></div>
                   <div><div class="aud-block-step-title">Which day?</div><div class="aud-block-step-sub">The date of this audition.</div></div>
                 </div>
-                <div style="display:flex;align-items:center;gap:0.55rem;margin-top:auto;">
-                  <span id="aud-date-badge-${sid}">${_dateBadgeHtml}</span>
-                  <input type="date" class="form-input aud-block-step-input" value="${session.date||''}" style="flex:1;min-width:0;" onchange="updateAudSession('${sid}','date',this.value);_updateSDateSummary('${sid}')">
+                <div style="display:flex;flex-direction:column;gap:0.25rem;margin-top:auto;">
+                  <div style="display:flex;align-items:center;gap:0.55rem;">
+                    <span id="aud-date-badge-${sid}">${_dateBadgeHtml}</span>
+                    <input type="date" class="form-input aud-block-step-input" value="${session.date||''}" style="flex:1;min-width:0;" onchange="updateAudSession('${sid}','date',this.value);_updateSDateSummary('${sid}')">
+                  </div>
+                  <div id="aud-date-dow-${sid}" class="aud-date-dow">${_getAudDow(session.date)}</div>
                 </div>
               </div>
               <div class="aud-block-step" style="background:#efab45;border-color:#efab45;">
@@ -26639,9 +26654,11 @@ See you soon!
       const fmtSel = getSessionAccessOptions({ ...session, format: curFmt });
       chipsEl.innerHTML = _buildAudHeaderChipsHtml(session, fmtSel, bm);
     }
-    // Update date badge inside the tile
+    // Update date badge and day-of-week inside the tile
     const badgeEl = document.getElementById(`aud-date-badge-${sessionId}`);
     if (badgeEl) badgeEl.innerHTML = _makeAudDateBadge(session.date);
+    const dowEl = document.getElementById(`aud-date-dow-${sessionId}`);
+    if (dowEl) dowEl.textContent = _getAudDow(session.date);
   }
 
   function switchAudStepTab(sessionId, key) {
