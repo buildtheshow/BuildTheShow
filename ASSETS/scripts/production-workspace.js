@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: extraday-step5-20260712');
+  console.log('[BTS] production-workspace.js version: session-type-colours-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -4778,9 +4778,9 @@
     { value: 'booking_confirmation', label: 'Booking Confirmation', color: '#7FAF8B' },
     { value: 'self_tape_booked',     label: 'Self Tape Registered', color: '#2563eb' },
     { value: 'registration_completed', label: 'Registration Complete', color: '#7FAF8B' },
-    { value: 'audition_reminder',    label: 'Audition Reminder - In Person', color: '#D68CB2' },
+    { value: 'audition_reminder',    label: 'Audition Reminder - In Person', color: '#476aaa' },
     { value: 'online_audition_reminder', label: 'Audition Reminder - Online Video Call', color: '#2563eb' },
-    { value: 'callback',             label: 'Callback Request',     color: '#E3A46F' },
+    { value: 'callback',             label: 'Callback Request',     color: '#769e7b' },
     { value: 'callback_confirmed',   label: 'Callback Confirmed',   color: '#659671' },
     { value: 'callback_declined',    label: 'Callback Declined',    color: '#4B5563' },
     { value: 'callback_self_tape',   label: 'Callback Self Tape',   color: '#2563eb' },
@@ -4803,8 +4803,8 @@
   ];
 
   const ET_SECTION_META = {
-    auditions:   { label: 'Auditions',   color: '#769e7b', ink: '#ffffff', summary: 'Bookings • Self tapes • Reminders • Callbacks' },
-    callbacks:   { label: 'Callbacks',   color: '#dd8233', ink: '#ffffff', summary: 'Requests • Responses • Materials' },
+    auditions:   { label: 'Auditions',   color: '#476aaa', ink: '#ffffff', summary: 'Bookings • Self tapes • Reminders • Callbacks' },
+    callbacks:   { label: 'Callbacks',   color: '#769e7b', ink: '#ffffff', summary: 'Requests • Responses • Materials' },
     casting:      { label: 'Casting, Registration & Payments', shortLabel: 'Casting',      color: '#572e88', ink: '#ffffff', summary: 'Role offers • Registration confirmation • Payment reminders' },
     registration: { label: 'Registration',                    shortLabel: 'Registration', color: '#769e7b', ink: '#ffffff', summary: 'Registration confirmation • Forms complete' },
     rehearsals:   { label: 'Rehearsals',                      shortLabel: 'Rehearsals',   color: '#78bbd4', ink: '#ffffff', summary: 'Schedules • First rehearsal • Cast updates' },
@@ -26111,7 +26111,7 @@ See you soon!
   }
 
   function buildAudSessionThemeStyle(sessionType) {
-    const _AUD_CARD_COLOURS = { audition: '#769e7b', dance_call: '#476aaa', vocal: '#d1523d', callback: '#dd8233' };
+    const _AUD_CARD_COLOURS = { audition: '#476aaa', dance_call: '#efab45', callback: '#769e7b', other: '#d1523d', vocal: '#d1523d' };
     const accentColor = _AUD_CARD_COLOURS[sessionType] || _AUD_CARD_COLOURS.audition;
     return [
       `--aud-card-accent:${accentColor}`,
@@ -26292,11 +26292,12 @@ See you soon!
       { value:'other',      label:'Other',             desc:'A custom audition session.<br>Use this for anything that doesn\'t fit the options above.',        color:'#d1523d', icon:'Budgeting-Registration.svg' },
     ];
     const AUD_TYPE_STYLE = {
-      audition:       { colour: '#dd8233', icon: 'Auditions.svg' },
-      dance_call:     { colour: '#d1523d', icon: 'Choreography.svg' },
+      audition:       { colour: '#476aaa', icon: 'Auditions.svg' },
+      dance_call:     { colour: '#efab45', icon: 'Choreography.svg' },
       vocal:          { colour: '#78bbd4', icon: 'script-music-songs.svg' },
       callback:       { colour: '#769e7b', icon: 'Star.svg' },
-      other_audition: { colour: '#ca7ea7', icon: 'Auditions.svg' },
+      other:          { colour: '#d1523d', icon: 'Budgeting-Registration.svg' },
+      other_audition: { colour: '#d1523d', icon: 'Auditions.svg' },
     };
     const typeStyle = AUD_TYPE_STYLE[session.type] || AUD_TYPE_STYLE.audition;
     const isCollapsed = audCollapsed.has(session.id);
@@ -27137,10 +27138,10 @@ See you soon!
   //  Add Audition Wizard
   // ─────────────────────────────────────────────────────────────
   const AUD_WIZ_TYPES = [
-    { key: 'audition',   label: 'General Audition', tagline: 'Meet performers.',   desc: 'This is your main audition. Performers might sing, do a monologue, move across the floor, or all three. Anyone interested can sign up and be considered for any available role.',                                                                                                                                                       colour: '#769e7b', icon: 'Auditions.svg' },
-    { key: 'dance_call', label: 'Dance Call',        tagline: 'See how well performers move.',         desc: 'Use this when dance ability is important. Performers will learn a short piece of choreography so you can assess movement, coordination, and how quickly they pick up new steps.',                                                                                                       colour: '#476aaa', icon: 'Choreography.svg' },
+    { key: 'audition',   label: 'General Audition', tagline: 'Meet performers.',   desc: 'This is your main audition. Performers might sing, do a monologue, move across the floor, or all three. Anyone interested can sign up and be considered for any available role.',                                                                                                                                                       colour: '#476aaa', icon: 'Auditions.svg' },
+    { key: 'dance_call', label: 'Dance Call',        tagline: 'See how well performers move.',         desc: 'Use this when dance ability is important. Performers will learn a short piece of choreography so you can assess movement, coordination, and how quickly they pick up new steps.',                                                                                                       colour: '#efab45', icon: 'Choreography.svg' },
     { key: 'vocal',      label: 'Vocal Audition',    tagline: 'Hear performers sing.',                 desc: 'Use this when producing a musical. Performers will sing for your creative team so you can assess their vocal ability before casting.',                                                                                                                                                   colour: '#d1523d', icon: 'script-music-songs.svg' },
-    { key: 'callback',   label: 'Callback',          tagline: 'See selected performers again.',        desc: 'After your first auditions, invite specific performers back to read scenes, sing, dance, or work with other performers before making your final casting decisions. Being invited to a callback simply means you\'d like to see more before casting.',                                    colour: '#dd8233', icon: 'Star.svg' },
+    { key: 'callback',   label: 'Callback',          tagline: 'See selected performers again.',        desc: 'After your first auditions, invite specific performers back to read scenes, sing, dance, or work with other performers before making your final casting decisions. Being invited to a callback simply means you\'d like to see more before casting.',                                    colour: '#769e7b', icon: 'Star.svg' },
   ];
   const AUD_WIZ_ZEUS_COLOURS = {
     rehearsal:'#572e88', performance:'#d1523d', music_rehearsal:'#78bbd4',
@@ -43724,12 +43725,12 @@ See you soon!
 
   function getAuditionScheduleSidebarMarkerColor(sessionType) {
     const scheduleMarkerColours = {
-      audition: '#7FAF8B',
-      dance_call: '#D68CB2',
-      callback: '#E3A46F',
+      audition: '#476aaa',
+      dance_call: '#efab45',
+      callback: '#769e7b',
       self_tape: '#78bbd4',
-      other: '#B8AECF',
-      other_audition: '#B8AECF'
+      other: '#d1523d',
+      other_audition: '#d1523d'
     };
     return scheduleMarkerColours[sessionType] || scheduleMarkerColours.audition;
   }
