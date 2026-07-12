@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: preserve-block-labels-20260712');
+  console.log('[BTS] production-workspace.js version: step6-label-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -26214,7 +26214,7 @@ See you soon!
       { key:'s01',    num:3, label:'Audition Format',     color:'#769e7b' },
       { key:'s02',    num:4, label:'Scheduling Method',   color:'#d1523d' },
       { key:'s03',    num:5, label:'Build Your Schedule', color:'#78bbd4' },
-      { key:'sslots', num:6, label:'Generate Timeslots',  color:'#dd8233' },
+      { key:'sslots', num:6, label:'Time Slots',           color:'#dd8233' },
     ];
     const onScheduleTab = activeTab === 's03' || activeTab === 'sslots';
     return `
