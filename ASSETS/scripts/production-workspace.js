@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: cal-badge-sm-20260712');
+  console.log('[BTS] production-workspace.js version: step6-unified-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -25963,7 +25963,8 @@ See you soon!
           ${extraSlotCount ? `
           <div class="aud-sched-header">
             <div class="aud-sched-header-stats">
-              <span style="font-weight:800;color:#1a1530;margin-right:0.25rem;">${esc(dateLabel)}</span>
+              ${_makeAudDateBadge(block.date, 'sm')}
+              <span class="aud-sched-stat" style="font-weight:800;color:#1a1530;">${esc(dateLabel)}</span>
               <span class="aud-sched-stat-sep">·</span>
               <span class="aud-sched-stat aud-sched-stat--open"><strong>${extraOpenCount}</strong> open</span>
               <span class="aud-sched-stat-sep">·</span>
@@ -26034,6 +26035,9 @@ See you soon!
           ${slotCount ? `
           <div class="aud-sched-header">
             <div class="aud-sched-header-stats">
+              ${_makeAudDateBadge(block.date || session?.date || '', 'sm')}
+              <span class="aud-sched-stat" style="font-weight:800;color:#1a1530;">${formatAuditionScheduleSessionDate(block.date || session?.date || '')}</span>
+              <span class="aud-sched-stat-sep">·</span>
               <span class="aud-sched-stat aud-sched-stat--open"><strong>${openSlotCount}</strong> open</span>
               <span class="aud-sched-stat-sep">·</span>
               <span class="aud-sched-stat aud-sched-stat--blocked"><strong>${slotCount - openSlotCount}</strong> blocked</span>
@@ -26502,18 +26506,8 @@ See you soon!
     const blocks = audBlocks[sessionId] || [];
     const session = audSessions.find(s => s.id === sessionId) || { id: sessionId, type: 'audition' };
     container.innerHTML = blocks.map((b, i) => buildBlockCardHTML(session, b, slots, i)).join('');
-    // Update days header
     const daysEl = document.getElementById('aud-days-header-' + sessionId);
-    if (daysEl) {
-      const datedBlocks = blocks.filter(b => b.date);
-      if (datedBlocks.length > 1) {
-        daysEl.style.display = '';
-        daysEl.innerHTML = '<div class="aud-days-strip"><span class="aud-days-strip-label">Days selected:</span>' +
-          datedBlocks.map(b => '<span class="aud-days-strip-pill">' + _makeAudDateBadge(b.date, 'sm') + formatAuditionScheduleSessionDate(b.date) + '</span>').join('') + '</div>';
-      } else {
-        daysEl.style.display = 'none';
-      }
-    }
+    if (daysEl) daysEl.style.display = 'none';
     // Update total slot count note
     const section = document.getElementById('blocks-section-' + sessionId);
     if (section) {
