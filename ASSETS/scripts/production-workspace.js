@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: no-x-tighter-gap-20260712');
+  console.log('[BTS] production-workspace.js version: gen-step6-only-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -26007,15 +26007,14 @@ See you soon!
               ${[1,2,3,4,5,6,7,8,9,10].map(n => `<option value="${n}"${(block.capacity||1)===n?' selected':''}>${n} performer${n===1?'':'s'}</option>`).join('')}
             </select>
           </div>
-          <!-- Generate button — 5th grid cell -->
-          <button class="aud-block-gen-main" onclick="generateBlockSlots('${sessionId}','${block.id}')">
-            <div class="aud-block-gen-btn-main">
-              <img src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt="">
-              ${slotCount ? 'Regenerate my time slots' : 'Create my time slots'}
-            </div>
-            <div class="aud-block-gen-sub">We'll build the bookable time slots using the settings above.</div>
-          </button>
         </div>
+        <button class="aud-block-gen-main aud-block-gen-step6" onclick="generateBlockSlots('${sessionId}','${block.id}')">
+          <div class="aud-block-gen-btn-main">
+            <img src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt="">
+            ${slotCount ? 'Regenerate my time slots' : 'Create my time slots'}
+          </div>
+          <div class="aud-block-gen-sub">We'll build the bookable time slots using the settings above.</div>
+        </button>
         `}
         <!-- Schedule preview -->
         <div class="aud-block-calendar-wrap" id="block-slots-${block.id}">
