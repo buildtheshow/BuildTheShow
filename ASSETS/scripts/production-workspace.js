@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: add-day-step1-20260712');
+  console.log('[BTS] production-workspace.js version: add-day-inline-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -26139,6 +26139,75 @@ See you soon!
     return `<div class="cal-badge"><div class="cal-badge-month">${M[parseInt(p[1],10)-1]||''}</div><div class="cal-badge-day">${parseInt(p[2],10)}</div></div>`;
   }
 
+  function _buildSdateExtraDayRowHtml(sid, block, dayNum) {
+    const esc = v => String(v||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return `
+    <div class="aud-sdate-extra-row aud-block-steps-grid" style="grid-template-columns:1.4fr 1fr 1fr;margin-bottom:0.5rem;" onclick="event.stopPropagation()">
+      <div class="aud-block-step" style="background:#476aaa;border-color:#476aaa;">
+        <div class="aud-block-step-head" style="justify-content:space-between;">
+          <div style="display:flex;align-items:flex-start;gap:0.5rem;">
+            <div class="aud-block-step-icon-wrap"><img src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt=""></div>
+            <div><div class="aud-block-step-title">Day ${dayNum}</div><div class="aud-block-step-sub">Additional audition day.</div></div>
+          </div>
+          <button onclick="removeAudDay('${esc(sid)}','${esc(block.id)}')" style="background:rgba(255,255,255,0.2);border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;color:#fff;font-size:0.9rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1;" title="Remove this day">&times;</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:0.55rem;margin-top:auto;">
+          <span id="blk-date-badge-${esc(block.id)}">${_makeAudDateBadge(block.date)}</span>
+          <input type="date" class="form-input aud-block-step-input" value="${esc(block.date||'')}" style="flex:1;min-width:0;"
+            onchange="updateBlockDate('${esc(sid)}','${esc(block.id)}','date',this.value)">
+        </div>
+      </div>
+      <div class="aud-block-step" style="background:#efab45;border-color:#efab45;">
+        <div class="aud-block-step-head">
+          <div class="aud-block-step-icon-wrap"><img src="/ASSETS/Images/Icons/time.svg" alt=""></div>
+          <div><div class="aud-block-step-title">Start time</div><div class="aud-block-step-sub">When auditions begin.</div></div>
+        </div>
+        <input type="time" class="form-input aud-block-step-input" value="${esc(block.start_time||'')}" style="margin-top:auto;"
+          onchange="updateBlockDate('${esc(sid)}','${esc(block.id)}','start_time',this.value)">
+      </div>
+      <div class="aud-block-step" style="background:#769e7b;border-color:#769e7b;">
+        <div class="aud-block-step-head">
+          <div class="aud-block-step-icon-wrap"><img src="/ASSETS/Images/Icons/time.svg" alt=""></div>
+          <div><div class="aud-block-step-title">End time</div><div class="aud-block-step-sub">When auditions wrap up.</div></div>
+        </div>
+        <input type="time" class="form-input aud-block-step-input" value="${esc(block.end_time||'')}" style="margin-top:auto;"
+          onchange="updateBlockDate('${esc(sid)}','${esc(block.id)}','end_time',this.value)">
+      </div>
+    </div>`;
+  }
+
+  function _reRenderSdateDays(sessionId) {
+    const container = document.getElementById(`aud-sdate-extra-days-${sessionId}`);
+    if (!container) return;
+    const extraBlocks = (audBlocks[sessionId] || []).slice(1);
+    container.innerHTML = extraBlocks.map((b, i) => _buildSdateExtraDayRowHtml(sessionId, b, i + 2)).join('');
+  }
+
+  function updateBlockDate(sessionId, blockId, field, value) {
+    const block = (audBlocks[sessionId] || []).find(b => b.id === blockId);
+    if (!block) return;
+    block[field] = value;
+    _saveBlocks(sessionId);
+    if (field === 'date') {
+      const badgeEl = document.getElementById(`blk-date-badge-${blockId}`);
+      if (badgeEl) badgeEl.innerHTML = _makeAudDateBadge(value);
+    }
+  }
+
+  async function removeAudDay(sessionId, blockId) {
+    const slots = (audSlots[sessionId] || []).filter(s => s.block_id === blockId);
+    const msg = slots.length
+      ? `Remove this day and its ${slots.length} time slot${slots.length !== 1 ? 's' : ''}?`
+      : 'Remove this day?';
+    if (!confirm(msg)) return;
+    await sb.from('audition_time_slots').delete().eq('block_id', blockId);
+    audSlots[sessionId] = (audSlots[sessionId] || []).filter(s => s.block_id !== blockId);
+    audBlocks[sessionId] = (audBlocks[sessionId] || []).filter(b => b.id !== blockId);
+    _saveBlocks(sessionId);
+    _reRenderBlocksList(sessionId);
+    _reRenderSdateDays(sessionId);
+  }
+
   function _buildAudHeaderChipsHtml(session, formatSelection, bookingMode) {
     const _esc = v => String(v||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const chips = [];
@@ -26330,6 +26399,7 @@ See you soon!
                 <input type="time" class="form-input aud-block-step-input" value="${session.end_time||''}" style="margin-top:auto;" onchange="updateAudSession('${sid}','end_time',this.value);_updateSDateSummary('${sid}')">
               </div>
             </div>
+            <div id="aud-sdate-extra-days-${sid}">${(audBlocks[sid]||[]).slice(1).map((b,i)=>_buildSdateExtraDayRowHtml(sid,b,i+2)).join('')}</div>
             <div class="aud-add-block-card" onclick="addBlock('${sid}')" style="margin-top:0.5rem;">
               <div class="aud-add-block-card-icon">+</div>
               <div class="aud-add-block-card-title">Add another day</div>
@@ -26449,6 +26519,7 @@ See you soon!
     });
     _saveBlocks(sessionId);
     _reRenderBlocksList(sessionId);
+    _reRenderSdateDays(sessionId);
   }
 
   function toggleCallbackBlockCharacter(sessionId, blockId, charId, checked) {
