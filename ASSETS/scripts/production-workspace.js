@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: fix-bookingmode-scope-20260712');
+  console.log('[BTS] production-workspace.js version: toast-schedule-refreshed-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -26777,7 +26777,7 @@ See you soon!
     audSlots[sessionId] = audSlots[sessionId]
       .sort((a, b) => (a.slot_date || '').localeCompare(b.slot_date || '') || a.slot_time.localeCompare(b.slot_time));
     _reRenderBlocksList(sessionId);
-    showToast('Time slots updated without removing existing bookings.');
+    showToast('Schedule refreshed.');
   }
 
   function timeToMins(t) {
