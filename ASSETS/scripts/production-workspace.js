@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: card-wording-20260712');
+  console.log('[BTS] production-workspace.js version: header-chips-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -26185,6 +26185,23 @@ See you soon!
     const collapsedMeta = `${collapsedDate}${collapsedTime ? ` · ${collapsedTime}` : ''}`;
     const _modeLabels = { appointment:'Individual Appointment', group_session:'Group Session', open_call:'Open Call' };
     const s03Summary = totalSlotCount ? `${totalSlotCount} slot${totalSlotCount !== 1 ? 's' : ''} created` : 'No slots yet';
+    // Header summary chips — only include fields that have been set
+    const _headerChips = [];
+    if (session.date) {
+      const _dc = session.end_date
+        ? `${formatAuditionScheduleSessionDate(session.date)} – ${formatAuditionScheduleSessionDate(session.end_date)}`
+        : formatAuditionScheduleSessionDate(session.date);
+      _headerChips.push({ icon:'navproductioncalendar.svg', label:_dc });
+    }
+    if (session.start_time) {
+      const _tc = `${formatSlotTime(session.start_time)}${session.end_time ? ` – ${formatSlotTime(session.end_time)}` : ''}`;
+      _headerChips.push({ icon:'time.svg', label:_tc });
+    }
+    const _fmtOpts = { in_person:{ label:'In Person', icon:'navprofile.svg' }, video_call:{ label:'Video Call', icon:'VideoCall.svg' }, self_tape:{ label:'Self Tape', icon:'SelfTape.svg' } };
+    Object.entries(formatSelection).forEach(([k,v]) => { if (v && _fmtOpts[k]) _headerChips.push({ icon:_fmtOpts[k].icon, label:_fmtOpts[k].label }); });
+    const _modeChipIcon = { appointment:'time.svg', group_session:'organisation-members.svg', open_call:'Volunteers.svg' };
+    _headerChips.push({ icon:_modeChipIcon[bookingMode]||'time.svg', label:_modeLabels[bookingMode]||'Individual Appointment' });
+    if (bookingMode === 'appointment' && session.slot_length) _headerChips.push({ icon:'time.svg', label:`${session.slot_length} min slots` });
     const typeCards = [
       { value:'audition',   label:'General Audition', desc:'The main audition for your production.<br>Use this for the first round of auditions.',           color:'#476aaa', icon:'template.svg' },
       { value:'dance_call', label:'Dance Call',        desc:'Focused on dance and movement.<br>Use this to assess choreography or movement skills.',          color:'#efab45', icon:'Choreography.svg' },
@@ -26222,7 +26239,7 @@ See you soon!
           <div class="aud-card-type-pill"><img src="/ASSETS/Images/Icons/${typeStyle.icon}" alt="" aria-hidden="true" /></div>
           <div class="aud-card-identity">
             <div class="aud-card-name">${esc(session.name || collapsedTitle)}</div>
-            <div class="aud-card-when">${esc(collapsedMeta)}</div>
+            <div class="aud-card-chips">${_headerChips.map(c => `<span class="aud-header-chip"><img src="/ASSETS/Images/Icons/${esc(c.icon)}" alt="" class="aud-header-chip-icon">${esc(c.label)}</span>`).join('')}</div>
           </div>
           <div class="aud-card-vis-badge ${showToApplicants ? 'is-visible' : 'is-hidden'}" id="aud-vis-badge-${sid}">${showToApplicants ? 'Visible' : 'Hidden'}</div>
           <button class="aud-action-btn danger" onclick="event.stopPropagation();deleteAudSession('${sid}')" title="Delete">×</button>
