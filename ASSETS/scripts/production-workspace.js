@@ -26173,10 +26173,10 @@ See you soon!
     const _modeLabels = { appointment:'Individual Appointment', group_session:'Group Session', open_call:'Open Call' };
     const s03Summary = totalSlotCount ? `${totalSlotCount} slot${totalSlotCount !== 1 ? 's' : ''} created` : 'No slots yet';
     const typeCards = [
-      { value:'audition',   label:'General Audition', desc:'The main audition for your production.<br>Use this for the first round of auditions.',           color:'#dd8233', icon:'template.svg' },
-      { value:'dance_call', label:'Dance Call',        desc:'Focused on dance and movement.<br>Use this to assess choreography or movement skills.',          color:'#d1523d', icon:'Choreography.svg' },
+      { value:'audition',   label:'General Audition', desc:'The main audition for your production.<br>Use this for the first round of auditions.',           color:'#78bbd4', icon:'template.svg' },
+      { value:'dance_call', label:'Dance Call',        desc:'Focused on dance and movement.<br>Use this to assess choreography or movement skills.',          color:'#efab45', icon:'Choreography.svg' },
       { value:'callback',   label:'Callback',          desc:'An additional audition for selected performers.<br>Use this after the first round when you need to see performers again.', color:'#769e7b', icon:'Star.svg' },
-      { value:'other',      label:'Other',             desc:'A custom audition session.<br>Use this for anything that doesn\'t fit the options above.',        color:'#ca7ea7', icon:'Budgeting-Registration.svg' },
+      { value:'other',      label:'Other',             desc:'A custom audition session.<br>Use this for anything that doesn\'t fit the options above.',        color:'#d1523d', icon:'Budgeting-Registration.svg' },
     ];
     const AUD_TYPE_STYLE = {
       audition:       { colour: '#dd8233', icon: 'Auditions.svg' },
@@ -26190,9 +26190,9 @@ See you soon!
     const sid = session.id;
     const activeTab = _audActiveTab[sid] || 'sdate';
     const modeCards = [
-      { key:'appointment',   icon:'time.svg',                color:'#572e88', title:'Individual Appointment', desc:'Performers choose a specific time slot for their individual audition.' },
-      { key:'group_session', icon:'organisation-members.svg', color:'#769e7b', title:'Group Session',          desc:'Performers choose a scheduled group session and audition together.' },
-      { key:'open_call',     icon:'Volunteers.svg',          color:'#dd8233', title:'Open Call',              desc:"Performers arrive during the advertised audition hours and wait until they're called." },
+      { key:'appointment',   icon:'time.svg',                color:'#78bbd4', title:'Individual Appointment', desc:'Performers choose a specific time slot for their individual audition.' },
+      { key:'group_session', icon:'organisation-members.svg', color:'#efab45', title:'Group Session',          desc:'Performers choose a scheduled group session and audition together.' },
+      { key:'open_call',     icon:'Volunteers.svg',          color:'#769e7b', title:'Open Call',              desc:"Performers arrive during the advertised audition hours and wait until they're called." },
     ];
     const stepTiles = [
       { key:'sdate',  num:1, label:'Audition Dates',      color:'#78bbd4' },
@@ -26247,8 +26247,8 @@ See you soon!
             <p style="font-size:0.78rem;color:rgba(26,21,48,0.5);margin:0 0 0.75rem;font-weight:500;">Select all that apply.</p>
             <div class="add-wiz-mode-cards" style="margin-bottom:1rem;">
               ${[
-                { key:'in_person',  color:'#476aaa', icon:'navprofile.svg',  title:'In Person',  desc:'Performers come to a physical location to audition.' },
-                { key:'video_call', color:'#572e88', icon:'VideoCall.svg',   title:'Video Call', desc:'Performers join a live video call to audition remotely.' },
+                { key:'in_person',  color:'#78bbd4', icon:'navprofile.svg',  title:'In Person',  desc:'Performers come to a physical location to audition.' },
+                { key:'video_call', color:'#efab45', icon:'VideoCall.svg',   title:'Video Call', desc:'Performers join a live video call to audition remotely.' },
                 { key:'self_tape',  color:'#769e7b', icon:'SelfTape.svg',    title:'Self Tape',  desc:'Performers record and submit their own audition video.' },
               ].map(f => `
                 <button id="s01-chip-${f.key}-${sid}" class="add-wiz-mode-card aud-mode-v2-card${formatSelection[f.key] ? ' selected' : ''}" style="--card-color:${f.color};background:${f.color};border:none" onclick="updateAudSessionFormatOption('${sid}','${f.key}')">
@@ -26288,21 +26288,21 @@ See you soon!
           <!-- Panel 4: Audition dates -->
           <div id="aud-panel-sdate-${sid}" class="aud-tab-panel" style="${activeTab === 'sdate' ? '' : 'display:none;'}">
             <div class="aud-block-steps-grid" style="grid-template-columns:1.4fr 1fr 1fr;margin-bottom:0.75rem;" onclick="event.stopPropagation()">
-              <div class="aud-block-step" style="background:#769e7b;border-color:#769e7b;">
+              <div class="aud-block-step" style="background:#78bbd4;border-color:#78bbd4;">
                 <div class="aud-block-step-head">
                   <div class="aud-block-step-icon-wrap"><img src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt=""></div>
                   <div><div class="aud-block-step-title">Which day?</div><div class="aud-block-step-sub">The date of this audition.</div></div>
                 </div>
                 <input type="date" class="form-input aud-block-step-input" value="${session.date||''}" style="margin-top:auto;" onchange="updateAudSession('${sid}','date',this.value);_updateSDateSummary('${sid}')">
               </div>
-              <div class="aud-block-step" style="background:#74a2b4;border-color:#74a2b4;">
+              <div class="aud-block-step" style="background:#efab45;border-color:#efab45;">
                 <div class="aud-block-step-head">
                   <div class="aud-block-step-icon-wrap"><img src="/ASSETS/Images/Icons/time.svg" alt=""></div>
                   <div><div class="aud-block-step-title">Start time</div><div class="aud-block-step-sub">When auditions begin.</div></div>
                 </div>
                 <input type="time" class="form-input aud-block-step-input" value="${session.start_time||''}" style="margin-top:auto;" onchange="updateAudSession('${sid}','start_time',this.value);_updateSDateSummary('${sid}')">
               </div>
-              <div class="aud-block-step" style="background:#74a2b4;border-color:#74a2b4;">
+              <div class="aud-block-step" style="background:#769e7b;border-color:#769e7b;">
                 <div class="aud-block-step-head">
                   <div class="aud-block-step-icon-wrap"><img src="/ASSETS/Images/Icons/time.svg" alt=""></div>
                   <div><div class="aud-block-step-title">End time</div><div class="aud-block-step-sub">When auditions wrap up.</div></div>
