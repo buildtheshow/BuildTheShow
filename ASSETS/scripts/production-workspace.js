@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: hide-capacity-individual-20260712');
+  console.log('[BTS] production-workspace.js version: fix-bookingmode-scope-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -25898,6 +25898,7 @@ See you soon!
 
   function buildBlockCardHTML(session, block, allSessionSlots, blockIndex = 0) {
     const sessionId = session?.id;
+    const bookingMode = session?.booking_mode || 'appointment';
     const blockSlots = allSessionSlots.filter(s => s.block_id === block.id);
     const slotCount = blockSlots.length;
     const openSlotCount = blockSlots.filter(s => getAudSlotState(s) === 'open').length;
