@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: add-day-inline-20260712');
+  console.log('[BTS] production-workspace.js version: extraday-slots-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -25916,18 +25916,20 @@ See you soon!
         <div class="aud-block-empty-state-sub">Click "Create my time slots" above to see your schedule.</div>
       </div>`;
 
-    // Extra day block — simplified: date picker + hours + generate only
+    // Extra day block — simplified settings + full slot grid
     if (isExtraDay) {
       const extraSlots = allSessionSlots.filter(s => s.block_id === block.id);
       const extraSlotCount = extraSlots.length;
+      const extraOpenCount = extraSlots.filter(s => getAudSlotState(s) === 'open').length;
+      const dateLabel = block.date ? formatAuditionScheduleSessionDate(block.date) : 'Additional day';
       return `
       <div class="aud-block-card aud-extra-day-card" data-block-id="${block.id}">
         <div class="aud-extra-day-header">
           <div class="aud-extra-day-header-left">
             <img src="/ASSETS/Images/Icons/navproductioncalendar.svg" class="aud-extra-day-header-icon" alt="">
             <div>
-              <div class="aud-extra-day-header-title">Additional day</div>
-              <div class="aud-extra-day-header-sub">Same audition format — just different hours for this day.</div>
+              <div class="aud-extra-day-header-title">${esc(dateLabel)}</div>
+              <div class="aud-extra-day-header-sub">Additional audition day.</div>
             </div>
           </div>
           <button type="button" class="aud-block-delete-btn" onclick="deleteBlock('${sessionId}','${block.id}')" title="Remove this day">✕</button>
@@ -25958,7 +25960,21 @@ See you soon!
           </button>
         </div>
         <div class="aud-block-calendar-wrap" id="block-slots-${block.id}">
-          ${extraSlotCount ? '' : emptySlotHTML}
+          ${extraSlotCount ? `
+          <div class="aud-sched-header">
+            <div class="aud-sched-header-stats">
+              <span style="font-weight:800;color:#1a1530;margin-right:0.25rem;">${esc(dateLabel)}</span>
+              <span class="aud-sched-stat-sep">·</span>
+              <span class="aud-sched-stat aud-sched-stat--open"><strong>${extraOpenCount}</strong> open</span>
+              <span class="aud-sched-stat-sep">·</span>
+              <span class="aud-sched-stat aud-sched-stat--blocked"><strong>${extraSlotCount - extraOpenCount}</strong> blocked</span>
+              <span class="aud-sched-stat-sep">·</span>
+              <span class="aud-sched-stat"><strong>${extraSlotCount}</strong> total</span>
+            </div>
+            <div class="aud-sched-header-hint">Tap a slot to block or unblock it</div>
+          </div>
+          <div class="aud-block-calendar">${buildAuditionSchedulerBlockSlotsHtml(sessionId, extraSlots)}</div>
+          ` : `<div class="aud-block-calendar-empty">Click Step 6 to generate your time slots.</div>`}
         </div>
       </div>`;
     }
