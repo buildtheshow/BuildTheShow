@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: days-badge-20260712');
+  console.log('[BTS] production-workspace.js version: cal-badge-sm-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -26155,11 +26155,12 @@ See you soon!
     return days[d.getDay()] || '';
   }
 
-  function _makeAudDateBadge(dateStr) {
+  function _makeAudDateBadge(dateStr, size) {
     if (!dateStr) return '';
     const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const p = String(dateStr).slice(0,10).split('-');
-    return `<div class="cal-badge"><div class="cal-badge-month">${M[parseInt(p[1],10)-1]||''}</div><div class="cal-badge-day">${parseInt(p[2],10)}</div></div>`;
+    const cls = size === 'sm' ? 'cal-badge cal-badge--sm' : 'cal-badge';
+    return `<div class="${cls}"><div class="cal-badge-month">${M[parseInt(p[1],10)-1]||''}</div><div class="cal-badge-day">${parseInt(p[2],10)}</div></div>`;
   }
 
   function _buildSdateExtraDayRowHtml(sid, block, dayNum) {
@@ -26508,7 +26509,7 @@ See you soon!
       if (datedBlocks.length > 1) {
         daysEl.style.display = '';
         daysEl.innerHTML = '<div class="aud-days-strip"><span class="aud-days-strip-label">Days selected:</span>' +
-          datedBlocks.map(b => '<span class="aud-days-strip-pill">' + _makeAudDateBadge(b.date) + formatAuditionScheduleSessionDate(b.date) + '</span>').join('') + '</div>';
+          datedBlocks.map(b => '<span class="aud-days-strip-pill">' + _makeAudDateBadge(b.date, 'sm') + formatAuditionScheduleSessionDate(b.date) + '</span>').join('') + '</div>';
       } else {
         daysEl.style.display = 'none';
       }
