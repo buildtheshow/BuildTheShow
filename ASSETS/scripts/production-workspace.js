@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: dow-label-20260712');
+  console.log('[BTS] production-workspace.js version: extraday-theme-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -25923,10 +25923,10 @@ See you soon!
       const extraOpenCount = extraSlots.filter(s => getAudSlotState(s) === 'open').length;
       const dateLabel = block.date ? formatAuditionScheduleSessionDate(block.date) : 'Additional day';
       return `
-      <div class="aud-block-card aud-extra-day-card" data-block-id="${block.id}">
+      <div class="aud-block-card aud-extra-day-card" data-block-id="${block.id}" style="${themeStyle}">
         <div class="aud-extra-day-header">
           <div class="aud-extra-day-header-left">
-            <img src="/ASSETS/Images/Icons/navproductioncalendar.svg" class="aud-extra-day-header-icon" alt="">
+            ${_makeAudDateBadge(block.date)}
             <div>
               <div class="aud-extra-day-header-title">${esc(dateLabel)}</div>
               <div class="aud-extra-day-header-sub">Additional audition day.</div>
