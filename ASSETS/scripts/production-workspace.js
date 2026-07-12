@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: step5-grid-3col-20260712');
+  console.log('[BTS] production-workspace.js version: time-sync-regen-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -26880,13 +26880,18 @@ See you soon!
     if (session) session[field] = value;
     renderAuditionsSidebarSubmenu();
 
-    // When date or time changes, push the new value into any blocks
-    // that are empty or still matching the old session value.
+    // When date or time changes, sync onto blocks.
+    // Time changes always update main-day blocks (no separate date, or same date as session)
+    // so that re-entering Step 6 regenerates with the new times.
+    // Date changes only sync to empty blocks (additional days keep their own dates).
     if (field === 'date' || field === 'start_time' || field === 'end_time') {
       const blocks = audBlocks[id] || [];
       let synced = false;
+      const sessionDate = session?.date;
       blocks.forEach(b => {
-        if (!b[field] || b[field] === '') {
+        const isMainDayBlock = !b.date || b.date === '' || b.date === sessionDate;
+        const shouldSync = field === 'date' ? (!b[field] || b[field] === '') : isMainDayBlock;
+        if (shouldSync) {
           b[field] = value;
           synced = true;
         }
