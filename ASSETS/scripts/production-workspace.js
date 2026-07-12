@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: slot-count-bookable-20260712');
+  console.log('[BTS] production-workspace.js version: hide-capacity-individual-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -25970,7 +25970,7 @@ See you soon!
         ${buildCallbackBlockConfigHTML(session, block)}
         ${isCallback ? '' : `
         <!-- Steps grid -->
-        <div class="aud-block-steps-grid" style="grid-template-columns:repeat(3,1fr);">
+        <div class="aud-block-steps-grid" style="grid-template-columns:repeat(${bookingMode === 'appointment' ? 2 : 3},1fr);">
           <!-- Step 2: Appointment length -->
           <div class="aud-block-step" style="background:#769e7b;border-color:#769e7b;">
             <div class="aud-block-step-head">
@@ -25996,7 +25996,8 @@ See you soon!
               ${[0,3,5,10,15,20,30].map(m => `<option value="${m}"${(block.buffer||0)===m?' selected':''}>${m===0?'None':m+' min'}</option>`).join('')}
             </select>
           </div>
-          <!-- Step 4: Capacity -->
+          ${bookingMode !== 'appointment' ? `
+          <!-- Step 4: Capacity (hidden for individual appointment — always 1) -->
           <div class="aud-block-step" style="background:#476aaa;border-color:#476aaa;">
             <div class="aud-block-step-head">
               <div class="aud-block-step-icon-wrap"><img src="/ASSETS/Images/Icons/organisation-members.svg" alt=""></div>
@@ -26006,7 +26007,7 @@ See you soon!
             <select class="form-select aud-block-step-input" style="margin-top:0;" onchange="updateBlock('${sessionId}','${block.id}','capacity',+this.value)">
               ${[1,2,3,4,5,6,7,8,9,10].map(n => `<option value="${n}"${(block.capacity||1)===n?' selected':''}>${n} performer${n===1?'':'s'}</option>`).join('')}
             </select>
-          </div>
+          </div>` : ''}
         </div>
         `}
         <!-- Schedule preview -->
