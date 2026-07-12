@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: save-error-20260712');
+  console.log('[BTS] production-workspace.js version: extraday-step5-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -25934,30 +25934,29 @@ See you soon!
           </div>
           <button type="button" class="aud-block-delete-btn" onclick="deleteBlock('${sessionId}','${block.id}')" title="Remove this day">✕</button>
         </div>
-        <div class="aud-block-steps-grid" style="grid-template-columns:1fr 1fr 0.6fr;margin-bottom:0.75rem;">
-          <div class="aud-block-step" style="background:#74a2b4;border-color:#74a2b4;">
+        <div class="aud-block-steps-grid" style="grid-template-columns:1fr 1fr;margin-bottom:0.75rem;">
+          <div class="aud-block-step" style="background:#769e7b;border-color:#769e7b;">
             <div class="aud-block-step-head">
               <div class="aud-block-step-icon-wrap"><img src="/ASSETS/Images/Icons/time.svg" alt=""></div>
-              <div><div class="aud-block-step-title">Audition hours</div><div class="aud-block-step-sub">The window for this day.</div></div>
+              <div><div class="aud-block-step-title">How long is each audition?</div><div class="aud-block-step-sub">The length of one audition slot.</div></div>
             </div>
-            <div style="margin-top:auto;display:flex;flex-direction:column;gap:0.3rem;">
-              <div><div class="aud-block-time-sublabel" style="margin-bottom:0.2rem;">Start</div>
-              <input type="time" class="form-input aud-block-time-input aud-block-step-input" value="${esc((block.start_time||'').slice(0,5))}" onchange="updateBlock('${sessionId}','${block.id}','start_time',this.value)"></div>
-              <div><div class="aud-block-time-sublabel" style="margin-bottom:0.2rem;">End</div>
-              <input type="time" class="form-input aud-block-time-input aud-block-step-input" value="${esc((block.end_time||'').slice(0,5))}" onchange="updateBlock('${sessionId}','${block.id}','end_time',this.value)"></div>
-            </div>
+            <select class="form-select aud-block-step-input" onchange="updateBlock('${sessionId}','${block.id}','slot_length',+this.value)">
+              ${[
+                [5,'5 minutes'],[7,'7 minutes'],[10,'10 minutes'],[15,'15 minutes'],[20,'20 minutes'],
+                [30,'30 minutes'],[45,'45 minutes'],[60,'1 hour'],[75,'1 hr 15 min'],
+                [90,'1 hr 30 min'],[105,'1 hr 45 min'],[120,'2 hours']
+              ].map(([m,l]) => `<option value="${m}"${(block.slot_length||10)===m?' selected':''}>${l}</option>`).join('')}
+            </select>
           </div>
-          <div class="aud-block-step" style="background:#d1523d;border-color:#d1523d;">
+          <div class="aud-block-step" style="background:#dd8233;border-color:#dd8233;">
             <div class="aud-block-step-head">
-              <div class="aud-block-step-icon-wrap"><img src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt=""></div>
-              <div><div class="aud-block-step-title">Which day?</div><div class="aud-block-step-sub">Pick the date for this extra day.</div></div>
+              <div class="aud-block-step-icon-wrap"><img src="/ASSETS/Images/Icons/Checklist.svg" alt=""></div>
+              <div><div class="aud-block-step-title">Break between auditions?</div><div class="aud-block-step-sub">Time for notes or a quick breather.</div></div>
             </div>
-            <input type="date" class="form-input aud-block-step-input" style="margin-top:auto;" value="${esc(block.date||'')}" onchange="updateBlock('${sessionId}','${block.id}','date',this.value)">
+            <select class="form-select aud-block-step-input" onchange="updateBlock('${sessionId}','${block.id}','buffer',+this.value)">
+              ${[0,3,5,10,15,20,30].map(m => `<option value="${m}"${(block.buffer||0)===m?' selected':''}>${m===0?'None':m+' min'}</option>`).join('')}
+            </select>
           </div>
-          <button class="aud-block-gen-main" onclick="generateBlockSlots('${sessionId}','${block.id}')">
-            <div class="aud-block-gen-btn-main"><img src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt="">${extraSlotCount ? 'Regenerate' : 'Create slots'}</div>
-            <div class="aud-block-gen-sub">Build time slots for this day.</div>
-          </button>
         </div>
         <div class="aud-block-calendar-wrap" id="block-slots-${block.id}">
           ${extraSlotCount ? `
