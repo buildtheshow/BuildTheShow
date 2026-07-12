@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: toast-schedule-refreshed-20260712');
+  console.log('[BTS] production-workspace.js version: planning-tip-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -26009,6 +26009,10 @@ See you soon!
               ${[1,2,3,4,5,6,7,8,9,10].map(n => `<option value="${n}"${(block.capacity||1)===n?' selected':''}>${n} performer${n===1?'':'s'}</option>`).join('')}
             </select>
           </div>` : ''}
+        </div>
+        <div class="aud-planning-tip">
+          <img src="/ASSETS/Images/Icons/Information.svg" alt="" class="aud-planning-tip-icon">
+          <span><strong>Planning tip:</strong> Remember to leave time for coffee breaks, lunch, and catching up if auditions run behind schedule.</span>
         </div>
         `}
         <!-- Schedule preview -->
