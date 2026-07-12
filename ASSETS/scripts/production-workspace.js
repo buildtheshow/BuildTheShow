@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: squares-back-20260712');
+  console.log('[BTS] production-workspace.js version: add-day-step1-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -26330,17 +26330,17 @@ See you soon!
                 <input type="time" class="form-input aud-block-step-input" value="${session.end_time||''}" style="margin-top:auto;" onchange="updateAudSession('${sid}','end_time',this.value);_updateSDateSummary('${sid}')">
               </div>
             </div>
+            <div class="aud-add-block-card" onclick="addBlock('${sid}')" style="margin-top:0.5rem;">
+              <div class="aud-add-block-card-icon">+</div>
+              <div class="aud-add-block-card-title">Add another day</div>
+              <div class="aud-add-block-card-sub">Running this audition across multiple days? Each day gets its own hours and time slots.</div>
+            </div>
           </div>
 
           <!-- Panels 5+6: Schedule builder (shared block list, CSS drives what's visible per tab) -->
           <div id="blocks-section-${sid}" class="aud-tab-panel" style="${onScheduleTab && bookingMode !== 'open_call' ? '' : 'display:none;'}">
             <div id="aud-days-header-${sid}" style="display:none;"></div>
             <div class="aud-blocks-list" id="blocks-list-${sid}">${blocksHTML}</div>
-            <div class="aud-add-block-card" onclick="addBlock('${sid}')">
-              <div class="aud-add-block-card-icon">+</div>
-              <div class="aud-add-block-card-title">Add another day</div>
-              <div class="aud-add-block-card-sub">Running this audition across multiple days? Each day gets its own hours and time slots.</div>
-            </div>
           </div>
 
           <!-- Open call note (tabs 5+6) -->
