@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: time-sync-regen-20260712');
+  console.log('[BTS] production-workspace.js version: preserve-block-labels-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -26723,6 +26723,7 @@ See you soon!
           block_id: block.id,
           capacity: cap,
           is_available: existing.is_available !== false,
+          label: existing.label || null,  // preserve manual block/open label
         });
       } else {
         if (!occupiedElsewhere.has(key)) {
@@ -26748,6 +26749,7 @@ See you soon!
         block_id: slot.block_id,
         capacity: slot.capacity,
         is_available: slot.is_available,
+        label: slot.label,  // preserve blocked/open label
       }).eq('id', slot.id));
     }
     if (dbOps.length) {
