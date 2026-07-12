@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: slot-redesign-20260712');
+  console.log('[BTS] production-workspace.js version: squares-back-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -25752,6 +25752,7 @@ See you soon!
       return '<div class="aud-block-calendar-empty">Generate slots to build this time view.</div>';
     }
 
+    // Index applicants by slot id — only the assignment for THIS session.
     const appsPerSlot = {};
     (allApplicants || []).forEach(app => {
       const assignments = Array.isArray(app.slot_assignments) ? app.slot_assignments : [];
@@ -25762,33 +25763,22 @@ See you soon!
       appsPerSlot[slotId].push(app);
     });
 
-    // Group slots by hour
-    const byHour = {};
-    blockSlots.forEach(slot => {
-      const t = slot.slot_time || slot.start_time || '00:00:00';
-      const h = parseInt(t.slice(0, 2), 10);
-      if (!byHour[h]) byHour[h] = [];
-      byHour[h].push(slot);
-    });
+    return `<div class="aud-block-calendar-grid">${blockSlots.map(slot => {
+      const state    = getAudSlotState(slot);
+      const cap      = Number(slot.capacity) || 1;
+      const slotApps = appsPerSlot[slot.id] || [];
+      const booked   = slotApps.length;
+      const capLabel = `${booked}/${cap}`;
 
-    const hours = Object.keys(byHour).map(Number).sort((a, b) => a - b);
-
-    const rows = hours.map(h => {
-      const label = h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`;
-      const pills = byHour[h].map(slot => {
-        const state   = getAudSlotState(slot);
-        const booked  = (appsPerSlot[slot.id] || []).length;
-        const t       = (slot.slot_time || slot.start_time || '00:00:00').slice(0, 5);
-        const [hh, mm] = t.split(':');
-        const timeStr = `${parseInt(hh, 10)}:${mm}`;
-        const cls = state === 'block' ? 'blocked' : booked > 0 ? 'booked' : 'open';
-        const tip = state === 'open' ? 'Block this slot' : 'Unblock this slot';
-        return `<button class="aud-sched-pill aud-sched-pill--${cls}" onclick="cycleAudSlotLabel('${esc(slot.id)}','${esc(sessionId)}')" title="${tip}">${timeStr}${booked > 0 ? `<span class="aud-sched-pill-booked-dot"></span>` : ''}</button>`;
-      }).join('');
-      return `<div class="aud-sched-row"><div class="aud-sched-row-label">${label}</div><div class="aud-sched-row-pills">${pills}</div></div>`;
-    }).join('');
-
-    return `<div class="aud-sched-hours">${rows}</div>`;
+      return `
+      <div class="aud-block-slot-cell state-${esc(state)}" onclick="cycleAudSlotLabel('${slot.id}','${sessionId}')" title="Click to ${state === 'open' ? 'block' : 'open'} this slot">
+        <div class="aud-block-slot-time">${buildAuditionSchedulePlaceholderTimeLabelHtml(formatSlotTime(slot.slot_time || slot.start_time || ''))}</div>
+        <div class="aud-block-slot-bottom">
+          <button class="aud-block-slot-state state-${esc(state)}" type="button" tabindex="-1">${esc(getAudSlotLabel(slot))}</button>
+          <div class="aud-block-slot-cap">${esc(capLabel)}</div>
+        </div>
+      </div>`;
+    }).join('')}</div>`;
   }
 
   function getAudSlotState(slot) {
@@ -26036,7 +26026,7 @@ See you soon!
             </div>
             <div class="aud-sched-header-hint">Tap a slot to block or unblock it</div>
           </div>` : ''}
-          <div class="aud-sched-wrap">${slotCount ? buildAuditionSchedulerBlockSlotsHtml(sessionId, blockSlots) : `<div class="aud-block-calendar-empty">Click Step 6 to generate your time slots.</div>`}</div>
+          <div class="aud-block-calendar">${slotCount ? buildAuditionSchedulerBlockSlotsHtml(sessionId, blockSlots) : `<div class="aud-block-calendar-empty">Click Step 6 to generate your time slots.</div>`}</div>
         </div>
       </div>`;
   }
