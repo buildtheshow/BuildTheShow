@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: extraday-theme-20260712');
+  console.log('[BTS] production-workspace.js version: days-badge-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -26508,7 +26508,7 @@ See you soon!
       if (datedBlocks.length > 1) {
         daysEl.style.display = '';
         daysEl.innerHTML = '<div class="aud-days-strip"><span class="aud-days-strip-label">Days selected:</span>' +
-          datedBlocks.map(b => '<span class="aud-days-strip-pill">' + formatAuditionScheduleSessionDate(b.date) + '</span>').join('') + '</div>';
+          datedBlocks.map(b => '<span class="aud-days-strip-pill">' + _makeAudDateBadge(b.date) + formatAuditionScheduleSessionDate(b.date) + '</span>').join('') + '</div>';
       } else {
         daysEl.style.display = 'none';
       }
