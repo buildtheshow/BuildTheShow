@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: type-cards-full-width-20260712');
+  console.log('[BTS] production-workspace.js version: step5-grid-3col-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -25970,7 +25970,7 @@ See you soon!
         ${buildCallbackBlockConfigHTML(session, block)}
         ${isCallback ? '' : `
         <!-- Steps grid -->
-        <div class="aud-block-steps-grid">
+        <div class="aud-block-steps-grid" style="grid-template-columns:repeat(3,1fr);">
           <!-- Step 2: Appointment length -->
           <div class="aud-block-step" style="background:#769e7b;border-color:#769e7b;">
             <div class="aud-block-step-head">
