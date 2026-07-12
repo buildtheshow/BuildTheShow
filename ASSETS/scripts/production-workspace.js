@@ -26253,13 +26253,11 @@ See you soon!
                 <button id="s01-chip-${f.key}-${sid}" class="add-wiz-mode-card aud-mode-v2-card${formatSelection[f.key] ? ' selected' : ''}" style="--card-color:${f.color};background:${f.color};border:none" onclick="updateAudSessionFormatOption('${sid}','${f.key}')">
                   <div class="aud-mode-v2-top">
                     <div class="aud-mode-v2-radio"><div class="aud-mode-v2-checkbox"><svg class="aud-mode-v2-checkbox-tick" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2" stroke="${f.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
-                    <div class="aud-mode-v2-body-row">
+                    <div class="aud-type-card-header">
                       <div class="aud-mode-v2-icon-circle"><img src="/ASSETS/Images/Icons/${f.icon}" class="aud-mode-v2-icon-img" alt=""></div>
-                      <div class="aud-mode-v2-text-col">
-                        <div class="aud-mode-v2-title">${f.title}</div>
-                        <div class="aud-mode-v2-desc">${f.desc}</div>
-                      </div>
+                      <div class="aud-mode-v2-title">${f.title}</div>
                     </div>
+                    <div class="aud-mode-v2-desc">${f.desc}</div>
                   </div>
                 </button>`).join('')}
             </div>
@@ -26276,13 +26274,11 @@ See you soon!
                 <button id="aud-mode-card-${sid}-${c.key}" class="add-wiz-mode-card aud-mode-v2-card${bookingMode === c.key ? ' selected' : ''}" style="--card-color:${c.color};background:${c.color};border:none" onclick="updateAudBookingMode('${sid}','${c.key}')">
                   <div class="aud-mode-v2-top">
                     <div class="aud-mode-v2-radio"><div class="aud-mode-v2-checkbox"><svg class="aud-mode-v2-checkbox-tick" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2" stroke="var(--card-color)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
-                    <div class="aud-mode-v2-body-row">
+                    <div class="aud-type-card-header">
                       <div class="aud-mode-v2-icon-circle"><img src="/ASSETS/Images/Icons/${c.icon}" class="aud-mode-v2-icon-img" alt=""></div>
-                      <div class="aud-mode-v2-text-col">
-                        <div class="aud-mode-v2-title">${c.title}</div>
-                        <div class="aud-mode-v2-desc">${c.desc}</div>
-                      </div>
+                      <div class="aud-mode-v2-title">${c.title}</div>
                     </div>
+                    <div class="aud-mode-v2-desc">${c.desc}</div>
                   </div>
                 </button>`).join('')}
             </div>
