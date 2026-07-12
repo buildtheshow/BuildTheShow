@@ -26232,13 +26232,11 @@ See you soon!
                 <button class="add-wiz-mode-card aud-mode-v2-card${(session.type||'audition') === t.value ? ' selected' : ''}" style="--card-color:${t.color};background:${t.color};border:none" onclick="updateAudSessionType('${sid}','${t.value}')">
                   <div class="aud-mode-v2-top">
                     <div class="aud-mode-v2-radio"><div class="aud-mode-v2-checkbox"><svg class="aud-mode-v2-checkbox-tick" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2" stroke="${t.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
-                    <div class="aud-mode-v2-body-row">
+                    <div class="aud-type-card-header">
                       <div class="aud-mode-v2-icon-circle"><img src="/ASSETS/Images/Icons/${t.icon}" class="aud-mode-v2-icon-img" alt=""></div>
-                      <div class="aud-mode-v2-text-col">
-                        <div class="aud-mode-v2-title">${t.label}</div>
-                        <div class="aud-mode-v2-desc">${t.desc}</div>
-                      </div>
+                      <div class="aud-mode-v2-title">${t.label}</div>
                     </div>
+                    <div class="aud-mode-v2-desc">${t.desc}</div>
                   </div>
                 </button>`).join('')}
             </div>
