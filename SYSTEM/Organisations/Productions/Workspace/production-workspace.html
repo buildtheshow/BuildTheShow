@@ -10,7 +10,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>Production Workspace - Build The Show</title>
-  <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260709j" />
+  <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=typography-safe-20260712a" />
   <link rel="stylesheet" href="/ASSETS/styles/production-sidebar.css?v=sidebar-v51-20260704" />
   <link rel="stylesheet" href="/ASSETS/styles/casting-card.css?v=inshow-template-20260529" />
   <link rel="stylesheet" href="/ASSETS/styles/production-team-card.css?v=volunteer-left-text-20260511" />
@@ -53030,7 +53030,7 @@ See you soon!
 
   let audSlotsEnabled = {}; // { [sessionId]: boolean } - pill toggle state
   let audSaveTimers = {};
-  let _audSectionState = {}; // { [sessionId]: { s01:bool, s02:bool, s03:bool, s04:bool } } — true = expanded
+  let _audSectionState = {}; // { [sessionId]: { stype, s01, s02, sdate, s03, s04 } } — true = expanded
   let slotSaveTimers = {};
 
   const SESSION_TYPE_OPTIONS = [
@@ -53493,10 +53493,18 @@ See you soon!
     const collapsedMeta = `${collapsedDate}${collapsedTime ? ` · ${collapsedTime}` : ''}`;
     const locationLabel = String(session.location || '').trim() || 'TBD';
     const _modeLabels = { appointment:'Individual Appointment', group_session:'Group Session', open_call:'Open Call' };
+    const stypeSummary = sessionTypeLabel(session.type || 'audition');
     const s01Summary = [formatSelection.in_person && 'In Person', formatSelection.video_call && 'Video Call', formatSelection.self_tape && 'Self Tape'].filter(Boolean).join(' · ') || 'Choose a format';
     const s02Summary = _modeLabels[bookingMode] || bookingMode;
     const s03Summary = totalSlotCount ? `${totalSlotCount} slot${totalSlotCount !== 1 ? 's' : ''} created` : 'No slots yet';
+    const sdateSummary = collapsedMeta;
     const s04Summary = showToApplicants ? 'Visible to applicants' : 'Hidden from applicants';
+    const typeCards = [
+      { value:'audition',   label:'General Audition', desc:'Singing, acting, or mixed-format auditions.', color:'#dd8233', icon:'Auditions.svg' },
+      { value:'dance_call', label:'Dance Call',        desc:'Movement and choreography auditions.',        color:'#d1523d', icon:'Choreography.svg' },
+      { value:'callback',   label:'Callback',          desc:'Second-round auditions for selected performers.', color:'#769e7b', icon:'Star.svg' },
+      { value:'other',      label:'Other',             desc:'Any other type of audition session.',         color:'#ca7ea7', icon:'Auditions.svg' },
+    ];
     const accessLabels = [];
     if (formatSelection.in_person) accessLabels.push('In Person');
     if (formatSelection.video_call) accessLabels.push('Video Call');
@@ -53525,15 +53533,49 @@ See you soon!
             <div class="aud-card-when">${esc(collapsedMeta)}</div>
           </div>
           <div class="aud-card-vis-badge ${showToApplicants ? 'is-visible' : 'is-hidden'}" id="aud-vis-badge-${sid}">${showToApplicants ? 'Visible' : 'Hidden'}</div>
-          <button class="aud-action-btn" onclick="event.stopPropagation();openEditAuditionWizard('${sid}')" title="Edit">Edit</button>
           <button class="aud-action-btn danger" onclick="event.stopPropagation();deleteAudSession('${sid}')" title="Delete">×</button>
           <span class="aud-collapse-chevron">▼</span>
         </div>
         <div class="aud-card-body">
-          <!-- 01 What is this audition -->
+          <!-- 01 Audition type -->
+          <div class="aud-card-section">
+            <div class="aud-card-section-head aud-section-toggle" onclick="toggleAudSection('${sid}','stype')">
+              <div class="aud-card-section-num">01</div>
+              <div style="flex:1;">
+                <div class="aud-card-section-title">What type of audition is this?</div>
+                <div class="aud-card-section-copy" style="${(_audSectionState[sid]&&_audSectionState[sid]['stype']) ? '' : 'display:none;'}">Choose the type that best describes this session.</div>
+                <div class="aud-card-section-summary" id="stype-summary-${sid}" style="${(_audSectionState[sid]&&_audSectionState[sid]['stype']) ? 'display:none;' : 'display:block;'}">${stypeSummary}</div>
+              </div>
+              <div class="aud-section-chevron" id="stype-chevron-${sid}" style="${(_audSectionState[sid]&&_audSectionState[sid]['stype']) ? '' : 'transform:rotate(-90deg);'}">&#9660;</div>
+            </div>
+            <div id="stype-body-${sid}" style="${(_audSectionState[sid]&&_audSectionState[sid]['stype']) ? '' : 'display:none;'}">
+            <div class="add-wiz-mode-cards" style="margin-bottom:1rem;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));">
+              ${typeCards.map(t => `
+                <button class="add-wiz-mode-card aud-mode-v2-card${(session.type||'audition') === t.value ? ' selected' : ''}" style="--card-color:${t.color};background:${t.color};border:none" onclick="updateAudSessionType('${sid}','${t.value}')">
+                  <div class="aud-mode-v2-top">
+                    <div class="aud-mode-v2-radio">
+                      <div class="aud-mode-v2-checkbox">
+                        <svg class="aud-mode-v2-checkbox-tick" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2" stroke="${t.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </div>
+                    </div>
+                    <div class="aud-mode-v2-body-row">
+                      <div class="aud-mode-v2-icon-circle">
+                        <img src="/ASSETS/Images/Icons/${t.icon}" class="aud-mode-v2-icon-img" alt="">
+                      </div>
+                      <div class="aud-mode-v2-text-col">
+                        <div class="aud-mode-v2-title">${t.label}</div>
+                        <div class="aud-mode-v2-desc">${t.desc}</div>
+                      </div>
+                    </div>
+                  </div>
+                </button>`).join('')}
+            </div>
+            </div><!-- /stype-body -->
+          </div>
+          <!-- 02 How will this take place -->
           <div class="aud-card-section">
             <div class="aud-card-section-head aud-section-toggle" onclick="toggleAudSection('${sid}','s01')">
-              <div class="aud-card-section-num">01</div>
+              <div class="aud-card-section-num">02</div>
               <div style="flex:1;">
                 <div class="aud-card-section-title">How will this audition take place?</div>
                 <div class="aud-card-section-copy" style="${(_audSectionState[sid]&&_audSectionState[sid]['s01']) ? '' : 'display:none;'}">Choose where and how performers can audition.</div>
@@ -53573,10 +53615,10 @@ See you soon!
             </div>
             </div><!-- /s01-body -->
           </div>
-          <!-- 02 How will performers attend -->
+          <!-- 03 How will performers attend -->
           <div class="aud-card-section">
             <div class="aud-card-section-head aud-section-toggle" onclick="toggleAudSection('${sid}','s02')">
-              <div class="aud-card-section-num">02</div>
+              <div class="aud-card-section-num">03</div>
               <div style="flex:1;">
                 <div class="aud-card-section-title">How will performers attend this audition?</div>
                 <div class="aud-card-section-copy" style="${(_audSectionState[sid]&&_audSectionState[sid]['s02']) ? '' : 'display:none;'}">Choose the option that best fits how you want this audition to run.</div>
@@ -53608,10 +53650,56 @@ See you soon!
             </div>
             </div><!-- /s02-body -->
           </div>
-          <!-- 03 Build schedule -->
+          <!-- 04 When is this audition -->
+          <div class="aud-card-section">
+            <div class="aud-card-section-head aud-section-toggle" onclick="toggleAudSection('${sid}','sdate')">
+              <div class="aud-card-section-num">04</div>
+              <div style="flex:1;">
+                <div class="aud-card-section-title">When is this audition?</div>
+                <div class="aud-card-section-copy" style="${(_audSectionState[sid]&&_audSectionState[sid]['sdate']) ? '' : 'display:none;'}">Set the date and overall time window for this audition.</div>
+                <div class="aud-card-section-summary" id="sdate-summary-${sid}" style="${(_audSectionState[sid]&&_audSectionState[sid]['sdate']) ? 'display:none;' : 'display:block;'}">${sdateSummary}</div>
+              </div>
+              <div class="aud-section-chevron" id="sdate-chevron-${sid}" style="${(_audSectionState[sid]&&_audSectionState[sid]['sdate']) ? '' : 'transform:rotate(-90deg);'}">&#9660;</div>
+            </div>
+            <div id="sdate-body-${sid}" style="${(_audSectionState[sid]&&_audSectionState[sid]['sdate']) ? '' : 'display:none;'}">
+            <div class="aud-block-steps-grid" style="grid-template-columns:1.4fr 1fr 1fr;margin-bottom:0.75rem;" onclick="event.stopPropagation()">
+              <div class="aud-block-step" style="background:#769e7b;border-color:#769e7b;">
+                <div class="aud-block-step-head">
+                  <div class="aud-block-step-icon-wrap"><img src="/ASSETS/Images/Icons/navproductioncalendar.svg" alt=""></div>
+                  <div>
+                    <div class="aud-block-step-title">Which day?</div>
+                    <div class="aud-block-step-sub">The date of this audition.</div>
+                  </div>
+                </div>
+                <input type="date" class="form-input aud-block-step-input" value="${session.date||''}" style="margin-top:auto;" onchange="updateAudSession('${sid}','date',this.value);_updateSDateSummary('${sid}')">
+              </div>
+              <div class="aud-block-step" style="background:#74a2b4;border-color:#74a2b4;">
+                <div class="aud-block-step-head">
+                  <div class="aud-block-step-icon-wrap"><img src="/ASSETS/Images/Icons/time.svg" alt=""></div>
+                  <div>
+                    <div class="aud-block-step-title">Start time</div>
+                    <div class="aud-block-step-sub">When auditions begin.</div>
+                  </div>
+                </div>
+                <input type="time" class="form-input aud-block-step-input" value="${session.start_time||''}" style="margin-top:auto;" onchange="updateAudSession('${sid}','start_time',this.value);_updateSDateSummary('${sid}')">
+              </div>
+              <div class="aud-block-step" style="background:#74a2b4;border-color:#74a2b4;">
+                <div class="aud-block-step-head">
+                  <div class="aud-block-step-icon-wrap"><img src="/ASSETS/Images/Icons/time.svg" alt=""></div>
+                  <div>
+                    <div class="aud-block-step-title">End time</div>
+                    <div class="aud-block-step-sub">When auditions wrap up.</div>
+                  </div>
+                </div>
+                <input type="time" class="form-input aud-block-step-input" value="${session.end_time||''}" style="margin-top:auto;" onchange="updateAudSession('${sid}','end_time',this.value);_updateSDateSummary('${sid}')">
+              </div>
+            </div>
+            </div><!-- /sdate-body -->
+          </div>
+          <!-- 05 Build schedule -->
           <div class="aud-card-section" id="blocks-section-${sid}" style="display:${bookingMode === 'open_call' ? 'none' : 'block'};">
             <div class="aud-card-section-head aud-section-toggle" onclick="toggleAudSection('${sid}','s03')">
-              <div class="aud-card-section-num">03</div>
+              <div class="aud-card-section-num">05</div>
               <div style="flex:1;">
                 <div class="aud-card-section-title">Build your schedule</div>
                 <div class="aud-card-section-copy" style="${(_audSectionState[sid]&&_audSectionState[sid]['s03']) ? '' : 'display:none;'}">Set the audition hours and we'll create time slots for performers to book.${totalSlotCount ? ` <strong>${totalSlotCount} slot${totalSlotCount !== 1 ? 's' : ''}</strong> generated.` : ''}</div>
@@ -53629,20 +53717,20 @@ See you soon!
             </div>
             </div><!-- /s03-body -->
           </div>
-          <!-- 03 Open call note -->
+          <!-- 05 Open call note -->
           <div class="aud-card-section" id="opencall-section-${sid}" style="display:${bookingMode === 'open_call' ? 'block' : 'none'};">
             <div class="aud-card-section-head">
-              <div class="aud-card-section-num">03</div>
+              <div class="aud-card-section-num">05</div>
               <div>
                 <div class="aud-card-section-title">No schedule needed</div>
                 <div class="aud-card-section-copy">Performers can walk in at any time during the audition window. No slot booking needed.</div>
               </div>
             </div>
           </div>
-          <!-- 04 Visibility -->
+          <!-- 06 Visibility -->
           <div class="aud-card-section aud-card-section--vis" id="vis-footer-${sid}">
             <div class="aud-card-section-head aud-section-toggle" onclick="toggleAudSection('${sid}','s04')">
-              <div class="aud-card-section-num">04</div>
+              <div class="aud-card-section-num">06</div>
               <div style="flex:1;">
                 <div class="aud-card-section-title">Can performers see this audition yet?</div>
                 <div class="aud-card-section-copy" style="${(_audSectionState[sid]&&_audSectionState[sid]['s04']) ? '' : 'display:none;'}">You can keep editing privately until you're ready.</div>
@@ -53840,6 +53928,22 @@ See you soon!
 
   function updateAudSelfBooking(sessionId, allowed) {
     updateAudSession(sessionId, 'allow_self_booking', allowed);
+  }
+
+  function _updateSDateSummary(sessionId) {
+    const session = audSessions.find(s => s.id === sessionId);
+    if (!session) return;
+    const dateStr = session.date
+      ? (session.end_date
+          ? `${formatAuditionScheduleSessionDate(session.date)} - ${formatAuditionScheduleSessionDate(session.end_date)}`
+          : formatAuditionScheduleSessionDate(session.date))
+      : 'No date booked';
+    const timeStr = session.start_time
+      ? `${formatSlotTime(session.start_time)}${session.end_time ? ` - ${formatSlotTime(session.end_time)}` : ''}`
+      : '';
+    updateAudSectionSummary('sdate', sessionId, dateStr + (timeStr ? ` · ${timeStr}` : ''));
+    const whenEl = document.querySelector(`.aud-session-card[data-session-id="${sessionId}"] .aud-card-when`);
+    if (whenEl) whenEl.textContent = dateStr + (timeStr ? ` · ${timeStr}` : '');
   }
 
   function toggleAudSection(sessionId, key) {
