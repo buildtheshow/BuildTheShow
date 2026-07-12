@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: chip-icons-20260712');
+  console.log('[BTS] production-workspace.js version: chip-no-cal-box-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -26159,7 +26159,7 @@ See you soon!
       const dc = session.end_date
         ? `${formatAuditionScheduleSessionDate(session.date)} – ${formatAuditionScheduleSessionDate(session.end_date)}`
         : formatAuditionScheduleSessionDate(session.date);
-      chips.push({ icon:'calendar-date.svg', label:dc });
+      chips.push({ icon:null, label:dc });
     }
     if (session.start_time) {
       const tc = `${formatSlotTime(session.start_time)}${session.end_time ? ` – ${formatSlotTime(session.end_time)}` : ''}`;
@@ -26171,7 +26171,7 @@ See you soon!
     const modeLabel = { appointment:'Individual Appointment', group_session:'Group Session', open_call:'Open Call' };
     chips.push({ icon:modeIcon[bookingMode]||'Performer.svg', label:modeLabel[bookingMode]||'Individual Appointment' });
     if (bookingMode === 'appointment' && session.slot_length) chips.push({ icon:'Shifts.svg', label:`${session.slot_length} min slots` });
-    return chips.map(c => `<span class="aud-header-chip"><img src="/ASSETS/Images/Icons/${_esc(c.icon)}" alt="" class="aud-header-chip-icon">${_esc(c.label)}</span>`).join('');
+    return chips.map(c => `<span class="aud-header-chip">${c.icon ? `<img src="/ASSETS/Images/Icons/${_esc(c.icon)}" alt="" class="aud-header-chip-icon">` : ''}<span>${_esc(c.label)}</span></span>`).join('');
   }
 
   function buildAudSessionCardHTML(session) {
