@@ -26188,17 +26188,17 @@ See you soon!
     const typeStyle = AUD_TYPE_STYLE[session.type] || AUD_TYPE_STYLE.audition;
     const isCollapsed = audCollapsed.has(session.id);
     const sid = session.id;
-    const activeTab = _audActiveTab[sid] || 'stype';
+    const activeTab = _audActiveTab[sid] || 'sdate';
     const modeCards = [
       { key:'appointment',   icon:'time.svg',                color:'#572e88', title:'Individual Appointment', desc:'Performers choose a specific time slot for their individual audition.' },
       { key:'group_session', icon:'organisation-members.svg', color:'#769e7b', title:'Group Session',          desc:'Performers choose a scheduled group session and audition together.' },
       { key:'open_call',     icon:'Volunteers.svg',          color:'#dd8233', title:'Open Call',              desc:"Performers arrive during the advertised audition hours and wait until they're called." },
     ];
     const stepTiles = [
-      { key:'stype',  num:1, label:'Audition Type',      color:'#d1523d' },
-      { key:'s01',    num:2, label:'Audition Format',     color:'#769e7b' },
-      { key:'s02',    num:3, label:'Scheduling Method',     color:'#dd8233' },
-      { key:'sdate',  num:4, label:'Audition Dates',      color:'#476aaa' },
+      { key:'sdate',  num:1, label:'Audition Dates',      color:'#476aaa' },
+      { key:'stype',  num:2, label:'Audition Type',       color:'#d1523d' },
+      { key:'s01',    num:3, label:'Audition Format',     color:'#769e7b' },
+      { key:'s02',    num:4, label:'Scheduling Method',   color:'#dd8233' },
       { key:'s03',    num:5, label:'Build Your Schedule', color:'#ca7ea7' },
       { key:'sslots', num:6, label:'Generate Timeslots',  color:'#572e88' },
     ];
