@@ -26172,10 +26172,10 @@ See you soon!
     const _modeLabels = { appointment:'Individual Appointment', group_session:'Group Session', open_call:'Open Call' };
     const s03Summary = totalSlotCount ? `${totalSlotCount} slot${totalSlotCount !== 1 ? 's' : ''} created` : 'No slots yet';
     const typeCards = [
-      { value:'audition',   label:'General Audition', desc:'Singing, acting, or mixed-format auditions.', color:'#dd8233', icon:'Auditions.svg' },
-      { value:'dance_call', label:'Dance Call',        desc:'Movement and choreography auditions.',        color:'#d1523d', icon:'Choreography.svg' },
-      { value:'callback',   label:'Callback',          desc:'Second-round auditions for selected performers.', color:'#769e7b', icon:'Star.svg' },
-      { value:'other',      label:'Other',             desc:'Any other type of audition session.',         color:'#ca7ea7', icon:'Auditions.svg' },
+      { value:'audition',   label:'General Audition', desc:'The main audition for your production.<br>Use this for the first round of auditions.',           color:'#dd8233', icon:'Auditions.svg' },
+      { value:'dance_call', label:'Dance Call',        desc:'Focused on dance and movement.<br>Use this to assess choreography or movement skills.',          color:'#d1523d', icon:'Choreography.svg' },
+      { value:'callback',   label:'Callback',          desc:'An additional audition for selected performers.<br>Use this after the first round when you need to see performers again.', color:'#769e7b', icon:'Star.svg' },
+      { value:'other',      label:'Other',             desc:'A custom audition session.<br>Use this for anything that doesn\'t fit the options above.',        color:'#ca7ea7', icon:'Auditions.svg' },
     ];
     const AUD_TYPE_STYLE = {
       audition:       { colour: '#dd8233', icon: 'Auditions.svg' },
