@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: group-capacity-20260712');
+  console.log('[BTS] production-workspace.js version: session-wide-settings-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -26590,6 +26590,10 @@ See you soon!
   function updateBlock(sessionId, blockId, field, value) {
     const block = (audBlocks[sessionId] || []).find(b => b.id === blockId);
     if (block) block[field] = value;
+    // slot_length and buffer are session-wide — keep all blocks in sync
+    if (['slot_length', 'buffer'].includes(field)) {
+      (audBlocks[sessionId] || []).forEach(b => { b[field] = value; });
+    }
     _saveBlocks(sessionId);
     if (['title', 'callback_type', 'instructions', 'reschedule_allowed'].includes(field)) {
       _reRenderBlocksList(sessionId);
