@@ -518,6 +518,11 @@
     if (audWrap) audWrap.style.display = isDisabled(enabledModules, 'auditions') ? 'none' : '';
     var regWrap = document.getElementById('registration-wrap');
     if (regWrap) regWrap.style.display = isDisabled(enabledModules, 'registration') ? 'none' : '';
+    var checkinEl = document.getElementById('group-checkin');
+    if (checkinEl) {
+      var showCheckin = !isDisabled(enabledModules, 'volunteers') || !isDisabled(enabledModules, 'registration');
+      checkinEl.style.display = showCheckin ? '' : 'none';
+    }
   }
 
   // Called by any page (workspace or standalone) once production data is available
