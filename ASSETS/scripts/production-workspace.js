@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: vol-deadline-panel-20260713');
+  console.log('[BTS] production-workspace.js version: vol-no-email-flag-20260713');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -45526,6 +45526,7 @@ See you soon!
 
       const summaryEmailActions = (() => {
         const buttons = [];
+        if (!p.no_email) {
         if (approvedShifts.length) {
           window._volReqApprovedIds = approvedShifts.map(s => s.id);
           buttons.push('<button type="button" class="btn-secondary" style="font-size:0.78rem;" onclick="volReqRespondAll(window._volReqApprovedIds,\'approved\')">Email Approved Shifts</button>');
@@ -45533,6 +45534,7 @@ See you soon!
         if (declinedShifts.length) {
           window._volReqDeclinedIds = declinedShifts.map(s => s.id);
           buttons.push('<button type="button" class="btn-secondary" style="font-size:0.78rem;" onclick="volReqRespondAll(window._volReqDeclinedIds,\'declined\')">Email Declined Shifts</button>');
+        }
         }
         return buttons.length
           ? '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;padding:0.75rem 1.5rem;border-top:1px solid rgba(87,46,136,0.08);background:#faf9fc;">' + buttons.join('') + '</div>'
@@ -45555,10 +45557,10 @@ See you soon!
         +   '<button type="button" onclick="volReqConfirmDelete(window._volReqEditKey)" style="background:none;border:1px solid rgba(180,50,30,0.3);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.6rem;font-weight:800;color:#b33a25;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;">Remove request</button>'
         + '</div>'
         +     '<div class="vol-req-detail-role" style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">'
-        +       esc(p.email || '')
-        +       (p.email ? '<button type="button" onclick="volResendCode(window._volReqResendEmail,window._volReqResendName,window._volReqResendPasscode)" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:5px;padding:0.12rem 0.45rem;font-size:0.62rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;white-space:nowrap;">Resend Production Code</button>' : '')
+        +       (p.no_email ? '<span style="font-size:0.72rem;font-weight:800;color:#d1523d;background:rgba(209,82,61,0.08);border-radius:4px;padding:0.1rem 0.4rem;">No email</span>' : esc(p.email || ''))
+        +       (!p.no_email && p.email ? '<button type="button" onclick="volResendCode(window._volReqResendEmail,window._volReqResendName,window._volReqResendPasscode)" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:5px;padding:0.12rem 0.45rem;font-size:0.62rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;white-space:nowrap;">Resend Production Code</button>' : '')
         +     '</div>'
-        +     (p.email ? '<div class="vol-req-detail-time" style="display:flex;align-items:center;gap:0.35rem;">Production Code: <strong style="font-size:0.82rem;letter-spacing:0.08em;color:#352756;">' + esc(p.volunteer_passcode || '—') + '</strong></div>' : '')
+        +     (!p.no_email && p.email ? '<div class="vol-req-detail-time" style="display:flex;align-items:center;gap:0.35rem;">Production Code: <strong style="font-size:0.82rem;letter-spacing:0.08em;color:#352756;">' + esc(p.volunteer_passcode || '—') + '</strong></div>' : '')
         +     (p.phone ? '<div class="vol-req-detail-time">' + esc(p.phone) + '</div>' : '')
         +     '<div class="vol-req-detail-time">Requested ' + volReqTimeAgo(p.created_at) + '</div>'
         + '</div></div>'
@@ -46122,7 +46124,14 @@ See you soon!
       + '</div>'
       + '<div style="margin-bottom:0.7rem;">'
       +   '<label style="display:block;font-size:0.72rem;font-weight:900;color:#1a1530;margin-bottom:0.22rem;">Email Address</label>'
-      +   '<input id="vecf-email" type="email" value="' + esc(p.email || '') + '" placeholder="email@example.com" style="width:100%;border:1.5px solid rgba(87,46,136,0.22);border-radius:8px;padding:0.6rem 0.75rem;font-family:inherit;font-size:0.9rem;outline:0;box-sizing:border-box;" />'
+      +   '<input id="vecf-email" type="email" value="' + esc(p.no_email ? '' : (p.email || '')) + '" placeholder="email@example.com" style="width:100%;border:1.5px solid rgba(87,46,136,0.22);border-radius:8px;padding:0.6rem 0.75rem;font-family:inherit;font-size:0.9rem;outline:0;box-sizing:border-box;" ' + (p.no_email ? 'disabled' : '') + '/>'
+      + '</div>'
+      + '<div style="margin-bottom:1rem;">'
+      +   '<label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;user-select:none;">'
+      +     '<input id="vecf-no-email" type="checkbox" ' + (p.no_email ? 'checked' : '') + ' onchange="(function(cb){var f=document.getElementById(\'vecf-email\');f.disabled=cb.checked;if(cb.checked)f.value=\'\';})(this)" style="width:15px;height:15px;accent-color:#572e88;cursor:pointer;flex-shrink:0;" />'
+      +     '<span style="font-size:0.8rem;font-weight:700;color:#572e88;">No email address</span>'
+      +     '<span style="font-size:0.72rem;color:#9a8ab0;">(phone contact only)</span>'
+      +   '</label>'
       + '</div>'
       + '<div style="margin-bottom:0.7rem;">'
       +   '<label style="display:block;font-size:0.72rem;font-weight:900;color:#1a1530;margin-bottom:0.22rem;">Phone Number</label>'
@@ -46144,14 +46153,15 @@ See you soon!
   }
 
   async function volReqSaveContact(portalKey) {
-    const nameVal  = (document.getElementById('vecf-name')?.value || '').trim();
-    const emailVal = (document.getElementById('vecf-email')?.value || '').trim().toLowerCase();
-    const phoneVal = (document.getElementById('vecf-phone')?.value || '').trim();
+    const nameVal     = (document.getElementById('vecf-name')?.value || '').trim();
+    const noEmail     = document.getElementById('vecf-no-email')?.checked || false;
+    const emailVal    = noEmail ? '' : (document.getElementById('vecf-email')?.value || '').trim().toLowerCase();
+    const phoneVal    = (document.getElementById('vecf-phone')?.value || '').trim();
     const passcodeVal = (document.getElementById('vecf-passcode')?.value || '').trim();
     const errEl    = document.getElementById('vecf-error');
     const saveBtn  = document.getElementById('vecf-save-btn');
     if (!nameVal) { errEl.textContent = 'Please enter a name.'; errEl.style.display = 'block'; return; }
-    if (!emailVal || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) { errEl.textContent = 'Please enter a valid email address.'; errEl.style.display = 'block'; return; }
+    if (!noEmail && (!emailVal || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal))) { errEl.textContent = 'Please enter a valid email address, or check "No email address".'; errEl.style.display = 'block'; return; }
     if (passcodeVal && !/^\d{6}$/.test(passcodeVal)) { errEl.textContent = 'Use exactly 6 numbers for the Production Code.'; errEl.style.display = 'block'; return; }
     errEl.style.display = 'none';
     if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
@@ -46164,7 +46174,8 @@ See you soon!
         name: nameVal,
         first_name: parts[0] || '',
         last_name: parts.slice(1).join(' ') || '',
-        email: emailVal,
+        email: emailVal || null,
+        no_email: noEmail,
         phone: phoneVal || null,
         volunteer_passcode: passcodeVal || null,
       };
