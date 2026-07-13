@@ -436,7 +436,7 @@ async function loadAll() {
        .eq('production_id', _prodId)
        .eq('status', 'approved'),
     _sb.from('registration_payment_records')
-       .select('casting_assignment_id,performer_name')
+       .select('id,casting_assignment_id,performer_name')
        .eq('production_id', _prodId),
     _sb.from('casting_assignments')
        .select('id,applicant_id,role_name,character_name')
@@ -489,18 +489,25 @@ async function loadAll() {
   });
   _volunteers.sort((a, b) => a.name.localeCompare(b.name));
 
+  // Build name map from audition records (fallback for cast name lookup)
   const nameMap = {};
   (appsRes.data || []).forEach(a => { nameMap[a.id] = [a.first_name, a.last_name].filter(Boolean).join(' ') || a.name; });
   (booksRes.data || []).forEach(b => { nameMap[b.id] = [b.first_name, b.last_name].filter(Boolean).join(' ') || b.name; });
-  const regMap = {};
-  (regRes.data || []).forEach(r => { if (r.casting_assignment_id) regMap[String(r.casting_assignment_id)] = r.performer_name || ''; });
-  _cast = (assignRes.data || []).map(a => {
-    // Name from registration record first, then audition application/booking, then fallback
-    const name = regMap[String(a.id)] || nameMap[a.applicant_id] || 'Performer';
-    const ci = ciMap['cast::' + a.id] || {};
+
+  // Build casting assignment map for role/character lookup
+  const assignMap = {};
+  (assignRes.data || []).forEach(a => { assignMap[String(a.id)] = a; });
+
+  // Cast = everyone registered for this production (registration is the source of truth)
+  // Character/role comes from their casting assignment if linked
+  _cast = (regRes.data || []).map(r => {
+    const assignment = r.casting_assignment_id ? (assignMap[String(r.casting_assignment_id)] || {}) : {};
+    const name = r.performer_name || nameMap[assignment.applicant_id] || 'Performer';
+    const role = assignment.character_name || assignment.role_name || '';
+    const ci = ciMap['cast::' + r.id] || {};
     return {
-      id: a.id, name, role: a.character_name || a.role_name || '',
-      refId: String(a.id), expectedStart: _eventStart, expectedEnd: evEnd,
+      id: r.id, name, role,
+      refId: String(r.id), expectedStart: _eventStart, expectedEnd: evEnd,
       checkedIn: !!ci.checkedIn, checkedInAt: ci.checkedInAt || null,
       signedOutAt: ci.signedOutAt || null, awayToday: !!ci.awayToday,
     };
