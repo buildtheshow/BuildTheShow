@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: vol-approve-all-shifts-20260713');
+  console.log('[BTS] production-workspace.js version: vol-role-editor-calendar-20260713');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -46889,7 +46889,9 @@ See you soon!
 	    const savedOwnTime = saved.shiftStartAnchor === 'own_time' || saved.shiftEndAnchor === 'own_time';
 	    const savedDeadline = saved.shiftStartAnchor === 'deadline' || saved.shiftEndAnchor === 'deadline';
 	    const editorColor = DEPT_COLOURS_LOCAL[department] || meta.color || '#572e88';
-	    const isProdRole = countMode === 'per_production' || ['dept_leads', 'other'].includes(type);
+	    // If the saved appliesTo contains real calendar types, honour that even for dept_leads/other
+    const hasCalendarTypes = appliesTo.some(t => !['dept_leads', 'other'].includes(t));
+    const isProdRole = !hasCalendarTypes && (countMode === 'per_production' || ['dept_leads', 'other'].includes(type));
 	    const pop = document.createElement('div');
 	    pop.className = 'vol-schedule-modal';
 	    const departmentOptions = DEPT_LIST.map(d => `<option value="${esc(d)}" ${d === department ? 'selected' : ''}>${esc(d)}</option>`).join('');
