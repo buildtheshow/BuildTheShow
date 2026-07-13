@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: vol-fixed-hours-20260713');
+  console.log('[BTS] production-workspace.js version: vol-deadline-email-20260713');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -45713,6 +45713,12 @@ See you soon!
     const shiftDateLines = rows.map(s => {
       const rd = Array.isArray(s.required_dates) ? s.required_dates.filter(Boolean) : [];
       if (s.shift_date && s.shift_start_time) {
+        const isDeadlineShift = s.shift_end_time && String(s.shift_start_time).slice(0,5) === String(s.shift_end_time).slice(0,5);
+        if (isDeadlineShift) {
+          const t = String(s.shift_start_time).slice(0,5);
+          const timeSuffix = (t && t !== '00:00') ? ' by ' + fmtT(s.shift_start_time) : '';
+          return 'Deadline: ' + fmtFullD(s.shift_date) + timeSuffix;
+        }
         const timeStr = fmtT(s.shift_start_time) + (s.shift_end_time ? ' – ' + fmtT(s.shift_end_time) : '');
         return fmtFullD(s.shift_date) + ' · ' + timeStr;
       }
@@ -45739,7 +45745,8 @@ See you soon!
       const location = s.location || s.venue || s.venue_name || s.room || s.where || s.check_in_location || '';
       const rd       = Array.isArray(s.required_dates) ? s.required_dates.filter(Boolean) : [];
       if (s.shift_date) {
-        displayRows.push({ role, dept, point, location, isoDate: s.shift_date, startTime: s.shift_start_time, endTime: s.shift_end_time });
+        const isDeadline = !!(s.shift_start_time && s.shift_end_time && String(s.shift_start_time).slice(0,5) === String(s.shift_end_time).slice(0,5));
+        displayRows.push({ role, dept, point, location, isoDate: s.shift_date, startTime: s.shift_start_time, endTime: s.shift_end_time, isDeadline });
       } else if (rd.length) {
         rd.forEach(rdStr => displayRows.push({ role, dept, point, location, rdStr: String(rdStr) }));
       } else {
@@ -45779,7 +45786,12 @@ See you soon!
         dayTop = d.toLocaleDateString('en-CA', { weekday: 'short' }).toUpperCase();
         dayNum = String(d.getDate());
         dayBot = d.toLocaleDateString('en-CA', { month: 'short', year: 'numeric' }).toUpperCase();
-        timeHtml = r.startTime ? fmtT(r.startTime) + (r.endTime ? ' – ' + fmtT(r.endTime) : '') : 'This date';
+        if (r.isDeadline) {
+          const t = (r.startTime || '').slice(0,5);
+          timeHtml = (t && t !== '00:00') ? 'Due by ' + fmtT(r.startTime) : 'Deadline';
+        } else {
+          timeHtml = r.startTime ? fmtT(r.startTime) + (r.endTime ? ' – ' + fmtT(r.endTime) : '') : 'This date';
+        }
       } else if (r.rdStr) {
         const parsed = parseRdStr(r.rdStr);
         if (parsed.date) {
