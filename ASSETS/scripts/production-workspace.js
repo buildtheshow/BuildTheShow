@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: vol-flexible-hrs-display-20260713');
+  console.log('[BTS] production-workspace.js version: vol-deadline-panel-20260713');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -45486,7 +45486,8 @@ See you soon!
         const isFlexible = !s.shift_start_time && !s.shift_end_time;
         const startFmt = fmtTime(s.shift_start_time);
         const endFmt   = fmtTime(s.shift_end_time);
-        const timeStr  = startFmt && endFmt ? startFmt + ' – ' + endFmt : startFmt || '';
+        const isDeadlineShift = !!(s.shift_start_time && s.shift_end_time && String(s.shift_start_time).slice(0,5) === String(s.shift_end_time).slice(0,5));
+        const timeStr  = isDeadlineShift ? ('Deadline' + (startFmt ? ' · Due by ' + startFmt : '')) : (startFmt && endFmt ? startFmt + ' – ' + endFmt : startFmt || '');
         const hrs      = shiftRequestedHrs(s);
         const hrsStr   = hrs > 0 ? fmtHourNumber(hrs) + ' hr' + (hrs===1?'':'s') : '';
         const opp      = opportunities.find(o => o.id === s.opportunity_id);
