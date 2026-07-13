@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: vol-role-editor-calendar-20260713');
+  console.log('[BTS] production-workspace.js version: vol-fixed-hours-20260713');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -45414,7 +45414,17 @@ See you soon!
       function shiftRequestedHrs(s) {
         const stored = parseFloat(s.approved_hours);
         if (Number.isFinite(stored) && stored > 0) return stored;
-        return shiftTimedHrs(s);
+        const timed = shiftTimedHrs(s);
+        if (timed > 0) return timed;
+        // No times and no stored hours — look up fixed hours from the role's staffing plan config
+        const roleName = (s.role_name || s.volunteer_role || '').trim().toLowerCase();
+        if (roleName) {
+          const planEntry = Object.values(_staffingPlan || {}).find(p =>
+            (p.roleName || '').trim().toLowerCase() === roleName && p.hoursMode === 'fixed' && p.countsFor > 0
+          );
+          if (planEntry) return Number(planEntry.countsFor);
+        }
+        return 0;
       }
       const totalRequestedHrs = personShifts.reduce((sum,s) => sum + shiftRequestedHrs(s), 0);
       const totalApprovedHrs  = personShifts.filter(s => s.status === 'approved').reduce((sum,s) => sum + (parseFloat(s.approved_hours) || shiftTimedHrs(s)), 0);
@@ -45929,13 +45939,24 @@ See you soon!
     if (Number.isFinite(existing) && existing > 0) return existing;
     const start = String(signup.shift_start_time || '').slice(0, 5);
     const end = String(signup.shift_end_time || '').slice(0, 5);
-    if (!start || !end) return 0;
-    const [sh, sm] = start.split(':').map(Number);
-    const [eh, em] = end.split(':').map(Number);
-    if (![sh, sm, eh, em].every(Number.isFinite)) return 0;
-    let diff = ((eh * 60) + em) - ((sh * 60) + sm);
-    if (diff < 0) diff += 24 * 60;
-    return Math.max(0, diff / 60);
+    if (start && end) {
+      const [sh, sm] = start.split(':').map(Number);
+      const [eh, em] = end.split(':').map(Number);
+      if ([sh, sm, eh, em].every(Number.isFinite)) {
+        let diff = ((eh * 60) + em) - ((sh * 60) + sm);
+        if (diff < 0) diff += 24 * 60;
+        if (diff > 0) return Math.max(0, diff / 60);
+      }
+    }
+    // No shift times — look up fixed hours from the role's staffing plan config
+    const roleName = (signup.role_name || signup.volunteer_role || '').trim().toLowerCase();
+    if (roleName) {
+      const planEntry = Object.values(_staffingPlan || {}).find(p =>
+        (p.roleName || '').trim().toLowerCase() === roleName && p.hoursMode === 'fixed' && p.countsFor > 0
+      );
+      if (planEntry) return Number(planEntry.countsFor);
+    }
+    return 0;
   }
 
   async function volReqApplyStatus(ids, newStatus) {
