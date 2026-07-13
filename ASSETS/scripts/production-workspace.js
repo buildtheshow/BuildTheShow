@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: session-type-colours-20260712');
+  console.log('[BTS] production-workspace.js version: group-capacity-20260712');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -26012,15 +26012,14 @@ See you soon!
             </select>
           </div>
           ${bookingMode !== 'appointment' ? `
-          <!-- Step 4: Capacity (hidden for individual appointment — always 1) -->
+          <!-- Capacity tile — group size for group_session, per-slot cap for open_call -->
           <div class="aud-block-step" style="background:#476aaa;border-color:#476aaa;">
             <div class="aud-block-step-head">
               <div class="aud-block-step-icon-wrap"><img src="/ASSETS/Images/Icons/organisation-members.svg" alt=""></div>
-              <div><div class="aud-block-step-title">How many per slot?</div><div class="aud-block-step-sub">Performers who can book the same time.</div></div>
+              <div><div class="aud-block-step-title">${bookingMode === 'group_session' ? 'Maximum group size' : 'How many per slot?'}</div><div class="aud-block-step-sub">${bookingMode === 'group_session' ? 'How many performers per group session.' : 'Performers who can book the same time.'}</div></div>
             </div>
-            <div class="aud-block-step-note" style="margin-top:auto;margin-bottom:0.3rem;">Use 2+ for pairs or small groups.</div>
-            <select class="form-select aud-block-step-input" style="margin-top:0;" onchange="updateBlock('${sessionId}','${block.id}','capacity',+this.value)">
-              ${[1,2,3,4,5,6,7,8,9,10].map(n => `<option value="${n}"${(block.capacity||1)===n?' selected':''}>${n} performer${n===1?'':'s'}</option>`).join('')}
+            <select class="form-select aud-block-step-input" style="margin-top:auto;" onchange="updateBlock('${sessionId}','${block.id}','capacity',+this.value)">
+              ${[2,3,4,5,6,7,8,9,10,12,15,20,25,30,40,50].map(n => `<option value="${n}"${(block.capacity||2)===n?' selected':''}>${n} performers</option>`).join('')}
             </select>
           </div>` : ''}
         </div>
@@ -26698,6 +26697,7 @@ See you soon!
       const card = document.getElementById('aud-mode-card-' + sessionId + '-' + m);
       if (card) card.classList.toggle('selected', m === mode);
     });
+    _reRenderBlocksList(sessionId);
   }
 
   async function generateBlockSlots(sessionId, blockId) {
