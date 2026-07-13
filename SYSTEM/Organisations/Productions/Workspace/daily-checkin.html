@@ -169,7 +169,7 @@
 
     /* ── Print ── */
     @media print {
-      .dci-action-btns, .dci-tab-right, .dci-row-acts, .dci-sec-hdr button, #prod-sidebar-mount { display: none !important; }
+      .dci-action-btns, .dci-tab-right, .dci-row-acts, .dci-sec-hdr button { display: none !important; }
       .prod-main { margin-left: 0 !important; max-width: 100% !important; }
       .prod-main::before { display: none; }
       .dci-section { break-inside: avoid; box-shadow: none; border: 1px solid #ddd; }
@@ -178,8 +178,7 @@
 </head>
 <body>
 
-<div id="prod-sidebar-mount"></div>
-<script>document.getElementById('prod-sidebar-mount').outerHTML = '';</script>
+<div id="prod-sidebar-host"></div>
 
 <div class="prod-main">
 
@@ -305,6 +304,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/SHARED/Navigation/production-sidebar-nav.js?v=71-20260713"></script>
+<script>window.initProductionPage('checkin');</script>
 <script>
 'use strict';
 
@@ -331,8 +331,7 @@ let _volunteers = [];   // { id, name, role, refId, shiftStart, shiftEnd, checke
 let _cast = [];         // { id, name, role, refId, expectedStart, expectedEnd, checkedIn, checkedInAt, signedOutAt, awayToday }
 let _search = '', _activeTab = 'everyone', _statusFilter = '';
 let _pendingKioskPerson = null;
-
-window.initProductionPage('checkin');
+let _eventStart = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   _sb = supabase.createClient(SUPA_URL, SUPA_KEY);
@@ -402,7 +401,8 @@ function personStatus(p, now) {
   if (p.awayToday) return 'away';
   if (p.checkedIn && p.signedOutAt) return 'signed-out';
   if (p.checkedIn) return 'here';
-  const startStr = p.shiftStart || p.expectedStart;
+  // Fall back to first event start when the person has no specific shift time
+  const startStr = p.shiftStart || p.expectedStart || _eventStart;
   if (startStr) {
     const dt = new Date(_date + 'T' + String(startStr).slice(0, 5) + ':00');
     if (!isNaN(dt.getTime()) && now > dt) return 'not-arrived';
@@ -459,6 +459,10 @@ async function loadAll() {
 
   _todayEvents = (evRes.data || []).filter(e => !e.is_deadline);
 
+  // First event start time — used as status fallback for timeless volunteers
+  const firstEv = _todayEvents[0];
+  _eventStart = firstEv && firstEv.start_time ? String(firstEv.start_time).split('T')[1].slice(0, 5) : null;
+
   // Build checkin map
   const ciMap = {};
   (ciRes.data || []).forEach(c => {
@@ -472,8 +476,7 @@ async function loadAll() {
 
   // Event time for cast expected column
   const firstEv = _todayEvents[0];
-  const evStart = firstEv && firstEv.start_time ? String(firstEv.start_time).split('T')[1].slice(0,5) : null;
-  const evEnd   = firstEv && firstEv.end_time   ? String(firstEv.end_time).split('T')[1].slice(0,5)   : null;
+  const evEnd = firstEv && firstEv.end_time ? String(firstEv.end_time).split('T')[1].slice(0, 5) : null;
 
   // Volunteers for today
   const volRows = (volRes.data || []).filter(s => {
@@ -505,7 +508,7 @@ async function loadAll() {
     const ci = ciMap['cast::' + a.id] || {};
     return {
       id: a.id, name, role: a.character_name || a.role_name || '',
-      refId: String(a.id), expectedStart: evStart, expectedEnd: evEnd,
+      refId: String(a.id), expectedStart: _eventStart, expectedEnd: evEnd,
       checkedIn: !!ci.checkedIn, checkedInAt: ci.checkedInAt || null,
       signedOutAt: ci.signedOutAt || null, awayToday: !!ci.awayToday,
     };
@@ -671,7 +674,7 @@ function volTable(people, now) {
   const rows = people.map(p => {
     const s = personStatus(p, now);
     const rowCls = s === 'here' ? 'r-here' : s === 'signed-out' ? 'r-out' : s === 'away' ? 'r-away' : '';
-    const shift = p.shiftStart ? fmtTime(p.shiftStart) + (p.shiftEnd ? ' – ' + fmtTime(p.shiftEnd) : '') : 'Flexible';
+    const shift = p.shiftStart ? fmtTime(p.shiftStart) + (p.shiftEnd ? ' – ' + fmtTime(p.shiftEnd) : '') : '';
     const hrs = p.checkedIn && p.signedOutAt ? fmtHours(p.checkedInAt, p.signedOutAt) : (p.checkedIn ? 'In progress' : '');
     const hrsCls = p.signedOutAt ? 'done' : p.checkedIn ? 'inprog' : 'none';
     return '<tr class="' + esc(rowCls) + '" data-type="volunteer" data-ref="' + esc(p.refId) + '">' +
@@ -680,7 +683,7 @@ function volTable(people, now) {
         '<div><div class="dci-pname">' + esc(p.name) + '</div>' +
         (p.role ? '<div class="dci-prole">' + esc(p.role) + '</div>' : '') +
         '</div></div></td>' +
-      '<td class="hm" style="font-size:0.78rem;color:rgba(26,21,48,0.45);">' + esc(shift) + '</td>' +
+      '<td class="hm" style="font-size:0.78rem;color:rgba(26,21,48,0.45);">' + (shift ? esc(shift) : '<span style="color:rgba(26,21,48,0.22);">—</span>') + '</td>' +
       '<td>' + pillHtml(s) + '</td>' +
       '<td class="dci-t' + (p.checkedInAt ? '' : ' empty') + '">' + (p.checkedInAt ? fmtStamp(p.checkedInAt) : '—') + '</td>' +
       '<td class="dci-t' + (p.signedOutAt ? '' : ' empty') + ' hm">' + (p.signedOutAt ? fmtStamp(p.signedOutAt) : '—') + '</td>' +
