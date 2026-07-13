@@ -691,11 +691,52 @@ function switchTab(tab) {
 function onSearch(val) { _search = val; renderContent(); }
 function onFilterChange(val) { _statusFilter = val; renderContent(); }
 
-function shiftDate(delta) {
-  const d = parseLocalDate(_date);
-  d.setDate(d.getDate() + delta);
-  _date = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+async function shiftDate(delta) {
+  const dir = delta > 0 ? 'next' : 'prev';
+  const nearest = await findNearestScheduledDate(dir);
+  if (nearest) {
+    _date = nearest;
+  } else {
+    // No more scheduled dates in that direction — step one day
+    const d = parseLocalDate(_date);
+    d.setDate(d.getDate() + delta);
+    _date = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
   reloadDate();
+}
+
+async function findNearestScheduledDate(dir) {
+  const isNext = dir === 'next';
+  const evOp  = isNext ? 'gt' : 'lt';
+  const volOp = isNext ? 'gt' : 'lt';
+  const evBoundary  = isNext ? _date + 'T23:59:59' : _date + 'T00:00:00';
+
+  const [evRes, volRes] = await Promise.all([
+    _sb.from('production_events')
+       .select('start_time')
+       .eq('production_id', _prodId)
+       .neq('is_deadline', true)
+       .filter('start_time', evOp, evBoundary)
+       .order('start_time', { ascending: isNext })
+       .limit(1),
+    _sb.from('volunteer_signups')
+       .select('shift_date')
+       .eq('production_id', _prodId)
+       .eq('status', 'approved')
+       .not('shift_date', 'is', null)
+       .filter('shift_date', volOp, _date)
+       .order('shift_date', { ascending: isNext })
+       .limit(1),
+  ]);
+
+  const evDate  = evRes.data && evRes.data[0] ? String(evRes.data[0].start_time).slice(0, 10) : null;
+  const volDate = volRes.data && volRes.data[0] ? volRes.data[0].shift_date : null;
+
+  if (!evDate && !volDate) return null;
+  if (!evDate) return volDate;
+  if (!volDate) return evDate;
+  // Pick whichever is closer in the requested direction
+  return isNext ? (evDate < volDate ? evDate : volDate) : (evDate > volDate ? evDate : volDate);
 }
 
 function openDatePicker() {
