@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: session-wide-settings-20260712');
+  console.log('[BTS] production-workspace.js version: vol-approve-all-shifts-20260713');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -45829,8 +45829,19 @@ See you soon!
 
   async function openVolReqEmailReview(ids, newStatus) {
     const idList = (Array.isArray(ids) ? ids : [ids]).map(String);
-    const signups = idList.map(id => volunteerRequests.find(r => String(r.id) === id)).filter(Boolean);
-    if (!signups.length) return;
+    const actionSignups = idList.map(id => volunteerRequests.find(r => String(r.id) === id)).filter(Boolean);
+    if (!actionSignups.length) return;
+    // For approval emails, show the volunteer's complete schedule:
+    // shifts being approved now + any shifts already approved.
+    // For decline emails, only show what's being declined.
+    let signups = actionSignups;
+    if (newStatus === 'approved') {
+      const portalKey = volReqPortalKey(actionSignups[0]);
+      const allPersonShifts = volReqRowsForPortalKey(portalKey);
+      const actionIds = new Set(idList);
+      signups = allPersonShifts.filter(s => actionIds.has(String(s.id)) || s.status === 'approved');
+      if (!signups.length) signups = actionSignups;
+    }
     const category = newStatus === 'approved' ? 'volunteer_approved' : 'volunteer_declined';
     const actionLabel = newStatus === 'approved' ? 'Approve' : 'Decline';
     const sendLabel = newStatus === 'approved' ? 'Send Email & Approve' : 'Send Email & Decline';
