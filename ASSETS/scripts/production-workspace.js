@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: vol-no-email-flag-20260713');
+  console.log('[BTS] production-workspace.js version: vol-required-dates-display-20260713');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -45427,7 +45427,7 @@ See you soon!
         return 0;
       }
       const totalRequestedHrs = personShifts.reduce((sum,s) => sum + shiftRequestedHrs(s), 0);
-      const totalApprovedHrs  = personShifts.filter(s => s.status === 'approved').reduce((sum,s) => sum + (parseFloat(s.approved_hours) || shiftTimedHrs(s)), 0);
+      const totalApprovedHrs  = personShifts.filter(s => s.status === 'approved').reduce((sum,s) => sum + shiftRequestedHrs(s), 0);
       const discountRequested = personShifts.some(s => s.discount_requested);
       const discountPerformer = personShifts.find(s => s.discount_performer)?.discount_performer || '';
       const anyFlexible = personShifts.some(s => !s.shift_start_time && !s.shift_end_time);
@@ -45483,13 +45483,16 @@ See you soon!
         const samePersonShifts = personShifts.filter(other => other.id !== s.id && (other.name || '') === (s.name || ''));
         const hasConflict = samePersonShifts.some(other => reqShiftsOverlap(s, other));
         const colour = shiftColour(s);
-        const isFlexible = !s.shift_start_time && !s.shift_end_time;
+        const _rdArr = Array.isArray(s.required_dates) ? s.required_dates.filter(Boolean) : [];
+        const isFlexible = !s.shift_date && !_rdArr.length && !s.shift_start_time && !s.shift_end_time;
+        const hasOnlyDates = !isFlexible && !s.shift_start_time && !s.shift_end_time;
         const startFmt = fmtTime(s.shift_start_time);
         const endFmt   = fmtTime(s.shift_end_time);
         const isDeadlineShift = !!(s.shift_start_time && s.shift_end_time && String(s.shift_start_time).slice(0,5) === String(s.shift_end_time).slice(0,5));
         const timeStr  = isDeadlineShift ? ('Deadline' + (startFmt ? ' · Due by ' + startFmt : '')) : (startFmt && endFmt ? startFmt + ' – ' + endFmt : startFmt || '');
         const hrs      = shiftRequestedHrs(s);
         const hrsStr   = hrs > 0 ? fmtHourNumber(hrs) + ' hr' + (hrs===1?'':'s') : '';
+        const datesOnlyLabel = _rdArr.length > 1 ? _rdArr.length + ' dates' : (dateLabel || (_rdArr[0] || '').slice(0,10));
         const opp      = opportunities.find(o => o.id === s.opportunity_id);
         const desc     = s.description || opp?.description || opp?.summary || '';
         const timeCommit = s.time_commitment || opp?.time_commitment || '';
@@ -45511,6 +45514,8 @@ See you soon!
           +   '</div>'
           +   (isFlexible
             ?   '<div style="font-size:0.78rem;color:#6b5e80;margin-bottom:0.18rem;">Flexible &mdash; no fixed date' + (hrsStr ? ' <span style="color:#2d6e35;font-weight:800;">&middot; ' + esc(hrsStr) + '</span>' : '') + '</div>'
+            : hasOnlyDates
+            ?   '<div style="font-size:0.78rem;color:#1a1530;font-weight:700;margin-bottom:0.18rem;">' + esc(datesOnlyLabel) + (hrsStr ? ' <span style="color:#2d6e35;font-weight:800;">&middot; ' + esc(hrsStr) + '</span>' : '') + '</div>'
             :   '<div style="font-size:0.78rem;color:#1a1530;font-weight:700;margin-bottom:0.18rem;">' + esc(dateLabel || '') + (timeStr ? ' &middot; ' + esc(timeStr) : '') + (hrsStr ? ' <span style="color:#2d6e35;font-weight:800;">(' + esc(hrsStr) + ')</span>' : '') + '</div>'
             )
           +   (timeCommit && !isFlexible && timeCommit !== dateLabel ? '<div style="font-size:0.72rem;color:#9a8ab0;margin-bottom:0.18rem;">' + esc(timeCommit) + '</div>' : '')
