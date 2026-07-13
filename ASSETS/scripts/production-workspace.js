@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: vol-deadline-email-20260713');
+  console.log('[BTS] production-workspace.js version: vol-flexible-hrs-display-20260713');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -45509,7 +45509,7 @@ See you soon!
           +     '<span class="' + volReqBadgeClass(s.status || 'pending') + '">' + volReqBadgeLabel(s.status || 'pending') + '</span>'
           +   '</div>'
           +   (isFlexible
-            ?   '<div style="font-size:0.78rem;color:#6b5e80;margin-bottom:0.18rem;">Flexible &mdash; no fixed date</div>'
+            ?   '<div style="font-size:0.78rem;color:#6b5e80;margin-bottom:0.18rem;">Flexible &mdash; no fixed date' + (hrsStr ? ' <span style="color:#2d6e35;font-weight:800;">&middot; ' + esc(hrsStr) + '</span>' : '') + '</div>'
             :   '<div style="font-size:0.78rem;color:#1a1530;font-weight:700;margin-bottom:0.18rem;">' + esc(dateLabel || '') + (timeStr ? ' &middot; ' + esc(timeStr) : '') + (hrsStr ? ' <span style="color:#2d6e35;font-weight:800;">(' + esc(hrsStr) + ')</span>' : '') + '</div>'
             )
           +   (timeCommit && !isFlexible && timeCommit !== dateLabel ? '<div style="font-size:0.72rem;color:#9a8ab0;margin-bottom:0.18rem;">' + esc(timeCommit) + '</div>' : '')
