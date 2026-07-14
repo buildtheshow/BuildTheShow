@@ -4223,36 +4223,82 @@ Return ONLY the JSON array, no explanation, no markdown fences.`;
 
       // Group events by type, colour-coded sections
       const _DATES_TYPE_ORDER = ['performance','rehearsal','music_rehearsal','choreography','tech','dress','audition','dance_call','callback','other_audition','strike','cast_party','costume_moveout'];
+      // Types that get broken into weekly sub-groups
+      const _WEEK_SPLIT_TYPES = new Set(['rehearsal','music_rehearsal','choreography','tech','dress']);
       const _eventsByType = {};
       sorted.forEach(ev => {
         const t = ev.event_type || 'rehearsal';
         if (!_eventsByType[t]) _eventsByType[t] = [];
         _eventsByType[t].push(ev);
       });
-      const _typeKeys = [...new Set([..._DATES_TYPE_ORDER, ...Object.keys(_eventsByType)])].filter(t => _eventsByType[t]);
+      // Sort type sections by each type's earliest event date
+      const _typeKeys = Object.keys(_eventsByType).sort((a, b) => {
+        const aFirst = (_eventsByType[a][0]?.date || '');
+        const bFirst = (_eventsByType[b][0]?.date || '');
+        return aFirst.localeCompare(bFirst);
+      });
+
+      // Returns Monday of the ISO week containing dateStr
+      const _weekStart = dateStr => {
+        const d = new Date(dateStr + 'T12:00:00');
+        const day = d.getDay(); // 0=Sun
+        d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+        return d.toISOString().slice(0, 10);
+      };
+      const _fmtWeekOf = dateStr => {
+        const d = new Date(dateStr + 'T12:00:00');
+        return 'Week of ' + d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+      };
+
+      const _dateGrid = (evs, colour) => `
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:0.55rem 1rem;">
+          ${evs.map(ev => {
+            const parts = fmtDate(ev.date).split(', ');
+            const typeLabel = EVENT_TYPE_LABELS[ev.event_type] || '';
+            const titleText = ev.title && ev.title !== typeLabel ? ev.title : '';
+            return `<div style="display:flex;align-items:flex-start;gap:0.55rem;padding:0.15rem 0;">
+              ${miniBadge(ev.date, colour)}
+              <div style="min-width:0;overflow:hidden;">
+                ${titleText ? `<div style="font-size:0.73rem;font-weight:800;color:#1a1530;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${titleText}</div>` : ''}
+                <div style="font-size:${titleText ? '0.62' : '0.72'}rem;font-weight:${titleText ? '600' : '700'};color:${titleText ? '#5a4e70' : '#1a1530'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${parts[0] || ''}</div>
+                <div style="font-size:0.61rem;color:#9080a8;margin-top:0.05rem;white-space:nowrap;">${fmtTime(ev.start_time)}${ev.end_time ? ' – ' + fmtTime(ev.end_time) : ''}</div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`;
+
       const datesRowHTML = sorted.length
         ? _typeKeys.map(type => {
             const evs = _eventsByType[type];
             const colour = EVENT_COLOURS[type] || '#572e88';
             const label = EVENT_TYPE_LABELS[type] || type;
-            return `<div style="margin-bottom:1rem;">
+            let bodyHtml;
+            if (_WEEK_SPLIT_TYPES.has(type) && evs.length > 3) {
+              // Sub-group by calendar week
+              const weekMap = new Map();
+              evs.forEach(ev => {
+                const ws = ev.date ? _weekStart(ev.date) : 'unknown';
+                if (!weekMap.has(ws)) weekMap.set(ws, []);
+                weekMap.get(ws).push(ev);
+              });
+              const weekKeys = [...weekMap.keys()].sort();
+              bodyHtml = weekKeys.map((ws, i) => {
+                const wEvs = weekMap.get(ws);
+                const weekLabel = ws === 'unknown' ? 'Unknown week' : _fmtWeekOf(ws);
+                return `<div style="margin-bottom:0.6rem;">
+                  <div style="font-size:0.56rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:${colour};opacity:0.65;margin-bottom:0.35rem;padding-left:2px;">Week ${i + 1} &middot; ${weekLabel}</div>
+                  ${_dateGrid(wEvs, colour)}
+                </div>`;
+              }).join('');
+            } else {
+              bodyHtml = _dateGrid(evs, colour);
+            }
+            return `<div style="margin-bottom:1.1rem;">
               <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.5rem;">
                 <span style="font-size:0.58rem;font-weight:900;text-transform:uppercase;letter-spacing:0.09em;color:${colour};background:${colour}18;border-radius:20px;padding:0.12rem 0.6rem;">${label}</span>
                 <span style="font-size:0.58rem;font-weight:700;color:#b0a0cc;">${evs.length} date${evs.length !== 1 ? 's' : ''}</span>
               </div>
-              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:0.5rem 1rem;">
-                ${evs.map(ev => {
-                  const parts = fmtDate(ev.date).split(', ');
-                  return `<div style="display:flex;align-items:center;gap:0.55rem;padding:0.15rem 0;">
-                    ${miniBadge(ev.date, colour)}
-                    <div style="min-width:0;overflow:hidden;">
-                      <div style="font-size:0.72rem;font-weight:700;color:#1a1530;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${parts[0] || ''}</div>
-                      <div style="font-size:0.63rem;color:#5a4e70;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${parts.slice(1).join(', ').trim()}</div>
-                      <div style="font-size:0.61rem;color:#9080a8;margin-top:0.05rem;white-space:nowrap;">${fmtTime(ev.start_time)}${ev.end_time ? ' – ' + fmtTime(ev.end_time) : ''}</div>
-                    </div>
-                  </div>`;
-                }).join('')}
-              </div>
+              ${bodyHtml}
             </div>`;
           }).join('')
         : `<span style="font-size:0.8rem;color:#b0a0cc;font-style:italic;">No dates added yet.</span>`;
