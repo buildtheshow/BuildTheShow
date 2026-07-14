@@ -45,9 +45,7 @@
     .fin-stat-sub--green { color: #fff; font-weight: 700; }
 
     /* ── Main grid ── */
-    .fin-main-grid { display: grid; grid-template-columns: 1fr 320px; gap: 1.25rem; align-items: start; }
-    @media (max-width: 1200px) { .fin-main-grid { grid-template-columns: 1fr 280px; } }
-    @media (max-width: 960px)  { .fin-main-grid { grid-template-columns: 1fr; } }
+    .fin-main-grid { display: grid; grid-template-columns: 1fr; gap: 1.25rem; align-items: start; }
 
     /* ── Section cards ── */
     .fin-section { background: #fff; border: 1px solid #e8e4f4; border-radius: 14px; padding: 1.5rem 1.6rem; margin-bottom: 1rem; box-shadow: 0 1px 6px rgba(87,46,136,0.06); }
@@ -1560,168 +1558,73 @@
               '</div>' +
             '</div>' +
 
-            // ── Budget Breakdown ──
-            (() => {
-              const groups = this.budgetGroupNames();
-              if (!groups.length && !all.length) return '';
-              const GROUP_COLORS = { 'Rights & Venue': '#d1523d', 'Promotion & Audience': '#efab45', 'Production Elements': '#572e88', 'Technical': '#476aaa', 'Safety Net': '#ca7ea7', 'People': '#dd8233', 'Events': '#769e7b', 'Other': '#74a2b4' };
-              // Index receipts by category_id
-              const receiptsByCategory = {};
-              const uncategorized = [];
-              all.forEach(r => {
-                if (r.category_id) {
-                  if (!receiptsByCategory[r.category_id]) receiptsByCategory[r.category_id] = [];
-                  receiptsByCategory[r.category_id].push(r);
-                } else {
-                  uncategorized.push(r);
-                }
-              });
-              const receiptDot = r => {
-                if (r.paid_by === 'personal' && r.status !== 'paid') return '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#d1523d;flex-shrink:0;margin-top:3px;"></span>';
-                if (r.paid_by === 'personal' && r.status === 'paid') return '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#769e7b;flex-shrink:0;margin-top:3px;"></span>';
-                return '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#476aaa;flex-shrink:0;margin-top:3px;"></span>';
-              };
-              const receiptStatusLabel = r => {
-                if (r.paid_by === 'personal' && r.status !== 'paid') return '<span style="font-size:0.6rem;font-weight:800;color:#d1523d;white-space:nowrap;">Pending</span>';
-                if (r.paid_by === 'personal' && r.status === 'paid') return '<span style="font-size:0.6rem;font-weight:800;color:#769e7b;white-space:nowrap;">Reimbursed</span>';
-                return '<span style="font-size:0.6rem;font-weight:800;color:#476aaa;white-space:nowrap;">Approved</span>';
-              };
-              const receiptRow = r =>
-                '<div style="display:flex;align-items:flex-start;gap:0.5rem;padding:0.28rem 0.5rem 0.28rem 1rem;border-bottom:1px solid #f5f3fa;">' +
-                  receiptDot(r) +
-                  '<div style="flex:1;min-width:0;">' +
-                    '<div style="font-size:0.78rem;font-weight:700;color:#1a1530;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + this.esc(r.vendor || 'Receipt') + '</div>' +
-                    (r.description ? '<div style="font-size:0.67rem;color:#7a6e9a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + this.esc(r.description) + '</div>' : '') +
-                  '</div>' +
-                  '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.1rem;flex-shrink:0;">' +
-                    '<span style="font-size:0.8rem;font-weight:800;color:#1a1530;">' + this.fmt$(r.amount_cents) + '</span>' +
-                    receiptStatusLabel(r) +
-                  '</div>' +
-                '</div>';
-              let bodyHtml = '';
-              groups.forEach(groupName => {
-                const cats = this.categoriesForGroup(groupName);
-                const groupColor = GROUP_COLORS[groupName] || '#74a2b4';
-                const groupReceipts = cats.flatMap(c => receiptsByCategory[c.id] || []);
-                const groupSpent = groupReceipts.reduce((s, r) => s + (r.amount_cents || 0), 0);
-                const groupBudget = cats.reduce((s, c) => s + (c.planned_cents || 0), 0);
-                const hasContent = cats.some(c => (c.planned_cents || 0) > 0 || (receiptsByCategory[c.id] || []).length > 0);
-                if (!hasContent) return;
-                bodyHtml += '<div style="margin-bottom:0.85rem;">' +
-                  '<div style="display:flex;align-items:center;justify-content:space-between;padding:0.35rem 0.5rem;background:' + groupColor + '10;border-radius:6px;margin-bottom:0.2rem;">' +
-                    '<span style="font-size:0.62rem;font-weight:900;text-transform:uppercase;letter-spacing:0.08em;color:' + groupColor + ';">' + this.esc(groupName) + '</span>' +
-                    '<div style="display:flex;align-items:center;gap:0.75rem;">' +
-                      (groupSpent ? '<span style="font-size:0.7rem;font-weight:800;color:' + groupColor + ';">' + this.fmt$(groupSpent) + ' spent</span>' : '') +
-                      (groupBudget ? '<span style="font-size:0.67rem;color:#9080a8;">of ' + this.fmt$(groupBudget) + '</span>' : '') +
-                    '</div>' +
-                  '</div>';
-                cats.forEach(c => {
-                  const catReceipts = receiptsByCategory[c.id] || [];
-                  const catBudget = c.planned_cents || 0;
-                  if (!catBudget && !catReceipts.length) return;
-                  const catSpentVal = catReceipts.reduce((s, r) => s + (r.amount_cents || 0), 0);
-                  bodyHtml += '<div style="margin-bottom:0.4rem;">' +
-                    '<div style="display:flex;align-items:center;justify-content:space-between;padding:0.25rem 0.5rem;">' +
-                      '<span style="font-size:0.74rem;font-weight:700;color:#3d3260;">' + this.esc(c.name) + '</span>' +
-                      '<div style="display:flex;align-items:center;gap:0.5rem;">' +
-                        (catSpentVal ? '<span style="font-size:0.74rem;font-weight:800;color:#1a1530;">' + this.fmt$(catSpentVal) + '</span>' : '') +
-                        (catBudget ? '<span style="font-size:0.65rem;color:#b0a0cc;">/ ' + this.fmt$(catBudget) + '</span>' : '') +
-                      '</div>' +
-                    '</div>' +
-                    (catReceipts.length
-                      ? catReceipts.map(receiptRow).join('')
-                      : '<div style="font-size:0.7rem;color:#c0b4d4;padding:0.15rem 0.5rem 0.15rem 1rem;font-style:italic;">No receipts</div>') +
-                  '</div>';
-                });
-                bodyHtml += '</div>';
-              });
-              if (uncategorized.length) {
-                bodyHtml += '<div style="margin-bottom:0.85rem;">' +
-                  '<div style="display:flex;align-items:center;justify-content:space-between;padding:0.35rem 0.5rem;background:rgba(160,148,192,0.08);border-radius:6px;margin-bottom:0.2rem;">' +
-                    '<span style="font-size:0.62rem;font-weight:900;text-transform:uppercase;letter-spacing:0.08em;color:#9080a8;">Uncategorized</span>' +
-                    '<span style="font-size:0.7rem;font-weight:800;color:#9080a8;">' + this.fmt$(uncategorized.reduce((s,r)=>s+(r.amount_cents||0),0)) + ' spent</span>' +
-                  '</div>' +
-                  uncategorized.map(receiptRow).join('') +
-                '</div>';
-              }
-              const totalPending = all.filter(r => r.paid_by==='personal' && r.status!=='paid').reduce((s,r)=>s+(r.amount_cents||0),0);
-              const totalApproved = all.filter(r => r.paid_by!=='personal' || r.status==='paid').reduce((s,r)=>s+(r.amount_cents||0),0);
-              return '<div class="fin-section fin-section--collapsed" id="fin-sec-bgt">' +
-                '<div class="fin-section-head" onclick="FIN.toggleSection(\'fin-sec-bgt\')">' +
-                  '<div><div class="fin-section-title"><span class="fin-collapse-chevron">&#9660;</span>Budget Breakdown</div>' +
-                  '<div class="fin-section-sub">' +
-                    (totalPending ? '<span style="color:#d1523d;font-weight:800;">' + this.fmt$(totalPending) + ' pending</span>' : '') +
-                    (totalPending && totalApproved ? ' &bull; ' : '') +
-                    (totalApproved ? '<span style="color:#476aaa;font-weight:800;">' + this.fmt$(totalApproved) + ' approved</span>' : '') +
-                    (!totalPending && !totalApproved ? 'No receipts yet' : '') +
-                  '</div></div>' +
+            // ── Production Budget (moved from sidebar) ──
+            '<div class="fin-section fin-section--collapsed" id="fin-sec-bgt">' +
+              '<div class="fin-section-head" onclick="FIN.toggleSection(\'fin-sec-bgt\')">' +
+                '<div>' +
+                  '<div class="fin-section-title"><span class="fin-collapse-chevron">&#9660;</span>Production Budget</div>' +
+                  '<div class="fin-section-sub">' + this.fmt$(totalCents) + ' spent' + (allocCents ? ' &bull; ' + this.fmt$(allocCents) + ' budgeted' : '') + '</div>' +
                 '</div>' +
-                '<div class="fin-section-body">' + (bodyHtml || '<div class="fin-empty">No budget categories set up yet.</div>') + '</div>' +
-              '</div>';
-            })() +
+              '</div>' +
+              '<div class="fin-section-body">' +
+                // Budget at a glance
+                '<div class="fin-sidebar-block">' +
+                  '<div class="fin-sidebar-block-label">Production Budget</div>' +
+                  (allocCents > 0 ? (
+                    '<div class="fin-sidebar-row"><span class="fin-sidebar-row-label">Overall Budget</span><span class="fin-sidebar-row-val">' + this.fmt$(allocCents) + '</span></div>' +
+                    '<div class="fin-sidebar-row"><span class="fin-sidebar-row-label">Total Spent</span><span class="fin-sidebar-row-val">' + this.fmt$(totalCents) + '</span></div>' +
+                    '<div class="fin-sidebar-row"><span class="fin-sidebar-row-label">Remaining Budget</span><span class="fin-sidebar-row-val fin-sidebar-row-val--green">' + this.fmt$(Math.max(0, allocCents - totalCents)) + '</span></div>' +
+                    '<div class="fin-progress-track"><div class="fin-progress-fill" style="width:' + Math.min(100, (totalCents / allocCents * 100)).toFixed(1) + '%"></div></div>' +
+                    '<div class="fin-progress-pct">' + (totalCents / allocCents * 100).toFixed(1) + '% of budget used</div>'
+                  ) : (
+                    '<div class="fin-sidebar-row"><span class="fin-sidebar-row-label">Total Spent</span><span class="fin-sidebar-row-val">' + this.fmt$(totalCents) + '</span></div>' +
+                    '<div style="font-size:0.75rem;color:#b0a8c8;margin-top:0.4rem">No budget set yet</div>'
+                  )) +
+                '</div>' +
+                // Expenses breakdown
+                (() => {
+                  const GROUP_COLORS = { 'Rights & Venue': '#d1523d', 'Promotion & Audience': '#efab45', 'Production Elements': '#572e88', 'Technical': '#476aaa', 'Safety Net': '#ca7ea7', 'People': '#dd8233', 'Events': '#769e7b', 'Other': '#74a2b4' };
+                  const groups = this.budgetGroupNames();
+                  if (!groups.length) return '';
+                  let html = '<div class="fin-sidebar-block"><div class="fin-sidebar-block-label">Expenses</div>';
+                  let totalExpenses = 0;
+                  groups.forEach(groupName => {
+                    const cats = this.categoriesForGroup(groupName);
+                    const groupTotal = cats.reduce((s, c) => s + (c.planned_cents || 0), 0);
+                    totalExpenses += groupTotal;
+                    const color = GROUP_COLORS[groupName] || '#74a2b4';
+                    html += '<div style="margin-bottom:0.75rem;">' +
+                      '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.2rem;">' +
+                        '<span style="font-size:0.68rem;font-weight:900;color:' + color + ';text-transform:uppercase;letter-spacing:0.06em;">' + this.esc(groupName) + '</span>' +
+                        '<span style="font-size:0.78rem;font-weight:800;color:' + color + ';">' + this.fmt$(groupTotal) + '</span>' +
+                      '</div>';
+                    cats.forEach(c => {
+                      const val = c.planned_cents || 0;
+                      html += '<div style="display:flex;justify-content:space-between;padding:0.1rem 0 0.1rem 0.6rem;font-size:0.78rem;">' +
+                        '<span style="color:#4a3f6a;">' + this.esc(c.name) + '</span>' +
+                        '<span style="color:#1a1530;font-weight:600;">' + (val ? this.fmt$(val) : '—') + '</span>' +
+                      '</div>';
+                    });
+                    html += '</div>';
+                  });
+                  html += '<div style="display:flex;justify-content:space-between;padding:0.6rem 0 0;border-top:2px dashed #e0dcea;margin-top:0.35rem;font-weight:900;font-size:0.85rem;">' +
+                    '<span style="text-transform:uppercase;letter-spacing:0.04em;">Total Expenses</span>' +
+                    '<span style="color:#572e88;">' + this.fmt$(totalExpenses) + '</span></div>';
+                  html += '</div>';
+                  return html;
+                })() +
+                // Receipt Status
+                '<div class="fin-sidebar-block">' +
+                  '<div class="fin-sidebar-block-label">Receipt Status</div>' +
+                  '<div class="fin-sidebar-status-row"><span class="fin-status-dot fin-status-dot--company"></span><span class="fin-sidebar-status-label">Company Paid</span><span class="fin-sidebar-status-count">' + companyList.length + '</span></div>' +
+                  '<div class="fin-sidebar-status-row"><span class="fin-status-dot fin-status-dot--reimburse"></span><span class="fin-sidebar-status-label">Needs Reimbursement</span><span class="fin-sidebar-status-count">' + owingList.length + '</span></div>' +
+                  '<div class="fin-sidebar-status-row"><span class="fin-status-dot fin-status-dot--reimbursed"></span><span class="fin-sidebar-status-label">Reimbursed</span><span class="fin-sidebar-status-count">' + paidList.length + '</span></div>' +
+                '</div>' +
+                '<div class="fin-sidebar-updated"><img src="/ASSETS/Images/Icons/Finance - Schedule.svg" style="width:12px;height:12px;opacity:0.5" alt="">Last updated: ' + now + '</div>' +
+              '</div>' +
+            '</div>' +
 
           '</div>' + // end left col
-
-          // ── Sidebar ──
-          '<div class="fin-sidebar-panel">' +
-
-            // Budget at a glance
-            '<div class="fin-sidebar-block">' +
-              '<div class="fin-sidebar-block-label">Production Budget</div>' +
-              (allocCents > 0 ? (
-                '<div class="fin-sidebar-row"><span class="fin-sidebar-row-label">Overall Budget</span><span class="fin-sidebar-row-val">' + this.fmt$(allocCents) + '</span></div>' +
-                '<div class="fin-sidebar-row"><span class="fin-sidebar-row-label">Total Spent</span><span class="fin-sidebar-row-val">' + this.fmt$(totalCents) + '</span></div>' +
-                '<div class="fin-sidebar-row"><span class="fin-sidebar-row-label">Remaining Budget</span><span class="fin-sidebar-row-val fin-sidebar-row-val--green">' + this.fmt$(Math.max(0, allocCents - totalCents)) + '</span></div>' +
-                '<div class="fin-progress-track"><div class="fin-progress-fill" style="width:' + Math.min(100, (totalCents / allocCents * 100)).toFixed(1) + '%"></div></div>' +
-                '<div class="fin-progress-pct">' + (totalCents / allocCents * 100).toFixed(1) + '% of budget used</div>'
-              ) : (
-                '<div class="fin-sidebar-row"><span class="fin-sidebar-row-label">Total Spent</span><span class="fin-sidebar-row-val">' + this.fmt$(totalCents) + '</span></div>' +
-                '<div style="font-size:0.75rem;color:#b0a8c8;margin-top:0.4rem">No budget set yet</div>'
-              )) +
-            '</div>' +
-
-            // Full budget breakdown grouped by department
-            (() => {
-              const GROUP_COLORS = { 'Rights & Venue': '#d1523d', 'Promotion & Audience': '#efab45', 'Production Elements': '#572e88', 'Technical': '#476aaa', 'Safety Net': '#ca7ea7', 'People': '#dd8233', 'Events': '#769e7b', 'Other': '#74a2b4' };
-              const groups = this.budgetGroupNames();
-              if (!groups.length) return '';
-              let html = '<div class="fin-sidebar-block"><div class="fin-sidebar-block-label">Expenses</div>';
-              let totalExpenses = 0;
-              groups.forEach(groupName => {
-                const cats = this.categoriesForGroup(groupName);
-                const groupTotal = cats.reduce((s, c) => s + (c.planned_cents || 0), 0);
-                totalExpenses += groupTotal;
-                const color = GROUP_COLORS[groupName] || '#74a2b4';
-                html += '<div style="margin-bottom:0.75rem;">' +
-                  '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.2rem;">' +
-                    '<span style="font-size:0.68rem;font-weight:900;color:' + color + ';text-transform:uppercase;letter-spacing:0.06em;">' + this.esc(groupName) + '</span>' +
-                    '<span style="font-size:0.78rem;font-weight:800;color:' + color + ';">' + this.fmt$(groupTotal) + '</span>' +
-                  '</div>';
-                cats.forEach(c => {
-                  const val = c.planned_cents || 0;
-                  html += '<div style="display:flex;justify-content:space-between;padding:0.1rem 0 0.1rem 0.6rem;font-size:0.78rem;">' +
-                    '<span style="color:#4a3f6a;">' + this.esc(c.name) + '</span>' +
-                    '<span style="color:#1a1530;font-weight:600;">' + (val ? this.fmt$(val) : '—') + '</span>' +
-                  '</div>';
-                });
-                html += '</div>';
-              });
-              html += '<div style="display:flex;justify-content:space-between;padding:0.6rem 0 0;border-top:2px dashed #e0dcea;margin-top:0.35rem;font-weight:900;font-size:0.85rem;">' +
-                '<span style="text-transform:uppercase;letter-spacing:0.04em;">Total Expenses</span>' +
-                '<span style="color:#572e88;">' + this.fmt$(totalExpenses) + '</span></div>';
-              html += '</div>';
-              return html;
-            })() +
-
-            '<div class="fin-sidebar-block">' +
-              '<div class="fin-sidebar-block-label">Receipt Status</div>' +
-              '<div class="fin-sidebar-status-row"><span class="fin-status-dot fin-status-dot--company"></span><span class="fin-sidebar-status-label">Company Paid</span><span class="fin-sidebar-status-count">' + companyList.length + '</span></div>' +
-              '<div class="fin-sidebar-status-row"><span class="fin-status-dot fin-status-dot--reimburse"></span><span class="fin-sidebar-status-label">Needs Reimbursement</span><span class="fin-sidebar-status-count">' + owingList.length + '</span></div>' +
-              '<div class="fin-sidebar-status-row"><span class="fin-status-dot fin-status-dot--reimbursed"></span><span class="fin-sidebar-status-label">Reimbursed</span><span class="fin-sidebar-status-count">' + paidList.length + '</span></div>' +
-            '</div>' +
-
-            '<div class="fin-sidebar-updated"><img src="/ASSETS/Images/Icons/Finance - Schedule.svg" style="width:12px;height:12px;opacity:0.5" alt="">Last updated: ' + now + '</div>' +
-          '</div>' +
 
         '</div>'; // end main grid
     },
