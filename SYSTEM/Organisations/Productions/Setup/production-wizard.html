@@ -4211,20 +4211,33 @@ Return ONLY the JSON array, no explanation, no markdown fences.`;
       const orgSlug   = currentOrg?.slug || 'yourorg';
       const showSlug  = wizardData.slug || '';
       const publicUrl = showSlug ? `buildtheshow.com/${orgSlug}/${showSlug}` : null;
-      const sorted    = [...step3Events].sort((a,b) => (a.date||'').localeCompare(b.date||''));
-      const f         = wizardData.features || {};
+      const sortedRaw = [...step3Events].sort((a,b) => (a.date||'').localeCompare(b.date||''));
+      // Deduplicate: same date + start_time = duplicate (AI extraction may have run twice)
+      const _seenEvKeys = new Set();
+      const sorted = sortedRaw.filter(ev => {
+        const k = `${ev.date}|${ev.start_time}`;
+        if (_seenEvKeys.has(k)) return false;
+        _seenEvKeys.add(k); return true;
+      });
+      const f = wizardData.features || {};
 
-      // Date row — small badges, flex-wrap, clean separators
+      // Compact date grid — auto columns, max 20 visible then overflow note
+      const DATES_MAX  = 20;
+      const datesExtra = sorted.length - DATES_MAX;
       const datesRowHTML = sorted.length
-        ? sorted.map((ev, i) => `
-            <div style="display:flex;align-items:center;gap:0.6rem;padding:0 ${i < sorted.length-1 ? '1rem' : '0'} 0 0;${i < sorted.length-1 ? 'border-right:1px solid rgba(87,46,136,0.12);margin-right:0;' : ''}">
-              ${miniBadge(ev.date)}
-              <div style="min-width:0;">
-                <div style="font-size:0.75rem;font-weight:700;color:#1a1530;white-space:nowrap;">${fmtDate(ev.date).split(',')[0]}</div>
-                <div style="font-size:0.68rem;color:#5a4e70;white-space:nowrap;">${fmtDate(ev.date).split(',').slice(1).join(',').trim()}</div>
-                <div style="font-size:0.65rem;color:#9080a8;margin-top:0.08rem;white-space:nowrap;">${fmtTime(ev.start_time)}${ev.end_time ? ' – ' + fmtTime(ev.end_time) : ''}</div>
-              </div>
-            </div>`).join('')
+        ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:0.5rem 1rem;">${
+            sorted.slice(0, DATES_MAX).map(ev => {
+              const parts = fmtDate(ev.date).split(', ');
+              return `<div style="display:flex;align-items:center;gap:0.55rem;padding:0.15rem 0;">
+                ${miniBadge(ev.date)}
+                <div style="min-width:0;overflow:hidden;">
+                  <div style="font-size:0.72rem;font-weight:700;color:#1a1530;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${parts[0] || ''}</div>
+                  <div style="font-size:0.63rem;color:#5a4e70;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${parts.slice(1).join(', ').trim()}</div>
+                  <div style="font-size:0.61rem;color:#9080a8;margin-top:0.05rem;white-space:nowrap;">${fmtTime(ev.start_time)}${ev.end_time ? ' – ' + fmtTime(ev.end_time) : ''}</div>
+                </div>
+              </div>`;
+            }).join('')
+          }</div>${datesExtra > 0 ? `<p style="font-size:0.72rem;color:#9080a8;margin:0.6rem 0 0;font-style:italic;">+ ${datesExtra} more dates</p>` : ''}`
         : `<span style="font-size:0.8rem;color:#b0a0cc;font-style:italic;">No dates added yet.</span>`;
 
       // Feature list — full-width rows so nothing clips
@@ -4291,7 +4304,7 @@ Return ONLY the JSON array, no explanation, no markdown fences.`;
               ${sorted.length ? `<span style="font-size:0.6rem;font-weight:700;color:#efab45;background:rgba(239,171,69,0.12);border-radius:20px;padding:0.08rem 0.4rem;">${sorted.length} added</span>` : ''}
               <span style="margin-left:auto;">${editBtn(3)}</span>
             </div>
-            <div style="display:flex;flex-wrap:wrap;gap:0.75rem 0;">${datesRowHTML}</div>
+            <div>${datesRowHTML}</div>
           </div>
 
           <!-- BOTTOM: 2 columns — features | visibility+launch -->
