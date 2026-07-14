@@ -184,9 +184,11 @@
     .fin-receipt-cards { display: flex; flex-direction: column; gap: 0.75rem; }
     .fin-receipt-card { display: flex; align-items: flex-start; gap: 1rem; border: 1.5px solid #f0eef8; border-radius: 14px; padding: 1rem 1.1rem; transition: box-shadow 0.15s; }
     .fin-receipt-card:hover { box-shadow: 0 3px 12px rgba(87,46,136,0.08); }
-    .fin-card-thumb { width: 88px; min-width: 88px; height: 88px; border-radius: 8px; overflow: hidden; background: #f5f3fa; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
-    .fin-card-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .fin-card-main { flex: 1.4; min-width: 0; }
+    .fin-card-thumb { width: 88px; min-width: 88px; flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; }
+    .fin-card-thumb-item { width: 88px; border-radius: 6px; overflow: hidden; background: #f5f3fa; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .fin-card-thumb-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .fin-card-thumb-item embed { display: block; pointer-events: none; }
+    .fin-card-main { flex: 0 0 220px; min-width: 0; }
     .fin-card-top { display: flex; align-items: flex-start; gap: 0.6rem; margin-bottom: 0.25rem; }
     .fin-card-icon-circle { width: 32px; height: 32px; border-radius: 50%; background: rgba(87,46,136,0.08); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
     .fin-card-store { font-size: 1rem; font-weight: 900; color: #1a1530; line-height: 1.2; }
@@ -1624,7 +1626,6 @@
     },
 
     _receiptCardHtml(r, opts = {}) {
-      // opts.showMarkPaid = true adds Mark as Paid in the dots menu
       const b = this.badgeFor(r);
       const deptRows = this.deptRows || [];
       const dName = this.deptName(r);
@@ -1633,34 +1634,81 @@
       const dColor = DEPT_COLORS[(dIdx >= 0 ? dIdx : 0) % DEPT_COLORS.length];
       const fileUrls = this.receiptFileUrls(r);
       const IMG_EXTS = ['jpg','jpeg','png','gif','webp'];
-      const firstImg = fileUrls.find(u => { const ext = (u.split('.').pop()||'').split('?')[0].toLowerCase(); return IMG_EXTS.includes(ext); });
-      const firstUrl = fileUrls[0] || null;
-      const thumbHtml = firstImg
-        ? '<img src="' + this.esc(firstImg) + '" alt="Receipt" loading="lazy" />'
-        : '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#c4b8d8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>';
+      const getExt = u => (u.split('.').pop() || '').split('?')[0].toLowerCase();
+
+      // Build per-file thumbnail tile
+      const fileTile = (u, h) => {
+        const ext = getExt(u);
+        const safeU = this.esc(u);
+        if (IMG_EXTS.includes(ext)) {
+          return '<div class="fin-card-thumb-item" style="height:' + h + 'px;" onclick="event.stopPropagation();window.open(\'' + safeU + '\',\'_blank\')">' +
+            '<img src="' + safeU + '" alt="Receipt" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block;" />' +
+          '</div>';
+        }
+        if (ext === 'pdf') {
+          return '<div class="fin-card-thumb-item" style="height:' + h + 'px;position:relative;overflow:hidden;" onclick="event.stopPropagation();window.open(\'' + safeU + '\',\'_blank\')">' +
+            '<embed src="' + safeU + '" type="application/pdf" style="width:88px;height:' + h + 'px;pointer-events:none;" />' +
+            '<div style="position:absolute;inset:0;"></div>' +
+          '</div>';
+        }
+        return '<div class="fin-card-thumb-item" style="height:' + h + 'px;flex-direction:column;gap:3px;" onclick="event.stopPropagation();window.open(\'' + safeU + '\',\'_blank\')">' +
+          '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9080a8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>' +
+          '<span style="font-size:0.55rem;font-weight:800;text-transform:uppercase;color:#9080a8;">' + (ext || 'file') + '</span>' +
+        '</div>';
+      };
+
+      let thumbsHtml;
+      if (fileUrls.length === 0) {
+        thumbsHtml = '<div class="fin-card-thumb-item" style="height:88px;">' +
+          '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#c4b8d8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
+        '</div>';
+      } else if (fileUrls.length === 1) {
+        thumbsHtml = fileTile(fileUrls[0], 88);
+      } else if (fileUrls.length === 2) {
+        thumbsHtml = fileTile(fileUrls[0], 42) + fileTile(fileUrls[1], 42);
+      } else {
+        const mainH = 54;
+        const restH = Math.floor((88 - mainH - 4 * (fileUrls.length - 2)) / (fileUrls.length - 1));
+        thumbsHtml = fileTile(fileUrls[0], mainH) + fileUrls.slice(1).map(u => fileTile(u, Math.max(18, restH))).join('');
+      }
+
       const receiptIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
       const calIcon = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
       const extLinkIcon = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
       const editIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
       const trashIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
       const markPaidIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+
       const name = r.submitted_by || r.submitted_by_name || '';
       const email = this.purchaserEmail(r);
       const paidByLabel = r.paid_by === 'personal' ? 'Personal' : 'Company';
       const dateStr = this.fmtDate(r.receipt_date || r.created_at);
       const safeId = this.esc(r.id);
-      const menuId = 'fin-dots-' + safeId;
+
+      // View receipt button(s)
+      let viewBtns = '';
+      if (fileUrls.length === 1) {
+        viewBtns = '<button class="fin-card-view-btn" onclick="event.stopPropagation();window.open(\'' + this.esc(fileUrls[0]) + '\',\'_blank\')">View receipt ' + extLinkIcon + '</button>';
+      } else if (fileUrls.length > 1) {
+        viewBtns = fileUrls.map((u, i) =>
+          '<button class="fin-card-view-btn" onclick="event.stopPropagation();window.open(\'' + this.esc(u) + '\',\'_blank\')">File ' + (i + 1) + ' ' + extLinkIcon + '</button>'
+        ).join('');
+      }
+
       const dotsMenu =
         '<div class="fin-card-dots-wrap">' +
           '<button class="fin-card-dots-btn" onclick="event.stopPropagation();FIN.toggleDotsMenu(\'' + safeId + '\')">&#8943;</button>' +
-          '<div class="fin-card-dots-menu" id="' + menuId + '">' +
+          '<div class="fin-card-dots-menu" id="fin-dots-' + safeId + '">' +
             (opts.showMarkPaid ? '<button onclick="event.stopPropagation();FIN.closeDotsMenus();FIN.markReceiptPaid(\'' + safeId + '\')">' + markPaidIcon + ' Mark as Paid</button><div class="fin-card-dots-divider"></div>' : '') +
             '<button onclick="event.stopPropagation();FIN.closeDotsMenus();FIN.openEditModal(\'' + safeId + '\')">' + editIcon + ' Edit</button>' +
             '<button class="fin-dots-danger" onclick="event.stopPropagation();FIN.closeDotsMenus();FIN.deleteReceipt(\'' + safeId + '\')">' + trashIcon + ' Delete</button>' +
           '</div>' +
         '</div>';
+
       return '<div class="fin-receipt-card">' +
-        '<div class="fin-card-thumb">' + thumbHtml + '</div>' +
+        // Chunk 1: file gallery
+        '<div class="fin-card-thumb">' + thumbsHtml + '</div>' +
+        // Chunk 2: store + dept + date
         '<div class="fin-card-main">' +
           '<div class="fin-card-top">' +
             '<div class="fin-card-icon-circle">' + receiptIcon + '</div>' +
@@ -1669,18 +1717,29 @@
               (r.description ? '<div class="fin-card-desc-text">' + this.esc(r.description) + '</div>' : '') +
             '</div>' +
           '</div>' +
-          (dName ? '<div class="fin-card-dept"><span class="fin-dept-pill" style="background:' + dColor + '14;color:' + dColor + '">' + this.esc(dName) + '</span></div>' : '') +
+          (dName ? '<div style="margin:0.3rem 0 0.15rem;">' +
+            '<span class="fin-dept-pill" style="background:' + dColor + '14;color:' + dColor + '">' + this.esc(dName) + '</span>' +
+          '</div>' : '') +
           '<div class="fin-card-meta">' + calIcon + ' ' + this.esc(dateStr) + '<span class="fin-card-meta-sep">|</span>' + paidByLabel + '</div>' +
         '</div>' +
+        // Chunk 3: paid by + notes
         '<div class="fin-card-person">' +
-          (name ? '<div class="fin-card-section-lbl">Paid by</div><div class="fin-card-pname">' + this.esc(name) + '</div>' + (email ? '<div class="fin-card-pemail">' + this.esc(email) + '</div>' : '') : '') +
-          (r.notes ? '<div class="fin-card-section-lbl">Notes</div><div class="fin-card-notes">' + this.esc(r.notes) + '</div>' : '') +
+          (name
+            ? '<div class="fin-card-section-lbl">Paid by</div>' +
+              '<div class="fin-card-pname">' + this.esc(name) + '</div>' +
+              (email ? '<div class="fin-card-pemail">' + this.esc(email) + '</div>' : '')
+            : '') +
+          (r.notes
+            ? '<div class="fin-card-section-lbl" style="margin-top:' + (name ? '0.5rem' : '0') + ';">Notes</div>' +
+              '<div class="fin-card-notes">' + this.esc(r.notes) + '</div>'
+            : '') +
         '</div>' +
+        // Chunk 4: amount + badge + view btn(s) + dots
         '<div class="fin-card-right">' +
           '<div class="fin-card-amount">' + this.fmt$(r.amount_cents) + '</div>' +
           '<span class="fin-badge ' + b.cls + '"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;margin-right:4px;vertical-align:middle;opacity:0.7;"></span>' + b.label + '</span>' +
-          '<div class="fin-card-actions">' +
-            (firstUrl ? '<button class="fin-card-view-btn" onclick="event.stopPropagation();window.open(\'' + this.esc(firstUrl) + '\',\'_blank\')">View receipt ' + extLinkIcon + '</button>' : '') +
+          '<div class="fin-card-actions" style="flex-direction:column;align-items:flex-end;gap:0.25rem;">' +
+            viewBtns +
             dotsMenu +
           '</div>' +
         '</div>' +
