@@ -1076,7 +1076,11 @@ const BP = {
       if (session?.access_token) this._token = session.access_token;
     } catch(_) {}
     this.buildColorGrid();
-    this.drivers = this._loadDrivers();
+    // Load drivers: prefer DB (survives cache clears), fall back to localStorage
+    const dbDrivers = await this._loadDriversFromDb();
+    this.drivers = dbDrivers !== null ? dbDrivers : this._loadDrivers();
+    // If we got drivers from localStorage but not yet in DB, migrate them now
+    if (dbDrivers === null && this.drivers.length) this._saveDrvs();
     this._buildTypeGrid();
     this.renderDrivers();
     this.renderSummary();
@@ -1093,7 +1097,24 @@ const BP = {
     try { const raw=localStorage.getItem('bts-bdrv4-'+this.prodId); if(raw) return JSON.parse(raw); } catch(_) {}
     return [];
   },
-  _saveDrvs() { try { localStorage.setItem('bts-bdrv4-'+this.prodId,JSON.stringify(this.drivers)); } catch(_) {} },
+  async _loadDriversFromDb() {
+    try {
+      const r = await fetch(this.URL+'/rest/v1/productions?id=eq.'+this.prodId+'&select=budget_revenue_drivers', {headers:this._h()});
+      if (!r.ok) return null;
+      const rows = await r.json();
+      const saved = rows?.[0]?.budget_revenue_drivers;
+      if (Array.isArray(saved) && saved.length) return saved;
+    } catch(_) {}
+    return null;
+  },
+  _saveDrvs() {
+    try { localStorage.setItem('bts-bdrv4-'+this.prodId,JSON.stringify(this.drivers)); } catch(_) {}
+    // Persist to DB so drivers survive cache clears and device switches
+    fetch(this.URL+'/rest/v1/productions?id=eq.'+this.prodId, {
+      method:'PATCH', headers:this._hj(),
+      body: JSON.stringify({budget_revenue_drivers: this.drivers})
+    }).catch(()=>{});
+  },
   _drvTypeCfg(type) { return this.DRIVER_TYPES.find(t=>t.type===type)||this.DRIVER_TYPES.find(t=>t.type==='custom'); },
   _mkElId() { return 'el_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5); },
 
