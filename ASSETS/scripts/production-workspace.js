@@ -46958,10 +46958,17 @@ See you soon!
 	    const calChips = calendarTypes.map(value => {
 	      const isChecked = appliesTo.includes(value);
 	      const canPick = DATE_PICKABLE.has(value);
-	      const matchEvs = canPick ? volunteerPlanEvents.filter(e => volCalendarEventMatches(e, value)).sort((a,b) => (a.start_time||'').localeCompare(b.start_time||'')) : [];
+	      const matchEvsRaw = canPick ? volunteerPlanEvents.filter(e => volCalendarEventMatches(e, value)).sort((a,b) => (a.start_time||'').localeCompare(b.start_time||'')) : [];
 	      const scopeData = volSavedScopeForAttendanceType(savedEventScope, value);
 	      const scopeMode = scopeData.mode || 'all';
 	      const selIds = (scopeMode === 'specific' && Array.isArray(scopeData.ids)) ? scopeData.ids : [];
+	      // Deduplicate events with identical date+title; prefer the saved ID when multiple copies exist
+	      const _seenDedup = new Map();
+	      matchEvsRaw.forEach(ev => {
+	        const dk = `${(ev.start_time||'').slice(0,10)}|${ev.title||''}`;
+	        if (!_seenDedup.has(dk) || selIds.includes(ev.id)) _seenDedup.set(dk, ev);
+	      });
+	      const matchEvs = [..._seenDedup.values()];
 	      const dateItems = matchEvs.map(ev => {
 	        const ds = ev.start_time ? ev.start_time.split('T')[0] : '';
 	        const fmtWithDay = ds ? (new Date(ds + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })) : '';
