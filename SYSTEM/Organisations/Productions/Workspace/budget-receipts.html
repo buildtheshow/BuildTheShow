@@ -279,10 +279,24 @@
     .fin-primary-btn:disabled { opacity: 0.65; cursor: default; transform: none; }
     .fin-secondary-btn { background: #fff; color: #4a3f6a; border-color: #ded6ec; }
     .fin-secondary-btn:hover { border-color: #572e88; color: #572e88; }
-    .fin-edit-files { display: flex; flex-wrap: wrap; gap: 0.45rem; }
-    .fin-edit-file-link { display: inline-flex; align-items: center; gap: 0.35rem; border: 1px solid #e0dcea; border-radius: 8px; color: #572e88; font-size: 0.78rem; font-weight: 850; padding: 0.45rem 0.6rem; text-decoration: none; }
-    .fin-edit-file-link:hover { border-color: #572e88; background: #faf9fd; }
-    .fin-edit-file-url-box { margin-top: 0.7rem; }
+    #fin-edit-files { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.6rem; }
+    .fin-file-row { display: flex; align-items: center; gap: 0.6rem; background: #faf9fd; border: 1.5px solid #e8e4f4; border-radius: 10px; padding: 0.6rem 0.75rem; }
+    .fin-file-type-badge { font-size: 0.55rem; font-weight: 900; letter-spacing: 0.06em; color: #fff; background: #572e88; border-radius: 4px; padding: 0.18rem 0.4rem; flex-shrink: 0; text-transform: uppercase; }
+    .fin-file-type-badge--pdf { background: #d1523d; }
+    .fin-file-type-badge--img { background: #476aaa; }
+    .fin-file-name { flex: 1; font-size: 0.8rem; font-weight: 700; color: #1a1530; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .fin-file-uploading { font-size: 0.75rem; color: #9a90b0; font-style: italic; }
+    .fin-file-row-actions { display: flex; align-items: center; gap: 0.35rem; flex-shrink: 0; }
+    .fin-file-btn { font-family: inherit; font-size: 0.72rem; font-weight: 800; border-radius: 6px; padding: 0.28rem 0.6rem; cursor: pointer; border: 1.5px solid; transition: background 0.12s; white-space: nowrap; }
+    .fin-file-btn--view { color: #572e88; border-color: rgba(87,46,136,0.25); background: transparent; text-decoration: none; display: inline-flex; align-items: center; }
+    .fin-file-btn--view:hover { background: rgba(87,46,136,0.06); }
+    .fin-file-btn--replace { color: #476aaa; border-color: rgba(71,106,170,0.25); background: transparent; }
+    .fin-file-btn--replace:hover { background: rgba(71,106,170,0.06); }
+    .fin-file-btn--remove { color: #d1523d; border-color: rgba(209,82,61,0.25); background: transparent; }
+    .fin-file-btn--remove:hover { background: rgba(209,82,61,0.06); }
+    .fin-file-add-btn { display: inline-flex; align-items: center; gap: 0.4rem; font-family: inherit; font-size: 0.78rem; font-weight: 800; color: #572e88; background: transparent; border: 1.5px dashed rgba(87,46,136,0.3); border-radius: 8px; padding: 0.45rem 0.85rem; cursor: pointer; transition: border-color 0.12s, background 0.12s; margin-top: 0.1rem; }
+    .fin-file-add-btn:hover { border-color: #572e88; background: rgba(87,46,136,0.04); }
+    .fin-file-add-btn:disabled { opacity: 0.55; cursor: default; }
     .fin-edit-line-items { display: flex; flex-direction: column; gap: 0.5rem; }
     .fin-edit-line-row { display: grid; grid-template-columns: 1fr 70px 105px 105px 34px; gap: 0.5rem; align-items: end; }
     .fin-edit-line-row .fin-form-field { gap: 0.25rem; }
@@ -459,12 +473,13 @@
 
           <div class="fin-form-section">
             <div class="fin-form-section-title">Files</div>
-            <div class="fin-edit-files" id="fin-edit-files"></div>
-            <label class="fin-form-field fin-edit-file-url-box">
-              <span class="fin-form-label">Receipt File URLs</span>
-              <textarea class="fin-form-textarea" id="fin-edit-file-urls" placeholder="One file URL per line"></textarea>
-            </label>
-            <span class="fin-form-help">Add, remove, or correct attached receipt links here. Use one URL per line.</span>
+            <div id="fin-edit-files"></div>
+            <button class="fin-file-add-btn" type="button" onclick="FIN.triggerFileAdd()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add File
+            </button>
+            <input type="file" id="fin-file-input" accept="image/*,.pdf,.heic,.heif" style="display:none" onchange="FIN.onFileInputChange(this)">
+            <textarea id="fin-edit-file-urls" style="display:none"></textarea>
           </div>
         </form>
       </div>
@@ -929,23 +944,94 @@
       }
     },
 
+    _editFileUrls: [],
+    _fileReplaceIndex: -1,
+
     renderReceiptFiles(receipt) {
+      this._editFileUrls = this.receiptFileUrls(receipt);
+      this._renderFileRows();
+    },
+
+    _renderFileRows() {
       const el = document.getElementById('fin-edit-files');
       if (!el) return;
-      const urls = this.receiptFileUrls(receipt);
+      // sync hidden textarea for collectReceiptUrlValue
       const urlEl = document.getElementById('fin-edit-file-urls');
-      if (urlEl) urlEl.value = urls.join('\n');
-      el.innerHTML = urls.length
-        ? urls.map((url, index) => {
-          const ext = (url.split('.').pop() || '').split('?')[0].toUpperCase();
-          return '<a class="fin-edit-file-link" href="' + this.escAttr(url) + '" target="_blank" rel="noopener">File ' + (index + 1) + (ext ? ' - ' + this.esc(ext) : '') + '</a>';
-        }).join('')
-        : '<span class="fin-form-help">No file is attached to this receipt.</span>';
+      if (urlEl) urlEl.value = this._editFileUrls.join('\n');
+      if (!this._editFileUrls.length) {
+        el.innerHTML = '<span class="fin-form-help" style="display:block;margin-bottom:0.25rem;">No files attached yet.</span>';
+        return;
+      }
+      el.innerHTML = this._editFileUrls.map((url, i) => {
+        const raw = (url.split('?')[0].split('.').pop() || '').toUpperCase();
+        const ext = raw.slice(0, 4);
+        const isPdf = ext === 'PDF';
+        const isImg = ['JPG','JPEG','PNG','GIF','WEBP','HEIC','HEIF'].includes(ext);
+        const badgeCls = isPdf ? 'fin-file-type-badge--pdf' : isImg ? 'fin-file-type-badge--img' : '';
+        const label = decodeURIComponent(url.split('/').pop()?.split('?')[0] || ('File ' + (i + 1)));
+        const displayName = label.length > 48 ? label.slice(0, 45) + '...' : label;
+        return '<div class="fin-file-row">' +
+          '<span class="fin-file-type-badge ' + badgeCls + '">' + this.esc(ext || 'FILE') + '</span>' +
+          '<span class="fin-file-name" title="' + this.escAttr(label) + '">' + this.esc(displayName) + '</span>' +
+          '<div class="fin-file-row-actions">' +
+            '<a class="fin-file-btn fin-file-btn--view" href="' + this.escAttr(url) + '" target="_blank" rel="noopener">View</a>' +
+            '<button class="fin-file-btn fin-file-btn--replace" type="button" onclick="FIN.triggerFileReplace(' + i + ')">Replace</button>' +
+            '<button class="fin-file-btn fin-file-btn--remove" type="button" onclick="FIN.removeFile(' + i + ')">Remove</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    },
+
+    removeFile(index) {
+      this._editFileUrls.splice(index, 1);
+      this._renderFileRows();
+    },
+
+    triggerFileAdd() {
+      this._fileReplaceIndex = -1;
+      const inp = document.getElementById('fin-file-input');
+      if (inp) { inp.value = ''; inp.click(); }
+    },
+
+    triggerFileReplace(index) {
+      this._fileReplaceIndex = index;
+      const inp = document.getElementById('fin-file-input');
+      if (inp) { inp.value = ''; inp.click(); }
+    },
+
+    async onFileInputChange(input) {
+      const file = input.files?.[0];
+      if (!file) return;
+      const addBtn = document.querySelector('.fin-file-add-btn');
+      if (addBtn) addBtn.disabled = true;
+      const el = document.getElementById('fin-edit-files');
+      const placeholder = document.createElement('div');
+      placeholder.className = 'fin-file-row';
+      placeholder.innerHTML = '<span class="fin-file-uploading">Uploading ' + this.esc(file.name) + '...</span>';
+      if (el) el.appendChild(placeholder);
+      try {
+        const path = this.prodId + '/receipts/' + Date.now() + '-' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const { error: upErr } = await this.sb.storage.from('receipts').upload(path, file, { upsert: true, contentType: file.type });
+        if (upErr) throw upErr;
+        const { data: urlData } = this.sb.storage.from('receipts').getPublicUrl(path);
+        const publicUrl = urlData?.publicUrl;
+        if (!publicUrl) throw new Error('Could not get file URL');
+        if (this._fileReplaceIndex >= 0 && this._fileReplaceIndex < this._editFileUrls.length) {
+          this._editFileUrls[this._fileReplaceIndex] = publicUrl;
+        } else {
+          this._editFileUrls.push(publicUrl);
+        }
+      } catch (err) {
+        this.showToast('Upload failed: ' + (err.message || 'unknown error'), true);
+      } finally {
+        if (el && placeholder.parentNode === el) el.removeChild(placeholder);
+        if (addBtn) addBtn.disabled = false;
+        this._renderFileRows();
+      }
     },
 
     collectReceiptUrlValue() {
-      const el = document.getElementById('fin-edit-file-urls');
-      const urls = (el?.value || '').split(/\n+/).map(url => url.trim()).filter(Boolean);
+      const urls = this._editFileUrls.filter(Boolean);
       if (!urls.length) return null;
       return urls.length === 1 ? urls[0] : JSON.stringify(urls);
     },
