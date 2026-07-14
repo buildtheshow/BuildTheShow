@@ -711,6 +711,10 @@
     .vp-date-add.added { background: #fff; color: var(--purple); }
     .vp-date-add:disabled { border-color: var(--light-grey); background: var(--light-grey); color: var(--muted); cursor: not-allowed; }
 
+    .vp-card-date-strip { display: flex; flex-wrap: wrap; gap: 0.28rem; margin-top: 0.45rem; }
+    .vp-date-chip { display: inline-flex; align-items: center; font-size: 0.7rem; font-weight: 800; color: #572e88; background: rgba(87,46,136,0.09); border-radius: 5px; padding: 0.18rem 0.45rem; white-space: nowrap; }
+    .vp-date-chip-more { font-size: 0.7rem; font-weight: 700; color: rgba(87,46,136,0.55); align-self: center; }
+
     .vp-empty {
       border: 1px dashed rgba(87,46,136,0.25);
       border-radius: 8px;
@@ -6999,6 +7003,15 @@
         : 'No open dates';
       const locations = [...new Set(openDates.map(o => eventMap[o.event_id]?.venue).filter(Boolean))];
       const detailsTarget = `decodeURIComponent('${jsArg(groupId)}')`;
+      // Build date chips — per-production roles use required_dates, per-event roles use each opp's shift_date
+      const cardDates = allRequiredDates.length > 0
+        ? allRequiredDates
+        : openDates.map(o => o.shift_date).filter(Boolean);
+      const chipHtml = cardDates.length
+        ? `<div class="vp-card-date-strip">${
+            cardDates.map(d => `<span class="vp-date-chip">${esc(fmtDate(d, { short: true }))}</span>`).join('')
+          }</div>`
+        : isFlexible ? `<div class="vp-card-date-strip"><span class="vp-date-chip-more">Flexible — no fixed date</span></div>` : '';
       return `<article class="vp-card ${isOpen ? 'open' : ''} ${isFull ? 'is-full' : ''}">
         <button class="vp-role-icon" type="button" onclick="toggleDetails(${detailsTarget})" aria-expanded="${isOpen ? 'true' : 'false'}" aria-label="${isOpen ? 'Hide' : 'Learn more about'} ${esc(roleName)}" style="background:${color};color:${isGold ? 'var(--ink)' : '#fff'};">${roleIcon(roleName, opp.department)}</button>
         <div class="vp-card-main">
@@ -7006,10 +7019,10 @@
           ${roleSummaryHtml(opp, detailsTarget, isOpen)}
           <div class="vp-card-facts">
             ${opp.event_type === 'dept_leads' ? '<span class="vp-fact" style="color:#572e88;font-weight:900;">Leadership Role</span>' : ''}
-            <span class="vp-fact">${ICONS.calendar}${esc(datesText)}</span>
             ${locations.length === 1 ? `<span class="vp-fact">${ICONS.pin}${esc(locations[0])}</span>` : ''}
             ${opp.department ? `<span class="vp-fact">${ICONS.users}${esc(departmentTile(opp.department).name || opp.department)}</span>` : ''}
           </div>
+          ${chipHtml}
         </div>
         <div class="vp-card-actions">
           ${(() => {
