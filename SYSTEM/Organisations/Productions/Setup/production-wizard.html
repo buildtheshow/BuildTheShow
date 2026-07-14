@@ -4188,14 +4188,14 @@ Return ONLY the JSON array, no explanation, no markdown fences.`;
       };
 
       // Small 44×44 square cal badge for the publish step date row
-      const miniBadge = dateStr => {
+      const miniBadge = (dateStr, colour = '#efab45') => {
         if (!dateStr) return '';
         const CAL_MONTHS_S = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         const parts = dateStr.split('-');
         const mon = CAL_MONTHS_S[parseInt(parts[1],10)-1] || '';
         const day = parseInt(parts[2],10);
         return `<div style="flex-shrink:0;width:44px;min-width:44px;max-width:44px;height:44px;min-height:44px;max-height:44px;border-radius:5px;overflow:hidden;box-shadow:0 1px 5px rgba(0,0,0,0.12);display:flex;flex-direction:column;box-sizing:border-box;">
-          <div style="background:#efab45;text-align:center;font-size:0.5rem;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;color:#fff;height:14px;min-height:14px;display:flex;align-items:center;justify-content:center;line-height:1;">${mon}</div>
+          <div style="background:${colour};text-align:center;font-size:0.5rem;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;color:#fff;height:14px;min-height:14px;display:flex;align-items:center;justify-content:center;line-height:1;">${mon}</div>
           <div style="background:#fff;text-align:center;font-size:1.05rem;font-weight:900;color:#1a1530;flex:1;display:flex;align-items:center;justify-content:center;line-height:1;">${day}</div>
         </div>`;
       };
@@ -4221,23 +4221,40 @@ Return ONLY the JSON array, no explanation, no markdown fences.`;
       });
       const f = wizardData.features || {};
 
-      // Compact date grid — auto columns, max 20 visible then overflow note
-      const DATES_MAX  = 20;
-      const datesExtra = sorted.length - DATES_MAX;
+      // Group events by type, colour-coded sections
+      const _DATES_TYPE_ORDER = ['performance','rehearsal','music_rehearsal','choreography','tech','dress','audition','dance_call','callback','other_audition','strike','cast_party','costume_moveout'];
+      const _eventsByType = {};
+      sorted.forEach(ev => {
+        const t = ev.event_type || 'rehearsal';
+        if (!_eventsByType[t]) _eventsByType[t] = [];
+        _eventsByType[t].push(ev);
+      });
+      const _typeKeys = [...new Set([..._DATES_TYPE_ORDER, ...Object.keys(_eventsByType)])].filter(t => _eventsByType[t]);
       const datesRowHTML = sorted.length
-        ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:0.5rem 1rem;">${
-            sorted.slice(0, DATES_MAX).map(ev => {
-              const parts = fmtDate(ev.date).split(', ');
-              return `<div style="display:flex;align-items:center;gap:0.55rem;padding:0.15rem 0;">
-                ${miniBadge(ev.date)}
-                <div style="min-width:0;overflow:hidden;">
-                  <div style="font-size:0.72rem;font-weight:700;color:#1a1530;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${parts[0] || ''}</div>
-                  <div style="font-size:0.63rem;color:#5a4e70;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${parts.slice(1).join(', ').trim()}</div>
-                  <div style="font-size:0.61rem;color:#9080a8;margin-top:0.05rem;white-space:nowrap;">${fmtTime(ev.start_time)}${ev.end_time ? ' – ' + fmtTime(ev.end_time) : ''}</div>
-                </div>
-              </div>`;
-            }).join('')
-          }</div>${datesExtra > 0 ? `<p style="font-size:0.72rem;color:#9080a8;margin:0.6rem 0 0;font-style:italic;">+ ${datesExtra} more dates</p>` : ''}`
+        ? _typeKeys.map(type => {
+            const evs = _eventsByType[type];
+            const colour = EVENT_COLOURS[type] || '#572e88';
+            const label = EVENT_TYPE_LABELS[type] || type;
+            return `<div style="margin-bottom:1rem;">
+              <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.5rem;">
+                <span style="font-size:0.58rem;font-weight:900;text-transform:uppercase;letter-spacing:0.09em;color:${colour};background:${colour}18;border-radius:20px;padding:0.12rem 0.6rem;">${label}</span>
+                <span style="font-size:0.58rem;font-weight:700;color:#b0a0cc;">${evs.length} date${evs.length !== 1 ? 's' : ''}</span>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:0.5rem 1rem;">
+                ${evs.map(ev => {
+                  const parts = fmtDate(ev.date).split(', ');
+                  return `<div style="display:flex;align-items:center;gap:0.55rem;padding:0.15rem 0;">
+                    ${miniBadge(ev.date, colour)}
+                    <div style="min-width:0;overflow:hidden;">
+                      <div style="font-size:0.72rem;font-weight:700;color:#1a1530;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${parts[0] || ''}</div>
+                      <div style="font-size:0.63rem;color:#5a4e70;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${parts.slice(1).join(', ').trim()}</div>
+                      <div style="font-size:0.61rem;color:#9080a8;margin-top:0.05rem;white-space:nowrap;">${fmtTime(ev.start_time)}${ev.end_time ? ' – ' + fmtTime(ev.end_time) : ''}</div>
+                    </div>
+                  </div>`;
+                }).join('')}
+              </div>
+            </div>`;
+          }).join('')
         : `<span style="font-size:0.8rem;color:#b0a0cc;font-style:italic;">No dates added yet.</span>`;
 
       // Feature list — full-width rows so nothing clips
@@ -4300,8 +4317,8 @@ Return ONLY the JSON array, no explanation, no markdown fences.`;
           <!-- DATES BAND: white card, full width, small badges -->
           <div style="background:#fff;border:1.5px solid rgba(87,46,136,0.1);border-radius:14px;padding:1rem 1.2rem;box-shadow:0 2px 8px rgba(87,46,136,0.05);margin-bottom:0.75rem;">
             <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.7rem;">
-              <span style="font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:#000;">Performance Dates</span>
-              ${sorted.length ? `<span style="font-size:0.6rem;font-weight:700;color:#efab45;background:rgba(239,171,69,0.12);border-radius:20px;padding:0.08rem 0.4rem;">${sorted.length} added</span>` : ''}
+              <span style="font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:#000;">Production Dates</span>
+              ${sorted.length ? `<span style="font-size:0.6rem;font-weight:700;color:#572e88;background:rgba(87,46,136,0.08);border-radius:20px;padding:0.08rem 0.4rem;">${sorted.length} added</span>` : ''}
               <span style="margin-left:auto;">${editBtn(3)}</span>
             </div>
             <div>${datesRowHTML}</div>
