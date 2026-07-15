@@ -295,9 +295,13 @@
     // Hide every top-level group
     document.querySelectorAll('.sidebar-group').forEach(function (g) { g.style.display = 'none'; });
 
-    // Show group-cast if any cast-related keys present
+    // Check-In — top-level group, shown independently of Cast
+    var grpCheckin = document.getElementById('group-checkin');
+    if (grpCheckin) grpCheckin.style.display = keys.has('checkin') ? '' : 'none';
+
+    // Show group-cast if any cast-related keys present (excluding checkin, which is its own group)
     var needsCast = hasKeyOrChild('auditions') || hasKeyOrChild('casting')
-      || keys.has('registration') || keys.has('cast-dashboard') || keys.has('checkin');
+      || keys.has('registration') || keys.has('cast-dashboard');
     if (needsCast) {
       var grpCast = document.getElementById('group-cast');
       if (grpCast) { grpCast.style.display = ''; grpCast.classList.add('open'); }
@@ -306,9 +310,9 @@
       var castDash = document.getElementById('cast-group-dashboard-nav');
       if (castDash) castDash.style.display = keys.has('cast-dashboard') ? '' : 'none';
 
-      // Check-In — show only if explicitly granted
-      var checkIn = document.getElementById('cast-checkin-nav');
-      if (checkIn) checkIn.style.display = keys.has('checkin') ? '' : 'none';
+      // cast-checkin-nav is now superseded by group-checkin; always hide it here
+      var castCheckIn = document.getElementById('cast-checkin-nav');
+      if (castCheckIn) castCheckIn.style.display = 'none';
 
       // Auditions wrap
       var audWrap = document.getElementById('auditions-wrap');
@@ -640,7 +644,7 @@
     }
     var checkinEl = document.getElementById('group-checkin');
     if (checkinEl) {
-      var showCheckin = !isDisabled(enabledModules, 'volunteers') || !isDisabled(enabledModules, 'registration');
+      var showCheckin = !isDisabled(enabledModules, 'volunteers') || !isDisabled(enabledModules, 'registration') || !isDisabled(enabledModules, 'auditions');
       checkinEl.style.display = showCheckin ? '' : 'none';
     }
   }
