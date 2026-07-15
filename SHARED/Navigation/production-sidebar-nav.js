@@ -294,9 +294,13 @@
       var grpCast = document.getElementById('group-cast');
       if (grpCast) { grpCast.style.display = ''; grpCast.classList.add('open'); }
 
-      // Cast Dashboard tab — hide unless explicitly allowed
+      // Cast Dashboard tab — always hidden for team portal
       var castDash = document.getElementById('cast-group-dashboard-nav');
       if (castDash) castDash.style.display = 'none';
+
+      // Check-In tab — hide unless team member has explicit check-in key
+      var checkIn = document.getElementById('cast-checkin-nav');
+      if (checkIn) checkIn.style.display = keys.has('checkin') ? '' : 'none';
 
       // Auditions wrap
       var audWrap = document.getElementById('auditions-wrap');
@@ -486,6 +490,7 @@
     }
 
     applyModuleVisibility(prod.enabled_modules);
+    window.applyTeamSidebarRestriction();
   };
 
   // Maps module keys to sidebar group element IDs
@@ -529,6 +534,7 @@
   window.applyNavModuleVisibility = function (enabledModules) {
     _pendingModules = enabledModules;
     applyModuleVisibility(enabledModules);
+    window.applyTeamSidebarRestriction();
   };
 
 
