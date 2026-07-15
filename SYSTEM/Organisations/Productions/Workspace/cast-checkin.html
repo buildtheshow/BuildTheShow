@@ -375,6 +375,7 @@
   let _people  = {};
   let _idCharMap = {}; // email → [character names], built after resolving assignment IDs
   let _idCharIdMap = {}; // applicant id → [character ids], used for event-specific call lists
+  let _hasCalledCastColumn = false;
   let _selectedEvent = null;
   let _allAttendees  = [];
   let _filterTab   = 'everyone';
@@ -416,9 +417,14 @@
 
   // ── Data ──────────────────────────────────────────────────────────
   async function loadData() {
+    const calledCastProbe = await _sb.from('production_events').select('called_cast').eq('production_id', _prodId).limit(1);
+    _hasCalledCastColumn = !calledCastProbe.error;
+    const eventSelect = _hasCalledCastColumn
+      ? 'id,title,event_type,start_time,end_time,venue,called_character_ids,called_cast,event_checkins,is_locked,locked_at'
+      : 'id,title,event_type,start_time,end_time,venue,called_character_ids,event_checkins,is_locked,locked_at';
     const [evRes, chRes, asRes, appsRes, booksRes, volsRes] = await Promise.all([
       _sb.from('production_events')
-        .select('id,title,event_type,start_time,end_time,venue,called_character_ids,event_checkins,is_locked,locked_at')
+        .select(eventSelect)
         .eq('production_id', _prodId).in('event_type', CHECKIN_TYPES).order('start_time'),
       _sb.from('production_characters').select('id,name,sort_order').eq('production_id', _prodId).order('sort_order'),
       _sb.from('casting_assignments').select('id,character_id,applicant_id,state').eq('production_id', _prodId).in('state', ['chosen','offer_accepted']),
@@ -582,7 +588,7 @@
   function selectEvent(id) {
     _selectedEvent = _events.find(e => e.id === id) || null;
     if (!_selectedEvent) return;
-    _pendingCallIds = new Set(_selectedEvent.called_character_ids || []);
+    _pendingCallIds = eventCalledCharacterIds(_selectedEvent);
     _clDirty  = false;
     _searchQ  = '';
     _filterTab = 'everyone';
@@ -612,6 +618,7 @@
       (e.venue ? '<span>' + esc(e.venue) + '</span>' : '');
     document.getElementById('ci-header-btns').innerHTML =
       '<button class="ci-bulk-actions-btn" onclick="printSheet(_selectedEvent.id)">&#x1F5A8; Print Sheet</button>' +
+      '<button class="ci-bulk-actions-btn" onclick="openCLModal()">Edit Call List</button>' +
       (locked
         ? '<span class="ci-locked-badge">Rehearsal Ended</span>'
         : '<button class="ci-bulk-actions-btn" onclick="openBulkHint()">Bulk Actions</button>' +
@@ -901,7 +908,7 @@
   }
 
   // ── Call list modal ───────────────────────────────────────────────
-  function openCLModal() { _pendingCallIds=new Set(_selectedEvent.called_character_ids||[]);_clDirty=false;renderCLModal();document.getElementById('cl-overlay').classList.add('open'); }
+  function openCLModal() { _pendingCallIds=eventCalledCharacterIds(_selectedEvent);_clDirty=false;renderCLModal();document.getElementById('cl-overlay').classList.add('open'); }
   function closeCLModal() { document.getElementById('cl-overlay').classList.remove('open'); }
   function renderCLModal() {
     const castMap={}; _assignments.forEach(a=>{const p=_people[a.applicant_id];if(!castMap[a.character_id])castMap[a.character_id]=[];if(p?.name)castMap[a.character_id].push(p.name);});
@@ -920,13 +927,29 @@
     const btn=document.getElementById('cl-save-btn');if(btn){btn.disabled=true;btn.textContent='Saving...';}
     const calledIds=[..._pendingCallIds]; const tmpEv={..._selectedEvent,called_character_ids:calledIds};
     const attendees=resolveAttendees(tmpEv); const merged=mergeCheckins(_selectedEvent.event_checkins||[],attendees);
-    const {error}=await _sb.from('production_events').update({called_character_ids:calledIds,event_checkins:merged}).eq('id',_selectedEvent.id);
-    if(!error){_selectedEvent.called_character_ids=calledIds;_selectedEvent.event_checkins=merged;_events=_events.map(e=>e.id===_selectedEvent.id?_selectedEvent:e);closeCLModal();_allAttendees=resolveAttendees(_selectedEvent);renderStats();renderControls();renderTable();}
+    const updatePayload = { called_character_ids:calledIds,event_checkins:merged };
+    if (_hasCalledCastColumn) updatePayload.called_cast = calledIds.length ? { type:'individuals', character_ids:calledIds.map(Number).filter(n => !isNaN(n)) } : { type:'tbd' };
+    const {error}=await _sb.from('production_events').update(updatePayload).eq('id',_selectedEvent.id);
+    if(!error){_selectedEvent.called_character_ids=calledIds;if(_hasCalledCastColumn)_selectedEvent.called_cast=updatePayload.called_cast;_selectedEvent.event_checkins=merged;_events=_events.map(e=>e.id===_selectedEvent.id?_selectedEvent:e);closeCLModal();_allAttendees=resolveAttendees(_selectedEvent);renderStats();renderControls();renderTable();}
     else{if(btn){btn.disabled=false;btn.textContent='Save Call List';}}
   }
   function mergeCheckins(existing,attendees) { const map={};(existing||[]).forEach(c=>{map[c.id]=c;});return attendees.map(a=>map[a.id]?{...map[a.id],name:a.name}:{id:a.id,type:a.type,name:a.name,status:null,checked_in_at:null,left_at:null,notes:null}); }
 
   // ── Helpers ───────────────────────────────────────────────────────
+
+  function eventCalledCharacterIds(ev) {
+    const legacyIds = Array.isArray(ev?.called_character_ids) ? ev.called_character_ids.filter(Boolean).map(String) : [];
+    if (legacyIds.length) return new Set(legacyIds);
+    const calledCast = ev?.called_cast;
+    if (!calledCast || typeof calledCast !== 'object') return new Set();
+    if (calledCast.type === 'individuals') {
+      return new Set((Array.isArray(calledCast.character_ids) ? calledCast.character_ids : []).filter(Boolean).map(String));
+    }
+    if (calledCast.type === 'all') {
+      return new Set(_chars.map(c => String(c.id)));
+    }
+    return new Set();
+  }
 
   // Build a map of applicant_id → [character names] from assignments
   function buildCharMap() {
@@ -959,7 +982,7 @@
 
   function resolveAttendees(ev) {
     const evDate = ev.start_time?.slice(0,10) || '';
-    const calledIds = new Set((Array.isArray(ev.called_character_ids) ? ev.called_character_ids : []).filter(Boolean).map(String));
+    const calledIds = eventCalledCharacterIds(ev);
     const useCalledCast = calledIds.size > 0;
 
     // When a call list exists, only the called cast should be expected for that event.
