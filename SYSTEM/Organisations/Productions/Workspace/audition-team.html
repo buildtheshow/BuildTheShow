@@ -25481,7 +25481,7 @@
     document.body.classList.add('team-access-mode');
     const perms = teamAccessPermissions();
     const nameEl = document.getElementById('hdr-title');
-    const subEl = document.getElementById('hdr-sub');
+    const subEl  = document.getElementById('hdr-sub');
     if (nameEl && prod) nameEl.textContent = prod.title || 'Production';
     if (subEl) subEl.textContent = [teamAccessMember?.name, perms.label].filter(Boolean).join(' · ');
     const sidebarProd = document.querySelector('.sidebar-prod');
@@ -25490,36 +25490,124 @@
         <button type="button" id="team-access-logout-btn" onclick="logoutTeamAccess()" style="display:flex;align-items:center;justify-content:center;width:100%;margin-top:0.75rem;font-size:0.76rem;font-weight:800;color:#fff;background:rgba(255,255,255,0.12);border:1.5px solid rgba(255,255,255,0.22);border-radius:8px;padding:0.42rem 0.85rem;cursor:pointer;font-family: var(--bts-font);">Log Out</button>
       `);
     }
+
     const menuAccess = teamMemberMenuAccess(teamAccessMember);
+
+    // True if key itself OR any key:* child is granted
+    function hasSection(prefix) {
+      if (menuAccess.has(prefix)) return true;
+      for (const k of menuAccess) { if (k.startsWith(prefix + ':')) return true; }
+      return false;
+    }
+    // True if key itself OR its top-level parent is granted
+    function allows(key) {
+      if (menuAccess.has(key)) return true;
+      const parent = String(key).split(':')[0];
+      return !!parent && menuAccess.has(parent);
+    }
+
+    // Show only permitted workspace tab buttons
     document.querySelectorAll('.prod-tabs > .prod-tab').forEach(tab => {
       const key = tab.dataset.tab || '';
-      const isAllowed = key === 'profile' || menuAccess.has(key);
-      tab.style.display = isAllowed ? '' : 'none';
+      tab.style.display = key === 'profile' || menuAccess.has(key) ? '' : 'none';
     });
-    document.getElementById('auditions-wrap')?.style.setProperty('display', menuAccess.has('auditions') ? '' : 'none');
-    document.getElementById('registration-wrap')?.style.setProperty('display', menuAccess.has('registration') ? '' : 'none');
     document.getElementById('team-profile-tab')?.style.setProperty('display', '');
-    document.getElementById('asub-setup')?.style.setProperty('display', menuAccess.has('auditions:settings') ? '' : 'none');
-    document.getElementById('asub-audschedule')?.style.setProperty('display', teamMenuAllows(menuAccess, 'auditions:schedule') ? '' : 'none');
-    document.getElementById('asub-allperformers')?.style.setProperty('display', menuAccess.has('auditions:allperformers') ? '' : 'none');
-    document.getElementById('asub-files')?.style.setProperty('display', menuAccess.has('auditions:files') ? '' : 'none');
-    document.getElementById('cast-group-dashboard-nav')?.style.setProperty('display', menuAccess.has('cast-dashboard') ? '' : 'none');
-    document.getElementById('cast-checkin-nav')?.style.setProperty('display', menuAccess.has('checkin') ? '' : 'none');
-    document.getElementById('rsub-dashboard')?.style.setProperty('display', teamMenuAllows(menuAccess, 'registration:dashboard') ? '' : 'none');
-    document.getElementById('rsub-payments')?.style.setProperty('display', teamMenuAllows(menuAccess, 'registration:payments') ? '' : 'none');
-    document.getElementById('rsub-settings')?.style.setProperty('display', teamMenuAllows(menuAccess, 'registration:settings') ? '' : 'none');
     document.getElementById('view-contact-info-btn')?.style.setProperty('display', 'none');
-    document.querySelectorAll('#prod-sidebar .sidebar-group').forEach(g => { g.style.display = 'none'; });
-    document.getElementById('group-cast')?.style.removeProperty('display');
-    const hasCastingAccess = [...menuAccess].some(k => k === 'casting' || k.startsWith('casting:') || k === 'auditions:casting');
-    document.getElementById('casting-wrap')?.style.setProperty('display', hasCastingAccess ? '' : 'none');
-    if (hasCastingAccess && !menuAccess.has('casting') && !menuAccess.has('auditions:casting')) {
-      document.getElementById('csub-dashboard')?.style.setProperty('display', menuAccess.has('casting:dashboard') ? '' : 'none');
-      document.getElementById('csub-castingboard')?.style.setProperty('display', menuAccess.has('casting:castingboard') ? '' : 'none');
-      document.getElementById('csub-offers')?.style.setProperty('display', menuAccess.has('casting:offers') ? '' : 'none');
-      document.getElementById('csub-castlist')?.style.setProperty('display', (menuAccess.has('casting:castlist') || menuAccess.has('castlist')) ? '' : 'none');
-    }
     document.querySelectorAll('[data-producer-only], .producer-only').forEach(el => { el.style.display = 'none'; });
+
+    // Hide every sidebar group — then re-show only what permissions grant
+    document.querySelectorAll('#prod-sidebar .sidebar-group').forEach(g => { g.style.display = 'none'; });
+
+    // ── Overview ───────────────────────────────────────────────
+    if (menuAccess.has('overview')) {
+      document.getElementById('group-overview')?.style.removeProperty('display');
+    }
+
+    // ── Plan ───────────────────────────────────────────────────
+    if (menuAccess.has('schedule')) {
+      document.getElementById('group-plan')?.style.removeProperty('display');
+    }
+
+    // ── Cast ───────────────────────────────────────────────────
+    const hasCastDash  = menuAccess.has('cast-dashboard');
+    const hasAuditions = hasSection('auditions');
+    const hasCasting   = hasSection('casting');
+    const hasReg       = menuAccess.has('registration');
+    if (hasCastDash || hasAuditions || hasCasting || hasReg) {
+      document.getElementById('group-cast')?.style.removeProperty('display');
+
+      // Dashboard — admin-only; no portal permissions key maps to 'cast-dashboard'
+      document.getElementById('cast-group-dashboard-nav')?.style.setProperty('display', hasCastDash ? '' : 'none');
+      // Check-In — admin-only; never grantable via portal permissions
+      document.getElementById('cast-checkin-nav')?.style.setProperty('display', 'none');
+
+      // Auditions
+      document.getElementById('auditions-wrap')?.style.setProperty('display', hasAuditions ? '' : 'none');
+      if (hasAuditions) {
+        document.getElementById('asub-dashboard')?.style.setProperty('display', allows('auditions:dashboard') ? '' : 'none');
+        document.getElementById('asub-audschedule')?.style.setProperty('display', allows('auditions:schedule') ? '' : 'none');
+        document.getElementById('asub-allperformers')?.style.setProperty('display', allows('auditions:allperformers') ? '' : 'none');
+        document.getElementById('asub-selftapes')?.style.setProperty('display', 'none');
+        document.getElementById('asub-setup')?.style.setProperty('display', allows('auditions:settings') ? '' : 'none');
+        document.getElementById('asub-files')?.style.setProperty('display', 'none');
+      }
+
+      // Casting
+      document.getElementById('casting-wrap')?.style.setProperty('display', hasCasting ? '' : 'none');
+      if (hasCasting) {
+        document.getElementById('csub-dashboard')?.style.setProperty('display', allows('casting:dashboard') ? '' : 'none');
+        document.getElementById('csub-castingboard')?.style.setProperty('display', allows('casting:castingboard') ? '' : 'none');
+        document.getElementById('csub-castlist')?.style.setProperty('display', (menuAccess.has('casting:castlist') || menuAccess.has('castlist') || menuAccess.has('casting')) ? '' : 'none');
+        document.getElementById('csub-offers')?.style.setProperty('display', allows('casting:offers') ? '' : 'none');
+      }
+
+      // Registration — if granted, all sub-pages show (no fine-grained permission keys exist)
+      document.getElementById('registration-wrap')?.style.setProperty('display', hasReg ? '' : 'none');
+      if (hasReg) {
+        document.getElementById('rsub-dashboard')?.style.setProperty('display', '');
+        document.getElementById('rsub-publicview')?.style.setProperty('display', '');
+        document.getElementById('rsub-payments')?.style.setProperty('display', '');
+        document.getElementById('rsub-settings')?.style.setProperty('display', '');
+      }
+    }
+
+    // ── Departments ────────────────────────────────────────────
+    if (menuAccess.has('departments')) {
+      document.getElementById('group-departments')?.style.removeProperty('display');
+    }
+
+    // ── Promote ────────────────────────────────────────────────
+    const hasMarketing = hasSection('marketing');
+    const hasSponsors  = hasSection('sponsors');
+    const hasProgramme = menuAccess.has('programme');
+    if (hasMarketing || hasSponsors || hasProgramme) {
+      document.getElementById('group-promote')?.style.removeProperty('display');
+      document.getElementById('marketing-wrap')?.style.setProperty('display', hasMarketing ? '' : 'none');
+      document.getElementById('sponsors-wrap')?.style.setProperty('display', hasSponsors ? '' : 'none');
+    }
+
+    // ── Ticketing ──────────────────────────────────────────────
+    if (menuAccess.has('ticketing')) {
+      document.getElementById('group-ticketing')?.style.removeProperty('display');
+    }
+
+    // ── Volunteers ─────────────────────────────────────────────
+    if (menuAccess.has('shifts') || menuAccess.has('hours')) {
+      document.getElementById('group-volunteers')?.style.removeProperty('display');
+    }
+
+    // ── Financials ─────────────────────────────────────────────
+    if (hasSection('financials')) {
+      document.getElementById('group-financials')?.style.removeProperty('display');
+    }
+
+    // ── Wrap Up ────────────────────────────────────────────────
+    if (menuAccess.has('wrapup')) {
+      document.getElementById('group-wrapup')?.style.removeProperty('display');
+    }
+
+    // Settings, Portals, Build — never grantable to team members; remain hidden
+
     renderAuditionsSidebarSubmenu();
   }
 
