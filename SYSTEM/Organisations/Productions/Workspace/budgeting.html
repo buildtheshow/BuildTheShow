@@ -2367,15 +2367,9 @@ const BP = {
     if (this._expView === 'table') {
       this._renderExpTable(area, filtered);
     } else {
-      const _normN = n => (n||'').trim().toLowerCase();
-      const nameToSec = {};
-      this.BW_SECTION_CATS.forEach(sec => {
-        sec.names.forEach(n => { nameToSec[_normN(n)] = sec; });
-        if (sec.label === 'Events') this.BW_EVENTS.forEach(ev => { nameToSec[_normN(ev.label)] = sec; });
-      });
       const usedCardIds = new Set();
       const groupedCards = this.BW_SECTION_CATS.map(sec => {
-        const secCats = filtered.filter(c => { const s = nameToSec[_normN(c.name)]; return s && s.label === sec.label; });
+        const secCats = filtered.filter(c => this._catSectionLabel(c.name, c) === sec.label);
         secCats.forEach(c => usedCardIds.add(c.id));
         return {sec, cats: secCats};
       }).filter(g => g.cats.length);
@@ -2408,15 +2402,9 @@ const BP = {
         '</div>';
     }
     // Build section grouping from BW_SECTION_CATS
-    const _normName = n => (n||'').trim().toLowerCase();
-    const nameToSection = {};
-    this.BW_SECTION_CATS.forEach(sec => {
-      sec.names.forEach(n => { nameToSection[_normName(n)] = sec; });
-      if (sec.label === 'Events') this.BW_EVENTS.forEach(ev => { nameToSection[_normName(ev.label)] = sec; });
-    });
     const usedIds = new Set();
     const grouped = this.BW_SECTION_CATS.map(sec => {
-      const secCats = cats.filter(c => { const s = nameToSection[_normName(c.name)]; return s && s.label === sec.label; });
+      const secCats = cats.filter(c => this._catSectionLabel(c.name, c) === sec.label);
       secCats.forEach(c => usedIds.add(c.id));
       return {sec, cats: secCats};
     }).filter(g => g.cats.length);
@@ -2437,7 +2425,7 @@ const BP = {
     '</div>';
 
     const renderCat = (c, isFirst) => {
-      const color = this._catSectionColor(c.name) || c.color || '#572e88';
+      const color = this._catSectionColor(c.name, c) || c.color || '#572e88';
       const t = this._catTotals(c.id);
       const items = this._catItems(c.id);
       const isEmpty = items.length === 0;
@@ -2562,7 +2550,8 @@ const BP = {
     this._secCollapsed[label] = !collapsed;
     this.renderExpenses();
   },
-  _catSectionLabel(name) {
+  _catSectionLabel(name, cat) {
+    if (this._bwEventDefForCategory(cat || {name})) return 'Events';
     const key = (name||'').trim().toLowerCase();
     for (const sec of this.BW_SECTION_CATS) {
       if (sec.names.some(n => n.trim().toLowerCase() === key)) return sec.label;
@@ -2582,7 +2571,7 @@ const BP = {
   focusCat(catId) {
     const cat = this.cats.find(c=>c.id===catId);
     if (!cat) return;
-    const secLabel = this._catSectionLabel(cat.name);
+    const secLabel = this._catSectionLabel(cat.name, cat);
     this.switchTab('expenses');
     if (secLabel) this._secCollapsed[secLabel] = false;
     this._catCollapsed[catId] = false;
@@ -2592,7 +2581,8 @@ const BP = {
       if (el) el.scrollIntoView({behavior:'smooth', block:'center'});
     });
   },
-  _catSectionColor(name) {
+  _catSectionColor(name, cat) {
+    if (this._bwEventDefForCategory(cat || {name})) return (this.BW_SECTION_CATS.find(sec => sec.label === 'Events') || {}).color || '#ca7ea7';
     const key = (name||'').trim().toLowerCase();
     for (const sec of this.BW_SECTION_CATS) {
       if (sec.names.some(n => n.trim().toLowerCase() === key)) return sec.color;
@@ -2668,7 +2658,7 @@ const BP = {
   },
 
   _expCatCardHtml(c, num) {
-    const color    = this._catSectionColor(c.name) || c.color || '#572e88';
+    const color    = this._catSectionColor(c.name, c) || c.color || '#572e88';
     const t        = this._catTotals(c.id);
     const items    = this._catItems(c.id);
     const budget   = c.planned_cents || 0;
@@ -2817,6 +2807,15 @@ const BP = {
     if (Object.values(draft.estimates||{}).some(v => v > 0)) return true;
     return false;
   },
+  _bwEventDefForCategory(cat) {
+    if (!cat) return null;
+    const name = (cat.name || '').trim().toLowerCase();
+    const color = (cat.color || '').trim().toLowerCase();
+    return (this.BW_EVENTS || []).find(ev => {
+      if ((ev.label || '').trim().toLowerCase() === name) return true;
+      return !!ev.hasName && (ev.color || '').trim().toLowerCase() === color;
+    }) || null;
+  },
   _bwPopulateFromDB() {
     const a = this._bwState.answers;
     const catByName = {};
@@ -2837,14 +2836,16 @@ const BP = {
       this._bwState.who[key] = its.map(i => ({name:i.name, qty:i.qty||1, unitCost:(i.unit_cost_cents||0)/100}));
     });
     // Reconstruct event items
-    this.BW_EVENTS.forEach(ev => {
-      const cat = catByName[ev.label];
-      if (!cat) return;
+    (this.cats||[]).forEach(cat => {
+      const ev = this._bwEventDefForCategory(cat);
+      if (!ev) return;
       const its = (this.items||[]).filter(i => i.category_id === cat.id);
       if (!its.length) return;
-      const evItems = its.map(i => ({name:i.name, qty:i.qty||1, unitCost:(i.unit_cost_cents||0)/100}))
-        .filter(it => !['food & catering','printing','other'].includes((it.name||'').trim().toLowerCase()) || (parseFloat(it.unitCost)||0) > 0);
-      this._bwState.events[ev.key] = {on:true, name:ev.hasName ? cat.name : '', items:evItems};
+      this._bwState.events[ev.key] = {
+        on:true,
+        name:ev.hasName ? cat.name : '',
+        items:its.map(i => ({name:i.name, qty:i.qty||1, unitCost:(i.unit_cost_cents||0)/100}))
+      };
     });
     // Reconstruct estimates from planned_cents
     let hasEst = false;
@@ -2868,11 +2869,7 @@ const BP = {
       this.BW_EVENTS.forEach(ev => {
         const e = draft.events[ev.key];
         if (e && !Array.isArray(e.items)) e.items = e.on ? this._bwEvtDefaultItems() : [];
-        if (e && Array.isArray(e.items)) {
-          e.items.forEach(it => { if (it.unitCost == null) { it.unitCost = it.fee||0; it.qty = it.qty||1; delete it.fee; } });
-          // Strip old stale defaults that were never filled in
-          e.items = e.items.filter(it => !['food & catering','printing','other'].includes((it.name||'').trim().toLowerCase()) || (parseFloat(it.unitCost)||0) > 0);
-        }
+        if (e && Array.isArray(e.items)) e.items.forEach(it => { if (it.unitCost == null) { it.unitCost = it.fee||0; it.qty = it.qty||1; delete it.fee; } });
       });
       // Migrate old who entries from {fee} to {qty, unitCost}
       Object.values(draft.who||{}).forEach(arr => { if (Array.isArray(arr)) arr.forEach(e => { if (e && e.unitCost == null) { e.unitCost = e.fee||0; e.qty = e.qty||1; delete e.fee; } }); });
@@ -3546,7 +3543,7 @@ const BP = {
   openCatDetail(catId) {
     this._catDetailId = catId;
     const cat = this.cats.find(c=>c.id===catId); if(!cat) return;
-    const color = this._catSectionColor(cat.name) || cat.color || '#572e88';
+    const color = this._catSectionColor(cat.name, cat) || cat.color || '#572e88';
     const hdr = document.getElementById('bg-cat-detail-hdr');
     if (hdr) hdr.style.background = color;
     const title = document.getElementById('bg-cat-detail-title');
@@ -3568,7 +3565,7 @@ const BP = {
     const cat = this.cats.find(c=>c.id===catId);
     const items = this._catItems(catId);
     const t = this._catTotals(catId);
-    const color = cat ? (this._catSectionColor(cat.name) || cat.color || '#572e88') : '#572e88';
+    const color = cat ? (this._catSectionColor(cat.name, cat) || cat.color || '#572e88') : '#572e88';
 
     const headerRow = '<div style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) 90px 90px 90px 100px 36px;gap:0;padding:0.4rem 1rem;background:#faf9fd;font-size:0.6rem;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;color:#9a90b0;border-bottom:1px solid rgba(87,46,136,0.1)">' +
       '<div>Item</div><div>Vendor</div><div style="text-align:right">Budgeted</div><div style="text-align:right">Committed</div><div style="text-align:right">Paid</div><div>Status</div><div></div>' +
@@ -3606,7 +3603,7 @@ const BP = {
 
   _catRowHtml(c, totBudget) {
     const t=this._catTotals(c.id); const items=this._catItems(c.id);
-    const color=this._catSectionColor(c.name)||c.color||'#572e88';
+    const color=this._catSectionColor(c.name, c)||c.color||'#572e88';
     const pct=totBudget>0?Math.round((c.planned_cents||0)/totBudget*100):0;
     const util=(c.planned_cents||0)>0?Math.min(100,Math.round(t.committed/(c.planned_cents||1)*100)):0;
     const barCol=util>=100?'#d1523d':util>=80?'#dd8233':color;
