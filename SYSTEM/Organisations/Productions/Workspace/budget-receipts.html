@@ -1485,44 +1485,82 @@
                   const pct = allocCents > 0 ? Math.min(100, totalSpentCents / allocCents * 100) : 0;
 
                   const dash = '<span style="color:#c4b8d8;">—</span>';
-                  const fmtAmt = (cents, colour) => cents
-                    ? '<span style="font-weight:700;color:' + (colour || '#1a1530') + ';">' + this.fmt$(cents) + '</span>'
+                  const COL = 'minmax(0,1fr) 82px 72px 80px 72px 90px 90px';
+
+                  const thdr = (label, align) =>
+                    '<div style="font-size:0.6rem;font-weight:900;text-transform:uppercase;letter-spacing:0.08em;color:#9080a8;text-align:' + (align || 'right') + ';padding:0.3rem 0.2rem;">' + label + '</div>';
+
+                  const fmtC = (cents, clr) => cents
+                    ? '<span style="font-variant-numeric:tabular-nums;white-space:nowrap;color:' + (clr || '#1a1530') + ';">' + this.fmt$(cents) + '</span>'
                     : dash;
 
+                  const miniBar = (p, clr) =>
+                    '<div style="display:flex;align-items:center;gap:0.3rem;">' +
+                      '<div style="flex:1;height:5px;background:#f0eef8;border-radius:3px;overflow:hidden;min-width:28px;">' +
+                        '<div style="width:' + Math.round(p) + '%;height:100%;background:' + clr + ';border-radius:3px;"></div>' +
+                      '</div>' +
+                      '<span style="font-size:0.7rem;font-weight:700;color:#9080a8;min-width:28px;">' + Math.round(p) + '%</span>' +
+                    '</div>';
+
                   const groups = this.budgetGroupNames();
-                  let grandBudget = 0;
+                  let grandBudget = 0, grandCommitted = 0, grandPaid = 0;
                   let expHtml = '';
 
                   groups.forEach(groupName => {
                     const cats = this.categoriesForGroup(groupName);
                     const clr = GC[groupName] || '#74a2b4';
-                    let gBudget = 0;
+                    let gBudget = 0, gCommitted = 0, gPaid = 0;
                     let catLines = '';
 
                     cats.forEach(c => {
                       const items = this.itemsForCategory(c.id);
-                      const cBudget = items.length
-                        ? items.reduce((s, i) => s + (i.qty || 1) * (i.unit_cost_cents || 0), 0)
-                        : (c.planned_cents || 0);
-                      gBudget += cBudget;
+                      const cBudget = c.planned_cents || 0;
+                      const cCommitted = items.reduce((s, i) => s + (i.committed_cents || 0), 0);
+                      const cPaid = items.reduce((s, i) => s + (i.paid_cents || 0), 0);
+                      const cPending = Math.max(0, cCommitted - cPaid);
+                      const cRemaining = cBudget - cCommitted;
+                      const cPct = cBudget > 0 ? Math.min(100, cCommitted / cBudget * 100) : 0;
+                      const barClr = cPct >= 100 ? '#d1523d' : cPct >= 80 ? '#dd8233' : clr;
+
+                      gBudget += cBudget; gCommitted += cCommitted; gPaid += cPaid;
+
                       catLines +=
-                        '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:0.22rem 0 0.22rem 0.6rem;">' +
-                          '<span style="font-size:0.82rem;color:#4a3f6a;">' + this.esc(c.name) + '</span>' +
-                          '<span style="font-size:0.82rem;font-weight:600;color:#1a1530;white-space:nowrap;padding-left:1rem;">' + (cBudget ? this.fmt$(cBudget) : '—') + '</span>' +
+                        '<div style="display:grid;grid-template-columns:' + COL + ';align-items:center;padding:0.2rem 0;border-top:1px solid #f5f2fb;">' +
+                          '<div style="font-size:0.8rem;color:#4a3f6a;padding-left:0.75rem;">' + this.esc(c.name) + '</div>' +
+                          '<div style="text-align:right;padding:0 0.2rem;">' + fmtC(cBudget) + '</div>' +
+                          '<div style="text-align:right;padding:0 0.2rem;">' + fmtC(cPaid, '#769e7b') + '</div>' +
+                          '<div style="text-align:right;padding:0 0.2rem;">' + fmtC(cPending, '#dd8233') + '</div>' +
+                          '<div style="text-align:right;padding:0 0.2rem;">' + fmtC(cCommitted) + '</div>' +
+                          '<div style="text-align:right;padding:0 0.2rem;">' + fmtC(Math.abs(cRemaining), cRemaining < 0 ? '#d1523d' : '#769e7b') + '</div>' +
+                          '<div style="padding:0 0.2rem;">' + miniBar(cPct, barClr) + '</div>' +
                         '</div>';
                     });
 
-                    grandBudget += gBudget;
+                    const gPending = Math.max(0, gCommitted - gPaid);
+                    const gRemaining = gBudget - gCommitted;
+                    const gPct = gBudget > 0 ? Math.min(100, gCommitted / gBudget * 100) : 0;
+                    const gBarClr = gPct >= 100 ? '#d1523d' : gPct >= 80 ? '#dd8233' : clr;
+
+                    grandBudget += gBudget; grandCommitted += gCommitted; grandPaid += gPaid;
+
                     expHtml +=
-                      '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:0.55rem 0 0.2rem;">' +
-                        '<span style="font-size:0.78rem;font-weight:900;text-transform:uppercase;letter-spacing:0.08em;color:' + clr + ';">' + this.esc(groupName) + '</span>' +
-                        '<span style="font-size:0.88rem;font-weight:900;color:' + clr + ';white-space:nowrap;">' + (gBudget ? this.fmt$(gBudget) : '—') + '</span>' +
+                      '<div style="display:grid;grid-template-columns:' + COL + ';align-items:center;padding:0.45rem 0 0.15rem;margin-top:0.25rem;">' +
+                        '<div style="font-size:0.76rem;font-weight:900;text-transform:uppercase;letter-spacing:0.07em;color:' + clr + ';">' + this.esc(groupName) + '</div>' +
+                        '<div style="text-align:right;padding:0 0.2rem;font-weight:800;font-size:0.82rem;color:' + clr + ';">' + (gBudget ? this.fmt$(gBudget) : '—') + '</div>' +
+                        '<div style="text-align:right;padding:0 0.2rem;font-weight:800;font-size:0.82rem;color:' + clr + ';">' + (gPaid ? this.fmt$(gPaid) : '—') + '</div>' +
+                        '<div style="text-align:right;padding:0 0.2rem;font-weight:800;font-size:0.82rem;color:' + clr + ';">' + (gPending ? this.fmt$(gPending) : '—') + '</div>' +
+                        '<div style="text-align:right;padding:0 0.2rem;font-weight:800;font-size:0.82rem;color:' + clr + ';">' + (gCommitted ? this.fmt$(gCommitted) : '—') + '</div>' +
+                        '<div style="text-align:right;padding:0 0.2rem;font-weight:800;font-size:0.82rem;color:' + (gRemaining < 0 ? '#d1523d' : clr) + ';">' + this.fmt$(Math.abs(gRemaining)) + '</div>' +
+                        '<div style="padding:0 0.2rem;">' + miniBar(gPct, gBarClr) + '</div>' +
                       '</div>' +
                       catLines;
                   });
 
+                  const grandPending = Math.max(0, grandCommitted - grandPaid);
+                  const grandRemaining = grandBudget - grandCommitted;
+                  const grandPct = grandBudget > 0 ? Math.min(100, grandCommitted / grandBudget * 100) : 0;
+
                   return (
-                    // Summary strip
                     '<div style="display:grid;grid-template-columns:1fr auto;gap:0.12rem 1.5rem;font-size:0.82rem;margin-bottom:0.75rem;">' +
                       '<span style="color:#4a3f6a;">Overall Budget</span><span style="font-weight:800;color:#1a1530;text-align:right;">' + (allocCents ? this.fmt$(allocCents) : '—') + '</span>' +
                       '<span style="color:#4a3f6a;">Total Spent</span><span style="font-weight:800;color:#1a1530;text-align:right;">' + this.fmt$(totalSpentCents) + '</span>' +
@@ -1534,14 +1572,27 @@
                         '</div>' +
                         '<div style="font-size:0.7rem;color:#9080a8;margin-bottom:1rem;">' + pct.toFixed(1) + '% of budget used</div>'
                       : '<div style="margin-bottom:0.75rem;"></div>') +
-                    // Expenses receipt
                     (groups.length
                       ? '<div style="border-top:1.5px dashed #d4cde8;padding-top:0.65rem;">' +
-                          '<div style="font-size:0.62rem;font-weight:900;text-transform:uppercase;letter-spacing:0.12em;color:#572e88;margin-bottom:0.3rem;">Expenses</div>' +
+                          '<div style="font-size:0.62rem;font-weight:900;text-transform:uppercase;letter-spacing:0.12em;color:#572e88;margin-bottom:0.4rem;">Expenses</div>' +
+                          '<div style="display:grid;grid-template-columns:' + COL + ';align-items:center;border-bottom:1.5px solid #ece8f5;padding-bottom:0.2rem;">' +
+                            thdr('Category', 'left') +
+                            thdr('Budget') +
+                            thdr('Spent') +
+                            thdr('Pending') +
+                            thdr('Total') +
+                            thdr('Remaining') +
+                            thdr('Progress', 'left') +
+                          '</div>' +
                           expHtml +
-                          '<div style="border-top:1.5px dashed #d4cde8;margin-top:0.6rem;padding-top:0.55rem;display:flex;justify-content:space-between;align-items:baseline;">' +
-                            '<span style="font-size:0.78rem;font-weight:900;text-transform:uppercase;letter-spacing:0.06em;color:#1a1530;">Total Budget</span>' +
-                            '<span style="font-size:0.95rem;font-weight:900;color:#572e88;">' + (grandBudget ? this.fmt$(grandBudget) : '—') + '</span>' +
+                          '<div style="display:grid;grid-template-columns:' + COL + ';align-items:center;padding:0.5rem 0;border-top:1.5px dashed #d4cde8;margin-top:0.5rem;">' +
+                            '<div style="font-size:0.78rem;font-weight:900;text-transform:uppercase;letter-spacing:0.06em;color:#1a1530;">Total</div>' +
+                            '<div style="text-align:right;padding:0 0.2rem;font-size:0.88rem;font-weight:900;color:#572e88;">' + (grandBudget ? this.fmt$(grandBudget) : '—') + '</div>' +
+                            '<div style="text-align:right;padding:0 0.2rem;font-size:0.88rem;font-weight:900;color:#769e7b;">' + (grandPaid ? this.fmt$(grandPaid) : '—') + '</div>' +
+                            '<div style="text-align:right;padding:0 0.2rem;font-size:0.88rem;font-weight:900;color:#dd8233;">' + (grandPending ? this.fmt$(grandPending) : '—') + '</div>' +
+                            '<div style="text-align:right;padding:0 0.2rem;font-size:0.88rem;font-weight:900;color:#1a1530;">' + (grandCommitted ? this.fmt$(grandCommitted) : '—') + '</div>' +
+                            '<div style="text-align:right;padding:0 0.2rem;font-size:0.88rem;font-weight:900;color:' + (grandRemaining < 0 ? '#d1523d' : '#769e7b') + ';">' + this.fmt$(Math.abs(grandRemaining)) + '</div>' +
+                            '<div style="padding:0 0.2rem;">' + miniBar(grandPct, grandPct >= 100 ? '#d1523d' : grandPct >= 80 ? '#dd8233' : '#572e88') + '</div>' +
                           '</div>' +
                         '</div>'
                       : '<div style="font-size:0.78rem;color:#b0a8c8;font-style:italic;padding-top:0.5rem;">No budget categories set up yet.</div>') +
