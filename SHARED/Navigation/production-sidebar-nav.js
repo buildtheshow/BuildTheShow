@@ -340,6 +340,67 @@
       if (regWrap) regWrap.style.display = 'none';
     }
 
+    // Overview
+    if (keys.has('overview')) {
+      var grpOverview = document.getElementById('group-overview');
+      if (grpOverview) grpOverview.style.display = '';
+    }
+
+    // Plan
+    if (hasKeyOrChild('schedule')) {
+      var grpPlan = document.getElementById('group-plan');
+      if (grpPlan) { grpPlan.style.display = ''; grpPlan.classList.add('open'); }
+    }
+
+    // Departments
+    if (keys.has('departments')) {
+      var grpDept = document.getElementById('group-departments');
+      if (grpDept) { grpDept.style.display = ''; grpDept.classList.add('open'); }
+    }
+
+    // Promote — marketing, sponsors, programme each control sub-wraps
+    var showMarketing = hasKeyOrChild('marketing');
+    var showSponsors  = hasKeyOrChild('sponsors');
+    var showProgramme = keys.has('programme');
+    if (showMarketing || showSponsors || showProgramme) {
+      var grpPromote = document.getElementById('group-promote');
+      if (grpPromote) { grpPromote.style.display = ''; grpPromote.classList.add('open'); }
+      var mktWrap = document.getElementById('marketing-wrap');
+      if (mktWrap) mktWrap.style.display = showMarketing ? '' : 'none';
+      var spnWrap = document.getElementById('sponsors-wrap');
+      if (spnWrap) spnWrap.style.display = showSponsors ? '' : 'none';
+    }
+
+    // Ticketing
+    if (hasKeyOrChild('ticketing')) {
+      var grpTicketing = document.getElementById('group-ticketing');
+      if (grpTicketing) { grpTicketing.style.display = ''; grpTicketing.classList.add('open'); }
+    }
+
+    // Volunteers
+    if (keys.has('shifts') || keys.has('hours')) {
+      var grpVolunteers = document.getElementById('group-volunteers');
+      if (grpVolunteers) { grpVolunteers.style.display = ''; grpVolunteers.classList.add('open'); }
+    }
+
+    // Financials
+    if (hasKeyOrChild('financials')) {
+      var grpFinancials = document.getElementById('group-financials');
+      if (grpFinancials) { grpFinancials.style.display = ''; grpFinancials.classList.add('open'); }
+    }
+
+    // Wrap-up
+    if (keys.has('wrapup')) {
+      var grpWrapup = document.getElementById('group-wrapup');
+      if (grpWrapup) { grpWrapup.style.display = ''; grpWrapup.classList.add('open'); }
+    }
+
+    // Settings
+    if (keys.has('settings')) {
+      var grpSettings = document.getElementById('group-settings');
+      if (grpSettings) { grpSettings.style.display = ''; grpSettings.classList.add('open'); }
+    }
+
     // Override nav functions to use standalone pages (not production-workspace.html)
     window.openAuditionsSubTab = function (sub) {
       var pages = {
@@ -353,6 +414,32 @@
     };
     window.openCastingSubTab = function () { location.href = pageUrl('casting-board.html'); };
     window.openFinalCastingSubTab = function () { location.href = pageUrl('casting-offers.html'); };
+    window.navigateToMarketing = function (sub) {
+      var pages = {
+        sponsors:         'promote-sponsors.html',
+        programmeads:     'promote-programme-ads.html',
+        showsponsors:     'promote-show-sponsors.html',
+        sponsorssettings: 'promote-sponsors-settings.html',
+      };
+      location.href = pageUrl(pages[sub] || 'promote-sponsors.html');
+    };
+    window.navigateToVolunteers = function (sub) {
+      var pages = {
+        shifts: 'volunteers-shifts.html',
+        hours:  'volunteers-hours.html',
+      };
+      location.href = pageUrl(pages[sub] || 'volunteers-shifts.html');
+    };
+    window.navigateToBudget = function (sub) {
+      var pages = {
+        receipts: 'budget-receipts.html',
+        reports:  'financials-reports.html',
+      };
+      location.href = pageUrl(pages[sub] || 'financials-dashboard.html');
+    };
+    window.navigateToTicketing = function () {
+      location.href = pageUrl('ticketing-dashboard.html');
+    };
 
     // Inject team member banner if not already present
     var host = document.getElementById('prod-sidebar-host');
