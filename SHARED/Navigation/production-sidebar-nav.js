@@ -211,12 +211,19 @@
   };
 
   window.navigateToVolunteers = function (sub) {
-    if (sub === 'settings') {
-      var id = new URLSearchParams(location.search).get('id') || '';
-      location.href = '/SYSTEM/Organisations/Productions/Workspace/volunteer-settings.html' + (id ? '?id=' + encodeURIComponent(id) : '');
-      return;
-    }
-    location.href = workspaceUrl('volunteers', sub);
+    var id = new URLSearchParams(location.search).get('id') || '';
+    var suffix = id ? '?id=' + encodeURIComponent(id) : '';
+    var pages = {
+      calendar:    'volunteers.html',
+      plan:        'volunteers.html',
+      suggestions: 'volunteer-suggestions.html',
+      roles:       'volunteer-roles.html',
+      publish:     'volunteer-publish.html',
+      share:       'volunteer-share.html',
+      requests:    'volunteer-applicants.html',
+      settings:    'volunteer-settings.html',
+    };
+    location.href = '/SYSTEM/Organisations/Productions/Workspace/' + (pages[sub] || 'volunteers.html') + suffix;
   };
 
   window.navigateToBudget = function (sub) {
@@ -624,6 +631,12 @@
     if (audWrap) audWrap.style.display = isDisabled(enabledModules, 'auditions') ? 'none' : '';
     var regWrap = document.getElementById('registration-wrap');
     if (regWrap) regWrap.style.display = isDisabled(enabledModules, 'registration') ? 'none' : '';
+    // group-volunteers shows when either volunteers OR registration is on (roles are needed for both)
+    var volGrp = document.getElementById('group-volunteers');
+    if (volGrp) {
+      var showVol = !isDisabled(enabledModules, 'volunteers') || !isDisabled(enabledModules, 'registration');
+      volGrp.style.display = showVol ? '' : 'none';
+    }
     var checkinEl = document.getElementById('group-checkin');
     if (checkinEl) {
       var showCheckin = !isDisabled(enabledModules, 'volunteers') || !isDisabled(enabledModules, 'registration');
