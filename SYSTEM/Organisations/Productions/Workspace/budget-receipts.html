@@ -505,7 +505,7 @@
               </label>
               <label class="fin-form-field">
                 <span class="fin-form-label">Paid By</span>
-                <select class="fin-form-select" id="fin-edit-paid-by">
+                <select class="fin-form-select" id="fin-edit-paid-by" onchange="FIN.syncPaidByEmailRequirement()">
                   <option value="personal">Personal card / reimbursement</option>
                   <option value="company">Production/company paid</option>
                 </select>
@@ -521,7 +521,7 @@
                 <input class="fin-form-input" id="fin-edit-submitted-by" type="text" autocomplete="off">
               </label>
               <label class="fin-form-field">
-                <span class="fin-form-label">Purchaser Email</span>
+                <span class="fin-form-label" id="fin-edit-email-label">Purchaser Email</span>
                 <input class="fin-form-input" id="fin-edit-submitted-email" type="email" autocomplete="off">
               </label>
               <label class="fin-form-field">
@@ -1236,6 +1236,18 @@
       if (saveBtn) saveBtn.textContent = isNew ? 'Add Receipt' : 'Save Changes';
     },
 
+    syncPaidByEmailRequirement() {
+      const paidBy = document.getElementById('fin-edit-paid-by')?.value || 'personal';
+      const emailLabel = document.getElementById('fin-edit-email-label');
+      const emailInput = document.getElementById('fin-edit-submitted-email');
+      const isPersonal = paidBy === 'personal';
+      if (emailLabel) emailLabel.textContent = isPersonal ? 'E-transfer Email *' : 'Purchaser Email';
+      if (emailInput) {
+        emailInput.required = isPersonal;
+        emailInput.placeholder = isPersonal ? 'Where should we send the reimbursement?' : '';
+      }
+    },
+
     openNewReceiptModal() {
       const defaultCategory = this.categories[0] || null;
       document.getElementById('fin-edit-id').value = '';
@@ -1258,6 +1270,7 @@
       document.getElementById('fin-edit-status').value = 'pending';
       document.getElementById('fin-edit-submitted-email').value = '';
       document.getElementById('fin-edit-notes').value = '';
+      this.syncPaidByEmailRequirement();
       this.renderReceiptLineItems([]);
       this.addReceiptLineItem();
       this.renderReceiptFiles({});
@@ -1285,6 +1298,7 @@
       document.getElementById('fin-edit-status').value = r.status || 'pending';
       document.getElementById('fin-edit-submitted-email').value = r.submitted_by_email || '';
       document.getElementById('fin-edit-notes').value = r.notes || '';
+      this.syncPaidByEmailRequirement();
       this.renderReceiptLineItems(r.line_items);
       this.renderReceiptFiles(r);
 
@@ -1345,6 +1359,18 @@
         const category = this.categories.find(c => String(c.id) === String(categoryId || ''));
         const amountCents = this.centsFromInput('fin-edit-amount');
         const lineItems = this.lineItemsWithSelectedBudgetItem(this.collectReceiptLineItems(), amountCents);
+        const paidBy = document.getElementById('fin-edit-paid-by').value || 'personal';
+        const purchaserEmail = document.getElementById('fin-edit-submitted-email').value.trim() || '';
+        if (paidBy === 'personal' && !purchaserEmail) {
+          this.showToast('E-transfer email is required for reimbursements.', true);
+          document.getElementById('fin-edit-submitted-email').focus();
+          return;
+        }
+        if (paidBy === 'personal' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(purchaserEmail)) {
+          this.showToast('Enter a valid e-transfer email.', true);
+          document.getElementById('fin-edit-submitted-email').focus();
+          return;
+        }
         const payload = {
           category_id: categoryId,
           department: category ? category.name : null,
@@ -1354,11 +1380,11 @@
           subtotal_cents: this.centsFromInput('fin-edit-subtotal'),
           tax_cents: this.centsFromInput('fin-edit-tax'),
           amount_cents: amountCents,
-          paid_by: document.getElementById('fin-edit-paid-by').value || 'personal',
+          paid_by: paidBy,
           submitted_by: document.getElementById('fin-edit-submitted-by').value.trim() || null,
           status: document.getElementById('fin-edit-status').value || 'pending',
           submitted_by_name: document.getElementById('fin-edit-submitted-by').value.trim() || null,
-          submitted_by_email: document.getElementById('fin-edit-submitted-email').value.trim() || null,
+          submitted_by_email: purchaserEmail || null,
           notes: document.getElementById('fin-edit-notes').value.trim() || null,
           line_items: lineItems,
           receipt_url: this.collectReceiptUrlValue(),

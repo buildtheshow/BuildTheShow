@@ -755,6 +755,12 @@
                   </div>
                 </div>
 
+                <div class="rcpt-field" id="rcpt-reimburse-email-field" style="display:none">
+                  <label class="rcpt-label" for="rcpt-reimburse-email">E-transfer email <span class="rcpt-req">*</span></label>
+                  <input class="rcpt-input" type="email" id="rcpt-reimburse-email" placeholder="Where should we send the reimbursement?" autocomplete="email">
+                  <div class="rcpt-field-hint">Required when this purchase needs to be reimbursed.</div>
+                </div>
+
                 <div class="rcpt-row-2">
                   <div class="rcpt-field">
                     <label class="rcpt-label" for="rcpt-vendor">Where was this purchase made? <span class="rcpt-req">*</span></label>
@@ -1490,6 +1496,13 @@
       paidBy = val;
       document.getElementById('rcpt-paid-company').classList.toggle('active', val === 'company');
       document.getElementById('rcpt-paid-personal').classList.toggle('active', val === 'personal');
+      const emailField = document.getElementById('rcpt-reimburse-email-field');
+      const emailInput = document.getElementById('rcpt-reimburse-email');
+      if (emailField) emailField.style.display = val === 'personal' ? '' : 'none';
+      if (emailInput) {
+        emailInput.required = val === 'personal';
+        if (val === 'personal' && !emailInput.value.trim() && currentUserEmail) emailInput.value = currentUserEmail;
+      }
     }
 
     function rcptCalcTotal() {
@@ -1640,8 +1653,11 @@
       const sub    = parseFloat(document.getElementById('rcpt-subtotal').value) || 0;
 
       const purchaser = (document.getElementById('rcpt-purchaser') || {}).value?.trim() || '';
+      const reimburseEmail = (document.getElementById('rcpt-reimburse-email') || {}).value?.trim() || '';
 
       if (!purchaser) { alert('Please enter the name of the person who made this purchase.'); document.getElementById('rcpt-purchaser').focus(); return; }
+      if (paidBy === 'personal' && !reimburseEmail) { alert('Please enter the e-transfer email for reimbursement.'); document.getElementById('rcpt-reimburse-email').focus(); return; }
+      if (paidBy === 'personal' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reimburseEmail)) { alert('Please enter a valid e-transfer email.'); document.getElementById('rcpt-reimburse-email').focus(); return; }
       if (!vendor) { alert('Please enter the store or supplier name.'); document.getElementById('rcpt-vendor').focus(); return; }
       if (!desc)   { alert('Please describe what this purchase was for.'); document.getElementById('rcpt-desc').focus(); return; }
       if (!date)   { alert('Please select a receipt date.'); document.getElementById('rcpt-date').focus(); return; }
@@ -1698,7 +1714,7 @@
           paid_by: paidBy,
           submitted_by: purchaser || null,
           submitted_by_name: purchaser || null,
-          submitted_by_email: currentUserEmail || null,
+          submitted_by_email: paidBy === 'personal' ? reimburseEmail : (reimburseEmail || currentUserEmail || null),
           subtotal_cents: Math.round(sub * 100),
           tax_cents: Math.round(tax * 100),
           receipt_url: receiptUrl,
@@ -1729,6 +1745,8 @@
       setTodayDate();
       const _pn = document.getElementById('rcpt-purchaser');
       if (_pn) _pn.value = '';
+      const _email = document.getElementById('rcpt-reimburse-email');
+      if (_email) _email.value = currentUserEmail || '';
       rcptSetPaidBy('company');
       const btn = document.getElementById('rcpt-save-btn');
       btn.disabled = false;
