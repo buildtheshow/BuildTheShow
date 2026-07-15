@@ -23,8 +23,27 @@
     .page-hierarchy-page { color: #efab45; font-weight: 950; letter-spacing: 0.08em; text-transform: uppercase; }
     .page-hierarchy-sep, .page-hierarchy-sub { color: rgba(255,255,255,0.82); font-weight: 500; }
     .page-subtitle { margin: 0.35rem 0 0; color: #fff; font-size: clamp(2.1rem, 4.6vw, 3.7rem); line-height: 0.98; font-weight: 950; }
+    .fin-hero-actions { display: flex; align-items: center; gap: 0.75rem; margin-left: auto; align-self: center; }
+    .fin-hero-add-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.55rem;
+      font-family: inherit;
+      font-size: 0.86rem;
+      font-weight: 900;
+      color: #572e88;
+      background: #fff;
+      border: 1.5px solid rgba(255,255,255,0.42);
+      border-radius: 999px;
+      padding: 0.78rem 1.15rem;
+      cursor: pointer;
+      box-shadow: 0 10px 20px rgba(26,21,48,0.16);
+      transition: transform 0.12s, box-shadow 0.12s, background 0.12s;
+    }
+    .fin-hero-add-btn:hover { transform: translateY(-1px); box-shadow: 0 14px 28px rgba(26,21,48,0.2); background: #faf7ff; }
+    .fin-hero-add-btn svg { flex-shrink: 0; }
     .receipts-content { flex: 1; padding: 1.5rem 2.25rem 2.5rem; position: relative; z-index: 1; }
-    @media (max-width: 900px) { .prod-main { margin-left: 0; max-width: 100vw; } .prod-main::before { inset: 0; } .hero-wrap { padding: 3.5rem 1rem 0; } .receipts-content { padding: 1rem 0.75rem 2rem; } .hero-deco { display: none; } .page-subtitle { font-size: 1.8rem; } }
+    @media (max-width: 900px) { .prod-main { margin-left: 0; max-width: 100vw; } .prod-main::before { inset: 0; } .hero-wrap { padding: 3.5rem 1rem 0; } .receipts-content { padding: 1rem 0.75rem 2rem; } .hero-deco { display: none; } .page-subtitle { font-size: 1.8rem; } .fin-hero-actions { margin-left: 0; width: 100%; justify-content: flex-start; } }
 
     /* ── Stat cards ── */
     .fin-stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
@@ -429,8 +448,8 @@
     <div class="fin-modal fin-modal--receipt" style="max-width:980px">
       <div class="fin-modal-header">
         <div>
-          <div class="fin-modal-title">Edit Receipt</div>
-          <div class="fin-modal-sub">Correct the receipt details if something was entered wrong</div>
+          <div class="fin-modal-title" id="fin-edit-modal-title">Edit Receipt</div>
+          <div class="fin-modal-sub" id="fin-edit-modal-sub">Correct the receipt details if something was entered wrong</div>
         </div>
         <button class="fin-modal-close" onclick="FIN.closeReceiptEditModal()" aria-label="Close">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -571,6 +590,12 @@
               </span>
             </div>
             <h1 class="page-subtitle">Receipts</h1>
+          </div>
+          <div class="fin-hero-actions">
+            <button class="fin-hero-add-btn" type="button" onclick="FIN.openNewReceiptModal()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Receipt
+            </button>
           </div>
         </div>
         <div class="hero-deco"><img src="/ASSETS/Images/Icons/page-financials.svg" alt="" /></div>
@@ -1199,11 +1224,55 @@
       return next;
     },
 
+    setReceiptEditModalMode(mode) {
+      const titleEl = document.getElementById('fin-edit-modal-title');
+      const subEl = document.getElementById('fin-edit-modal-sub');
+      const saveBtn = document.getElementById('fin-edit-save-btn');
+      const isNew = mode === 'new';
+      if (titleEl) titleEl.textContent = isNew ? 'Add Receipt' : 'Edit Receipt';
+      if (subEl) subEl.textContent = isNew
+        ? 'Log a new receipt manually for this production'
+        : 'Correct the receipt details if something was entered wrong';
+      if (saveBtn) saveBtn.textContent = isNew ? 'Add Receipt' : 'Save Changes';
+    },
+
+    openNewReceiptModal() {
+      const defaultCategory = this.categories[0] || null;
+      document.getElementById('fin-edit-id').value = '';
+      this.setReceiptEditModalMode('new');
+      this.renderBudgetMappingControls({
+        category_id: defaultCategory?.id || '',
+        department: defaultCategory?.name || '',
+        paid_by: 'personal',
+        status: 'pending',
+        line_items: []
+      });
+      document.getElementById('fin-edit-date').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('fin-edit-vendor').value = '';
+      document.getElementById('fin-edit-description').value = '';
+      document.getElementById('fin-edit-subtotal').value = '';
+      document.getElementById('fin-edit-tax').value = '';
+      document.getElementById('fin-edit-amount').value = '';
+      document.getElementById('fin-edit-paid-by').value = 'personal';
+      document.getElementById('fin-edit-submitted-by').value = '';
+      document.getElementById('fin-edit-status').value = 'pending';
+      document.getElementById('fin-edit-submitted-email').value = '';
+      document.getElementById('fin-edit-notes').value = '';
+      this.renderReceiptLineItems([]);
+      this.addReceiptLineItem();
+      this.renderReceiptFiles({});
+
+      document.getElementById('fin-receipt-edit-modal').classList.add('open');
+      document.body.style.overflow = 'hidden';
+      setTimeout(function() { document.getElementById('fin-edit-vendor').focus(); }, 80);
+    },
+
     openReceiptEditModal(receiptId) {
       const r = this.receipts.find(item => String(item.id) === String(receiptId));
       if (!r) return;
 
       document.getElementById('fin-edit-id').value = r.id || '';
+      this.setReceiptEditModalMode('edit');
       this.renderBudgetMappingControls(r);
       document.getElementById('fin-edit-date').value = (r.receipt_date || '').slice(0, 10);
       document.getElementById('fin-edit-vendor').value = r.vendor || '';
@@ -1269,7 +1338,6 @@
 
     async saveReceiptEdit() {
       const id = document.getElementById('fin-edit-id').value;
-      if (!id) return;
       const btn = document.getElementById('fin-edit-save-btn');
       if (btn) btn.disabled = true;
       try {
@@ -1295,7 +1363,16 @@
           line_items: lineItems,
           receipt_url: this.collectReceiptUrlValue(),
         };
-        const { error } = await this.sb.from('budget_receipts').update(payload).eq('id', id);
+        let error = null;
+        if (id) {
+          const result = await this.sb.from('budget_receipts').update(payload).eq('id', id);
+          error = result.error;
+        } else {
+          const result = await this.sb.from('budget_receipts').insert(Object.assign({}, payload, {
+            production_id: this.prodId
+          }));
+          error = result.error;
+        }
         if (error) throw error;
         this.closeReceiptEditModal();
         await this.load();
