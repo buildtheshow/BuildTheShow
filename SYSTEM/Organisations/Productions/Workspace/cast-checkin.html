@@ -374,6 +374,7 @@
   let _allApplicants = [];
   let _people  = {};
   let _idCharMap = {}; // email → [character names], built after resolving assignment IDs
+  let _idCharIdMap = {}; // applicant id → [character ids], used for event-specific call lists
   let _selectedEvent = null;
   let _allAttendees  = [];
   let _filterTab   = 'everyone';
@@ -481,7 +482,9 @@
         if (!appId) return;
         const charName = a.character_id ? (_chars.find(c => c.id === a.character_id)?.name || 'Ensemble') : 'Ensemble';
         if (!_idCharMap[appId]) _idCharMap[appId] = [];
+        if (!_idCharIdMap[appId]) _idCharIdMap[appId] = [];
         if (!_idCharMap[appId].includes(charName)) _idCharMap[appId].push(charName);
+        if (a.character_id && !_idCharIdMap[appId].includes(String(a.character_id))) _idCharIdMap[appId].push(String(a.character_id));
       });
     }
   }
@@ -956,13 +959,20 @@
 
   function resolveAttendees(ev) {
     const evDate = ev.start_time?.slice(0,10) || '';
+    const calledIds = new Set((Array.isArray(ev.called_character_ids) ? ev.called_character_ids : []).filter(Boolean).map(String));
+    const useCalledCast = calledIds.size > 0;
 
-    // All registered performers, always — no date filtering
-    const cast = _allApplicants.map(a => {
-      const p = _people[a.id] || {};
-      const chars = _idCharMap[a.id] || [];
-      return { id:a.id, type:'cast', name:displayName(p), headshot_url:p.headshot_url||null, characters: chars };
-    });
+    // When a call list exists, only the called cast should be expected for that event.
+    const cast = _allApplicants
+      .filter(a => {
+        if (!useCalledCast) return true;
+        return (_idCharIdMap[a.id] || []).some(charId => calledIds.has(String(charId)));
+      })
+      .map(a => {
+        const p = _people[a.id] || {};
+        const chars = _idCharMap[a.id] || [];
+        return { id:a.id, type:'cast', name:displayName(p), headshot_url:p.headshot_url||null, characters: chars };
+      });
 
     // Volunteers scheduled for this date
     const vols = _volunteers
