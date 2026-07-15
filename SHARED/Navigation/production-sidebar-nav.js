@@ -340,6 +340,20 @@
       if (regWrap) regWrap.style.display = 'none';
     }
 
+    // Override nav functions to use standalone pages (not production-workspace.html)
+    window.openAuditionsSubTab = function (sub) {
+      var pages = {
+        dashboard:    'auditions-dashboard.html',
+        audschedule:  'auditions-schedule.html',
+        allperformers:'auditions-performers.html',
+        selftape:     'auditions-selftapes.html',
+        setup:        'auditions-settings.html',
+      };
+      location.href = pageUrl(pages[sub] || 'auditions-dashboard.html');
+    };
+    window.openCastingSubTab = function () { location.href = pageUrl('casting-board.html'); };
+    window.openFinalCastingSubTab = function () { location.href = pageUrl('casting-offers.html'); };
+
     // Inject team member banner if not already present
     var host = document.getElementById('prod-sidebar-host');
     if (host && data.name && !host.querySelector('.tp-sidebar-banner')) {
