@@ -277,6 +277,29 @@
         return roleLookupMatch(explicitDept, aliasToGroupKey) || roleLookupMatch(roleName, aliasToGroupKey) || null;
       }
 
+      function buildBudgetCategoryLookup(rolesByGroup) {
+        const lookup = Object.assign({}, aliasToGroupKey);
+        cfg.groups.forEach(function (group) {
+          lookup[norm(group.label)] = group.key;
+          group.sections.forEach(function (section) {
+            lookup[norm(section.label)] = group.key;
+            (section.categoryAliases || []).forEach(function (alias) {
+              lookup[norm(alias)] = group.key;
+            });
+          });
+        });
+        Object.keys(rolesByGroup || {}).forEach(function (groupKey) {
+          (rolesByGroup[groupKey] || []).forEach(function (role) {
+            if (role && role.label) lookup[norm(role.label)] = groupKey;
+          });
+        });
+        return lookup;
+      }
+
+      function groupKeyForBudgetCategory(catName, budgetLookup) {
+        return roleLookupMatch(catName, budgetLookup || aliasToGroupKey);
+      }
+
       function planEntryBaseType(key) {
         return Object.keys(STAFFING_ROLE_MAP)
           .sort(function (a, b) { return b.length - a.length; })
@@ -430,21 +453,23 @@
           paidByCat[item.category_id] = (paidByCat[item.category_id] || 0) + (item.paid_cents || 0);
         });
 
-        // Aggregate by group
-        const byGroup = {};
-        cats.forEach(function (cat) {
-          const gk = groupKeyForCategory(cat.name);
-          if (!gk) return;
-          if (!byGroup[gk]) byGroup[gk] = { planned: 0, spent: 0 };
-          byGroup[gk].planned += (cat.planned_cents || 0);
-          byGroup[gk].spent += (paidByCat[cat.id] || 0);
-        });
-
         const rolesByGroup = collectLiveRoles({
           opportunities: opportunities,
           signups: signups,
           teamMembers: teamMembers,
           staffingPlan: staffingPlan,
+        });
+
+        const budgetLookup = buildBudgetCategoryLookup(rolesByGroup);
+
+        // Aggregate by group, including custom role-level budget categories
+        const byGroup = {};
+        cats.forEach(function (cat) {
+          const gk = groupKeyForBudgetCategory(cat.name, budgetLookup) || groupKeyForCategory(cat.name);
+          if (!gk) return;
+          if (!byGroup[gk]) byGroup[gk] = { planned: 0, spent: 0 };
+          byGroup[gk].planned += (cat.planned_cents || 0);
+          byGroup[gk].spent += (paidByCat[cat.id] || 0);
         });
 
         renderCards(byGroup, rolesByGroup);
