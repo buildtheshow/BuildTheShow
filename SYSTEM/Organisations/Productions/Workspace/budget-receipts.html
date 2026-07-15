@@ -349,6 +349,17 @@
     .fin-icon-btn { width: 34px; height: 34px; border: 1px solid #e0dcea; border-radius: 8px; background: #fff; color: #572e88; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-weight: 950; }
     .fin-icon-btn:hover { border-color: #572e88; background: #faf9fd; }
     .fin-inline-add { align-self: flex-start; margin-top: 0.25rem; }
+    .fin-files-modal { max-width: 960px; }
+    .fin-files-gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+    .fin-files-card { border: 1.5px solid #ece6f6; border-radius: 14px; background: #fff; overflow: hidden; }
+    .fin-files-preview { aspect-ratio: 1 / 1.12; background: #f7f4fb; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .fin-files-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .fin-files-preview embed { width: 100%; height: 100%; pointer-events: none; display: block; }
+    .fin-files-meta { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.85rem 1rem 1rem; }
+    .fin-files-name { min-width: 0; font-size: 0.8rem; font-weight: 800; color: #3d3260; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fin-files-open-btn { font-family: inherit; font-size: 0.76rem; font-weight: 800; color: #4a3f7f; background: #fff; border: 2px solid #d8d0ea; border-radius: 12px; padding: 0.45rem 0.9rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap; }
+    .fin-files-open-btn:hover { border-color: #572e88; color: #572e88; }
+    @media (max-width: 760px) { .fin-files-gallery { grid-template-columns: 1fr; } }
     .toast { position: fixed; right: 1.5rem; bottom: 1.5rem; z-index: 9999; opacity: 0; transform: translateY(6px); pointer-events: none; border-radius: 999px; padding: 0.75rem 1rem; font-size: 0.82rem; font-weight: 900; box-shadow: 0 14px 34px rgba(87,46,136,0.22); transition: opacity 0.18s, transform 0.18s; }
     .toast.visible { opacity: 1; transform: translateY(0); }
     .toast--success { background: #efab45; color: #1a1530; }
@@ -534,6 +545,20 @@
       </div>
     </div>
   </div>
+  <div class="fin-modal-overlay" id="fin-files-modal" onclick="if(event.target===this)FIN.closeReceiptFilesModal()">
+    <div class="fin-modal fin-files-modal">
+      <div class="fin-modal-header">
+        <div>
+          <div class="fin-modal-title">Receipt Files</div>
+          <div class="fin-modal-sub" id="fin-files-modal-sub">View every file attached to this receipt</div>
+        </div>
+        <button class="fin-modal-close" onclick="FIN.closeReceiptFilesModal()" aria-label="Close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="fin-modal-body" id="fin-files-modal-body"></div>
+    </div>
+  </div>
   <div class="prod-main">
     <div class="hero-wrap">
       <div class="aud-visual-hero">
@@ -580,6 +605,7 @@
     sortDir: 'desc',
     showPendingOnly: false,
     _toastTimer: null,
+    _filesModalReceiptId: null,
 
     init() {
       window.initProductionPage('financials');
@@ -1203,6 +1229,44 @@
       document.body.style.overflow = '';
     },
 
+    openReceiptFilesModal(receiptId) {
+      const receipt = this.receipts.find(r => String(r.id) === String(receiptId));
+      if (!receipt) return;
+      const urls = this.receiptFileUrls(receipt);
+      if (!urls.length) return;
+      this._filesModalReceiptId = receiptId;
+      document.getElementById('fin-files-modal-sub').textContent = (receipt.vendor || 'Receipt') + ' • ' + urls.length + ' file' + (urls.length === 1 ? '' : 's');
+      document.getElementById('fin-files-modal-body').innerHTML = this.renderReceiptFilesModalBody(urls);
+      document.getElementById('fin-files-modal').classList.add('open');
+      document.body.style.overflow = 'hidden';
+    },
+
+    closeReceiptFilesModal() {
+      document.getElementById('fin-files-modal').classList.remove('open');
+      document.body.style.overflow = '';
+      this._filesModalReceiptId = null;
+    },
+
+    renderReceiptFilesModalBody(urls) {
+      const extLinkIcon = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
+      const imgExts = new Set(['jpg','jpeg','png','gif','webp']);
+      const previewFor = (u) => {
+        const ext = ((u.split('.').pop() || '').split('?')[0] || '').toLowerCase();
+        if (imgExts.has(ext)) return '<img src="' + this.esc(u) + '" alt="Receipt file" loading="lazy">';
+        if (ext === 'pdf') return '<embed src="' + this.esc(u) + '" type="application/pdf">';
+        return '<div style="display:flex;flex-direction:column;align-items:center;gap:0.45rem;color:#9080a8;padding:1rem;text-align:center;"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#9080a8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span style="font-size:0.72rem;font-weight:800;text-transform:uppercase;">' + this.esc(ext || 'file') + '</span></div>';
+      };
+      return '<div class="fin-files-gallery">' + urls.map((u, i) =>
+        '<div class="fin-files-card">' +
+          '<div class="fin-files-preview">' + previewFor(u) + '</div>' +
+          '<div class="fin-files-meta">' +
+            '<div class="fin-files-name">File ' + (i + 1) + '</div>' +
+            '<button class="fin-files-open-btn" onclick="window.open(\'' + this.esc(u) + '\',\'_blank\')">Open ' + extLinkIcon + '</button>' +
+          '</div>' +
+        '</div>'
+      ).join('') + '</div>';
+    },
+
     async saveReceiptEdit() {
       const id = document.getElementById('fin-edit-id').value;
       if (!id) return;
@@ -1724,9 +1788,7 @@
       if (fileUrls.length === 1) {
         viewBtns = '<button class="fin-card-view-btn" onclick="event.stopPropagation();window.open(\'' + this.esc(fileUrls[0]) + '\',\'_blank\')">View receipt ' + extLinkIcon + '</button>';
       } else if (fileUrls.length > 1) {
-        viewBtns = fileUrls.map((u, i) =>
-          '<button class="fin-card-view-btn" onclick="event.stopPropagation();window.open(\'' + this.esc(u) + '\',\'_blank\')">File ' + (i + 1) + ' ' + extLinkIcon + '</button>'
-        ).join('');
+        viewBtns = '<button class="fin-card-view-btn" onclick="event.stopPropagation();FIN.openReceiptFilesModal(\'' + safeId + '\')">View receipts ' + extLinkIcon + '</button>';
       }
 
       const dotsMenu =
