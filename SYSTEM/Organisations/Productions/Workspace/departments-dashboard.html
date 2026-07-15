@@ -182,26 +182,191 @@
         return cents < 0 ? '-' + str : str;
       }
 
-      // Build alias → group-key lookup from department config
+      const STAFFING_ROLE_MAP = {
+        dept_leads: [
+          { dept: 'Backstage & Rehearsal Support', name: 'Stage Manager' }, { dept: 'Front of House', name: 'Front of House Manager' }, { dept: 'Front of House', name: 'Concession Manager' }, { dept: 'Technical Crew', name: 'Lighting Designer / Technician' }, { dept: 'Design & Construction', name: 'Lead Builder' }, { dept: 'Design & Construction', name: 'Lead Set Painter' }, { dept: 'Design & Construction', name: 'Lead Prop Person' }, { dept: 'Costume & Makeup', name: 'Costume Designer' }, { dept: 'Marketing & Publicity', name: 'Marketing Director' }, { dept: 'Backstage & Rehearsal Support', name: 'Cast Party Coordinator' }, { dept: 'Technical Crew', name: 'Sound / Audio Technician' },
+        ],
+        performance: [
+          { dept: 'Front of House', name: 'Ushers' }, { dept: 'Front of House', name: 'Concession Workers' }, { dept: 'Front of House', name: 'Ticket Sales' }, { dept: 'Backstage & Rehearsal Support', name: 'Backstage Crew' }, { dept: 'Backstage & Rehearsal Support', name: 'Quick-Change Assistant' }, { dept: 'Backstage & Rehearsal Support', name: 'Child Wrangler' }, { dept: 'Technical Crew', name: 'Mic Wrangler' }, { dept: 'Technical Crew', name: 'Spotlight Operators' },
+        ],
+        tech: [
+          { dept: 'Technical Crew', name: 'Mic Wrangler' }, { dept: 'Backstage & Rehearsal Support', name: 'Quick-Change Assistant' }, { dept: 'Backstage & Rehearsal Support', name: 'Backstage Crew' },
+        ],
+        dress: [
+          { dept: 'Technical Crew', name: 'Mic Wrangler' }, { dept: 'Backstage & Rehearsal Support', name: 'Quick-Change Assistant' }, { dept: 'Backstage & Rehearsal Support', name: 'Backstage Crew' }, { dept: 'Backstage & Rehearsal Support', name: 'Child Wrangler' },
+        ],
+        rehearsal: [
+          { dept: 'Backstage & Rehearsal Support', name: 'Rehearsal Assistant' }, { dept: 'Backstage & Rehearsal Support', name: 'Child Wrangler' },
+        ],
+        music_rehearsal: [{ dept: 'Backstage & Rehearsal Support', name: 'Rehearsal Assistant' }],
+        choreography: [{ dept: 'Backstage & Rehearsal Support', name: 'Rehearsal Assistant' }],
+        strike: [{ dept: 'Design & Construction', name: 'Set Strike Crew' }],
+        costume_moveout: [{ dept: 'Costume & Makeup', name: 'Costume Move-Out Crew' }],
+        cast_party: [{ dept: 'Backstage & Rehearsal Support', name: 'Cast Party Helper' }],
+        crew: [{ dept: 'Design & Construction', name: 'Build Crew Helper' }],
+        crew_set: [{ dept: 'Design & Construction', name: 'Set Builder' }],
+        crew_set_painting: [{ dept: 'Design & Construction', name: 'Set Painter' }],
+        crew_set_dressing: [{ dept: 'Design & Construction', name: 'Set Dresser' }],
+        crew_costumes: [{ dept: 'Costume & Makeup', name: 'Costume Work Helper' }],
+        crew_props: [{ dept: 'Design & Construction', name: 'Props Helper' }],
+        crew_hair_makeup: [{ dept: 'Costume & Makeup', name: 'Hair & Makeup Crew' }],
+        crew_wigs: [{ dept: 'Costume & Makeup', name: 'Wig Crew' }],
+        crew_lighting: [{ dept: 'Technical Crew', name: 'Lighting Crew' }],
+        crew_sound: [{ dept: 'Technical Crew', name: 'Sound Crew' }],
+        other: [
+          { dept: 'Costume & Makeup', name: 'Costume Washer' }, { dept: 'Front of House', name: 'Bakers / Treat Contributors' }, { dept: 'Marketing & Publicity', name: 'Promotion Distribution' },
+        ],
+      };
+
+      // Build alias → group/section lookup from department config
       const aliasToGroupKey = {};
+      const aliasToSection = {};
       cfg.groups.forEach(function (group) {
+        aliasToGroupKey[group.label.trim().toLowerCase()] = group.key;
         group.sections.forEach(function (sec) {
+          aliasToGroupKey[sec.label.trim().toLowerCase()] = group.key;
+          aliasToSection[sec.label.trim().toLowerCase()] = { groupKey: group.key, sectionKey: sec.key };
           (sec.categoryAliases || []).forEach(function (alias) {
             const key = alias.trim().toLowerCase();
             if (!aliasToGroupKey[key]) aliasToGroupKey[key] = group.key;
+            if (!aliasToSection[key]) aliasToSection[key] = { groupKey: group.key, sectionKey: sec.key };
           });
         });
       });
 
+      function norm(value) {
+        return String(value || '').trim().toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ');
+      }
+
+      function canonicalVolunteerRoleName(name) {
+        const raw = String(name || '').trim();
+        const key = norm(raw);
+        const renames = {
+          'build crew helper': 'Set Builders',
+          'set builder': 'Set Builders',
+          'costume work helper': 'Costume Helper',
+        };
+        return renames[key] || raw;
+      }
+
+      function roleLookupMatch(text, lookup) {
+        const key = norm(text);
+        if (!key) return null;
+        if (lookup[key]) return lookup[key];
+        const keys = Object.keys(lookup);
+        for (let i = 0; i < keys.length; i += 1) {
+          const candidate = keys[i];
+          if (key.includes(candidate) || candidate.includes(key)) return lookup[candidate];
+        }
+        return null;
+      }
+
       function groupKeyForCategory(catName) {
-        return aliasToGroupKey[(catName || '').trim().toLowerCase()] || null;
+        return roleLookupMatch(catName, aliasToGroupKey);
+      }
+
+      function sectionForRole(roleName, explicitDept, group) {
+        const direct = roleLookupMatch(roleName, aliasToSection);
+        if (direct && direct.groupKey === group.key) return direct.sectionKey;
+        const byDept = roleLookupMatch(explicitDept, aliasToSection);
+        if (byDept && byDept.groupKey === group.key) return byDept.sectionKey;
+        return (group.sections[0] && group.sections[0].key) || '';
+      }
+
+      function groupKeyForRole(roleName, explicitDept) {
+        return roleLookupMatch(explicitDept, aliasToGroupKey) || roleLookupMatch(roleName, aliasToGroupKey) || null;
+      }
+
+      function planEntryBaseType(key) {
+        return Object.keys(STAFFING_ROLE_MAP)
+          .sort(function (a, b) { return b.length - a.length; })
+          .find(function (type) { return key === type || String(key || '').indexOf(type + '-') === 0; }) || '';
+      }
+
+      function planEntryRoleIndex(key, baseType) {
+        const raw = String(key || '').slice(String(baseType || '').length + 1);
+        const match = raw.match(/^(\d+)/);
+        return match ? parseInt(match[1], 10) : -1;
+      }
+
+      function defaultPlanRole(key, entry) {
+        const baseType = planEntryBaseType(key);
+        const roles = STAFFING_ROLE_MAP[baseType] || [];
+        const idx = planEntryRoleIndex(key, baseType);
+        const fallback = idx >= 0 ? roles[idx] : null;
+        return {
+          name: canonicalVolunteerRoleName(entry.roleName || entry.role_name || (fallback && fallback.name) || ''),
+          dept: entry.department || entry.dept || (fallback && fallback.dept) || '',
+        };
+      }
+
+      function signupRole(signup) {
+        return canonicalVolunteerRoleName(
+          signup.production_title ||
+          signup.volunteer_role ||
+          signup.role_name ||
+          signup.role ||
+          signup.summary ||
+          ''
+        );
+      }
+
+      function collectLiveRoles(source) {
+        const byGroup = {};
+        cfg.groups.forEach(function (group) { byGroup[group.key] = []; });
+
+        function addRole(groupKey, roleName, explicitDept) {
+          if (!groupKey || !roleName) return;
+          const group = cfg.groups.find(function (item) { return item.key === groupKey; });
+          if (!group) return;
+          const label = canonicalVolunteerRoleName(roleName);
+          const key = norm(label);
+          if (!key) return;
+          if (byGroup[groupKey].some(function (item) { return item.key === key; })) return;
+          byGroup[groupKey].push({
+            key,
+            label,
+            sectionKey: sectionForRole(label, explicitDept, group),
+          });
+        }
+
+        Object.keys(source.staffingPlan || {}).forEach(function (planKey) {
+          const entry = source.staffingPlan[planKey] || {};
+          if (entry.hidden) return;
+          const count = parseInt(entry.count ?? entry.qty ?? entry.volunteers_needed, 10) || 0;
+          if (count <= 0) return;
+          const role = defaultPlanRole(planKey, entry);
+          addRole(groupKeyForRole(role.name, role.dept), role.name, role.dept);
+        });
+
+        (source.opportunities || []).forEach(function (opp) {
+          const roleName = canonicalVolunteerRoleName(opp.production_title || opp.volunteer_role || opp.summary || '');
+          addRole(groupKeyForRole(roleName, opp.department || opp.dept_category || opp.volunteer_department), roleName, opp.department || opp.dept_category || opp.volunteer_department);
+        });
+
+        (source.signups || []).forEach(function (signup) {
+          const roleName = signupRole(signup);
+          addRole(groupKeyForRole(roleName, signup.department || signup.dept_category || signup.volunteer_department), roleName, signup.department || signup.dept_category || signup.volunteer_department);
+        });
+
+        (source.teamMembers || []).forEach(function (member) {
+          const roleName = canonicalVolunteerRoleName(member.role_name || member.role || member.access_level || '');
+          addRole(groupKeyForRole(roleName, member.department), roleName, member.department);
+        });
+
+        return byGroup;
       }
 
       // Render cards immediately with placeholder budget slots
-      function renderCards(budgetByGroup) {
+      function renderCards(budgetByGroup, rolesByGroup) {
         root.innerHTML = cfg.groups.map(function (group) {
-          const links = group.sections.map(function (section) {
-            return '<button type="button" class="dept-dashboard-link" onclick="btsDeptSectionNav(\'' + esc(group.key) + '\',\'' + esc(section.key) + '\')">' + esc(section.label) + '</button>';
+          const roleItems = (rolesByGroup && rolesByGroup[group.key] && rolesByGroup[group.key].length)
+            ? rolesByGroup[group.key]
+            : group.sections.map(function (section) {
+                return { label: section.label, sectionKey: section.key };
+              });
+          const links = roleItems.map(function (item) {
+            return '<button type="button" class="dept-dashboard-link" onclick="btsDeptSectionNav(\'' + esc(group.key) + '\',\'' + esc(item.sectionKey) + '\')">' + esc(item.label) + '</button>';
           }).join('');
 
           let budgetHtml = '';
@@ -224,7 +389,7 @@
           return '<section class="dept-dashboard-card" style="--dept-color:' + esc(group.color) + ';">' +
             '<div class="dept-dashboard-head">' +
               '<div class="dept-dashboard-icon"><img src="' + esc(group.icon) + '" alt="" /></div>' +
-              '<div><div class="dept-dashboard-title">' + esc(group.label) + '</div><div class="dept-dashboard-sub">' + group.sections.length + ' section' + (group.sections.length === 1 ? '' : 's') + '</div></div>' +
+              '<div><div class="dept-dashboard-title">' + esc(group.label) + '</div><div class="dept-dashboard-sub">' + roleItems.length + ' role' + (roleItems.length === 1 ? '' : 's') + '</div></div>' +
             '</div>' +
             budgetHtml +
             '<div class="dept-dashboard-links">' + links + '</div>' +
@@ -233,7 +398,7 @@
       }
 
       // Render immediately with placeholders
-      renderCards(null);
+      renderCards(null, null);
 
       // Fetch budget data from Supabase
       const prodId = new URLSearchParams(location.search).get('id');
@@ -247,9 +412,17 @@
       Promise.all([
         sb.from('budget_categories').select('id, name, planned_cents').eq('production_id', prodId),
         sb.from('budget_items').select('category_id, paid_cents').eq('production_id', prodId),
+        sb.from('opportunities').select('id, production_title, volunteer_role, summary, department, dept_category, volunteer_department, volunteers_needed, status').eq('production_id', prodId).in('opportunity_type', ['volunteer', 'creative_team']),
+        sb.from('volunteer_signups').select('id, role_name, volunteer_role, production_title, department, dept_category, volunteer_department, status').eq('production_id', prodId),
+        sb.from('production_team_members').select('id, role_name, role, access_level, department, is_active').eq('production_id', prodId),
+        sb.from('productions').select('volunteer_staffing_plan').eq('id', prodId).single(),
       ]).then(function (results) {
         const cats = (results[0].data || []);
         const items = (results[1].data || []);
+        const opportunities = (results[2].data || []);
+        const signups = (results[3].data || []);
+        const teamMembers = (results[4].data || []).filter(function (member) { return member.is_active !== false; });
+        const staffingPlan = (results[5].data && results[5].data.volunteer_staffing_plan) || {};
 
         // Sum paid_cents per category_id
         const paidByCat = {};
@@ -267,7 +440,14 @@
           byGroup[gk].spent += (paidByCat[cat.id] || 0);
         });
 
-        renderCards(byGroup);
+        const rolesByGroup = collectLiveRoles({
+          opportunities: opportunities,
+          signups: signups,
+          teamMembers: teamMembers,
+          staffingPlan: staffingPlan,
+        });
+
+        renderCards(byGroup, rolesByGroup);
       }).catch(function () {
         // Budget fetch failed — placeholders stay
       });
