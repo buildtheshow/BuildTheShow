@@ -1476,170 +1476,76 @@
                   '<div class="fin-section-sub">' + this.fmt$(totalCents) + ' spent' + (allocCents ? ' &bull; ' + this.fmt$(allocCents) + ' budgeted' : '') + '</div>' +
                 '</div>' +
               '</div>' +
-              '<div class="fin-section-body" style="padding:0;">' +
+              '<div class="fin-section-body">' +
                 (() => {
                   const GC = { 'Rights & Venue': '#d1523d', 'Promotion & Audience': '#efab45', 'Production Elements': '#572e88', 'Technical': '#476aaa', 'Safety Net': '#ca7ea7', 'People': '#dd8233', 'Events': '#769e7b', 'Other': '#74a2b4' };
 
-                  // Item-level spend from receipt line_items; unallocated at category level
-                  const itemSpent = {}, itemPend = {}, catUSpent = {}, catUPend = {};
-                  all.forEach(r => {
-                    const lines = Array.isArray(r.line_items) ? r.line_items.filter(li => li && li.budget_item_id) : [];
-                    const isComp = r.paid_by !== 'personal';
-                    const isPend = r.paid_by === 'personal' && r.status !== 'paid';
-                    if (lines.length) {
-                      lines.forEach(li => {
-                        const a = li.amount_cents || 0;
-                        if (isComp) itemSpent[li.budget_item_id] = (itemSpent[li.budget_item_id] || 0) + a;
-                        else if (isPend) itemPend[li.budget_item_id] = (itemPend[li.budget_item_id] || 0) + a;
-                      });
-                    } else if (r.category_id) {
-                      const a = r.amount_cents || 0;
-                      if (isComp) catUSpent[r.category_id] = (catUSpent[r.category_id] || 0) + a;
-                      else if (isPend) catUPend[r.category_id] = (catUPend[r.category_id] || 0) + a;
-                    }
-                  });
-
-                  // Total Spent = ALL receipts (company + personal reimbursed + personal pending)
                   const totalSpentCents = totalCents;
-                  const totalPendCents  = owingCents;
-                  const totalUsed  = totalSpentCents;
-                  const remainCents = Math.max(0, allocCents - totalUsed);
-                  const pct = allocCents > 0 ? Math.min(100, totalUsed / allocCents * 100) : 0;
+                  const remainCents = Math.max(0, allocCents - totalSpentCents);
+                  const pct = allocCents > 0 ? Math.min(100, totalSpentCents / allocCents * 100) : 0;
 
-                  const miniBar = (used, budget, clr) => {
-                    if (!budget) return '';
-                    const p = Math.min(100, used / budget * 100);
-                    const bc = p >= 100 ? '#d1523d' : p > 80 ? '#dd8233' : (clr || '#476aaa');
-                    return '<div style="display:flex;align-items:center;gap:0.35rem;">' +
-                      '<div style="width:72px;height:5px;background:rgba(0,0,0,0.08);border-radius:3px;overflow:hidden;flex-shrink:0;">' +
-                        '<div style="width:' + p.toFixed(1) + '%;height:100%;background:' + bc + ';border-radius:3px;"></div>' +
-                      '</div>' +
-                      '<span style="font-size:0.65rem;font-weight:800;opacity:0.75;white-space:nowrap;">' + Math.round(p) + '%</span>' +
-                    '</div>';
-                  };
+                  const dash = '<span style="color:#c4b8d8;">—</span>';
+                  const fmtAmt = (cents, colour) => cents
+                    ? '<span style="font-weight:700;color:' + (colour || '#1a1530') + ';">' + this.fmt$(cents) + '</span>'
+                    : dash;
 
                   const groups = this.budgetGroupNames();
-                  let grandBudget = 0, grandActual = 0;
-                  let groupsHtml = '';
+                  let grandBudget = 0;
+                  let expHtml = '';
 
                   groups.forEach(groupName => {
                     const cats = this.categoriesForGroup(groupName);
                     const clr = GC[groupName] || '#74a2b4';
-                    let gBudget = 0, gActual = 0;
-                    let catsHtml = '';
+                    let gBudget = 0;
+                    let catLines = '';
 
                     cats.forEach(c => {
                       const items = this.itemsForCategory(c.id);
-                      let cBudget = 0, cActual = 0;
-                      let itemsHtml = '';
-
-                      items.forEach(item => {
-                        const planned = (item.qty || 1) * (item.unit_cost_cents || 0);
-                        const iAct = (itemSpent[item.id] || 0) + (itemPend[item.id] || 0);
-                        const iRem = planned - iAct;
-                        cBudget += planned; cActual += iAct;
-                        const qtyTag = (item.qty && item.qty > 1 && item.unit_cost_cents)
-                          ? ' <span style="font-size:0.65rem;color:rgba(255,255,255,0.6);">' + item.qty + ' × ' + this.fmt$(item.unit_cost_cents) + '</span>' : '';
-                        itemsHtml +=
-                          '<div style="display:grid;grid-template-columns:1fr auto auto;gap:0 0.75rem;align-items:center;padding:0.3rem 1rem 0.3rem 2.2rem;border-top:1px solid rgba(255,255,255,0.08);font-size:0.76rem;">' +
-                            '<span style="color:rgba(255,255,255,0.85);">' + this.esc(item.name) + qtyTag + '</span>' +
-                            '<span style="text-align:right;font-weight:700;color:#fff;white-space:nowrap;">' + (iAct ? this.fmt$(iAct) : '<span style="opacity:0.3;">—</span>') + '</span>' +
-                            '<span style="text-align:right;white-space:nowrap;font-weight:700;color:' + (iRem < 0 ? '#ff9f9f' : 'rgba(255,255,255,0.6)') + ';">' + (planned ? this.fmt$(iRem) : '<span style="opacity:0.3;">—</span>') + '</span>' +
-                          '</div>';
-                      });
-
-                      // Unallocated
-                      const uAct = (catUSpent[c.id] || 0) + (catUPend[c.id] || 0);
-                      if (uAct) { cActual += uAct; itemsHtml += '<div style="display:grid;grid-template-columns:1fr auto auto;gap:0 0.75rem;align-items:center;padding:0.3rem 1rem 0.3rem 2.2rem;border-top:1px solid rgba(255,255,255,0.08);font-size:0.75rem;"><span style="color:rgba(255,255,255,0.5);font-style:italic;">Other receipts</span><span style="text-align:right;font-weight:700;color:#fff;white-space:nowrap;">' + this.fmt$(uAct) + '</span><span style="opacity:0.3;text-align:right;">—</span></div>'; }
-
-                      if (!items.length && !uAct) cBudget = c.planned_cents || 0;
-
-                      const cRem = cBudget ? cBudget - cActual : null;
-                      gBudget += cBudget; gActual += cActual;
-
-                      // Category header row
-                      catsHtml +=
-                        '<div style="background:rgba(255,255,255,0.12);border-top:1px solid rgba(255,255,255,0.12);">' +
-                          '<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:0 0.75rem;align-items:center;padding:0.42rem 1rem 0.42rem 1.2rem;">' +
-                            '<span style="font-size:0.8rem;font-weight:900;color:#fff;">' + this.esc(c.name) + '</span>' +
-                            '<span style="font-size:0.65rem;font-weight:700;color:rgba(255,255,255,0.55);white-space:nowrap;">BUDGET</span>' +
-                            '<span style="font-size:0.65rem;font-weight:700;color:rgba(255,255,255,0.55);white-space:nowrap;">SPENT</span>' +
-                            '<span style="font-size:0.65rem;font-weight:700;color:rgba(255,255,255,0.55);white-space:nowrap;">REMAINING</span>' +
-                          '</div>' +
-                          (items.length || uAct
-                            ? '<div style="display:grid;grid-template-columns:1fr auto auto;gap:0 0.75rem;align-items:center;padding:0.05rem 1rem 0.35rem 2.2rem;font-size:0.72rem;">' +
-                                '<span style="color:rgba(255,255,255,0.55);letter-spacing:0.03em;">LINE ITEMS</span>' +
-                                '<span style="text-align:right;font-weight:900;font-size:0.8rem;color:#fff;white-space:nowrap;">' + (cActual ? this.fmt$(cActual) : '<span style="opacity:0.35;">—</span>') + '</span>' +
-                                '<span style="text-align:right;font-weight:700;font-size:0.8rem;white-space:nowrap;color:' + (cRem !== null && cRem < 0 ? '#ff9f9f' : 'rgba(255,255,255,0.7)') + ';">' + (cRem !== null ? this.fmt$(cRem) : '<span style="opacity:0.35;">—</span>') + '</span>' +
-                              '</div>' +
-                              itemsHtml
-                            : '<div style="padding:0.1rem 1rem 0.45rem 1.2rem;font-size:0.73rem;">' +
-                                '<div style="display:grid;grid-template-columns:1fr auto auto;gap:0 0.75rem;">' +
-                                  '<span></span>' +
-                                  '<span style="text-align:right;font-weight:900;font-size:0.82rem;color:#fff;">' + (cBudget ? this.fmt$(cBudget) : '<span style="opacity:0.35;">—</span>') + '</span>' +
-                                  '<span style="opacity:0.35;text-align:right;font-size:0.82rem;">—</span>' +
-                                '</div>' +
-                              '</div>') +
+                      const cBudget = items.length
+                        ? items.reduce((s, i) => s + (i.qty || 1) * (i.unit_cost_cents || 0), 0)
+                        : (c.planned_cents || 0);
+                      gBudget += cBudget;
+                      catLines +=
+                        '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:0.22rem 0 0.22rem 0.6rem;">' +
+                          '<span style="font-size:0.82rem;color:#4a3f6a;">' + this.esc(c.name) + '</span>' +
+                          '<span style="font-size:0.82rem;font-weight:600;color:#1a1530;white-space:nowrap;padding-left:1rem;">' + (cBudget ? this.fmt$(cBudget) : '—') + '</span>' +
                         '</div>';
                     });
 
-                    const gRem = gBudget - gActual;
-                    grandBudget += gBudget; grandActual += gActual;
-
-                    groupsHtml +=
-                      '<div style="border-radius:12px;overflow:hidden;background:' + clr + ';margin-bottom:0.6rem;">' +
-                        // Group banner
-                        '<div style="padding:0.7rem 1rem;display:flex;align-items:center;justify-content:space-between;">' +
-                          '<div style="font-size:0.8rem;font-weight:900;text-transform:uppercase;letter-spacing:0.1em;color:#fff;">' + this.esc(groupName) + '</div>' +
-                          '<div style="display:flex;align-items:center;gap:1.25rem;">' +
-                            '<div>' +
-                              '<div style="font-size:0.55rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.6);text-align:right;">Budget</div>' +
-                              '<div style="font-size:0.88rem;font-weight:900;color:#fff;white-space:nowrap;">' + (gBudget ? this.fmt$(gBudget) : '—') + '</div>' +
-                            '</div>' +
-                            '<div>' +
-                              '<div style="font-size:0.55rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.6);text-align:right;">Spent</div>' +
-                              '<div style="font-size:0.88rem;font-weight:900;color:#fff;white-space:nowrap;">' + (gActual ? this.fmt$(gActual) : '—') + '</div>' +
-                            '</div>' +
-                            '<div>' +
-                              '<div style="font-size:0.55rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.6);text-align:right;">Remaining</div>' +
-                              '<div style="font-size:0.88rem;font-weight:900;color:#fff;white-space:nowrap;">' + (gBudget ? this.fmt$(gRem) : '—') + '</div>' +
-                            '</div>' +
-                            (gBudget ? '<div>' + miniBar(gActual, gBudget, '#fff') + '</div>' : '') +
-                          '</div>' +
-                        '</div>' +
-                        catsHtml +
-                      '</div>';
+                    grandBudget += gBudget;
+                    expHtml +=
+                      '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:0.55rem 0 0.2rem;">' +
+                        '<span style="font-size:0.78rem;font-weight:900;text-transform:uppercase;letter-spacing:0.08em;color:' + clr + ';">' + this.esc(groupName) + '</span>' +
+                        '<span style="font-size:0.88rem;font-weight:900;color:' + clr + ';white-space:nowrap;">' + (gBudget ? this.fmt$(gBudget) : '—') + '</span>' +
+                      '</div>' +
+                      catLines;
                   });
 
-                  const grandRem = grandBudget - grandActual;
-
                   return (
-                    '<div style="padding:1rem 1.1rem 0.9rem;border-bottom:1px solid #f0eef8;">' +
-                      '<div style="display:grid;grid-template-columns:1fr auto;gap:0.12rem 1.5rem;font-size:0.82rem;">' +
-                        '<span style="color:#4a3f6a;">Overall Budget</span><span style="font-weight:800;color:#1a1530;text-align:right;">' + (allocCents ? this.fmt$(allocCents) : '—') + '</span>' +
-                        '<span style="color:#4a3f6a;">Total Spent</span><span style="font-weight:800;color:#1a1530;text-align:right;">' + this.fmt$(totalSpentCents) + '</span>' +
-                        '<span style="color:#4a3f6a;">Remaining Budget</span><span style="font-weight:900;color:#769e7b;text-align:right;">' + this.fmt$(remainCents) + '</span>' +
-                      '</div>' +
-                      (allocCents > 0
-                        ? '<div style="height:9px;background:#f0eef8;border-radius:5px;overflow:hidden;margin:0.6rem 0 0.25rem;">' +
-                            '<div style="width:' + pct.toFixed(1) + '%;height:100%;background:#769e7b;border-radius:5px;"></div>' +
-                          '</div>' +
-                          '<div style="font-size:0.7rem;color:#9080a8;">' + pct.toFixed(1) + '% of budget used</div>'
-                        : '') +
+                    // Summary strip
+                    '<div style="display:grid;grid-template-columns:1fr auto;gap:0.12rem 1.5rem;font-size:0.82rem;margin-bottom:0.75rem;">' +
+                      '<span style="color:#4a3f6a;">Overall Budget</span><span style="font-weight:800;color:#1a1530;text-align:right;">' + (allocCents ? this.fmt$(allocCents) : '—') + '</span>' +
+                      '<span style="color:#4a3f6a;">Total Spent</span><span style="font-weight:800;color:#1a1530;text-align:right;">' + this.fmt$(totalSpentCents) + '</span>' +
+                      '<span style="color:#4a3f6a;">Remaining Budget</span><span style="font-weight:900;color:#769e7b;text-align:right;">' + this.fmt$(remainCents) + '</span>' +
                     '</div>' +
+                    (allocCents > 0
+                      ? '<div style="height:9px;background:#f0eef8;border-radius:5px;overflow:hidden;margin:0 0 0.25rem;">' +
+                          '<div style="width:' + pct.toFixed(1) + '%;height:100%;background:#769e7b;border-radius:5px;"></div>' +
+                        '</div>' +
+                        '<div style="font-size:0.7rem;color:#9080a8;margin-bottom:1rem;">' + pct.toFixed(1) + '% of budget used</div>'
+                      : '<div style="margin-bottom:0.75rem;"></div>') +
+                    // Expenses receipt
                     (groups.length
-                      ? '<div style="padding:0.85rem 0.9rem;">' + groupsHtml +
-                          '<div style="display:flex;justify-content:space-between;align-items:center;padding:0.6rem 0.2rem 0;border-top:2px solid #e8e4f4;margin-top:0.1rem;">' +
-                            '<span style="font-size:0.72rem;font-weight:900;text-transform:uppercase;letter-spacing:0.05em;color:#3d3260;">Grand Total</span>' +
-                            '<div style="display:flex;align-items:center;gap:1.5rem;">' +
-                              '<div style="text-align:right;"><div style="font-size:0.55rem;font-weight:800;text-transform:uppercase;letter-spacing:0.07em;color:#b0a0cc;">Budget</div><div style="font-size:0.88rem;font-weight:900;color:#1a1530;">' + (grandBudget ? this.fmt$(grandBudget) : '—') + '</div></div>' +
-                              '<div style="text-align:right;"><div style="font-size:0.55rem;font-weight:800;text-transform:uppercase;letter-spacing:0.07em;color:#b0a0cc;">Spent</div><div style="font-size:0.88rem;font-weight:900;color:#1a1530;">' + this.fmt$(grandActual) + '</div></div>' +
-                              '<div style="text-align:right;"><div style="font-size:0.55rem;font-weight:800;text-transform:uppercase;letter-spacing:0.07em;color:#b0a0cc;">Remaining</div><div style="font-size:0.88rem;font-weight:900;color:' + (grandRem < 0 ? '#d1523d' : '#769e7b') + ';">' + this.fmt$(grandRem) + '</div></div>' +
-                            '</div>' +
+                      ? '<div style="border-top:1.5px dashed #d4cde8;padding-top:0.65rem;">' +
+                          '<div style="font-size:0.62rem;font-weight:900;text-transform:uppercase;letter-spacing:0.12em;color:#572e88;margin-bottom:0.3rem;">Expenses</div>' +
+                          expHtml +
+                          '<div style="border-top:1.5px dashed #d4cde8;margin-top:0.6rem;padding-top:0.55rem;display:flex;justify-content:space-between;align-items:baseline;">' +
+                            '<span style="font-size:0.78rem;font-weight:900;text-transform:uppercase;letter-spacing:0.06em;color:#1a1530;">Total Budget</span>' +
+                            '<span style="font-size:0.95rem;font-weight:900;color:#572e88;">' + (grandBudget ? this.fmt$(grandBudget) : '—') + '</span>' +
                           '</div>' +
                         '</div>'
-                      : '<div style="padding:1rem;font-size:0.78rem;color:#b0a8c8;font-style:italic;">No budget categories set up yet.</div>') +
-                    '<div style="padding:0.4rem 1rem;font-size:0.67rem;color:#b0a8c8;display:flex;align-items:center;gap:0.3rem;border-top:1px solid #f5f2fb;">' +
+                      : '<div style="font-size:0.78rem;color:#b0a8c8;font-style:italic;padding-top:0.5rem;">No budget categories set up yet.</div>') +
+                    '<div style="margin-top:1rem;font-size:0.67rem;color:#b0a8c8;display:flex;align-items:center;gap:0.3rem;border-top:1px solid #f5f2fb;padding-top:0.5rem;">' +
                       '<img src="/ASSETS/Images/Icons/Finance - Schedule.svg" style="width:10px;height:10px;opacity:0.4" alt="">Last updated: ' + now +
                     '</div>'
                   );
