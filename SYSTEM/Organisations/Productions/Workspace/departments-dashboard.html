@@ -118,6 +118,55 @@
       flex-wrap: wrap;
       gap: 0.45rem;
     }
+    .dept-dashboard-breakdown {
+      margin: 0 0 0.75rem;
+      border: 1px solid rgba(87,46,136,0.08);
+      border-radius: 8px;
+      background: rgba(87,46,136,0.025);
+      overflow: hidden;
+    }
+    .dept-dashboard-breakdown-head,
+    .dept-dashboard-breakdown-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 0.6rem;
+      align-items: center;
+      padding: 0.45rem 0.65rem;
+    }
+    .dept-dashboard-breakdown-head {
+      background: rgba(87,46,136,0.04);
+      border-bottom: 1px solid rgba(87,46,136,0.08);
+      font-size: 0.64rem;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: rgba(26,21,48,0.5);
+    }
+    .dept-dashboard-breakdown-row + .dept-dashboard-breakdown-row {
+      border-top: 1px solid rgba(87,46,136,0.06);
+    }
+    .dept-breakdown-name {
+      font-size: 0.74rem;
+      font-weight: 800;
+      color: #1a1530;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .dept-breakdown-value {
+      font-size: 0.74rem;
+      font-weight: 900;
+      color: #1a1530;
+      white-space: nowrap;
+    }
+    .dept-breakdown-value.is-zero {
+      color: rgba(26,21,48,0.36);
+    }
+    .dept-breakdown-empty {
+      padding: 0.65rem;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: rgba(26,21,48,0.45);
+    }
     .dept-dashboard-link {
       border: 1.5px solid rgba(87,46,136,0.14);
       background: rgba(87,46,136,0.04);
@@ -380,6 +429,25 @@
         return byGroup;
       }
 
+      function renderBudgetBreakdown(groupBudget) {
+        if (!groupBudget || !Array.isArray(groupBudget.categories) || !groupBudget.categories.length) {
+          return '<div class="dept-dashboard-breakdown"><div class="dept-breakdown-empty">No role-level budget breakdown yet.</div></div>';
+        }
+        const rows = groupBudget.categories.map(function (category) {
+          const plannedClass = category.planned === 0 ? 'is-zero' : '';
+          const spentClass = category.spent === 0 ? 'is-zero' : '';
+          return '<div class="dept-dashboard-breakdown-row">' +
+            '<div class="dept-breakdown-name">' + esc(category.name) + '</div>' +
+            '<div class="dept-breakdown-value ' + plannedClass + '">' + fmtDollars(category.planned) + '</div>' +
+            '<div class="dept-breakdown-value ' + spentClass + '">' + fmtDollars(category.spent) + '</div>' +
+          '</div>';
+        }).join('');
+        return '<div class="dept-dashboard-breakdown">' +
+          '<div class="dept-dashboard-breakdown-head"><div>Breakdown</div><div>Planned</div><div>Spent</div></div>' +
+          rows +
+        '</div>';
+      }
+
       // Render cards immediately with placeholder budget slots
       function renderCards(budgetByGroup, rolesByGroup) {
         root.innerHTML = cfg.groups.map(function (group) {
@@ -394,19 +462,19 @@
 
           let budgetHtml = '';
           if (budgetByGroup) {
-            const b = budgetByGroup[group.key] || { planned: 0, spent: 0 };
+            const b = budgetByGroup[group.key] || { planned: 0, spent: 0, categories: [] };
             const overBudget = b.spent > 0 && b.planned > 0 && b.spent > b.planned;
             const spentClass = overBudget ? 'is-over' : (b.spent === 0 ? 'is-zero' : '');
             const plannedClass = b.planned === 0 ? 'is-zero' : '';
             budgetHtml = '<div class="dept-dashboard-budget">' +
               '<div class="dept-budget-item"><div class="dept-budget-label">Planned</div><div class="dept-budget-value ' + plannedClass + '">' + fmtDollars(b.planned) + '</div></div>' +
               '<div class="dept-budget-item"><div class="dept-budget-label">Spent</div><div class="dept-budget-value ' + spentClass + '">' + fmtDollars(b.spent) + '</div></div>' +
-            '</div>';
+            '</div>' + renderBudgetBreakdown(b);
           } else {
             budgetHtml = '<div class="dept-dashboard-budget" id="dept-budget-' + esc(group.key) + '">' +
               '<div class="dept-budget-item"><div class="dept-budget-label">Planned</div><div class="dept-budget-value is-zero">--</div></div>' +
               '<div class="dept-budget-item"><div class="dept-budget-label">Spent</div><div class="dept-budget-value is-zero">--</div></div>' +
-            '</div>';
+            '</div><div class="dept-dashboard-breakdown"><div class="dept-breakdown-empty">Loading breakdown...</div></div>';
           }
 
           return '<section class="dept-dashboard-card" style="--dept-color:' + esc(group.color) + ';">' +
@@ -467,9 +535,20 @@
         cats.forEach(function (cat) {
           const gk = groupKeyForBudgetCategory(cat.name, budgetLookup) || groupKeyForCategory(cat.name);
           if (!gk) return;
-          if (!byGroup[gk]) byGroup[gk] = { planned: 0, spent: 0 };
+          if (!byGroup[gk]) byGroup[gk] = { planned: 0, spent: 0, categories: [] };
           byGroup[gk].planned += (cat.planned_cents || 0);
           byGroup[gk].spent += (paidByCat[cat.id] || 0);
+          byGroup[gk].categories.push({
+            name: cat.name || 'Untitled',
+            planned: cat.planned_cents || 0,
+            spent: paidByCat[cat.id] || 0,
+          });
+        });
+
+        Object.keys(byGroup).forEach(function (groupKey) {
+          byGroup[groupKey].categories.sort(function (a, b) {
+            return (b.planned + b.spent) - (a.planned + a.spent) || String(a.name || '').localeCompare(String(b.name || ''));
+          });
         });
 
         renderCards(byGroup, rolesByGroup);
