@@ -297,6 +297,22 @@
       if (!currentFeatures.sponsors && em.promote) currentFeatures.sponsors = true;
       if (!currentFeatures.producer_timeline && em.producer_timeline) currentFeatures.producer_timeline = true;
 
+      const normalizedModules = MODULES_FROM_FEATURES(currentFeatures);
+      const modulesChanged = JSON.stringify(em || {}) !== JSON.stringify(normalizedModules);
+      if (modulesChanged) {
+        const mergedWizardData = Object.assign({}, currentWizardData, { features: currentFeatures });
+        const { error: syncError } = await sb.from('productions').update({
+          enabled_modules: normalizedModules,
+          wizard_data: mergedWizardData,
+        }).eq('id', prodId);
+        if (!syncError) {
+          currentWizardData = mergedWizardData;
+          if (window.applyNavModuleVisibility) window.applyNavModuleVisibility(normalizedModules);
+        }
+      } else if (window.applyNavModuleVisibility) {
+        window.applyNavModuleVisibility(normalizedModules);
+      }
+
       renderGrid();
     }
 
