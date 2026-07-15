@@ -295,17 +295,18 @@
     // Hide every top-level group
     document.querySelectorAll('.sidebar-group').forEach(function (g) { g.style.display = 'none'; });
 
-    // Show group-cast if any auditions or casting keys present
-    var needsCast = hasKeyOrChild('auditions') || hasKeyOrChild('casting');
+    // Show group-cast if any cast-related keys present
+    var needsCast = hasKeyOrChild('auditions') || hasKeyOrChild('casting')
+      || keys.has('registration') || keys.has('cast-dashboard') || keys.has('checkin');
     if (needsCast) {
       var grpCast = document.getElementById('group-cast');
       if (grpCast) { grpCast.style.display = ''; grpCast.classList.add('open'); }
 
-      // Cast Dashboard tab — always hidden for team portal
+      // Cast Dashboard — show only if explicitly granted
       var castDash = document.getElementById('cast-group-dashboard-nav');
-      if (castDash) castDash.style.display = 'none';
+      if (castDash) castDash.style.display = keys.has('cast-dashboard') ? '' : 'none';
 
-      // Check-In tab — hide unless team member has explicit check-in key
+      // Check-In — show only if explicitly granted
       var checkIn = document.getElementById('cast-checkin-nav');
       if (checkIn) checkIn.style.display = keys.has('checkin') ? '' : 'none';
 
@@ -342,9 +343,9 @@
         });
       }
 
-      // Registration wrap — not exposed to team members
+      // Registration wrap — show if explicitly granted
       var regWrap = document.getElementById('registration-wrap');
-      if (regWrap) regWrap.style.display = 'none';
+      if (regWrap) regWrap.style.display = keys.has('registration') ? '' : 'none';
     }
 
     // Overview
