@@ -4751,6 +4751,7 @@
       const raw = record.amount ?? record.amount_paid ?? record.payment_amount ?? record.paid_amount ?? '';
       const parsed = parseFloat(String(raw || '').replace(/[^0-9.]/g, ''));
       if (Number.isFinite(parsed) && parsed > 0) return parsed;
+      if (record.amount_cents > 0) return record.amount_cents / 100;
       return Number(installment.amount || 0);
     }
     function paymentRecordMeta(record = {}) {
@@ -4769,7 +4770,11 @@
       const assignment = (performer.assignments || [])[0] || {};
       const effective = portalEffectiveFee(assignment);
       const installments = effective.installments;
-      const records = assignment.payment_records || [];
+      // Merge payment records from all assignments (records may be split across duplicates)
+      const allRecs = (performer.assignments || []).flatMap(a => a.payment_records || []);
+      const recMap = new Map();
+      allRecs.forEach(r => { if (!recMap.has(r.installment_index) || r.paid) recMap.set(r.installment_index, r); });
+      const records = [...recMap.values()];
       const total = effective.total;
       const paid = records.filter(row => row.paid).reduce((sum, row) => sum + paymentRecordAmount(row, installments[row.installment_index] || {}), 0);
       const balance = Math.max(0, total - paid);
