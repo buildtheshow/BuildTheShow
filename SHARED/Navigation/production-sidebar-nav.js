@@ -453,28 +453,6 @@
       location.href = pageUrl('ticketing-dashboard.html');
     };
 
-    // Inject team member banner if not already present
-    var host = document.getElementById('prod-sidebar-host');
-    if (host && data.name && !host.querySelector('.tp-sidebar-banner')) {
-      var banner = document.createElement('div');
-      banner.className = 'tp-sidebar-banner';
-      banner.innerHTML =
-        '<div class="tp-sb-name">' + _esc(data.name) + '</div>' +
-        '<div class="tp-sb-role">' + _esc(data.roleLabel || data.role || '') + '</div>' +
-        '<button class="tp-sb-exit" onclick="btsTeamPortalExit()">Exit Team View</button>';
-      host.insertBefore(banner, host.firstChild);
-    }
-  };
-
-  function _esc(s) {
-    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-
-  window.btsTeamPortalExit = function () {
-    sessionStorage.removeItem('bts-team-portal-v1');
-    var pid = prodId();
-    try { localStorage.removeItem('bts-team-access:' + pid); } catch {}
-    location.href = '/SYSTEM/Organisations/Productions/Workspace/team-portal.html?id=' + encodeURIComponent(pid);
   };
 
   window.loadProductionSidebar = function (activeGroup, activePage) {
