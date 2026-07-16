@@ -3681,19 +3681,25 @@
     }
     async function loadPortalPerformerDetails(apps = []) {
       if (!apps.length || !prod?.id) return [];
-      const bookingIds = apps.map(app => app.id).filter(Boolean);
+      const appIds = apps.map(app => app.id).filter(Boolean);
+      // casting_assignments.applicant_id may be a booking ID or an application ID -- include both
+      const linkedBookingIds = apps.map(app => app.booking_id).filter(Boolean);
 
       // Bookings get promoted to audition_applications — find those IDs via three strategies
-      let promotedIds = [...bookingIds];
+      let promotedIds = [...new Set([...appIds, ...linkedBookingIds])];
       const _addAppIds = ids => { promotedIds = [...new Set([...promotedIds, ...ids.filter(Boolean)])]; };
 
-      // 1. booking_id column on audition_applications
+      // 1. booking_id column on audition_applications (search all known IDs in case any are booking IDs)
+      const bookingSearchIds = [...new Set([...appIds, ...linkedBookingIds])];
       try {
         const { data } = await sb.from('audition_applications')
-          .select('id')
+          .select('id,booking_id')
           .eq('production_id', prod.id)
-          .in('booking_id', bookingIds);
-        if (data?.length) _addAppIds(data.map(r => r.id));
+          .in('booking_id', bookingSearchIds);
+        if (data?.length) {
+          _addAppIds(data.map(r => r.id));
+          _addAppIds(data.map(r => r.booking_id).filter(Boolean));
+        }
       } catch (_) {}
 
       // 2. Portal code — same code stored in custom_answers at registration complete
