@@ -3780,7 +3780,10 @@
 
       const basePerformers = apps.map(app => {
         const ca = applicantCustomAnswers(app);
-        const rows = assignments.filter(row => promotedIds.includes(String(row.applicant_id)));
+        // Only attach assignments that directly belong to this app — not email-matched siblings
+        const appOwnIds = new Set([String(app.id)]);
+        if (app.booking_id) appOwnIds.add(String(app.booking_id));
+        const rows = assignments.filter(row => appOwnIds.has(String(row.applicant_id)));
         const roles = rows.map(row => row.character_id ? (charMap.get(String(row.character_id)) || '') : 'Ensemble').filter(Boolean);
         const fallbackRoles = String(ca.__bts_cast_offer_role_names || ca.Role || ca.role_name || '').split(',').map(s => s.trim()).filter(Boolean);
         return {
@@ -3789,6 +3792,36 @@
           roles: [...new Set(roles.length ? roles : fallbackRoles)],
         };
       });
+
+      // Email-matched siblings: any assignments loaded but not yet in a base performer entry
+      const coveredAssignIds = new Set(basePerformers.flatMap(p => p.assignments.map(a => String(a.id))));
+      const siblingAssignments = assignments.filter(a => !coveredAssignIds.has(String(a.id)));
+      if (siblingAssignments.length) {
+        const sibApplicantIds = [...new Set(siblingAssignments.map(a => a.applicant_id).filter(Boolean))];
+        const sibAppMap = new Map();
+        try {
+          const { data } = await sb.from('audition_applications').select('id,name,email,dob,custom_answers,headshot_url,booking_id,portal_code').in('id', sibApplicantIds);
+          (data || []).forEach(a => sibAppMap.set(String(a.id), a));
+        } catch (_) {}
+        const missingIds = sibApplicantIds.filter(id => !sibAppMap.has(id));
+        if (missingIds.length) {
+          try {
+            const { data } = await sb.from('audition_bookings').select('id,name,email,dob,custom_answers,headshot_url').in('id', missingIds);
+            (data || []).forEach(b => sibAppMap.set(String(b.id), b));
+          } catch (_) {}
+        }
+        const sibGrouped = new Map();
+        siblingAssignments.forEach(sa => {
+          const sibApp = sibAppMap.get(String(sa.applicant_id)) || { id: sa.applicant_id, name: '' };
+          const roleName = sa.character_id ? (charMap.get(String(sa.character_id)) || '') : 'Ensemble';
+          const key = String(sa.applicant_id);
+          if (!sibGrouped.has(key)) sibGrouped.set(key, { app: sibApp, assignments: [], roles: [] });
+          const g = sibGrouped.get(key);
+          g.assignments.push({ ...sa, role_name: roleName, payment_records: paymentMap.get(String(sa.id)) || [] });
+          if (roleName) g.roles.push(roleName);
+        });
+        sibGrouped.forEach(g => { g.roles = [...new Set(g.roles)]; basePerformers.push(g); });
+      }
 
       // Household expansion: load sibling cast members using admin-configured households
       try {
