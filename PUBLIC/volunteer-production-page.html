@@ -3721,6 +3721,7 @@
       const emails = [...new Set(apps.map(a => String(a.email || '').toLowerCase().trim()).filter(Boolean))];
       const emailFoundApps = new Map(); // Cache full records so sibling block can use names/headshots
       if (emails.length) {
+        // audition_applications — primary source for performers who completed registration
         try {
           const { data } = await sb.from('audition_applications')
             .select('id,name,email,dob,custom_answers,headshot_url,booking_id,portal_code')
@@ -3728,7 +3729,21 @@
             .in('email', emails);
           if (data?.length) {
             _addAppIds(data.map(r => r.id));
-            data.forEach(r => emailFoundApps.set(String(r.id), r));
+            data.forEach(r => {
+              emailFoundApps.set(String(r.id), r);
+              if (r.booking_id) emailFoundApps.set(String(r.booking_id), r);
+            });
+          }
+        } catch (_) {}
+        // audition_bookings — catches siblings who are booking-only (no application record)
+        try {
+          const { data } = await sb.from('audition_bookings')
+            .select('id,name,email,dob,custom_answers')
+            .eq('production_id', prod.id)
+            .in('email', emails);
+          if (data?.length) {
+            _addAppIds(data.map(r => r.id));
+            data.forEach(r => { if (!emailFoundApps.has(String(r.id))) emailFoundApps.set(String(r.id), r); });
           }
         } catch (_) {}
       }
