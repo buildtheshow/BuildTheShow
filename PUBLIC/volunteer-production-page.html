@@ -3858,21 +3858,21 @@
         const foundApplicantIds = new Set(assignments.map(a => String(a.applicant_id)).filter(Boolean));
         const siblingMemberIds = [];
         assignments.forEach(a => {
-          const hh = households.find(h => {
+          const matchedHouseholds = households.filter(h => {
             const mids = (h.member_ids || []).map(String);
             const memberAssignIds = (h.members || []).map(m => String(m.assignment_id || '')).filter(Boolean);
             return mids.includes(String(a.id)) || mids.includes(String(a.applicant_id))
               || memberAssignIds.includes(String(a.id));
           });
-          if (hh) {
-            // Prefer members[].assignment_id (reliable assignment IDs) over raw member_ids (may be mixed)
+          matchedHouseholds.forEach(hh => {
+            // Prefer members[].assignment_id (reliable) over raw member_ids (may be mixed/stale)
             const memberAssignIds = (hh.members || []).map(m => String(m.assignment_id || '')).filter(Boolean);
             const idsToCheck = memberAssignIds.length ? memberAssignIds : (hh.member_ids || []).map(String);
             idsToCheck.forEach(mid => {
               if (!foundAssignIds.has(mid) && !foundApplicantIds.has(mid))
                 siblingMemberIds.push(mid);
             });
-          }
+          });
         });
         const uniqueSibMemberIds = [...new Set(siblingMemberIds)];
         if (uniqueSibMemberIds.length && prod?.id) {
