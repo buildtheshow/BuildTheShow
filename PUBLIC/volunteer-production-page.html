@@ -4920,266 +4920,157 @@
     function registrationPaymentsHtml(performers = []) {
       if (!performers.length) return `<div class="vpd-card"><div class="vpd-empty">No registration records are connected to this portal yet.</div></div>`;
       const paymentEnabled = paymentInstallments().length > 0;
-      const isHousehold = performers.length > 1;
       const allPay = performers.map(p => ({ performer: p, pay: performerPaymentSummary(p) }));
       const totalExpected = allPay.reduce((s, x) => s + x.pay.total, 0);
       const totalPaid     = allPay.reduce((s, x) => s + x.pay.paid, 0);
       const balanceDue    = Math.max(0, totalExpected - totalPaid);
-      const totalCredits  = allPay.reduce((sum, { pay }) =>
-        sum + paymentDiscountLines(pay.discountLabel).reduce((s, line) => {
-          const m = line.match(/-([$£]?\s*[0-9]+(?:\.[0-9]{1,2})?)/);
-          return s + (m ? parseFloat(m[1].replace(/[^0-9.]/g, '')) : 0);
-        }, 0), 0);
       const allPaidRecords = allPay.flatMap(({ performer, pay }) =>
         (pay.records || []).filter(r => r.paid).map(r => ({ record: r, performer, pay }))
       );
-
-      const orgName   = org?.name || org?.organization_name || 'Build The Show';
-      const logoUrl   = org?.logo_url || '';
-      const issuedDate = fmtDate(new Date().toISOString().slice(0,10), { short: true });
-      const rawHowToPay = String(paymentSettings?.instructions || paymentSettings?.payment_instructions || '').trim();
-      const hasSplitMode = paymentSettings?.mode === 'split' && (paymentInstallments().length > 1);
-      const nextInst  = allPay.flatMap(({ pay }) =>
+      const orgName = org?.name || org?.organization_name || 'Build The Show';
+      const logoUrl = org?.logo_url || '';
+      const prodTitle = prod?.title || 'Production';
+      const performerName = performers.length === 1 ? performerDisplayName(performers[0]) : performers.map(p => performerDisplayName(p)).join(', ');
+      const lastPaid = allPaidRecords.sort((a, b) => (b.record.paid_at || '').localeCompare(a.record.paid_at || ''))[0];
+      const nextInst = allPay.flatMap(({ pay }) =>
         pay.installments.map((inst, i) => ({ inst, paid: !!(pay.records || []).find(r => r.installment_index === i && r.paid) }))
       ).find(x => !x.paid);
-      const lastPaid  = allPaidRecords.sort((a,b) => (b.record.paid_at||'').localeCompare(a.record.paid_at||''))[0];
-      const progressPct = (totalExpected + totalCredits) > 0 ? Math.round((totalPaid / (totalExpected + totalCredits)) * 100) : 0;
+      const payEmail = paymentSettings?.etransfer_email || paymentSettings?.payment_email || paymentSettings?.producer_email || paymentSettings?.contact_email || org?.email || '';
+      const memoText = `${performerName} - ${prodTitle}`;
+      const rawInstructions = String(paymentSettings?.instructions || paymentSettings?.payment_instructions || '').trim();
+      const daysUntilNext = nextInst?.inst.dueDate ? Math.ceil((new Date(nextInst.inst.dueDate) - new Date()) / 86400000) : null;
 
-      // All discounts flat list
-      const allDiscounts = allPay.flatMap(({ performer, pay }) =>
-        paymentDiscountLines(pay.discountLabel).map(line => ({ line, performer }))
-      );
-      const totalDiscount = allDiscounts.reduce((s, { line }) => {
-        const m = line.match(/-([$£]?\s*[0-9]+(?:\.[0-9]{1,2})?)/);
-        return s + (m ? parseFloat(m[1].replace(/[^0-9.]/g, '')) : 0);
-      }, 0);
+      const pdfLinks = allPay.map(({ performer }) => {
+        const ca = applicantCustomAnswers(performer.app || {});
+        const url = String(ca.__bts_registration_pdf_url || ca.registration_pdf_url || '').trim();
+        return url ? { name: performerDisplayName(performer), url } : null;
+      }).filter(Boolean);
 
-      // Timeline items: all installments for all performers, sorted by due date
-      const tlItems = allPay.flatMap(({ performer, pay }) =>
-        pay.installments.map((inst, i) => {
-          const rec = (pay.records || []).find(r => r.installment_index === i && r.paid);
-          return { inst, rec, performer, pay, isPaid: !!rec, sortKey: inst.dueDate || 'zzz' };
-        })
-      ).sort((a, b) => a.sortKey.localeCompare(b.sortKey));
-      // Sum all unpaid instalments sharing the same due date as nextInst (combines household performers)
-      const nextInstAmount = nextInst ? tlItems.filter(x => !x.isPaid && x.inst.dueDate === nextInst.inst.dueDate).reduce((s, x) => s + Number(x.inst.amount || 0), 0) : 0;
+      const allFullyPaid = balanceDue <= 0 && totalPaid > 0;
 
-      // No registration action buttons on the payment page
+      const iconCheck = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+      const iconDoc = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
+      const iconDl = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+      const iconPay = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+      const iconTransfer = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>`;
 
-      // ── LEFT COLUMN ──
-      const leftHtml = `
-        <div class="vp-pc">
-          <div class="vp-pay-hdr">
-            <div class="vp-pay-hdr-left">
-              ${logoUrl ? `<img class="vp-pay-hdr-logo" src="${esc(logoUrl)}" alt="${esc(orgName)}" />` : `<span class="vp-pay-hdr-org">${esc(orgName)}</span>`}
+      return `<div style="max-width:780px;margin:0 auto;padding:1rem 0;">
+        <style>
+          .vp-reg2{background:#fff;border-radius:16px;box-shadow:0 2px 16px rgba(87,46,136,0.08);overflow:hidden;}
+          .vp-reg2-top{display:flex;align-items:center;gap:0.75rem;padding:1.1rem 1.4rem 0.9rem;border-bottom:1px solid #f0ecf8;}
+          .vp-reg2-top-logo{width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;}
+          .vp-reg2-top-logo-fallback{width:36px;height:36px;border-radius:8px;background:#572e88;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.7rem;font-weight:800;flex-shrink:0;}
+          .vp-reg2-top-info{flex:1;min-width:0;}
+          .vp-reg2-top-show{font-size:0.82rem;font-weight:800;color:#1a1530;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+          .vp-reg2-top-name{font-size:0.72rem;color:#8e82a7;margin-top:0.05rem;}
+          .vp-reg2-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-bottom:1px solid #f0ecf8;}
+          .vp-reg2-stat{padding:1.2rem 1rem;text-align:center;position:relative;}
+          .vp-reg2-stat+.vp-reg2-stat{border-left:1px solid #f0ecf8;}
+          .vp-reg2-stat-lbl{font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#8e82a7;margin-bottom:0.5rem;}
+          .vp-reg2-stat-val{font-size:1.5rem;font-weight:900;color:#1a1530;line-height:1;}
+          .vp-reg2-stat-val.green{color:#2a6035;}
+          .vp-reg2-stat-sub{font-size:0.65rem;color:#8e82a7;margin-top:0.35rem;}
+          .vp-reg2-stat--next{background:#f7f4fd;}
+          .vp-reg2-stat--next .vp-reg2-stat-val{color:#572e88;}
+          .vp-reg2-stat--next .vp-reg2-stat-lbl{color:#572e88;}
+          .vp-reg2-paid-circle{width:40px;height:40px;border-radius:50%;background:#769e7b;display:flex;align-items:center;justify-content:center;margin:0 auto 0.5rem;}
+          .vp-reg2-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-top:0;}
+          .vp-reg2-card{padding:1.25rem 1.2rem;border-top:1px solid #f0ecf8;}
+          .vp-reg2-card+.vp-reg2-card{border-left:1px solid #f0ecf8;}
+          .vp-reg2-card-icon{margin-bottom:0.6rem;}
+          .vp-reg2-card-title{font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;color:#8e82a7;margin-bottom:0.6rem;}
+          .vp-reg2-pay-btn{display:block;width:100%;padding:0.7rem;background:#1a1530;color:#fff;font-size:0.78rem;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;border:none;border-radius:8px;cursor:pointer;margin:0.65rem 0 0.4rem;text-align:center;}
+          .vp-reg2-pay-btn:hover{background:#572e88;}
+          .vp-reg2-pay-sub{font-size:0.65rem;color:#8e82a7;text-align:center;}
+          .vp-reg2-instr-row{font-size:0.75rem;color:#1a1530;margin-bottom:0.35rem;}
+          .vp-reg2-instr-label{font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#8e82a7;margin-bottom:0.1rem;}
+          .vp-reg2-copy-btn{display:inline-flex;align-items:center;gap:0.3rem;padding:0.4rem 0.75rem;background:#fff;border:1.5px solid #572e88;border-radius:6px;color:#572e88;font-size:0.7rem;font-weight:700;cursor:pointer;margin-top:0.5rem;}
+          .vp-reg2-copy-btn:hover{background:#f7f4fd;}
+          .vp-reg2-dl-row{display:flex;align-items:center;justify-content:space-between;padding:0.45rem 0;border-bottom:1px solid #f0ecf8;}
+          .vp-reg2-dl-row:last-child{border-bottom:none;}
+          .vp-reg2-dl-name{font-size:0.75rem;font-weight:600;color:#1a1530;}
+          .vp-reg2-dl-link{font-size:0.7rem;font-weight:700;color:#572e88;text-decoration:none;display:flex;align-items:center;gap:0.25rem;}
+          .vp-reg2-footer{padding:0.75rem 1.4rem;font-size:0.7rem;color:#8e82a7;text-align:center;border-top:1px solid #f0ecf8;}
+          .vp-reg2-footer a{color:#572e88;font-weight:700;text-decoration:none;}
+          @media(max-width:540px){
+            .vp-reg2-stats{grid-template-columns:repeat(2,1fr);}
+            .vp-reg2-cards{grid-template-columns:1fr;}
+            .vp-reg2-card+.vp-reg2-card{border-left:0;}
+          }
+        </style>
+        <div class="vp-reg2">
+          <div class="vp-reg2-top">
+            ${logoUrl ? `<img class="vp-reg2-top-logo" src="${esc(logoUrl)}" alt="${esc(orgName)}" />` : `<div class="vp-reg2-top-logo-fallback">${esc(orgName.slice(0,2).toUpperCase())}</div>`}
+            <div class="vp-reg2-top-info">
+              <div class="vp-reg2-top-show">${esc(prodTitle)}</div>
+              <div class="vp-reg2-top-name">${esc(performerName)}</div>
             </div>
-            <div class="vp-pay-hdr-right">${esc(prod?.title || 'Production')}<br>${esc(issuedDate)}</div>
           </div>
-          <div class="vp-pay-stats">
-            <div class="vp-pay-stat">
-              <div class="vp-pay-stat-lbl">Balance Due</div>
-              <div class="vp-pay-stat-val purple">${esc(paymentEnabled ? moneyLabel(balanceDue) : '—')}</div>
+
+          ${paymentEnabled ? `<div class="vp-reg2-stats">
+            <div class="vp-reg2-stat">
+              <div class="vp-reg2-stat-lbl">Paid</div>
+              ${totalPaid > 0 ? `<div class="vp-reg2-paid-circle">${iconCheck}</div>` : ''}
+              <div class="vp-reg2-stat-val green">${esc(moneyLabel(totalPaid))}</div>
+              ${lastPaid ? `<div class="vp-reg2-stat-sub">${esc(fmtDate(lastPaid.record.paid_at, { short: true }))}</div>` : `<div class="vp-reg2-stat-sub">Nothing yet</div>`}
             </div>
-            <div class="vp-pay-stat">
-              <div class="vp-pay-stat-lbl">Next Payment</div>
-              <div class="vp-pay-stat-val">${esc(nextInst ? moneyLabel(nextInstAmount || nextInst.inst.amount) : (balanceDue <= 0 ? 'Paid' : '—'))}</div>
-              ${nextInst?.inst.dueDate ? `<div class="vp-pay-stat-sub">Due ${esc(fmtDate(nextInst.inst.dueDate, { short: true }))}</div>` : ''}
+            <div class="vp-reg2-stat vp-reg2-stat--next">
+              <div class="vp-reg2-stat-lbl">${allFullyPaid ? 'Status' : 'Due Next'}</div>
+              <div class="vp-reg2-stat-val">${allFullyPaid ? 'Paid in Full' : esc(moneyLabel(nextInst?.inst.amount || 0))}</div>
+              ${!allFullyPaid && nextInst?.inst.dueDate ? `<div class="vp-reg2-stat-sub">${esc(fmtDate(nextInst.inst.dueDate, { short: true }))}</div>` : ''}
             </div>
-            <div class="vp-pay-stat">
-              <div class="vp-pay-stat-lbl">Paid So Far</div>
-              <div class="vp-pay-stat-val green">${esc(moneyLabel(totalPaid) || '$0')}</div>
-              ${lastPaid ? `<div class="vp-pay-stat-sub">Last: ${esc(fmtDate(lastPaid.record.paid_at, { short: true }))}</div>` : ''}
+            <div class="vp-reg2-stat">
+              <div class="vp-reg2-stat-lbl">Total</div>
+              <div class="vp-reg2-stat-val">${esc(moneyLabel(totalExpected))}</div>
             </div>
-          </div>
-          ${paymentEnabled ? `<div class="vp-pay-prog">
-            <div class="vp-pay-prog-bar"><div class="vp-pay-prog-fill" style="width:${progressPct}%;"></div></div>
-            <div class="vp-pay-prog-txt">${esc(String(progressPct))}% paid</div>
+            <div class="vp-reg2-stat">
+              <div class="vp-reg2-stat-lbl">Balance</div>
+              <div class="vp-reg2-stat-val${balanceDue <= 0 ? ' green' : ''}">${esc(moneyLabel(balanceDue))}</div>
+            </div>
           </div>` : ''}
-          ${isHousehold ? `
-            <div class="vp-pay-sec">Performers</div>
-            ${allPay.map(({ performer }) => {
-              const name = performerDisplayName(performer);
-              const roles = performerRoleNames(performer).join(', ') || 'Performer';
-              return `<div class="vp-pay-perf">
-                <div class="vp-pay-av" style="background:${_payAvatarColor(name)};">${esc(_payInitials(performer))}</div>
-                <div><div class="vp-pay-perf-name">${esc(name)}</div><div class="vp-pay-perf-role">${esc(roles)}</div></div>
-              </div>`;
-            }).join('')}` : ''}
-          ${paymentEnabled ? `
-            ${hasSplitMode ? `<div class="vp-pay-view-toggle">
-              <div class="vp-pay-view-toggle-inner">
-                <button class="vp-pay-view-btn active" type="button" data-view="instalment" onclick="this.closest('.vp-pc').querySelectorAll('.vp-pay-view-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active');this.closest('.vp-pc').querySelector('.vp-pay-instalment-view').style.display='';this.closest('.vp-pc').querySelector('.vp-pay-fullamount-view').style.display='none';">Pay by Instalment</button>
-                <button class="vp-pay-view-btn" type="button" data-view="full" onclick="this.closest('.vp-pc').querySelectorAll('.vp-pay-view-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active');this.closest('.vp-pc').querySelector('.vp-pay-instalment-view').style.display='none';this.closest('.vp-pc').querySelector('.vp-pay-fullamount-view').style.display='';">Pay in Full</button>
-              </div>
-            </div>` : ''}
-            <div class="vp-pay-sec" style="margin-top:0.75rem;">Your Registration Payments</div>
-            <div class="vp-pay-instalment-view">
-              ${(() => {
-                const maxInsts = Math.max(0, ...allPay.map(({ pay }) => pay.installments.length));
-                return Array.from({ length: maxInsts }, (_, i) => {
-                  const isLast = i === maxInsts - 1;
-                  const items = allPay.map(({ performer, pay }) => {
-                    const inst = pay.installments[i];
-                    if (!inst) return null;
-                    const rec = (pay.records || []).find(r => r.installment_index === i && r.paid);
-                    return { performer, inst, rec, isPaid: !!rec };
-                  }).filter(Boolean);
-                  const allPaid = items.length > 0 && items.every(x => x.isPaid);
-                  const label = items[0]?.inst.label || ('Payment ' + (i + 1));
-                  const dueDate = items[0]?.inst.dueDate || '';
-                  const paidRec = items[0]?.rec;
-                  const methodLabel = paidRec?.payment_method ? ({ e_transfer:'E-Transfer', cheque:'Cheque', cash:'Cash', square:'Square / Card' }[paidRec.payment_method] || paidRec.payment_method) : '';
-                  const dueTxt = allPaid ? ('Paid ' + fmtDate(paidRec?.paid_at, { short: true }) + (methodLabel ? ' · ' + methodLabel : '')) : (dueDate ? ('Due ' + fmtDate(dueDate, { short: true })) : 'Due date TBA');
 
-                  // Reconstruct base price per performer for final block (post-discount + their discount total)
-                  const perfDiscountTotals = {};
-                  if (isLast) {
-                    allDiscounts.forEach(({ line, performer }) => {
-                      const m = line.match(/-([$£]?\s*[0-9.]+)/);
-                      const amt = m ? parseFloat(m[1].replace(/[^0-9.]/g, '')) : 0;
-                      const pid = String(performer?.id || performer?.assignment_id || performer?.performer_id || JSON.stringify(performer));
-                      perfDiscountTotals[pid] = (perfDiscountTotals[pid] || 0) + amt;
-                    });
-                  }
-
-                  const itemRows = items.map(({ performer, inst }) => {
-                    const pid = String(performer?.id || performer?.assignment_id || performer?.performer_id || JSON.stringify(performer));
-                    const showAmt = isLast ? Number(inst.amount) + (perfDiscountTotals[pid] || 0) : Number(inst.amount);
-                    const nameHtml = isHousehold
-                      ? ('<span class="vp-inst-row-av" style="background:' + _payAvatarColor(performerDisplayName(performer)) + ';">' + esc(_payInitials(performer)) + '</span>' + esc(performerDisplayName(performer)))
-                      : 'Registration fee';
-                    return '<div class="vp-inst-row"><span class="vp-inst-row-name">' + nameHtml + '</span><span class="vp-inst-row-amt">' + esc(moneyLabel(showAmt) || '$0') + '</span></div>';
-                  }).join('');
-
-                  const discountRows = isLast && allDiscounts.length ? allDiscounts.map(({ line }) => {
-                    const dname = line.split(/:\s*/)[0].replace(/-\$[\d.]+$/, '').trim();
-                    const m = line.match(/-([$£]?\s*[0-9.]+)/);
-                    const amt = m ? ('-$' + m[1].trim().replace(/^[$£]/, '')) : '';
-                    if (!amt) return '';
-                    return '<div class="vp-inst-row"><span class="vp-inst-row-name" style="color:#9b6fa8;">' + esc(dname) + '</span><span class="vp-inst-row-amt" style="color:#9b6fa8;">' + esc(amt) + '</span></div>';
-                  }).join('') : '';
-
-                  const totalAmt = items.reduce((s, x) => s + Number(x.inst.amount || 0), 0);
-                  const totalRow = '<div class="vp-inst-row" style="border-top:2px solid #e3dff0;"><span class="vp-inst-row-name" style="font-weight:700;color:#1a1530;">Total due</span><span class="vp-inst-row-amt" style="font-size:0.88rem;font-weight:800;color:' + (allPaid ? '#2a6035' : '#1a1530') + ';">' + esc(moneyLabel(totalAmt) || '$0') + '</span></div>';
-
-                  var paidAmtDisplay = moneyLabel(allPaid && paidRec ? paymentRecordAmount(paidRec, items[0]?.inst || {}) : totalAmt);
-                  return '<div class="vp-inst-block' + (allPaid ? ' done' : '') + '">'
-                    + '<div class="vp-inst-hdr"><span class="vp-inst-hdr-label">' + (i + 1) + ' of ' + maxInsts + '</span><span class="vp-inst-hdr-tag">' + (allPaid ? 'Paid' : 'Upcoming') + '</span></div>'
-                    + '<div class="vp-inst-main"><div style="flex:1"><div class="vp-inst-name">' + esc(label) + '</div><div class="vp-inst-due"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>' + esc(dueTxt) + '</div></div><div style="font-size:1.1rem;font-weight:900;color:' + (allPaid ? '#2a6035' : '#1a1530') + ';">' + esc(paidAmtDisplay || '') + '</div></div>'
-                    + '<div class="vp-inst-rows">' + itemRows + discountRows + '</div>'
-                    + '</div>';
-                }).join('');
-              })()}
+          <div class="vp-reg2-cards">
+            <div class="vp-reg2-card">
+              <div class="vp-reg2-card-icon">${iconPay}</div>
+              <div class="vp-reg2-card-title">Quick Pay</div>
+              ${!paymentEnabled ? `<div style="font-size:0.75rem;color:#8e82a7;">No fee set for this production.</div>` :
+                allFullyPaid ? `<div style="font-size:0.85rem;font-weight:700;color:#2a6035;">You're all paid up!</div>` :
+                `<div style="font-size:0.75rem;color:#8e82a7;margin-bottom:0.1rem;">Pay your remaining balance</div>
+                <button class="vp-reg2-pay-btn" onclick="document.getElementById('vp-reg2-instr').scrollIntoView({behavior:'smooth'})">Pay Now</button>
+                ${daysUntilNext !== null && daysUntilNext >= 0 ? `<div class="vp-reg2-pay-sub">Due in ${daysUntilNext} day${daysUntilNext === 1 ? '' : 's'}</div>` : ''}`
+              }
             </div>
-            ${hasSplitMode ? `<div class="vp-pay-fullamount-view" style="display:none;">
-              ${(() => {
-                const basePerPerformer = paymentInstallments().reduce((s, inst) => s + Number(inst.amount || 0), 0);
-                const allFullPaid = allPay.every(({ pay }) => pay.balance <= 0);
-                const perfRows = allPay.map(({ performer, pay }) => {
-                  const nameHtml = isHousehold
-                    ? ('<span class="vp-inst-row-av" style="background:' + _payAvatarColor(performerDisplayName(performer)) + ';">' + esc(_payInitials(performer)) + '</span>' + esc(performerDisplayName(performer)))
-                    : 'Registration fee';
-                  return '<div class="vp-inst-row"><span class="vp-inst-row-name">' + nameHtml + '</span><span class="vp-inst-row-amt">' + esc(moneyLabel(basePerPerformer) || '$0') + '</span></div>';
-                }).join('');
-                const discRows = allDiscounts.map(({ line }) => {
-                  const dname = line.split(/:\s*/)[0].replace(/-\$[\d.]+$/, '').trim();
-                  const m = line.match(/-([$£]?\s*[0-9.]+)/);
-                  const amt = m ? ('-$' + m[1].trim().replace(/^[$£]/, '')) : '';
-                  if (!amt) return '';
-                  return '<div class="vp-inst-row"><span class="vp-inst-row-name" style="color:#9b6fa8;">' + esc(dname) + '</span><span class="vp-inst-row-amt" style="color:#9b6fa8;">' + esc(amt) + '</span></div>';
-                }).join('');
-                const totalRow = '<div class="vp-inst-row" style="border-top:2px solid #e3dff0;"><span class="vp-inst-row-name" style="font-weight:700;color:#1a1530;">Total due</span><span class="vp-inst-row-amt" style="font-size:0.88rem;font-weight:800;color:' + (allFullPaid ? '#2a6035' : '#1a1530') + ';">' + esc(moneyLabel(balanceDue) || '$0') + '</span></div>';
-                return '<div class="vp-inst-block' + (allFullPaid ? ' done' : '') + '">'
-                  + '<div class="vp-inst-hdr"><span class="vp-inst-hdr-label">Pay in Full</span><span class="vp-inst-hdr-tag">' + (allFullPaid ? 'Paid' : 'Upcoming') + '</span></div>'
-                  + '<div class="vp-inst-main" style="padding-bottom:0.2rem;"><div class="vp-inst-name">Full balance</div><div class="vp-inst-due">Pay the full amount at once</div></div>'
-                  + '<div class="vp-inst-rows">' + perfRows + discRows + totalRow + '</div>'
-                  + '</div>';
-              })()}
-            </div>` : ''}
-            <div class="vp-pay-totals" style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.75rem;margin-top:1.25rem;padding-top:1rem;border-top:1.5px solid #e3dff0;">
-              <div style="text-align:center;">
-                <div style="font-size:0.55rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#8e82a7;margin-bottom:0.25rem;">Total Registration Fees</div>
-                <div style="font-size:1.2rem;font-weight:900;color:#1a1530;">${esc(moneyLabel(totalExpected)||'$0')}</div>
-              </div>
-              <div style="text-align:center;">
-                <div style="font-size:0.55rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#8e82a7;margin-bottom:0.25rem;">Total Paid</div>
-                <div style="font-size:1.2rem;font-weight:900;color:#2a6035;">${esc(moneyLabel(totalPaid)||'$0')}</div>
-              </div>
-              <div style="text-align:center;">
-                <div style="font-size:0.55rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#8e82a7;margin-bottom:0.25rem;">Balance Due</div>
-                <div style="font-size:1.2rem;font-weight:900;color:${balanceDue <= 0 ? '#2a6035' : '#1a1530'};">${esc(moneyLabel(balanceDue)||'$0')}</div>
-              </div>
-            </div>
-          ` : ''}
-        </div>`;
 
-      // ── RIGHT COLUMN — sticky timeline + how to pay ──
-      const rightHtml = `
-        <div class="vp-pc">
-          <div class="vp-pay-tl">
-            <div class="vp-pay-tl-hdr">Payment Timeline</div>
-            ${(() => {
-              // Group timeline by due date — sum amounts across all performers for that date
-              const tlGroupMap = new Map();
-              tlItems.forEach(x => {
-                const k = String(x.inst.dueDate||'zzz') + '|' + (x.inst.label||'');
-                if (!tlGroupMap.has(k)) tlGroupMap.set(k, { ...x, totalAmt: 0 });
-                tlGroupMap.get(k).totalAmt += Number(x.inst.amount || 0);
-              });
-              const deduped = [...tlGroupMap.values()].sort((a,b) => a.sortKey.localeCompare(b.sortKey));
-              return deduped.length ? deduped.map(({ inst, rec, isPaid, totalAmt }) => {
-                const label = inst.label || 'Payment';
-                const dateStr = isPaid && rec?.paid_at ? fmtDate(rec.paid_at, { short: true }) : (inst.dueDate ? fmtDate(inst.dueDate, { short: true }) : 'TBA');
-                const meta = isPaid ? (rec?.payment_method ? paymentMethodLabel(rec.payment_method) : '') : '';
-                const rawAmt = isPaid ? paymentRecordAmount(rec, inst) : totalAmt;
-                const amt = moneyLabel(Math.abs(Number(rawAmt || 0)));
-                return `<div class="vp-pay-tl-item">
-                  <div class="vp-pay-tl-col">
-                    <div class="vp-pay-tl-dot ${isPaid ? 'done' : ''}">${isPaid ? `<svg viewBox="0 0 24 24"><path d="m20 6-11 11-5-5"/></svg>` : ''}</div>
-                    <div class="vp-pay-tl-line"></div>
-                  </div>
-                  <div class="vp-pay-tl-body">
-                    <div class="vp-pay-tl-row">
-                      <div class="vp-pay-tl-date">${esc(dateStr)}</div>
-                      <div class="vp-pay-tl-amt ${isPaid ? 'g' : ''}">${esc(amt||'$0')}</div>
-                    </div>
-                    <div class="vp-pay-tl-desc">${esc(label)}${meta ? ` · ${esc(meta)}` : ''}</div>
-                    <span class="vp-pay-tl-tag ${isPaid ? 'p' : ''}">${esc(isPaid ? 'Paid' : 'Upcoming')}</span>
-                  </div>
-                </div>`;
-              }).join('') : `<div style="color:#aaa;font-size:0.72rem;">No schedule yet.</div>`;
-            })()}
+            <div class="vp-reg2-card" id="vp-reg2-instr">
+              <div class="vp-reg2-card-icon">${iconTransfer}</div>
+              <div class="vp-reg2-card-title">Payment Instructions</div>
+              ${payEmail ? `<div class="vp-reg2-instr-label">E-transfer to</div>
+              <div class="vp-reg2-instr-row" style="font-weight:700;">${esc(payEmail)}</div>` : ''}
+              ${memoText ? `<div class="vp-reg2-instr-label" style="margin-top:0.5rem;">Memo</div>
+              <div class="vp-reg2-instr-row">${esc(memoText)}</div>
+              <button class="vp-reg2-copy-btn" onclick="(async()=>{try{await navigator.clipboard.writeText(${JSON.stringify(memoText)});this.textContent='Copied!';setTimeout(()=>this.textContent='Copy Memo',1800);}catch(e){}})()">Copy Memo</button>` : ''}
+              ${rawInstructions && !payEmail ? `<div style="font-size:0.75rem;color:#5a5070;white-space:pre-line;">${esc(rawInstructions)}</div>` : ''}
+            </div>
+
+            <div class="vp-reg2-card">
+              <div class="vp-reg2-card-icon">${iconDoc}</div>
+              <div class="vp-reg2-card-title">Documents</div>
+              ${pdfLinks.length ? pdfLinks.map(({ name, url }) => `
+                <div class="vp-reg2-dl-row">
+                  <span class="vp-reg2-dl-name">Registration Form</span>
+                  <a href="${esc(url)}" target="_blank" rel="noopener" class="vp-reg2-dl-link">${iconDl} Download</a>
+                </div>`).join('') : `<div class="vp-reg2-dl-row">
+                  <span class="vp-reg2-dl-name">Registration Form</span>
+                  <span style="font-size:0.7rem;color:#b0a8c0;">Not available</span>
+                </div>`}
+            </div>
           </div>
-        </div>
-        <div class="vp-pc" style="margin-top:1rem;">
-          ${paymentHowToHtml(rawHowToPay, performers, orgName, {
-            balanceDue,
-            nextAmount: nextInstAmount || nextInst?.inst?.amount || 0,
-            nextDueDate: nextInst?.inst?.dueDate || ''
-          })}
-        </div>
-        ${(() => {
-          const pdfs = performers.map(p => {
-            const ca = applicantCustomAnswers(p.app || {});
-            const url = (ca.__bts_registration_pdf_url || '').trim();
-            return url ? { name: performerDisplayName(p), url } : null;
-          }).filter(Boolean);
-          if (!pdfs.length) return '';
-          return `<div class="vp-pc" style="margin-top:1rem;">
-            <div class="vp-pay-tl-hdr">Registration Forms</div>
-            <div style="display:flex;flex-direction:column;gap:0.55rem;margin-top:0.65rem;">
-              ${pdfs.map(({ name, url }) => `
-                <a href="${esc(url)}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:0.6rem;padding:0.6rem 0.75rem;border:1px solid #e3dff0;border-radius:8px;background:#faf8fd;text-decoration:none;color:#1a1530;">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-                  <span style="font-size:0.82rem;font-weight:700;flex:1;">${esc(name)}'s Registration</span>
-                  <span style="font-size:0.7rem;font-weight:600;color:#572e88;">Download</span>
-                </a>`).join('')}
-            </div>
-          </div>`;
-        })()}`;
 
-      return `<div class="vpd-breakdown"><div class="vp-pay-page">${leftHtml}<div class="vp-pay-right">${rightHtml}</div></div></div>`;
+          ${org?.email || paymentSettings?.producer_email ? `<div class="vp-reg2-footer">Questions? Email your producer at <a href="mailto:${esc(org?.email || paymentSettings?.producer_email)}">${esc(org?.email || paymentSettings?.producer_email)}</a></div>` : ''}
+        </div>
+      </div>`;
     }
+
     function performerDashboardHtml(performers = []) {
       if (!performers.length) return `<div class="vpd-card"><div class="vpd-empty">No performer records found for this Production Code.</div></div>`;
       const performerCalItems = performerEvents(performers).map(ev => ({
