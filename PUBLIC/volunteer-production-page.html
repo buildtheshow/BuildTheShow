@@ -3718,7 +3718,11 @@
       }
 
       // 3. Email — finds all family members sharing the same email (siblings, parent registrations)
-      const emails = [...new Set(apps.map(a => String(a.email || '').toLowerCase().trim()).filter(Boolean))];
+      // Pull email from both top-level field and custom_answers in case one is empty
+      const emails = [...new Set(apps.flatMap(a => {
+        const ca = applicantCustomAnswers(a);
+        return [a.email, ca.email, ca.Email, ca.__bts_email].map(v => String(v || '').toLowerCase().trim()).filter(Boolean);
+      }))];
       const emailFoundApps = new Map(); // Cache full records so sibling block can use names/headshots
       if (emails.length) {
         // audition_applications — primary source for performers who completed registration
@@ -3834,14 +3838,14 @@
         }));
         if (stillMissing.length) {
           try {
-            const { data, error } = await sb.from('audition_applications').select('id,name,email,dob,custom_answers,headshot_url,booking_id,portal_code').in('id', stillMissing);
+            const { data, error } = await sb.from('audition_applications').select('id,name,email,dob,custom_answers,headshot_url,booking_id,portal_code').eq('production_id', prod.id).in('id', stillMissing);
             console.log('[BTS SIB APP LOOKUP]', JSON.stringify({ data: (data||[]).map(r=>({id:r.id,name:r.name})), error }));
             (data || []).forEach(a => sibAppMap.set(String(a.id), a));
           } catch (e) { console.log('[BTS SIB APP ERR]', e?.message); }
           const bookingMissing = stillMissing.filter(id => !sibAppMap.has(id));
           if (bookingMissing.length) {
             try {
-              const { data, error } = await sb.from('audition_bookings').select('id,name,email,dob,custom_answers').in('id', bookingMissing);
+              const { data, error } = await sb.from('audition_bookings').select('id,name,email,dob,custom_answers').eq('production_id', prod.id).in('id', bookingMissing);
               console.log('[BTS SIB BOOK LOOKUP]', JSON.stringify({ data: (data||[]).map(r=>({id:r.id,name:r.name})), error }));
               (data || []).forEach(b => sibAppMap.set(String(b.id), b));
             } catch (e) { console.log('[BTS SIB BOOK ERR]', e?.message); }
@@ -3909,13 +3913,13 @@
             const missingIds = sibApplicantIds.filter(id => !sibAppMap.has(String(id)));
             if (missingIds.length) {
               try {
-                const { data: sibApps } = await sb.from('audition_applications').select('id,name,email,dob,custom_answers,headshot_url,booking_id,portal_code').in('id', missingIds);
+                const { data: sibApps } = await sb.from('audition_applications').select('id,name,email,dob,custom_answers,headshot_url,booking_id,portal_code').eq('production_id', prod.id).in('id', missingIds);
                 (sibApps || []).forEach(a => { sibAppMap.set(String(a.id), a); if (a.booking_id) sibAppMap.set(String(a.booking_id), a); });
               } catch (_) {}
               const stillMissingIds = missingIds.filter(id => !sibAppMap.has(String(id)));
               if (stillMissingIds.length) {
                 try {
-                  const { data: sibBooks } = await sb.from('audition_bookings').select('id,name,email,dob,custom_answers').in('id', stillMissingIds);
+                  const { data: sibBooks } = await sb.from('audition_bookings').select('id,name,email,dob,custom_answers').eq('production_id', prod.id).in('id', stillMissingIds);
                   (sibBooks || []).forEach(b => sibAppMap.set(String(b.id), b));
                 } catch (_) {}
               }
