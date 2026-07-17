@@ -3802,8 +3802,12 @@
       const siblingAssignments = assignments.filter(a => !coveredAssignIds.has(String(a.id)));
       if (siblingAssignments.length) {
         const sibApplicantIds = [...new Set(siblingAssignments.map(a => a.applicant_id).filter(Boolean))];
-        // Pre-populate from the email lookup cache — those records were already fetched successfully
-        const sibAppMap = new Map(emailFoundApps);
+        // Pre-populate from the email lookup cache, keyed by both app ID and booking_id
+        const sibAppMap = new Map();
+        emailFoundApps.forEach((record, appId) => {
+          sibAppMap.set(appId, record);
+          if (record.booking_id) sibAppMap.set(String(record.booking_id), record);
+        });
         // Fill any gaps with a direct ID lookup
         const stillMissing = sibApplicantIds.filter(id => !sibAppMap.has(id));
         if (stillMissing.length) {
@@ -3814,7 +3818,7 @@
           const bookingMissing = stillMissing.filter(id => !sibAppMap.has(id));
           if (bookingMissing.length) {
             try {
-              const { data } = await sb.from('audition_bookings').select('id,name,email,dob,custom_answers,headshot_url').in('id', bookingMissing);
+              const { data } = await sb.from('audition_bookings').select('id,name,email,dob,custom_answers').in('id', bookingMissing);
               (data || []).forEach(b => sibAppMap.set(String(b.id), b));
             } catch (_) {}
           }
