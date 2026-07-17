@@ -4924,27 +4924,22 @@
       const totalExpected = allPay.reduce((s, x) => s + x.pay.total, 0);
       const totalPaid     = allPay.reduce((s, x) => s + x.pay.paid, 0);
       const balanceDue    = Math.max(0, totalExpected - totalPaid);
-      const allPaidRecords = allPay.flatMap(({ pay }) =>
-        (pay.records || []).filter(r => r.paid)
-      );
-      const orgName = org?.name || org?.organization_name || 'Build The Show';
-      const logoUrl = org?.logo_url || '';
-      const prodTitle = prod?.title || 'Production';
+      const allFullyPaid  = paymentEnabled && balanceDue <= 0 && totalPaid > 0;
+      const allPaidRecs   = allPay.flatMap(({ pay }) => (pay.records || []).filter(r => r.paid));
+      const lastPaidRec   = allPaidRecs.sort((a, b) => (b.paid_at || '').localeCompare(a.paid_at || ''))[0];
+      const orgName     = org?.name || org?.organization_name || 'Build The Show';
+      const logoUrl     = org?.logo_url || '';
+      const prodTitle   = prod?.title || 'Production';
       const performerName = performers.length === 1 ? performerDisplayName(performers[0]) : performers.map(p => performerDisplayName(p)).join(', ');
-      const lastPaidRec = allPaidRecords.sort((a, b) => (b.paid_at || '').localeCompare(a.paid_at || ''))[0];
-      const allFullyPaid = balanceDue <= 0 && totalPaid > 0;
-      const payEmail = org?.etransfer_email || paymentSettings?.etransfer_email || paymentSettings?.payment_email || paymentSettings?.producer_email || paymentSettings?.contact_email || '';
-      const memoText = `${performerName} - ${prodTitle}`;
+      const payEmail    = org?.etransfer_email || paymentSettings?.etransfer_email || paymentSettings?.payment_email || paymentSettings?.producer_email || paymentSettings?.contact_email || '';
+      const memoText    = `${performerName} - ${prodTitle}`;
       const rawInstructions = String(paymentSettings?.instructions || paymentSettings?.payment_instructions || '').trim();
 
-      // Base fee (before discounts)
+      // Base fee and discounts
       const baseInstallments = paymentInstallments();
       const baseTotal = baseInstallments.reduce((s, i) => s + (i.amount || 0), 0);
       const hasDiscount = totalExpected < baseTotal;
-
-      // Collect discount lines from all performers
       const allDiscountLabels = [...new Set(allPay.map(({ pay }) => pay.discountLabel).filter(Boolean))];
-      // Parse "Label: -$X" format into structured items
       const discountItems = allDiscountLabels.flatMap(label =>
         label.split(' · ').map(part => {
           const m = part.match(/^(.+?):\s*(-?\$?[\d,.]+)$/);
@@ -4952,15 +4947,14 @@
         })
       );
 
-      // Installment schedule across all performers
+      // Payment schedule (only relevant when NOT fully paid)
       const scheduleRows = allPay.flatMap(({ performer, pay }) => {
         const pName = performers.length > 1 ? performerDisplayName(performer) : '';
         return (pay.installments || []).map((inst, i) => {
           const rec = (pay.records || []).find(r => r.installment_index === i);
           const paid = !!rec?.paid;
-          const paidAt = rec?.paid_at || '';
           const amount = paymentRecordAmount(rec || {}, inst);
-          return { label: inst.label || `Payment ${i + 1}`, amount: paid ? amount : (inst.amount || 0), dueDate: inst.dueDate || '', paid, paidAt, pName };
+          return { label: inst.label || `Payment ${i + 1}`, amount: paid ? amount : (inst.amount || 0), dueDate: inst.dueDate || '', paid, paidAt: rec?.paid_at || '', pName };
         });
       });
       const nextInst = scheduleRows.find(r => !r.paid);
@@ -4974,22 +4968,31 @@
       }).filter(Boolean);
 
       // Icons
-      const iconCheck = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
-      const iconCircle = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b0a8c0" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>`;
-      const iconDoc = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
-      const iconDl = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
-      const iconPay = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
-      const iconTransfer = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>`;
+      const iconCheckW  = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+      const iconCheckG  = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#769e7b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+      const iconCircle  = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b0a8c0" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>`;
+      const iconDoc     = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
+      const iconDl      = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+      const iconPay     = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+      const iconTransfer= `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>`;
 
       return `<div style="max-width:800px;margin:0 auto;padding:1rem 0;">
         <style>
           .vp-reg2{background:#fff;border-radius:16px;box-shadow:0 2px 16px rgba(87,46,136,0.08);overflow:hidden;}
           .vp-reg2-top{display:flex;align-items:center;gap:0.75rem;padding:1.1rem 1.4rem 0.9rem;border-bottom:1px solid #f0ecf8;}
           .vp-reg2-top-logo{width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;}
-          .vp-reg2-top-logo-fallback{width:36px;height:36px;border-radius:8px;background:#572e88;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.7rem;font-weight:800;flex-shrink:0;}
-          .vp-reg2-top-info{flex:1;min-width:0;}
+          .vp-reg2-top-logo-fb{width:36px;height:36px;border-radius:8px;background:#572e88;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.7rem;font-weight:800;flex-shrink:0;}
           .vp-reg2-top-show{font-size:0.82rem;font-weight:800;color:#1a1530;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
           .vp-reg2-top-name{font-size:0.72rem;color:#8e82a7;margin-top:0.05rem;}
+          .vp-reg2-done{padding:1.75rem 1.4rem;text-align:center;border-bottom:1px solid #f0ecf8;}
+          .vp-reg2-done-circle{width:56px;height:56px;border-radius:50%;background:#769e7b;display:flex;align-items:center;justify-content:center;margin:0 auto 0.85rem;}
+          .vp-reg2-done-circle svg{width:28px;height:28px;}
+          .vp-reg2-done-title{font-size:1.25rem;font-weight:900;color:#1a1530;margin-bottom:0.3rem;}
+          .vp-reg2-done-sub{font-size:0.8rem;color:#8e82a7;}
+          .vp-reg2-done-meta{display:flex;justify-content:center;gap:1.5rem;margin-top:1.1rem;flex-wrap:wrap;}
+          .vp-reg2-done-stat{text-align:center;}
+          .vp-reg2-done-stat-lbl{font-size:0.58rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#b0a8c0;margin-bottom:0.2rem;}
+          .vp-reg2-done-stat-val{font-size:1rem;font-weight:800;color:#2a6035;}
           .vp-reg2-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-bottom:1px solid #f0ecf8;}
           .vp-reg2-stat{padding:1.15rem 0.75rem;text-align:center;}
           .vp-reg2-stat+.vp-reg2-stat{border-left:1px solid #f0ecf8;}
@@ -5002,10 +5005,9 @@
           .vp-reg2-stat--next .vp-reg2-stat-lbl{color:#572e88;}
           .vp-reg2-paid-circle{width:36px;height:36px;border-radius:50%;background:#769e7b;display:flex;align-items:center;justify-content:center;margin:0 auto 0.4rem;}
           .vp-reg2-breakdown{padding:0.9rem 1.4rem;border-bottom:1px solid #f0ecf8;background:#faf9fd;}
-          .vp-reg2-breakdown-title{font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#8e82a7;margin-bottom:0.6rem;}
+          .vp-reg2-section-title{font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#8e82a7;margin-bottom:0.6rem;}
           .vp-reg2-fee-grid{display:flex;flex-wrap:wrap;gap:0.4rem 1.5rem;margin-bottom:0.75rem;}
           .vp-reg2-fee-item{font-size:0.73rem;color:#5a5070;}
-          .vp-reg2-fee-item.strike{color:#b0a8c0;text-decoration:line-through;}
           .vp-reg2-fee-item.discount{color:#769e7b;font-weight:700;}
           .vp-reg2-fee-item.total-line{color:#1a1530;font-weight:800;}
           .vp-reg2-schedule{display:flex;flex-direction:column;gap:0.35rem;}
@@ -5046,25 +5048,56 @@
 
           <!-- Header -->
           <div class="vp-reg2-top">
-            ${logoUrl ? `<img class="vp-reg2-top-logo" src="${esc(logoUrl)}" alt="${esc(orgName)}" />` : `<div class="vp-reg2-top-logo-fallback">${esc(orgName.slice(0,2).toUpperCase())}</div>`}
-            <div class="vp-reg2-top-info">
+            ${logoUrl ? `<img class="vp-reg2-top-logo" src="${esc(logoUrl)}" alt="${esc(orgName)}" />` : `<div class="vp-reg2-top-logo-fb">${esc(orgName.slice(0,2).toUpperCase())}</div>`}
+            <div style="flex:1;min-width:0;">
               <div class="vp-reg2-top-show">${esc(prodTitle)}</div>
               <div class="vp-reg2-top-name">${esc(performerName)}</div>
             </div>
           </div>
 
-          <!-- Stats row -->
+          ${paymentEnabled && allFullyPaid ? `
+          <!-- PAID IN FULL state -->
+          <div class="vp-reg2-done">
+            <div class="vp-reg2-done-circle"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div class="vp-reg2-done-title">Registration Complete</div>
+            <div class="vp-reg2-done-sub">Payment received in full. Nothing more is needed.</div>
+            <div class="vp-reg2-done-meta">
+              <div class="vp-reg2-done-stat">
+                <div class="vp-reg2-done-stat-lbl">Amount paid</div>
+                <div class="vp-reg2-done-stat-val">${esc(moneyLabel(totalPaid))}</div>
+              </div>
+              ${lastPaidRec ? `<div class="vp-reg2-done-stat">
+                <div class="vp-reg2-done-stat-lbl">Last payment</div>
+                <div class="vp-reg2-done-stat-val">${esc(fmtDate(lastPaidRec.paid_at, { short: true }))}</div>
+              </div>` : ''}
+              ${hasDiscount ? `<div class="vp-reg2-done-stat">
+                <div class="vp-reg2-done-stat-lbl">Discounts applied</div>
+                <div class="vp-reg2-done-stat-val">${esc(moneyLabel(baseTotal - totalExpected))}</div>
+              </div>` : ''}
+            </div>
+          </div>
+          <!-- Documents only when paid -->
+          ${pdfLinks.length ? `<div style="padding:1rem 1.4rem;border-bottom:1px solid #f0ecf8;">
+            <div class="vp-reg2-section-title">Documents</div>
+            ${pdfLinks.map(({ name, url }) => `<div class="vp-reg2-dl-row">
+              <span class="vp-reg2-dl-name">Registration Form</span>
+              <a href="${esc(url)}" target="_blank" rel="noopener" class="vp-reg2-dl-link">${iconDl} Download</a>
+            </div>`).join('')}
+          </div>` : ''}
+          ` : `
+
+          <!-- Stats row (not fully paid) -->
           ${paymentEnabled ? `<div class="vp-reg2-stats">
             <div class="vp-reg2-stat">
               <div class="vp-reg2-stat-lbl">Paid</div>
-              ${totalPaid > 0 ? `<div class="vp-reg2-paid-circle">${iconCheck}</div>` : ''}
+              ${totalPaid > 0 ? `<div class="vp-reg2-paid-circle">${iconCheckW}</div>` : ''}
               <div class="vp-reg2-stat-val green">${esc(moneyLabel(totalPaid))}</div>
               ${lastPaidRec ? `<div class="vp-reg2-stat-sub">${esc(fmtDate(lastPaidRec.paid_at, { short: true }))}</div>` : `<div class="vp-reg2-stat-sub">Nothing yet</div>`}
             </div>
             <div class="vp-reg2-stat vp-reg2-stat--next">
-              <div class="vp-reg2-stat-lbl">${allFullyPaid ? 'Status' : 'Due Next'}</div>
-              <div class="vp-reg2-stat-val">${allFullyPaid ? 'Paid in Full' : esc(moneyLabel(nextInst?.amount || 0))}</div>
-              ${!allFullyPaid && nextInst?.dueDate ? `<div class="vp-reg2-stat-sub">${esc(fmtDate(nextInst.dueDate, { short: true }))}</div>` : ''}
+              <div class="vp-reg2-stat-lbl">Due Next</div>
+              <div class="vp-reg2-stat-val">${esc(moneyLabel(nextInst?.amount || 0))}</div>
+              ${nextInst?.dueDate ? `<div class="vp-reg2-stat-sub">${esc(fmtDate(nextInst.dueDate, { short: true }))}</div>` : ''}
             </div>
             <div class="vp-reg2-stat">
               <div class="vp-reg2-stat-lbl">Total</div>
@@ -5073,24 +5106,24 @@
             </div>
             <div class="vp-reg2-stat">
               <div class="vp-reg2-stat-lbl">Balance</div>
-              <div class="vp-reg2-stat-val${balanceDue <= 0 ? ' green' : ''}">${esc(moneyLabel(balanceDue))}</div>
+              <div class="vp-reg2-stat-val">${esc(moneyLabel(balanceDue))}</div>
             </div>
           </div>` : ''}
 
-          <!-- Fee breakdown + payment schedule -->
+          <!-- Fee breakdown + schedule (not fully paid) -->
           ${paymentEnabled ? `<div class="vp-reg2-breakdown">
-            ${hasDiscount ? `<div class="vp-reg2-breakdown-title">Fee breakdown</div>
+            ${hasDiscount ? `<div class="vp-reg2-section-title">Fee breakdown</div>
             <div class="vp-reg2-fee-grid">
               <div class="vp-reg2-fee-item">Registration fee: <strong>${esc(moneyLabel(baseTotal))}</strong></div>
               ${discountItems.map(d => `<div class="vp-reg2-fee-item discount">${esc(d.label)}${d.amount ? `: ${esc(d.amount)}` : ''}</div>`).join('')}
               <div class="vp-reg2-fee-item total-line">Your total: ${esc(moneyLabel(totalExpected))}</div>
             </div>` : ''}
-            ${scheduleRows.length > 1 ? `<div class="vp-reg2-breakdown-title" style="${hasDiscount ? 'margin-top:0.2rem;' : ''}">Payment schedule</div>
+            ${scheduleRows.length > 1 ? `<div class="vp-reg2-section-title" style="${hasDiscount ? 'margin-top:0.2rem;' : ''}">Payment schedule</div>
             <div class="vp-reg2-schedule">
               ${scheduleRows.map(row => {
                 const isOverdue = !row.paid && row.dueDate && new Date(row.dueDate) < new Date();
                 return `<div class="vp-reg2-sched-row">
-                  <div class="${row.paid ? 'vp-reg2-sched-icon-paid' : 'vp-reg2-sched-icon-due'}">${row.paid ? iconCheck : iconCircle}</div>
+                  <div class="${row.paid ? 'vp-reg2-sched-icon-paid' : 'vp-reg2-sched-icon-due'}">${row.paid ? iconCheckW : iconCircle}</div>
                   <div class="vp-reg2-sched-label">${esc(row.label)}${row.pName ? ` <span class="vp-reg2-sched-pname">(${esc(row.pName)})</span>` : ''}</div>
                   <div class="vp-reg2-sched-amount">${esc(moneyLabel(row.amount))}</div>
                   <div class="vp-reg2-sched-date ${row.paid ? 'paid-date' : isOverdue ? 'overdue' : 'due-date'}">${row.paid ? `Paid ${esc(fmtDate(row.paidAt, { short: true }))}` : row.dueDate ? (isOverdue ? `Overdue ${esc(fmtDate(row.dueDate, { short: true }))}` : `Due ${esc(fmtDate(row.dueDate, { short: true }))}`) : ''}</div>
@@ -5099,19 +5132,17 @@
             </div>` : ''}
           </div>` : ''}
 
-          <!-- Action cards -->
+          <!-- Action cards (not fully paid) -->
           <div class="vp-reg2-cards">
             <div class="vp-reg2-card">
               <div class="vp-reg2-card-icon">${iconPay}</div>
               <div class="vp-reg2-card-title">Quick Pay</div>
               ${!paymentEnabled ? `<div style="font-size:0.75rem;color:#8e82a7;">No fee set for this production.</div>` :
-                allFullyPaid ? `<div style="font-size:0.85rem;font-weight:700;color:#2a6035;">You're all paid up!</div>` :
                 `<div style="font-size:0.73rem;color:#8e82a7;margin-bottom:0.1rem;">Pay your remaining balance</div>
                 <button class="vp-reg2-pay-btn" onclick="document.getElementById('vp-reg2-instr').scrollIntoView({behavior:'smooth'})">Pay Now</button>
                 ${daysUntilNext !== null && daysUntilNext >= 0 ? `<div class="vp-reg2-pay-sub">Due in ${daysUntilNext} day${daysUntilNext === 1 ? '' : 's'}</div>` : ''}`
               }
             </div>
-
             <div class="vp-reg2-card" id="vp-reg2-instr">
               <div class="vp-reg2-card-icon">${iconTransfer}</div>
               <div class="vp-reg2-card-title">Payment Instructions</div>
@@ -5122,7 +5153,6 @@
               <button class="vp-reg2-copy-btn" data-memo="${esc(memoText)}" onclick="(async(b)=>{try{await navigator.clipboard.writeText(b.dataset.memo);b.textContent='Copied!';setTimeout(()=>b.textContent='Copy Memo',1800);}catch(e){}})(this)">Copy Memo</button>` : ''}
               ${rawInstructions && !payEmail ? `<div style="font-size:0.73rem;color:#5a5070;margin-top:0.4rem;white-space:pre-line;">${esc(rawInstructions)}</div>` : ''}
             </div>
-
             <div class="vp-reg2-card">
               <div class="vp-reg2-card-icon">${iconDoc}</div>
               <div class="vp-reg2-card-title">Documents</div>
@@ -5136,6 +5166,7 @@
                 </div>`}
             </div>
           </div>
+          `}
 
           ${org?.email || paymentSettings?.producer_email ? `<div class="vp-reg2-footer">Questions? Email your producer at <a href="mailto:${esc(org?.email || paymentSettings?.producer_email)}">${esc(org?.email || paymentSettings?.producer_email)}</a></div>` : ''}
         </div>
