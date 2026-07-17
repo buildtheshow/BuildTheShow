@@ -5136,15 +5136,23 @@
         ...feeRows.flatMap(r => r.discounts.map(d => ({ label: d.label, amount: -d.amount, type: 'discount' }))),
       ];
 
-      // Payment schedule
-      const scheduleRows = allPay.flatMap(({ performer, pay }) => {
-        const pName = isFamily ? performerDisplayName(performer) : '';
+      // Payment schedule — one card per installment slot (combined across all performers)
+      const allScheduleRows = allPay.flatMap(({ performer, pay }) => {
         return (pay.installments || []).map((inst, i) => {
           const rec  = (pay.records || []).find(r => r.installment_index === i);
           const paid = !!rec?.paid;
           const amount = paymentRecordAmount(rec || {}, inst);
-          return { label: inst.label || `Payment ${i + 1}`, amount: paid ? amount : (inst.amount || 0), dueDate: inst.dueDate || '', paid, paidAt: rec?.paid_at || '', pName };
+          return { label: inst.label || `Payment ${i + 1}`, amount: paid ? amount : (inst.amount || 0), dueDate: inst.dueDate || '', paid, paidAt: rec?.paid_at || '' };
         });
+      });
+      // Collapse to one card per installment index: paid only if ALL performers paid it; worst status wins
+      const slotCount = allPay[0]?.pay?.installments?.length || 0;
+      const scheduleRows = Array.from({ length: slotCount }, (_, i) => {
+        const slots = allScheduleRows.filter(r => r.label === (allPay[0]?.pay?.installments?.[i]?.label || `Payment ${i + 1}`));
+        const allPaid = slots.length > 0 && slots.every(r => r.paid);
+        const anyPaid = slots.some(r => r.paid);
+        const base = slots[0] || { label: `Payment ${i + 1}`, amount: 0, dueDate: '', paid: false, paidAt: '' };
+        return { ...base, paid: allPaid, paidAt: allPaid ? base.paidAt : '' };
       });
       const nextInst      = scheduleRows.find(r => !r.paid);
       const daysUntilNext = nextInst?.dueDate ? Math.ceil((new Date(nextInst.dueDate) - new Date()) / 86400000) : null;
