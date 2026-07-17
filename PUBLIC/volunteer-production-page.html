@@ -5865,10 +5865,12 @@
               if (hh) (hh.member_ids || []).forEach(mid => { if (!_foundIds.has(String(mid))) _siblingAssignIds.push(String(mid)); });
             });
             if (!_siblingAssignIds.length) return;
-            const { data: sibAssign } = await sb.from('casting_assignments')
+            const { data: sibAssign, error: sibErr } = await sb.from('casting_assignments')
               .select('id,applicant_id,character_id,state,volunteer_discount_approved,volunteer_hours_completed,volunteer_signup_ids,volunteer_signup_name,scholarship_status,scholarship_amount')
+              .eq('production_id', prod.id)
               .in('id', _siblingAssignIds)
               .in('state', ['chosen', 'ensemble_manual', 'offer_accepted', 'offer_declined']);
+            if (sibErr) { console.warn('[BTS portal] sibling assignment query failed', sibErr); return; }
             if (!sibAssign?.length) return;
             const sibPayMap = new Map();
             try {
@@ -6506,7 +6508,6 @@
         }
         if (!prodData) { showOnly('vp-notfound'); return; }
         prod = prodData;
-        console.log('[BTS HOUSEHOLD DEBUG] registration_households:', JSON.stringify(prod.registration_households));
         paymentSettings = Object.assign({}, prod.registration_settings?.payment_settings || {});
 
         org = { id: prod.organization_id, name: orgSlug, email: null };
