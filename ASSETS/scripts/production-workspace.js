@@ -22284,7 +22284,7 @@ See you soon!
 
         // Collect suggested members by typed registration names and last-name fallback (don't auto-check them)
         _rptCastItems.forEach(item => {
-          const id = String(item.assignment?.id || '');
+          const id = String(item.app?.id || '');
           if (rptHouseholdNameMatches(item.app?.name, siblingEntries, siblingLasts))
             suggestedMembers.push({ id, name: String(item.app?.name || 'Cast Member').trim() });
         });
