@@ -3860,12 +3860,19 @@
         assignments.forEach(a => {
           const hh = households.find(h => {
             const mids = (h.member_ids || []).map(String);
-            return mids.includes(String(a.id)) || mids.includes(String(a.applicant_id));
+            const memberAssignIds = (h.members || []).map(m => String(m.assignment_id || '')).filter(Boolean);
+            return mids.includes(String(a.id)) || mids.includes(String(a.applicant_id))
+              || memberAssignIds.includes(String(a.id));
           });
-          if (hh) (hh.member_ids || []).forEach(mid => {
-            if (!foundAssignIds.has(String(mid)) && !foundApplicantIds.has(String(mid)))
-              siblingMemberIds.push(String(mid));
-          });
+          if (hh) {
+            // Prefer members[].assignment_id (reliable assignment IDs) over raw member_ids (may be mixed)
+            const memberAssignIds = (hh.members || []).map(m => String(m.assignment_id || '')).filter(Boolean);
+            const idsToCheck = memberAssignIds.length ? memberAssignIds : (hh.member_ids || []).map(String);
+            idsToCheck.forEach(mid => {
+              if (!foundAssignIds.has(mid) && !foundApplicantIds.has(mid))
+                siblingMemberIds.push(mid);
+            });
+          }
         });
         const uniqueSibMemberIds = [...new Set(siblingMemberIds)];
         if (uniqueSibMemberIds.length && prod?.id) {
