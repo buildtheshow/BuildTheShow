@@ -3717,15 +3717,19 @@
         } catch (_) {}
       }
 
-      // 3. Email — last resort
+      // 3. Email — finds all family members sharing the same email (siblings, parent registrations)
       const emails = [...new Set(apps.map(a => String(a.email || '').toLowerCase().trim()).filter(Boolean))];
+      const emailFoundApps = new Map(); // Cache full records so sibling block can use names/headshots
       if (emails.length) {
         try {
           const { data } = await sb.from('audition_applications')
-            .select('id')
+            .select('id,name,email,dob,custom_answers,headshot_url,booking_id,portal_code')
             .eq('production_id', prod.id)
             .in('email', emails);
-          if (data?.length) _addAppIds(data.map(r => r.id));
+          if (data?.length) {
+            _addAppIds(data.map(r => r.id));
+            data.forEach(r => emailFoundApps.set(String(r.id), r));
+          }
         } catch (_) {}
       }
 
@@ -3798,26 +3802,22 @@
       const siblingAssignments = assignments.filter(a => !coveredAssignIds.has(String(a.id)));
       if (siblingAssignments.length) {
         const sibApplicantIds = [...new Set(siblingAssignments.map(a => a.applicant_id).filter(Boolean))];
-        const sibAppMap = new Map();
-        // Load sibling app records — try multiple strategies to handle both app and booking IDs
-        try {
-          const { data } = await sb.from('audition_applications').select('id,name,email,dob,custom_answers,headshot_url,booking_id,portal_code').eq('production_id', prod.id).in('id', sibApplicantIds);
-          (data || []).forEach(a => sibAppMap.set(String(a.id), a));
-        } catch (_) {}
-        // Fallback: query by the portal email for this production (catches cases where IDs are booking IDs or production_id not set)
-        const sibEmails = [...new Set(apps.map(a => String(a.email || '').toLowerCase()).filter(Boolean))];
-        if (sibEmails.length && sibApplicantIds.some(id => !sibAppMap.has(id))) {
+        // Pre-populate from the email lookup cache — those records were already fetched successfully
+        const sibAppMap = new Map(emailFoundApps);
+        // Fill any gaps with a direct ID lookup
+        const stillMissing = sibApplicantIds.filter(id => !sibAppMap.has(id));
+        if (stillMissing.length) {
           try {
-            const { data } = await sb.from('audition_applications').select('id,name,email,dob,custom_answers,headshot_url,booking_id,portal_code').eq('production_id', prod.id).in('email', sibEmails);
-            (data || []).forEach(a => { if (!sibAppMap.has(String(a.id))) sibAppMap.set(String(a.id), a); });
+            const { data } = await sb.from('audition_applications').select('id,name,email,dob,custom_answers,headshot_url,booking_id,portal_code').in('id', stillMissing);
+            (data || []).forEach(a => sibAppMap.set(String(a.id), a));
           } catch (_) {}
-        }
-        const missingIds = sibApplicantIds.filter(id => !sibAppMap.has(id));
-        if (missingIds.length) {
-          try {
-            const { data } = await sb.from('audition_bookings').select('id,name,email,dob,custom_answers,headshot_url').in('id', missingIds);
-            (data || []).forEach(b => sibAppMap.set(String(b.id), b));
-          } catch (_) {}
+          const bookingMissing = stillMissing.filter(id => !sibAppMap.has(id));
+          if (bookingMissing.length) {
+            try {
+              const { data } = await sb.from('audition_bookings').select('id,name,email,dob,custom_answers,headshot_url').in('id', bookingMissing);
+              (data || []).forEach(b => sibAppMap.set(String(b.id), b));
+            } catch (_) {}
+          }
         }
         const sibGrouped = new Map();
         siblingAssignments.forEach(sa => {
