@@ -3904,11 +3904,18 @@
               (sibPay || []).forEach(r => { const k = String(r.casting_assignment_id); if (!sibPayMap.has(k)) sibPayMap.set(k, []); sibPayMap.get(k).push(r); });
             } catch (_) {}
             const sibApplicantIds = [...new Set(sibAssign.map(a => a.applicant_id).filter(Boolean))];
-            // Seed from email cache (already has both audition_applications + audition_bookings records)
+            // Build a map from assignment_id → member data using the rich members array saved by the admin
+            const hhMemberByAssignId = new Map();
+            households.forEach(hh => (hh.members || []).forEach(m => { if (m.assignment_id) hhMemberByAssignId.set(String(m.assignment_id), m); }));
+            // Seed from email cache AND from the pre-saved household members array
             const sibAppMap = new Map();
             emailFoundApps.forEach((record, id) => {
               sibAppMap.set(id, record);
               if (record.booking_id) sibAppMap.set(String(record.booking_id), record);
+            });
+            // Also seed from the household members array (has name/email/headshot saved at creation time)
+            hhMemberByAssignId.forEach(m => {
+              if (m.applicant_id) sibAppMap.set(String(m.applicant_id), { id: m.applicant_id, name: m.name, email: m.email, headshot_url: m.headshot_url });
             });
             const missingIds = sibApplicantIds.filter(id => !sibAppMap.has(String(id)));
             if (missingIds.length) {
@@ -3935,7 +3942,8 @@
             const grouped = new Map();
             sibAssign.forEach(sa => {
               if (baseAssignIds.has(String(sa.id))) return;
-              const app = sibAppMap.get(String(sa.applicant_id)) || { id: sa.applicant_id, name: '' };
+              const hhMember = hhMemberByAssignId.get(String(sa.id));
+              const app = sibAppMap.get(String(sa.applicant_id)) || (hhMember ? { id: sa.applicant_id, name: hhMember.name, email: hhMember.email, headshot_url: hhMember.headshot_url } : { id: sa.applicant_id, name: '' });
               const charName = sa.character_id ? (charMap.get(String(sa.character_id)) || '') : 'Ensemble';
               const key = String(sa.applicant_id);
               if (!grouped.has(key)) grouped.set(key, { app, assignments: [], roles: [] });

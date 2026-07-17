@@ -22356,11 +22356,22 @@ See you soon!
     }
     const checked = [...document.querySelectorAll('#rpt-household-modal .rpt-household-modal-member input:checked')];
     const memberIds = checked.map(cb => cb.value).filter(Boolean);
-    let updated = _rptHouseholds.map(h => ({ ...h, member_ids: (h.member_ids || []).filter(id => !memberIds.includes(id)) })).filter(h => (h.member_ids || []).length > 0 || h.id === _rptHouseholdModalEditId);
+    // Embed full member data so the portal never needs to do ID lookups
+    const members = memberIds.map(assignId => {
+      const item = _rptCastItems.find(i => String(i.assignment?.id) === assignId);
+      return {
+        assignment_id: assignId,
+        applicant_id: String(item?.assignment?.applicant_id || item?.app?.id || ''),
+        name: String(item?.app?.name || ''),
+        email: String(item?.app?.email || ''),
+        headshot_url: String(item?.app?.headshot_url || ''),
+      };
+    }).filter(m => m.assignment_id);
+    let updated = _rptHouseholds.map(h => ({ ...h, member_ids: (h.member_ids || []).filter(id => !memberIds.includes(id)), members: (h.members || []).filter(m => !memberIds.includes(m.assignment_id)) })).filter(h => (h.member_ids || []).length > 0 || h.id === _rptHouseholdModalEditId);
     if (_rptHouseholdModalEditId) {
-      updated = updated.map(h => h.id === _rptHouseholdModalEditId ? { ...h, name, member_ids: memberIds } : h);
+      updated = updated.map(h => h.id === _rptHouseholdModalEditId ? { ...h, name, member_ids: memberIds, members } : h);
     } else {
-      updated.push({ id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()), name, member_ids: memberIds });
+      updated.push({ id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()), name, member_ids: memberIds, members });
     }
     const saveBtn = document.querySelector('#rpt-household-modal .rpt-modal-save-btn');
     if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
