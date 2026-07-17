@@ -22308,7 +22308,7 @@ See you soon!
       <div class="rpt-household-modal-section-label">Members</div>
       <input class="rpt-household-modal-input" id="rpt-hh-search" placeholder="Search cast members…" oninput="rptFilterHouseholdMembers(this.value)" style="margin-bottom:0.25rem;" />
       <div class="rpt-household-modal-members" id="rpt-hh-members">${sortedCastItems.map(item => {
-        const id = String(item.app?.id || '');
+        const id = String(item.assignment?.id || '');
         return `<label class="rpt-household-modal-member${checkedIds.has(id) ? ' selected' : ''}"><input type="checkbox" value="${esc(id)}" ${checkedIds.has(id) ? 'checked' : ''} onchange="this.closest('.rpt-household-modal-member')?.classList.toggle('selected', this.checked)" /><span>${esc(String(item.app?.name || 'Cast Member').trim())}</span></label>`;
       }).join('')}</div>
       <div class="rpt-household-modal-actions">

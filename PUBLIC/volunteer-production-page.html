@@ -3795,34 +3795,33 @@
         const households = Array.isArray(prod?.registration_households) ? prod.registration_households : [];
         console.log('[BTS HH] households:', households.length, '| assignment ids:', assignments.map(a=>a.id));
         console.log('[BTS HH] all member_ids in households:', households.flatMap(h => h.member_ids || []));
-        const foundApplicantIds = new Set(assignments.map(a => String(a.applicant_id)));
-        const siblingApplicantIds = [];
+        const foundIds = new Set(assignments.map(a => String(a.id)));
+        const siblingAssignIds = [];
         assignments.forEach(a => {
-          const hh = households.find(h => (h.member_ids || []).map(String).includes(String(a.applicant_id)));
-          if (hh) (hh.member_ids || []).forEach(mid => { if (!foundApplicantIds.has(String(mid))) siblingApplicantIds.push(String(mid)); });
+          const hh = households.find(h => (h.member_ids || []).map(String).includes(String(a.id)));
+          if (hh) (hh.member_ids || []).forEach(mid => { if (!foundIds.has(String(mid))) siblingAssignIds.push(String(mid)); });
         });
-        console.log('[BTS HH] siblingApplicantIds:', siblingApplicantIds);
-        if (siblingApplicantIds.length && prod?.id) {
+        console.log('[BTS HH] siblingAssignIds:', siblingAssignIds);
+        if (siblingAssignIds.length && prod?.id) {
           const { data: sibAssign, error: sibErr } = await sb.from('casting_assignments')
             .select('id,applicant_id,character_id,state,volunteer_discount_approved,volunteer_hours_completed,volunteer_role_notes,volunteer_signup_ids,volunteer_signup_name,scholarship_status,scholarship_amount,reg_payment_notes')
             .eq('production_id', prod.id)
-            .in('applicant_id', siblingApplicantIds)
+            .in('id', siblingAssignIds)
             .in('state', ['chosen', 'ensemble_manual', 'offer_accepted', 'offer_declined']);
           if (!sibErr && sibAssign?.length) {
-            const sibAssignIds = sibAssign.map(a => String(a.id)).filter(Boolean);
             const sibPayMap = new Map();
             try {
               const { data: sibPay } = await sb.from('registration_payment_records')
-                .select('*').in('casting_assignment_id', sibAssignIds).order('installment_index', { ascending: true });
+                .select('*').in('casting_assignment_id', siblingAssignIds).order('installment_index', { ascending: true });
               (sibPay || []).forEach(r => { const k = String(r.casting_assignment_id); if (!sibPayMap.has(k)) sibPayMap.set(k, []); sibPayMap.get(k).push(r); });
             } catch (_) {}
-            const sibLoadApplicantIds = [...new Set(sibAssign.map(a => a.applicant_id).filter(Boolean))];
+            const sibApplicantIds = [...new Set(sibAssign.map(a => a.applicant_id).filter(Boolean))];
             const sibAppMap = new Map();
             try {
-              const { data: sibApps } = await sb.from('audition_applications').select('id,name,email,dob,custom_answers,headshot_url,booking_id,portal_code').in('id', sibLoadApplicantIds);
+              const { data: sibApps } = await sb.from('audition_applications').select('id,name,email,dob,custom_answers,headshot_url,booking_id,portal_code').in('id', sibApplicantIds);
               (sibApps || []).forEach(a => sibAppMap.set(String(a.id), a));
             } catch (_) {}
-            const missingIds = sibLoadApplicantIds.filter(id => !sibAppMap.has(String(id)));
+            const missingIds = sibApplicantIds.filter(id => !sibAppMap.has(String(id)));
             if (missingIds.length) {
               try {
                 const { data: sibBooks } = await sb.from('audition_bookings').select('id,name,email,dob,custom_answers,headshot_url').in('id', missingIds);
