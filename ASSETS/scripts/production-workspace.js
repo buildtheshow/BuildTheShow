@@ -22260,12 +22260,20 @@ See you soon!
   function rptOpenHouseholdModal(preselectedId = null, editId = null) {
     _rptHouseholdModalEditId = editId;
     const existing = editId ? _rptHouseholds.find(h => h.id === editId) : null;
-    const checkedIds = new Set(existing?.member_ids || (preselectedId ? [preselectedId] : []));
+    // Resolve stored member_ids (may be old casting_assignment IDs or new applicant IDs)
+    // Map them all to applicant IDs so checkboxes pre-select correctly
+    const storedIds = new Set((existing?.member_ids || (preselectedId ? [preselectedId] : [])).map(String));
+    const checkedIds = new Set(
+      _rptCastItems
+        .filter(item => storedIds.has(String(item.app?.id || '')) || storedIds.has(String(item.assignment?.id || '')))
+        .map(item => String(item.app?.id || ''))
+        .filter(Boolean)
+    );
     let suggestedName = existing?.name || '';
     let suggestedMembers = []; // {id, name} — shown as a suggestion panel, NOT auto-checked
 
     if (preselectedId && !editId) {
-      const requester = _rptCastItems.find(i => String(i.assignment?.id) === String(preselectedId));
+      const requester = _rptCastItems.find(i => String(i.app?.id) === String(preselectedId) || String(i.assignment?.id) === String(preselectedId));
       if (requester) {
         const _lastName = n => String(n || '').trim().split(/\s+/).pop();
         const requesterLast = _lastName(requester.app?.name).toLowerCase();
