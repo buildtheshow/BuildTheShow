@@ -3900,17 +3900,25 @@
               (sibPay || []).forEach(r => { const k = String(r.casting_assignment_id); if (!sibPayMap.has(k)) sibPayMap.set(k, []); sibPayMap.get(k).push(r); });
             } catch (_) {}
             const sibApplicantIds = [...new Set(sibAssign.map(a => a.applicant_id).filter(Boolean))];
+            // Seed from email cache (already has both audition_applications + audition_bookings records)
             const sibAppMap = new Map();
-            try {
-              const { data: sibApps } = await sb.from('audition_applications').select('id,name,email,dob,custom_answers,headshot_url,booking_id,portal_code').in('id', sibApplicantIds);
-              (sibApps || []).forEach(a => sibAppMap.set(String(a.id), a));
-            } catch (_) {}
+            emailFoundApps.forEach((record, id) => {
+              sibAppMap.set(id, record);
+              if (record.booking_id) sibAppMap.set(String(record.booking_id), record);
+            });
             const missingIds = sibApplicantIds.filter(id => !sibAppMap.has(String(id)));
             if (missingIds.length) {
               try {
-                const { data: sibBooks } = await sb.from('audition_bookings').select('id,name,email,dob,custom_answers,headshot_url').in('id', missingIds);
-                (sibBooks || []).forEach(b => sibAppMap.set(String(b.id), b));
+                const { data: sibApps } = await sb.from('audition_applications').select('id,name,email,dob,custom_answers,headshot_url,booking_id,portal_code').in('id', missingIds);
+                (sibApps || []).forEach(a => { sibAppMap.set(String(a.id), a); if (a.booking_id) sibAppMap.set(String(a.booking_id), a); });
               } catch (_) {}
+              const stillMissingIds = missingIds.filter(id => !sibAppMap.has(String(id)));
+              if (stillMissingIds.length) {
+                try {
+                  const { data: sibBooks } = await sb.from('audition_bookings').select('id,name,email,dob,custom_answers').in('id', stillMissingIds);
+                  (sibBooks || []).forEach(b => sibAppMap.set(String(b.id), b));
+                } catch (_) {}
+              }
             }
             const sibCharIds = [...new Set(sibAssign.map(a => a.character_id).filter(Boolean))];
             if (sibCharIds.length) {
