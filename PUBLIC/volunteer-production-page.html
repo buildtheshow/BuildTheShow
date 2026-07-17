@@ -4652,8 +4652,13 @@
     }
     function portalHouseholdForAssignment(assignmentId) {
       const id = String(assignmentId || '');
+      if (!id) return null;
       return (Array.isArray(prod?.registration_households) ? prod.registration_households : [])
-        .find(h => (h.member_ids || []).map(String).includes(id)) || null;
+        .find(h => {
+          const mids = (h.member_ids || []).map(String);
+          const memberAssignIds = (h.members || []).map(m => String(m.assignment_id || '')).filter(Boolean);
+          return mids.includes(id) || memberAssignIds.includes(id);
+        }) || null;
     }
     function portalAssignmentEarnedVolunteerDiscount(assignment = {}) {
       if (assignment.volunteer_discount_approved) return true;
@@ -4702,9 +4707,7 @@
           parts.push('Sibling rate');
         }
       }
-      const volunteerApplies = household
-        ? householdPos === 0 && portalHouseholdVolunteerDiscountEarned(household)
-        : portalAssignmentEarnedVolunteerDiscount(assignment);
+      const volunteerApplies = portalAssignmentEarnedVolunteerDiscount(assignment);
       const volAdj = paymentSettings.volunteer_discount_enabled && volunteerApplies
         ? parseFloat(String(paymentSettings.volunteer_discount || '').replace(/[^0-9.]/g, '')) || 0
         : 0;
