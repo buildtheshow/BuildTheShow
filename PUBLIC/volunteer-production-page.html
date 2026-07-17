@@ -3793,24 +3793,37 @@
       // Household expansion: load sibling cast members using admin-configured households
       try {
         const households = Array.isArray(prod?.registration_households) ? prod.registration_households : [];
-        console.log('[BTS HH] households:', households.length, '| assignment ids:', assignments.map(a=>a.id));
-        const foundIds = new Set(assignments.map(a => String(a.id)));
-        const siblingAssignIds = [];
+        // Match on both assignment ID and applicant_id — member_ids may store either type
+        const foundAssignIds = new Set(assignments.map(a => String(a.id)));
+        const foundApplicantIds = new Set(assignments.map(a => String(a.applicant_id)).filter(Boolean));
+        const siblingMemberIds = [];
         assignments.forEach(a => {
-          const hh = households.find(h => (h.member_ids || []).map(String).includes(String(a.id)));
-          if (hh) (hh.member_ids || []).forEach(mid => { if (!foundIds.has(String(mid))) siblingAssignIds.push(String(mid)); });
+          const hh = households.find(h => {
+            const mids = (h.member_ids || []).map(String);
+            return mids.includes(String(a.id)) || mids.includes(String(a.applicant_id));
+          });
+          if (hh) (hh.member_ids || []).forEach(mid => {
+            if (!foundAssignIds.has(String(mid)) && !foundApplicantIds.has(String(mid)))
+              siblingMemberIds.push(String(mid));
+          });
         });
-        if (siblingAssignIds.length && prod?.id) {
-          const { data: sibAssign, error: sibErr } = await sb.from('casting_assignments')
-            .select('id,applicant_id,character_id,state,volunteer_discount_approved,volunteer_hours_completed,volunteer_role_notes,volunteer_signup_ids,volunteer_signup_name,scholarship_status,scholarship_amount,reg_payment_notes')
-            .eq('production_id', prod.id)
-            .in('id', siblingAssignIds)
-            .in('state', ['chosen', 'ensemble_manual', 'offer_accepted', 'offer_declined']);
+        const uniqueSibMemberIds = [...new Set(siblingMemberIds)];
+        if (uniqueSibMemberIds.length && prod?.id) {
+          const states = ['chosen', 'ensemble_manual', 'offer_accepted', 'offer_declined'];
+          const sel = 'id,applicant_id,character_id,state,volunteer_discount_approved,volunteer_hours_completed,volunteer_role_notes,volunteer_signup_ids,volunteer_signup_name,scholarship_status,scholarship_amount,reg_payment_notes';
+          // Query by both id and applicant_id — works regardless of which type member_ids stores
+          const [byId, byApplicant] = await Promise.all([
+            sb.from('casting_assignments').select(sel).eq('production_id', prod.id).in('id', uniqueSibMemberIds).in('state', states),
+            sb.from('casting_assignments').select(sel).eq('production_id', prod.id).in('applicant_id', uniqueSibMemberIds).in('state', states),
+          ]);
+          const seen = new Set();
+          const sibAssign = [...(byId.data || []), ...(byApplicant.data || [])].filter(r => { if (seen.has(r.id)) return false; seen.add(r.id); return true; });
+          const sibErr = byId.error && byApplicant.error ? byId.error : null;
           if (!sibErr && sibAssign?.length) {
             const sibPayMap = new Map();
             try {
               const { data: sibPay } = await sb.from('registration_payment_records')
-                .select('*').in('casting_assignment_id', siblingAssignIds).order('installment_index', { ascending: true });
+                .select('*').in('casting_assignment_id', sibAssignIds).order('installment_index', { ascending: true });
               (sibPay || []).forEach(r => { const k = String(r.casting_assignment_id); if (!sibPayMap.has(k)) sibPayMap.set(k, []); sibPayMap.get(k).push(r); });
             } catch (_) {}
             const sibApplicantIds = [...new Set(sibAssign.map(a => a.applicant_id).filter(Boolean))];
