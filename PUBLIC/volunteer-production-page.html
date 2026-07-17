@@ -3777,7 +3777,68 @@
       }
       // Prefer assignments that have payment records (when there are duplicates, pick the one with data)
       assignments.sort((a, b) => (paymentMap.has(String(b.id)) ? 1 : 0) - (paymentMap.has(String(a.id)) ? 1 : 0));
-      return apps.map(app => {
+
+      // Household expansion: if any found assignment is in a household, load sibling assignments too
+      const _households = Array.isArray(prod?.registration_households) ? prod.registration_households : [];
+      const _foundIds = new Set(assignments.map(a => String(a.id)));
+      const _siblingAssignIds = [];
+      assignments.forEach(a => {
+        const hh = _households.find(h => (h.member_ids || []).map(String).includes(String(a.id)));
+        if (hh) {
+          (hh.member_ids || []).forEach(mid => { if (!_foundIds.has(String(mid))) _siblingAssignIds.push(String(mid)); });
+        }
+      });
+      let _siblingPerformers = [];
+      if (_siblingAssignIds.length) {
+        try {
+          const { data: sibAssign } = await sb.from('casting_assignments')
+            .select('id,applicant_id,character_id,state,created_at,volunteer_discount_approved,volunteer_hours_completed,volunteer_role_notes,volunteer_signup_ids,volunteer_signup_name,scholarship_status,scholarship_amount,reg_payment_notes')
+            .in('id', _siblingAssignIds)
+            .in('state', ['chosen', 'ensemble_manual', 'offer_accepted', 'offer_declined']);
+          if (sibAssign?.length) {
+            // Payment records for siblings
+            const sibPayMap = new Map();
+            try {
+              const { data: sibPay } = await sb.from('registration_payment_records')
+                .select('*').in('casting_assignment_id', _siblingAssignIds).order('installment_index', { ascending: true });
+              (sibPay || []).forEach(r => {
+                const k = String(r.casting_assignment_id);
+                if (!sibPayMap.has(k)) sibPayMap.set(k, []);
+                sibPayMap.get(k).push(r);
+              });
+            } catch (_) {}
+            // Load sibling apps (try applications first, then bookings)
+            const sibApplicantIds = [...new Set(sibAssign.map(a => a.applicant_id).filter(Boolean))];
+            const sibAppMap = new Map();
+            try {
+              const { data: sibApps } = await sb.from('audition_applications').select('*').in('id', sibApplicantIds);
+              (sibApps || []).forEach(a => sibAppMap.set(String(a.id), a));
+            } catch (_) {}
+            const missingIds = sibApplicantIds.filter(id => !sibAppMap.has(String(id)));
+            if (missingIds.length) {
+              try {
+                const { data: sibBooks } = await sb.from('audition_bookings').select('*').in('id', missingIds);
+                (sibBooks || []).forEach(b => sibAppMap.set(String(b.id), { ...b, _from_booking: true }));
+              } catch (_) {}
+            }
+            // Fetch sibling characters not already in charMap
+            const sibCharIds = [...new Set(sibAssign.map(a => a.character_id).filter(id => id && !charMap.has(String(id))))];
+            if (sibCharIds.length) {
+              try {
+                const { data: sibChars } = await sb.from('production_characters').select('id,name').in('id', sibCharIds);
+                (sibChars || []).forEach(c => charMap.set(String(c.id), c.name));
+              } catch (_) {}
+            }
+            _siblingPerformers = sibAssign.map(sa => {
+              const app = sibAppMap.get(String(sa.applicant_id)) || { id: sa.applicant_id, name: '' };
+              const charName = sa.character_id ? (charMap.get(String(sa.character_id)) || '') : 'Ensemble';
+              return { app, assignments: [{ ...sa, role_name: charName, payment_records: sibPayMap.get(String(sa.id)) || [] }], roles: [charName].filter(Boolean) };
+            });
+          }
+        } catch (err) { console.warn('[BTS portal] household sibling expansion failed', err); }
+      }
+
+      const _basePerformers = apps.map(app => {
         const ca = applicantCustomAnswers(app);
         const rows = assignments.filter(row => promotedIds.includes(String(row.applicant_id)));
         const roles = rows.map(row => row.character_id ? (charMap.get(String(row.character_id)) || '') : 'Ensemble').filter(Boolean);
@@ -3788,6 +3849,10 @@
           roles: [...new Set(roles.length ? roles : fallbackRoles)],
         };
       });
+      // Deduplicate siblings already found via email/code
+      const _allPerformerAssignIds = new Set(_basePerformers.flatMap(p => (p.assignments || []).map(a => String(a.id))));
+      const _dedupedSiblings = _siblingPerformers.filter(p => !(p.assignments || []).some(a => _allPerformerAssignIds.has(String(a.id))));
+      return [..._basePerformers, ..._dedupedSiblings];
     }
     async function loadVolunteerLinkedPerformers(signups = []) {
       if (!prod?.id || !Array.isArray(signups) || !signups.length) return [];
