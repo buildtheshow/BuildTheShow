@@ -1669,6 +1669,28 @@
       box-shadow: 0 4px 14px rgba(0,0,0,0.04);
       overflow: hidden;
     }
+    .vpd-bv-card--past {
+      background: #fcfbfe;
+      box-shadow: none;
+      opacity: 0.68;
+      filter: saturate(0.55);
+    }
+    .vpd-bv-card--past .vpd-type-bar { background: #b8b2c4 !important; }
+    .vpd-bv-card--past .vpd-date-tile-top { background: #b8b2c4 !important; }
+    .vpd-bv-card--past .vpd-date-month,
+    .vpd-bv-card--past .vpd-date-year,
+    .vpd-bv-card--past .vpd-date-day,
+    .vpd-bv-card--past .vpd-shift-role,
+    .vpd-bv-card--past .vpd-shift-value,
+    .vpd-bv-card--past .vpd-shift-time,
+    .vpd-bv-card--past .vpd-shift-people,
+    .vpd-bv-card--past .vpd-shift-notes {
+      color: #8f8a9d !important;
+    }
+    .vpd-bv-card--past .vpd-shift-dept,
+    .vpd-bv-card--past .vpd-shift-notes strong {
+      color: rgba(87,46,136,0.48) !important;
+    }
     .vpd-bv-card > .vpd-type-bar { margin: 0; padding: 0.24rem 0.9rem; }
     .vpd-bv-body {
       display: grid;
@@ -4150,6 +4172,36 @@
       if (row.isDeadline && row.shift_end_time) return `By ${fmtTime(row.shift_end_time)}`;
       return fmtTimeRange(row.shift_start_time, row.shift_end_time) || 'Flexible';
     }
+    function portalIsPastDateValue(dateValue = '') {
+      const raw = String(dateValue || '').slice(0, 10);
+      if (!raw) return false;
+      const d = new Date(`${raw}T12:00:00`);
+      if (isNaN(d)) return false;
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      return d < today;
+    }
+    function portalScheduleSortValue(item = {}) {
+      const raw = String(item.date || item.shift_date || '').slice(0, 10);
+      const base = raw ? new Date(`${raw}T12:00:00`) : null;
+      if (!base || isNaN(base)) return Number.MAX_SAFE_INTEGER;
+      const sourceStart = String(item.source?.start_time || item.source_item?.source?.start_time || '').trim();
+      if (sourceStart) {
+        const sourceDate = new Date(sourceStart);
+        if (!isNaN(sourceDate)) return sourceDate.getTime();
+      }
+      const timeText = String(item.time || item.display_time || '').trim().toLowerCase();
+      const match = timeText.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/);
+      if (match) {
+        let hour = parseInt(match[1], 10);
+        const minute = parseInt(match[2] || '0', 10);
+        const meridiem = match[3];
+        if (meridiem === 'pm' && hour !== 12) hour += 12;
+        if (meridiem === 'am' && hour === 12) hour = 0;
+        base.setHours(hour, minute, 0, 0);
+      }
+      return base.getTime();
+    }
     function dashboardShiftStartText(row = {}) {
       return fmtTime(row.shift_start_time) || 'Flexible';
     }
@@ -4313,6 +4365,7 @@
       const peopleLabel = portalRowPeopleLabel(row);
       const compactPlace = isPayment ? '' : (placeText || 'TBD');
       const notesText = String(row.row_notes || row.notes || row.note || '').trim();
+      const pastClass = row.is_past ? ' vpd-bv-card--past' : '';
       if (compact) {
         const BV_ICONS = {
           rehearsal:       '/ASSETS/Images/Icons/Rehearsals.svg',
@@ -4335,7 +4388,7 @@
         };
         if (row.item_kind === 'volunteer') {
           const volIconSrc = DEPT_ICONS[row.source_dept] || '/ASSETS/Images/Icons/Volunteers.svg';
-          return `<article class="vpd-bv-card" style="border-left:4px solid ${deptCol};">
+          return `<article class="vpd-bv-card${pastClass}" style="border-left:4px solid ${deptCol};">
             <div class="vpd-type-bar" style="background:${deptCol};">${esc(row.department)}</div>
             <div class="vpd-bv-body">
               ${dashboardShiftDateBadgeHtml(row, deptCol, { ...options, hideYear: false })}
@@ -4360,7 +4413,7 @@
           const performanceNumber = portalPerformanceNumber(row);
           const showTitle = prod?.title || prod?.name || 'This production';
           const performanceHours = portalEventDurationHours(sourceEvent);
-          return `<article class="vpd-bv-card vpd-bv-card--performance" style="border-left:4px solid ${perfCol};">
+          return `<article class="vpd-bv-card vpd-bv-card--performance${pastClass}" style="border-left:4px solid ${perfCol};">
             <div class="vpd-type-bar" style="background:${perfCol};">Performance</div>
             <div class="vpd-bv-body">
               ${dashboardShiftDateBadgeHtml(row, perfCol, { ...options, hideYear: false })}
@@ -4380,7 +4433,7 @@
           </article>`;
         }
         // Rehearsal / deadline / other card
-        return `<article class="vpd-bv-card" style="border-left:4px solid ${deptCol};">
+        return `<article class="vpd-bv-card${pastClass}" style="border-left:4px solid ${deptCol};">
           <div class="vpd-type-bar" style="background:${deptCol};">${esc(row.department)}</div>
           <div class="vpd-bv-body">
             ${dashboardShiftDateBadgeHtml(row, deptCol, { ...options, hideYear: false })}
@@ -5544,7 +5597,16 @@
         source: ev,
       }));
       const events = performerCalItems; // kept for calendar rendering
-      const breakdownRows = performerCalItems.map(item => portalCalendarItemToBreakdownRow(item, currentPortalData?.email || ''));
+      const sortedScheduleItems = [...performerCalItems].sort((a, b) => {
+        const aPast = portalIsPastDateValue(a.date);
+        const bPast = portalIsPastDateValue(b.date);
+        if (aPast !== bPast) return Number(aPast) - Number(bPast);
+        return portalScheduleSortValue(a) - portalScheduleSortValue(b);
+      });
+      const breakdownRows = sortedScheduleItems.map(item => ({
+        ...portalCalendarItemToBreakdownRow(item, currentPortalData?.email || ''),
+        is_past: portalIsPastDateValue(item.date),
+      }));
       const castingCardsHtml = performers.map(item => {
         const app = item.app || {};
         const ca = applicantCustomAnswers(app);
