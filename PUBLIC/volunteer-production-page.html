@@ -3627,6 +3627,40 @@
         ca['Parent Email'],
       ].map(normalizePortalEmail).filter(Boolean);
     }
+    function applicantContactPhone(app = {}) {
+      const ca = applicantCustomAnswers(app);
+      return [
+        app.phone,
+        app.phone_number,
+        app.contact_phone,
+        app.guardian_phone,
+        ca['Phone'],
+        ca['phone'],
+        ca['Contact phone'],
+        ca['Contact Phone'],
+        ca['Guardian phone'],
+        ca['Guardian Phone'],
+        ca['Parent phone'],
+        ca['Parent Phone'],
+        ca['Main contact phone'],
+        ca['Main Contact Phone'],
+      ].map(value => String(value || '').trim()).find(Boolean) || '';
+    }
+    function applicantContactName(app = {}) {
+      const ca = applicantCustomAnswers(app);
+      return [
+        app.contact_name,
+        app.guardian_name,
+        ca['Contact name'],
+        ca['Contact Name'],
+        ca['Guardian name'],
+        ca['Guardian Name'],
+        ca['Parent name'],
+        ca['Parent Name'],
+        ca['Main contact name'],
+        ca['Main Contact Name'],
+      ].map(value => String(value || '').trim()).find(Boolean) || '';
+    }
     function portalApplicantMatchesEmail(app, email) {
       const wanted = normalizePortalEmail(email);
       return !!wanted && applicantEmailCandidates(app).includes(wanted);
@@ -5113,6 +5147,7 @@
       const showName = doc.showName || 'Production';
       const payerName = doc.payerName || 'Payer';
       const payerEmail = doc.payerEmail || '';
+      const payerPhone = doc.payerPhone || '';
       const orgEmail = doc.orgEmail || '';
       const orgPhone = doc.orgPhone || '';
       const invoiceNumber = doc.invoiceNumber || '';
@@ -5197,6 +5232,7 @@
         <div class="label">Bill To</div>
         <div class="value">${esc(payerName)}</div>
         ${payerEmail ? `<div class="sub">${esc(payerEmail)}</div>` : ''}
+        ${payerPhone ? `<div class="sub">${esc(payerPhone)}</div>` : ''}
         ${accountCode ? `<div class="sub">Production Code: ${esc(accountCode)}</div>` : ''}
       </div>
       <div class="meta-cell">
@@ -5445,6 +5481,10 @@
       const orgEmail = org?.contact_email || org?.email || paymentSettings?.producer_email || paymentSettings?.contact_email || '';
       const orgPhone = paymentSettings?.producer_phone || paymentSettings?.contact_phone || '';
       const accountCode = currentPortalData?.code || '';
+      const primaryContactApp = performers[0]?.app || {};
+      const contactName = applicantContactName(primaryContactApp);
+      const contactEmail = applicantEmailCandidates(primaryContactApp)[0] || currentPortalData?.email || '';
+      const contactPhone = applicantContactPhone(primaryContactApp);
       const invoiceNumber = accountCode
         ? `INV-${String(accountCode).replace(/[^0-9A-Z]+/gi, '').toUpperCase()}`
         : `INV-${String(prod?.slug || prod?.id || 'PORTAL').replace(/[^0-9A-Z]+/gi, '').toUpperCase()}`;
@@ -5462,8 +5502,9 @@
         issueDateLabel: invoiceIssueRaw ? fmtDate(invoiceIssueRaw, { short: true }) : '',
         dueDateLabel: invoiceDueRaw ? fmtDate(invoiceDueRaw, { short: true }) : '',
         accountCode,
-        payerName: isFamily ? (householdName || performerName) : performerName,
-        payerEmail: currentPortalData?.email || '',
+        payerName: contactName || (isFamily ? (householdName || performerName) : performerName),
+        payerEmail: contactEmail,
+        payerPhone: contactPhone,
         totalFeeLabel: moneyLabel(totalExpected),
         amountPaidLabel: moneyLabel(totalPaid),
         paymentDateLabel: invoiceSource?.paid_at ? fmtDate(invoiceSource.paid_at, { short: true }) : '',
