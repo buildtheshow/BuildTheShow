@@ -5113,6 +5113,12 @@
       const showName = doc.showName || 'Production';
       const payerName = doc.payerName || 'Payer';
       const payerEmail = doc.payerEmail || '';
+      const orgEmail = doc.orgEmail || '';
+      const orgPhone = doc.orgPhone || '';
+      const invoiceNumber = doc.invoiceNumber || '';
+      const issueDate = doc.issueDateLabel || '';
+      const dueDate = doc.dueDateLabel || '';
+      const accountCode = doc.accountCode || '';
       const amountPaid = doc.amountPaidLabel || '$0';
       const totalFee = doc.totalFeeLabel || '$0';
       const paymentDate = doc.paymentDateLabel || '';
@@ -5137,9 +5143,14 @@
     .brand img{max-width:190px;max-height:64px;object-fit:contain;display:block;}
     .brand-name{font-size:16px;font-weight:900;letter-spacing:0.06em;text-transform:uppercase;}
     .brand-show{font-size:14px;color:#7b7192;font-weight:700;margin-top:6px;}
+    .brand-contact{font-size:12px;color:#7b7192;line-height:1.5;margin-top:10px;}
     .title{text-align:right;}
     .title-main{font-size:18px;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;}
     .title-sub{font-size:13px;color:#7b7192;font-weight:700;margin-top:8px;}
+    .title-meta{display:grid;gap:6px;margin-top:14px;justify-items:end;}
+    .title-meta-row{display:flex;gap:10px;align-items:baseline;font-size:13px;}
+    .title-meta-row span:first-child{font-size:11px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:#9b92ae;}
+    .title-meta-row span:last-child{font-weight:800;color:#1a1530;}
     .meta{display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid #eee8f7;}
     .meta-cell{padding:22px 32px;}
     .meta-cell + .meta-cell{border-left:1px solid #eee8f7;}
@@ -5159,6 +5170,7 @@
     .total-row.balance{margin-top:8px;padding-top:14px;border-top:2px solid #1a1530;font-size:16px;font-weight:900;color:#1a1530;}
     .total-row.balance span:last-child{font-size:18px;}
     .footer{padding:22px 32px 30px;border-top:1px solid #eee8f7;font-size:13px;line-height:1.6;color:#615975;}
+    @media (max-width:700px){.top,.meta{display:grid;grid-template-columns:1fr}.title{text-align:left}.title-meta{justify-items:start}.meta-cell + .meta-cell{border-left:0;border-top:1px solid #eee8f7;}}
     @media print{body{background:#fff;padding:0}.receipt{box-shadow:none;border:none;border-radius:0}}
   </style>
 </head>
@@ -5168,20 +5180,28 @@
       <div class="brand">
         ${logoUrl ? `<img src="${esc(logoUrl)}" alt="${esc(orgName)}" />` : `<div class="brand-name">${esc(orgName)}</div>`}
         ${logoUrl ? `<div class="brand-show">${esc(orgName)}</div>` : ''}
+        ${orgEmail || orgPhone ? `<div class="brand-contact">${orgEmail ? esc(orgEmail) : ''}${orgEmail && orgPhone ? '<br />' : ''}${orgPhone ? esc(orgPhone) : ''}</div>` : ''}
       </div>
       <div class="title">
         <div class="title-main">${esc(invoiceTitle)}</div>
         <div class="title-sub">${esc(showName)}</div>
+        <div class="title-meta">
+          ${invoiceNumber ? `<div class="title-meta-row"><span>Invoice #</span><span>${esc(invoiceNumber)}</span></div>` : ''}
+          ${issueDate ? `<div class="title-meta-row"><span>Issue Date</span><span>${esc(issueDate)}</span></div>` : ''}
+          ${dueDate ? `<div class="title-meta-row"><span>Due Date</span><span>${esc(dueDate)}</span></div>` : ''}
+        </div>
       </div>
     </div>
     <div class="meta">
       <div class="meta-cell">
-        <div class="label">Paid By</div>
+        <div class="label">Bill To</div>
         <div class="value">${esc(payerName)}</div>
         ${payerEmail ? `<div class="sub">${esc(payerEmail)}</div>` : ''}
+        ${accountCode ? `<div class="sub">Production Code: ${esc(accountCode)}</div>` : ''}
       </div>
       <div class="meta-cell">
-        ${paymentDate ? `<div class="label">Updated</div><div class="value">${esc(paymentDate)}</div>` : ''}
+        <div class="label">Account Details</div>
+        ${paymentDate ? `<div class="value">${esc(paymentDate)}</div><div class="sub">Last Updated</div>` : ''}
         ${paymentMethod ? `<div class="sub">Payment Method: ${esc(paymentMethod)}</div>` : ''}
         ${whoLabel ? `<div class="sub">Who: ${esc(whoLabel)}</div>` : ''}
         ${transactionRef ? `<div class="sub">Transaction ID: ${esc(transactionRef)}</div>` : ''}
@@ -5414,14 +5434,36 @@
         : totalPaid > 0
           ? 'Updated Invoice'
           : 'Registration Invoice';
+      const invoiceIssueRaw = [
+        ...performers.map(p => p?.app?.created_at || ''),
+        ...scheduleRows.map(row => row?.dueDate || ''),
+        lastPaidRec?.paid_at || '',
+      ].filter(Boolean).sort()[0] || '';
+      const invoiceDueRaw = balanceDue > 0
+        ? (nextInst?.dueDate || scheduleRows.find(row => !row.paid && row.dueDate)?.dueDate || '')
+        : '';
+      const orgEmail = org?.contact_email || org?.email || paymentSettings?.producer_email || paymentSettings?.contact_email || '';
+      const orgPhone = paymentSettings?.producer_phone || paymentSettings?.contact_phone || '';
+      const accountCode = currentPortalData?.code || '';
+      const invoiceNumberBase = [prod?.id || prod?.slug || prodTitle, accountCode || 'portal']
+        .map(v => String(v || '').replace(/[^a-z0-9]+/gi, '').toUpperCase())
+        .filter(Boolean)
+        .join('-');
+      const invoiceNumber = invoiceNumberBase ? `INV-${invoiceNumberBase}` : '';
       const invoiceSource = isFamily
         ? (hhLogs.filter(r => (r.amount_cents || 0) > 0 && r.paid_at).slice().sort((a, b) => String(b.paid_at || '').localeCompare(String(a.paid_at || '')))[0] || null)
         : ([...allPaidRecs].sort((a, b) => String(b.paid_at || '').localeCompare(String(a.paid_at || '')))[0] || null);
       window._portalInvoiceDoc = {
         invoiceTitle,
         orgName,
+        orgEmail,
+        orgPhone,
         showName: prodTitle,
         logoUrl,
+        invoiceNumber,
+        issueDateLabel: invoiceIssueRaw ? fmtDate(invoiceIssueRaw, { short: true }) : '',
+        dueDateLabel: invoiceDueRaw ? fmtDate(invoiceDueRaw, { short: true }) : '',
+        accountCode,
         payerName: isFamily ? (householdName || performerName) : performerName,
         payerEmail: currentPortalData?.email || '',
         totalFeeLabel: moneyLabel(totalExpected),
