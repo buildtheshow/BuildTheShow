@@ -980,7 +980,7 @@
 
       <div class="ov-card" style="margin-bottom:1.25rem;padding:1.1rem 1.2rem;">
         <div style="display:grid;grid-template-columns:auto minmax(0,1fr);gap:1rem;align-items:center;">
-          <div id="team-access-headshot-preview" style="width:110px;aspect-ratio:1;border-radius:18px;background:rgba(87,46,136,0.08);overflow:hidden;display:grid;place-items:center;color:#572e88;font-size:3rem;font-weight:950;box-shadow:inset 0 0 0 1px rgba(87,46,136,0.1);">
+          <div id="team-access-headshot-preview" style="width:110px;aspect-ratio:1;border-radius:18px;background:rgba(87,46,136,0.08);overflow:hidden;display:grid;place-items:center;color:#572e88;font-size:3rem;font-weight:900;box-shadow:inset 0 0 0 1px rgba(87,46,136,0.1);">
             ${teamAccessMember.headshot_url ? `<img src="${esc(teamAccessMember.headshot_url)}" alt="" style="width:100%;height:100%;object-fit:cover;object-position:top;" />` : initial}
           </div>
           <div style="min-width:0;">
@@ -7195,7 +7195,7 @@ Your submission link is unique to you. Please do not share it with another perfo
 
   <div style="border:1.5px solid #ded6ea;border-radius:16px;overflow:hidden;margin:22px 0;background:#ffffff;">
     <div style="background:#fbf7ef;padding:15px 18px;border-bottom:1px solid #ead9bd;">
-      <div style="font-size:12px;font-weight:950;letter-spacing:0.12em;text-transform:uppercase;color:#a06415;">Booking Summary</div>
+      <div style="font-size:12px;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;color:#a06415;">Booking Summary</div>
     </div>
     <div style="padding:18px;">
       {{sponsor_booking_summary}}
@@ -7204,7 +7204,7 @@ Your submission link is unique to you. Please do not share it with another perfo
 
   <div style="border:1.5px solid #ded6ea;border-radius:16px;overflow:hidden;margin:22px 0;background:#ffffff;">
     <div style="background:#f7f4fb;padding:15px 18px;border-bottom:1px solid #ded6ea;">
-      <div style="font-size:12px;font-weight:950;letter-spacing:0.12em;text-transform:uppercase;color:#572e88;">Important Deadlines</div>
+      <div style="font-size:12px;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;color:#572e88;">Important Deadlines</div>
     </div>
     <div style="padding:18px;">
       {{booking_deadlines}}
@@ -8744,7 +8744,7 @@ See you soon!
     };
     const datesEl = document.getElementById('ov-dates');
     if (prod.start_date && prod.end_date) {
-      datesEl.innerHTML = `<div style="display:flex;align-items:center;gap:0.5rem;">${_heroBadge(prod.start_date)}<span style="color:rgba(255,255,255,0.45);font-size:0.75rem;font-weight:600;">to</span>${_heroBadge(prod.end_date)}</div>`;
+      datesEl.innerHTML = `<div style="display:flex;align-items:center;gap:0.5rem;">${_heroBadge(prod.start_date)}<span style="color:rgba(255,255,255,0.45);font-size:0.75rem;font-weight:700;">to</span>${_heroBadge(prod.end_date)}</div>`;
     } else if (prod.start_date) {
       datesEl.innerHTML = `<div style="display:flex;align-items:center;gap:0.5rem;"><span style="color:rgba(255,255,255,0.5);font-size:0.75rem;">From</span>${_heroBadge(prod.start_date)}</div>`;
     } else {
@@ -9211,7 +9211,7 @@ See you soon!
             + `<div class="zeus-event-label">${safeTxt(ev.title || '')}</div>`;
           return { domNodes: [wrap] };
         } catch(e) {
-          return { html: `<div style="padding:2px 4px;font-size:0.75rem;font-weight:600;">${String(arg.event.title||'')}</div>` };
+          return { html: `<div style="padding:2px 4px;font-size:0.75rem;font-weight:700;">${String(arg.event.title||'')}</div>` };
         }
       },
       eventDidMount(info) {
@@ -11853,7 +11853,7 @@ See you soon!
         return `<label style="display:grid;grid-template-columns:minmax(0,1fr) 176px;gap:0.75rem;align-items:center;padding:0.45rem 0;border-bottom:1px solid rgba(87,46,136,0.08);${indent}">
           <span style="min-width:0;">
             <strong style="display:block;font-size:0.82rem;font-weight:${page.parent_page_key ? '650' : '850'};color:#2d1b4e;">${esc(page.label)}</strong>
-            <span class="${esc(prefix)}-page-help" style="display:block;margin-top:0.12rem;font-size:0.68rem;font-weight:650;color:rgba(87,46,136,0.5);">${esc(PRODUCTION_PERMISSION_LEVEL_HELP[level] || '')}</span>
+            <span class="${esc(prefix)}-page-help" style="display:block;margin-top:0.12rem;font-size:0.68rem;font-weight:700;color:rgba(87,46,136,0.5);">${esc(PRODUCTION_PERMISSION_LEVEL_HELP[level] || '')}</span>
           </span>
           <select class="form-select ${esc(prefix)}-page" data-page-key="${esc(page.page_key)}" title="${esc(PRODUCTION_PERMISSION_LEVEL_HELP[level] || '')}" onchange="syncTeamMemberAccessEditorHelp(this)" style="font-size:0.78rem;padding:0.35rem 0.5rem;">${optionsHtml}</select>
         </label>`;
@@ -12776,7 +12776,7 @@ See you soon!
             <span class="ptme-toggle-track"></span>
             <span class="ptme-toggle-thumb"></span>
           </label>
-          <span id="ptme-active-label" style="font-size:0.83rem;color:#1a1530;font-weight:600;">${_ptmeActive ? 'Active' : 'Inactive'}</span>
+          <span id="ptme-active-label" style="font-size:0.83rem;color:#1a1530;font-weight:700;">${_ptmeActive ? 'Active' : 'Inactive'}</span>
         </div>
       </div>`;
   }
@@ -12806,7 +12806,7 @@ See you soon!
         <p style="font-size:0.82rem;color:rgba(87,46,136,0.5);margin:0 0 0.75rem;">Replace the current headshot with this photo?</p>
         <div style="display:flex;gap:0.5rem;">
           <button onclick="ptmeConfirmHeadshot()" style="background:#572e88;color:#fff;border:none;border-radius:8px;padding:0.45rem 1rem;font-size:0.82rem;font-weight:700;cursor:pointer;">Yes, use this photo</button>
-          <button onclick="ptmeCancelHeadshot()" style="background:none;border:1px solid rgba(87,46,136,0.2);border-radius:8px;padding:0.45rem 1rem;font-size:0.82rem;font-weight:600;color:#572e88;cursor:pointer;">Cancel</button>
+          <button onclick="ptmeCancelHeadshot()" style="background:none;border:1px solid rgba(87,46,136,0.2);border-radius:8px;padding:0.45rem 1rem;font-size:0.82rem;font-weight:700;color:#572e88;cursor:pointer;">Cancel</button>
         </div>`;
     }
     return `
@@ -13289,7 +13289,7 @@ See you soon!
       <div class="team-manager">
         <div class="tm-header">
           <div>
-            <div style="font-size:0.82rem;font-weight:600;color:rgba(87,46,136,0.5);">Editing roles</div>
+            <div style="font-size:0.82rem;font-weight:700;color:rgba(87,46,136,0.5);">Editing roles</div>
           </div>
           <button class="btn-secondary" onclick="switchTeamTab('overview')">Done editing</button>
         </div>
@@ -16207,14 +16207,14 @@ See you soon!
         <input type="checkbox" id="pay-checkout-pay-now" ${payNow ? 'checked' : ''} style="margin-top:0.15rem;" />
         <span>
           <span style="font-size:0.84rem;font-weight:800;color:#1a1530;display:block;">Pay now</span>
-          <span style="font-size:0.74rem;color:#7a6a95;font-weight:550;">Families see payment options right away on the confirmation screen.</span>
+          <span style="font-size:0.74rem;color:#7a6a95;font-weight:400;">Families see payment options right away on the confirmation screen.</span>
         </span>
       </label>
       <label class="pay-toggle-row" style="align-items:flex-start;">
         <input type="checkbox" id="pay-checkout-pay-later" ${payLater ? 'checked' : ''} style="margin-top:0.15rem;" />
         <span>
           <span style="font-size:0.84rem;font-weight:800;color:#1a1530;display:block;">Pay later</span>
-          <span style="font-size:0.74rem;color:#7a6a95;font-weight:550;">Families can return through their personal payment link whenever they're ready.</span>
+          <span style="font-size:0.74rem;color:#7a6a95;font-weight:400;">Families can return through their personal payment link whenever they're ready.</span>
         </span>
       </label>
     </div>`;
@@ -16229,14 +16229,14 @@ See you soon!
         <input type="checkbox" id="pay-checkout-etransfer" ${etransfer && orgEtransferConfigured ? 'checked' : ''} ${orgEtransferConfigured ? '' : 'disabled'} style="margin-top:0.15rem;" />
         <span>
           <span style="font-size:0.84rem;font-weight:800;color:#1a1530;display:block;">E-transfer</span>
-          <span style="font-size:0.74rem;color:#7a6a95;font-weight:550;">${orgEtransferConfigured ? 'Families e-transfer to your organisation\'s payment email.' : 'Ask your organisation admin to add an e-transfer email in Organisation Settings › Payments.'}</span>
+          <span style="font-size:0.74rem;color:#7a6a95;font-weight:400;">${orgEtransferConfigured ? 'Families e-transfer to your organisation\'s payment email.' : 'Ask your organisation admin to add an e-transfer email in Organisation Settings › Payments.'}</span>
         </span>
       </label>
       <label class="pay-toggle-row" style="align-items:flex-start;${orgSquareConnected ? '' : 'opacity:0.45;cursor:not-allowed;'}">
         <input type="checkbox" id="pay-checkout-square" ${square && orgSquareConnected ? 'checked' : ''} ${orgSquareConnected ? '' : 'disabled'} style="margin-top:0.15rem;" />
         <span>
           <span style="font-size:0.84rem;font-weight:800;color:#1a1530;display:block;">Square</span>
-          <span style="font-size:0.74rem;color:#7a6a95;font-weight:550;">${orgSquareConnected ? 'Card checkout on Square. Paid status updates automatically.' : 'Ask your organisation admin to connect Square in Organisation Settings › Payments.'}</span>
+          <span style="font-size:0.74rem;color:#7a6a95;font-weight:400;">${orgSquareConnected ? 'Card checkout on Square. Paid status updates automatically.' : 'Ask your organisation admin to connect Square in Organisation Settings › Payments.'}</span>
         </span>
       </label>
     </div>`;
@@ -16283,7 +16283,7 @@ See you soon!
         <input type="checkbox" id="pay-refund-enabled" ${s.refund_enabled !== false ? 'checked' : ''} style="margin-top:0.15rem;" />
         <span>
           <span style="font-size:0.84rem;font-weight:800;color:#1a1530;display:block;">Show refund information</span>
-          <span style="font-size:0.74rem;color:#7a6a95;font-weight:550;">Include the refund policy in registration/payment checkout screens.</span>
+          <span style="font-size:0.74rem;color:#7a6a95;font-weight:400;">Include the refund policy in registration/payment checkout screens.</span>
         </span>
       </label>
       <div class="pay-fields-group">
@@ -16506,7 +16506,7 @@ See you soon!
     const sym = { CAD: '$', USD: '$', GBP: '£' }[document.getElementById('pay-currency')?.value || 'CAD'] || '$';
     const fmt = n => n > 0 ? sym + n.toFixed(2) : '-';
     const addends = amounts.map((a, i) =>
-      `<span style="color:#9980b8;margin-right:0.2rem;">${i > 0 ? '+' : ''}</span><span style="color:#1a1530;font-weight:600;">${fmt(a)}</span>`
+      `<span style="color:#9980b8;margin-right:0.2rem;">${i > 0 ? '+' : ''}</span><span style="color:#1a1530;font-weight:700;">${fmt(a)}</span>`
     ).join('<span style="padding:0 0.3rem;"></span>');
     const note = over  ? `<span style="color:#d1523d;font-size:0.73rem;font-family:var(--bts-font);"> - over by ${sym}${(total - totalFee).toFixed(2)}</span>`
                : under ? `<span style="color:#d1523d;font-size:0.73rem;font-family:var(--bts-font);"> - short by ${sym}${(totalFee - total).toFixed(2)}</span>`
@@ -20986,7 +20986,7 @@ See you soon!
       const approved = rscVolunteerDiscountEarned(assignment, settings);
       const linkedVolunteer = rscVolunteerLinkedLabel(assignment);
       volHtml = `<div class="rpt-discount-row">
-        <div class="rpt-discount-label">Volunteer discount <span style="font-weight:600;color:rgba(87,46,136,0.45);">(${registrationFormatPaymentAmount(parseFloat(settings.volunteer_discount) || 0, settings)} off)</span></div>
+        <div class="rpt-discount-label">Volunteer discount <span style="font-weight:700;color:rgba(87,46,136,0.45);">(${registrationFormatPaymentAmount(parseFloat(settings.volunteer_discount) || 0, settings)} off)</span></div>
         <button class="registration-action rpt-approve-btn${linkedVolunteer ? ' approved' : ''}" onclick="rscOpenVolunteerModal('${esc(assignId)}')">${linkedVolunteer ? 'Change' : 'Link'}</button>
       </div>`;
     }
@@ -21863,7 +21863,7 @@ See you soon!
         group.code ? `Code ${group.code}` : '',
         group.status ? group.status.replace(/_/g, ' ') : '',
       ].filter(Boolean).join(' · ');
-      summaryEl.innerHTML = `<div style="font-size:0.78rem;font-weight:850;color:#1a1530;">${esc(group.name)}</div>
+      summaryEl.innerHTML = `<div style="font-size:0.78rem;font-weight:900;color:#1a1530;">${esc(group.name)}</div>
         <div style="font-size:0.72rem;color:rgba(87,46,136,0.55);line-height:1.45;">${esc(group.roles || 'Volunteer')}${group.hours ? ` · ${esc(String(group.hours))} approved hr${group.hours === 1 ? '' : 's'}` : ''}</div>
         ${meta ? `<div style="font-size:0.68rem;color:rgba(87,46,136,0.42);margin-top:0.1rem;">${esc(meta)}</div>` : ''}`;
     }
@@ -21933,7 +21933,7 @@ See you soon!
       ? `<div style="font-size:0.74rem;color:rgba(87,46,136,0.56);line-height:1.45;margin-top:-0.1rem;">This connection will apply to ${esc(scope.memberNames.join(', '))}.</div>`
       : '';
     const linkedSummary = selectedGroup
-      ? `<div style="font-size:0.78rem;font-weight:850;color:#1a1530;">${esc(selectedGroup.name)}</div>
+      ? `<div style="font-size:0.78rem;font-weight:900;color:#1a1530;">${esc(selectedGroup.name)}</div>
         <div style="font-size:0.72rem;color:rgba(87,46,136,0.55);line-height:1.45;">${esc(selectedGroup.roles || 'Volunteer')}${selectedGroup.hours ? ` · ${esc(String(selectedGroup.hours))} approved hr${selectedGroup.hours === 1 ? '' : 's'}` : ''}</div>`
       : '<div style="font-size:0.74rem;color:rgba(87,46,136,0.45);">No volunteer connected yet.</div>';
     document.getElementById('rsc-volunteer-modal')?.remove();
@@ -22694,7 +22694,7 @@ See you soon!
       cardHtml: buildNoOneCheckedInCastingCardHtml()
     });
     const checkinRailHtml = `<div class="template-checkin-rail" data-bts-template="checked-in-rail" style="display:grid;grid-template-columns:48px minmax(0,1fr);gap:0.5rem;align-items:stretch;min-width:0;border-radius:0 0 16px 16px;background:#fff;padding:0.55rem 0.65rem 0.75rem;overflow:hidden;">
-      <div class="template-checkin-label" style="position:relative;display:flex;align-items:center;justify-content:center;align-self:stretch;min-height:100%;margin:-0.55rem 0 -0.75rem;padding:0.55rem 0 0.75rem;border-left:2px solid rgba(87,46,136,0.12);color:#1a1530;font-size:0.66rem;font-weight:950;letter-spacing:0.08em;line-height:1.1;text-align:center;text-transform:uppercase;writing-mode:vertical-rl;transform:rotate(180deg);user-select:none;">Checked In</div>
+      <div class="template-checkin-label" style="position:relative;display:flex;align-items:center;justify-content:center;align-self:stretch;min-height:100%;margin:-0.55rem 0 -0.75rem;padding:0.55rem 0 0.75rem;border-left:2px solid rgba(87,46,136,0.12);color:#1a1530;font-size:0.66rem;font-weight:900;letter-spacing:0.08em;line-height:1.1;text-align:center;text-transform:uppercase;writing-mode:vertical-rl;transform:rotate(180deg);user-select:none;">Checked In</div>
       <div class="template-checkin-row" style="display:flex;flex-direction:row;flex-wrap:nowrap;align-items:flex-start;gap:0.55rem;min-width:0;max-width:100%;min-height:7.25rem;overflow-x:auto;overflow-y:hidden;padding:0.05rem 0.1rem 0.45rem;scrollbar-width:thin;-webkit-overflow-scrolling:touch;perspective:900px;">${trayCards}</div>
     </div>`;
     return `<div class="audition-flow-template-checkin" aria-hidden="true">
@@ -22706,12 +22706,12 @@ See you soon!
         .audition-flow-template-checkin .template-checkin-row::-webkit-scrollbar-track{background:transparent;}
         .audition-flow-template-checkin .template-checkin-row::-webkit-scrollbar-thumb{background:rgba(30,30,30,0.55);border-radius:999px;}
         .audition-flow-template-checkin .template-checkin-tile{flex:0 0 108px;width:108px;display:grid;grid-template-rows:1rem auto 1.05rem;justify-items:center;gap:0.26rem;border:0;background:transparent;padding:0;margin:0;font-family:var(--bts-font);color:#1a1530;cursor:default;appearance:none;-webkit-appearance:none;text-align:center;}
-        .audition-flow-template-checkin .template-checkin-time{color:#7dae8a;font-size:0.78rem;font-weight:950;line-height:1rem;white-space:nowrap;}
+        .audition-flow-template-checkin .template-checkin-time{color:#7dae8a;font-size:0.78rem;font-weight:900;line-height:1rem;white-space:nowrap;}
         .audition-flow-template-checkin .template-checkin-card{width:100%;aspect-ratio:4 / 5;min-height:0;}
         .audition-flow-template-checkin .template-checkin-card .casting-card{width:100%;height:100%;cursor:inherit;pointer-events:none;box-shadow:2px 2px 4px rgba(15,23,42,0.16);}
         .audition-flow-template-checkin .template-checkin-tile.is-done{opacity:0.5;filter:grayscale(0.72);}
         .audition-flow-template-checkin .template-checkin-tile.is-next .template-checkin-card .casting-card{box-shadow:0 15px 28px rgba(26,21,48,0.27),0 8px 18px rgba(239,171,69,0.27),0 0 0 2px rgba(239,171,69,0.38);transform:translateY(-1px) translateZ(36px) scale(1.075);}
-        .audition-flow-template-checkin .template-checkin-status{display:inline-flex;align-items:center;justify-content:center;min-width:3.25rem;min-height:1.05rem;border-radius:999px;background:#eef7ef;color:#5ca46d;font-size:0.72rem;font-weight:950;line-height:1rem;padding:0.03rem 0.52rem;white-space:nowrap;}
+        .audition-flow-template-checkin .template-checkin-status{display:inline-flex;align-items:center;justify-content:center;min-width:3.25rem;min-height:1.05rem;border-radius:999px;background:#eef7ef;color:#5ca46d;font-size:0.72rem;font-weight:900;line-height:1rem;padding:0.03rem 0.52rem;white-space:nowrap;}
         .audition-flow-template-checkin .template-checkin-tile.is-next .template-checkin-status{background:#fff4df;color:#a56716;}
       </style>
       ${checkinRailHtml}
@@ -26373,7 +26373,7 @@ See you soon!
 
           <!-- Panel 2: Audition format -->
           <div id="aud-panel-s01-${sid}" class="aud-tab-panel" style="${activeTab === 's01' ? '' : 'display:none;'}">
-            <p style="font-size:0.78rem;color:rgba(26,21,48,0.5);margin:0 0 0.75rem;font-weight:500;">Select all that apply.</p>
+            <p style="font-size:0.78rem;color:rgba(26,21,48,0.5);margin:0 0 0.75rem;font-weight:400;">Select all that apply.</p>
             <div class="add-wiz-mode-cards" style="margin-bottom:1rem;">
               ${[
                 { key:'in_person',  color:'#476aaa', icon:'navprofile.svg',  title:'In Person',  desc:'Performers come to a physical location to audition.' },
@@ -28398,7 +28398,7 @@ See you soon!
         const booked = bookingsPerSlot[s.id] || 0;
         const full = booked >= s.capacity;
         return `<div style="display:flex;align-items:center;gap:1rem;padding:0.55rem 0.75rem;border-radius:8px;background:${full ? 'rgba(239,68,68,0.04)' : 'rgba(87,46,136,0.03)'};margin-bottom:0.3rem;">
-          <span style="font-size:0.875rem;font-weight:600;color:#1a1530;min-width:110px;">${s.start_time.slice(0,5)} - ${s.end_time.slice(0,5)}</span>
+          <span style="font-size:0.875rem;font-weight:700;color:#1a1530;min-width:110px;">${s.start_time.slice(0,5)} - ${s.end_time.slice(0,5)}</span>
           <span style="font-size:0.8rem;color:rgba(87,46,136,0.5);flex:1;">${booked} / ${s.capacity} booked</span>
           <span style="font-size:0.75rem;font-weight:700;padding:0.2rem 0.6rem;border-radius:20px;${full ? 'background:rgba(239,68,68,0.1);color:#b91c1c;' : 'background:rgba(34,197,94,0.1);color:#769e7b;'}">${full ? 'Full' : 'Open'}</span>
           ${booked === 0 ? `<button onclick="deleteSlot('${s.id}')" style="background:none;border:none;color:#c4b8d8;cursor:pointer;font-size:0.8rem;padding:0.15rem 0.35rem;border-radius:4px;" title="Delete">✕</button>` : '<span style="width:28px;"></span>'}
@@ -31937,7 +31937,7 @@ See you soon!
           <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:rgba(87,46,136,0.5);">Q${i + 1}</div>
           <button type="button" onclick="removeFaqItem(${i})" style="background:none;border:none;cursor:pointer;color:rgba(87,46,136,0.5);font-size:1rem;padding:0;line-height:1;" title="Remove">&times;</button>
         </div>
-        <input class="form-input" style="margin-bottom:0.4rem;font-weight:600;" type="text" placeholder="Question" value="${esc(item.q)}"
+        <input class="form-input" style="margin-bottom:0.4rem;font-weight:700;" type="text" placeholder="Question" value="${esc(item.q)}"
                oninput="_faqItems[${i}].q = this.value; scheduleProdInfoSave();" />
         <textarea class="form-input" rows="2" placeholder="Answer" style="resize:vertical;"
                   oninput="_faqItems[${i}].a = this.value; scheduleProdInfoSave();">${esc(item.a)}</textarea>
@@ -33208,7 +33208,7 @@ See you soon!
             const roles = applicantRequestedRoleList(a);
             const tdBase = `min-width:${col.minWidth || '115px'};max-width:${col.minWidth || '115px'};text-align:left;vertical-align:middle;`;
             if (!roles.length) return `<td style="${tdBase}font-size:0.8rem;color:rgba(87,46,136,0.5);">Any</td>`;
-            const pills = roles.map(r => `<span style="display:inline-block;background:rgba(108,149,95,0.12);color:#4a7a40;border:1px solid rgba(108,149,95,0.3);border-radius:20px;padding:0.1rem 0.5rem;font-size:0.75rem;font-weight:600;white-space:nowrap;margin:0.1rem 0.15rem 0.1rem 0;">${esc(r)}</span>`).join('');
+            const pills = roles.map(r => `<span style="display:inline-block;background:rgba(108,149,95,0.12);color:#4a7a40;border:1px solid rgba(108,149,95,0.3);border-radius:20px;padding:0.1rem 0.5rem;font-size:0.75rem;font-weight:700;white-space:nowrap;margin:0.1rem 0.15rem 0.1rem 0;">${esc(r)}</span>`).join('');
             return `<td style="${tdBase}"><div style="display:flex;flex-wrap:wrap;gap:0;">${pills}</div></td>`;
           }
           if (col.key === 'gender_roles') {
@@ -33251,7 +33251,7 @@ See you soon!
           const isBookingColumn = ['booking_summary'].includes(col.key);
           const shouldCollapse = ['aq_acting','aq_vocals','aq_dance','aq_skills','emails_sent'].includes(applicantSheetSection) && !['headshot', 'name', 'email_sent_count'].includes(col.key);
           const nameWordWrap = col.key === 'name' && col._wordWrap;
-          const baseStyle = `${(index === 0 || col.key === 'name') ? 'font-weight:600;color:#1a1530;' : 'font-size:0.8rem;color:rgba(87,46,136,0.5);'}${col.key === 'name' ? 'padding-left:1.4rem;' : ''}min-width:${col.minWidth || '120px'};max-width:${col.minWidth || '120px'};text-align:left;vertical-align:middle;${nameWordWrap ? 'white-space:normal;line-height:1.45;word-break:normal;overflow-wrap:normal;' : fitAuditionInfo ? 'white-space:normal;line-height:1.45;overflow-wrap:normal;word-break:normal;' : (col.key === 'open' || col.key === 'status' || col.key === 'submitted' || col.key === 'pronouns' || col.key === 'other_roles' || col.key === 'age' || col.key === 'contact_phone' || col.key === 'contact_email' || col.key === 'name' ? 'white-space:nowrap;' : 'line-height:1.45;white-space:normal;')}`;
+          const baseStyle = `${(index === 0 || col.key === 'name') ? 'font-weight:700;color:#1a1530;' : 'font-size:0.8rem;color:rgba(87,46,136,0.5);'}${col.key === 'name' ? 'padding-left:1.4rem;' : ''}min-width:${col.minWidth || '120px'};max-width:${col.minWidth || '120px'};text-align:left;vertical-align:middle;${nameWordWrap ? 'white-space:normal;line-height:1.45;word-break:normal;overflow-wrap:normal;' : fitAuditionInfo ? 'white-space:normal;line-height:1.45;overflow-wrap:normal;word-break:normal;' : (col.key === 'open' || col.key === 'status' || col.key === 'submitted' || col.key === 'pronouns' || col.key === 'other_roles' || col.key === 'age' || col.key === 'contact_phone' || col.key === 'contact_email' || col.key === 'name' ? 'white-space:nowrap;' : 'line-height:1.45;white-space:normal;')}`;
           const innerStyle = fitAuditionInfo
             ? 'display:block;white-space:normal;line-height:1.45;overflow-wrap:normal;word-break:normal;'
             : (isBookingColumn
@@ -33260,7 +33260,7 @@ See you soon!
           const innerHtml = shouldCollapse
             ? buildCatchsheetExpandableCell(value, auditionTextStyle)
             : nameWordWrap
-              ? `<div style="width:${col.minWidth || '70px'};box-sizing:border-box;padding-left:1.4rem;white-space:normal;line-height:1.45;word-break:normal;overflow-wrap:normal;font-weight:600;color:#1a1530;">${esc(value)}</div>`
+              ? `<div style="width:${col.minWidth || '70px'};box-sizing:border-box;padding-left:1.4rem;white-space:normal;line-height:1.45;word-break:normal;overflow-wrap:normal;font-weight:700;color:#1a1530;">${esc(value)}</div>`
               : `<div style="${innerStyle}${auditionTextStyle}">${esc(value)}</div>`;
           const tdStyle = nameWordWrap
             ? `text-align:left;vertical-align:middle;padding:0;`
@@ -33539,7 +33539,7 @@ See you soon!
           .pdf-session { margin-bottom: 28px; page-break-inside: avoid; }
           .pdf-session-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
           .pdf-session-name { font-size: 14px; font-weight: 800; color: #1a1530; }
-          .pdf-session-date { font-size: 11px; color: rgba(87,46,136,0.5); font-weight: 500; }
+          .pdf-session-date { font-size: 11px; color: rgba(87,46,136,0.5); font-weight: 400; }
           table { width: 100%; border-collapse: collapse; table-layout: auto; }
           th, td { border: 1px solid #ddd6eb; padding: 6px 10px; text-align: left; vertical-align: top; font-size: 11px; line-height: 1.35; }
           th { background: #f5f1fb; color: #4f2d7f; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -33730,7 +33730,7 @@ See you soon!
       ${entries.map(([key, value], idx) => {
         const normalized = Array.isArray(value) ? value.join(', ') : (typeof value === 'object' ? JSON.stringify(value) : String(value ?? ''));
         return `<label style="display:flex;flex-direction:column;gap:0.35rem;">
-          <span style="font-size:0.8rem;font-weight:600;color:rgba(87,46,136,0.5);">${esc(key)}</span>
+          <span style="font-size:0.8rem;font-weight:700;color:rgba(87,46,136,0.5);">${esc(key)}</span>
           <textarea id="app-ca-${idx}" data-ca-key="${esc(key)}" class="form-input app-ca-input" rows="2" style="resize:vertical;">${esc(normalized)}</textarea>
         </label>`;
       }).join('')}
@@ -34157,7 +34157,7 @@ See you soon!
         <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:rgba(87,46,136,0.5);margin-bottom:0.15rem;">Move to</div>
         <div id="reschedule-confirm-label" style="font-size:1rem;font-weight:800;color:#352756;"></div>
       </div>
-      <button type="button" onclick="cancelRescheduleSelection()" style="padding:0.38rem 0.85rem;border-radius:8px;border:1px solid rgba(87,46,136,0.2);background:#fff;color:rgba(87,46,136,0.5);font-size:0.8rem;font-weight:600;cursor:pointer;font-family: var(--bts-font);flex-shrink:0;">Cancel</button>
+      <button type="button" onclick="cancelRescheduleSelection()" style="padding:0.38rem 0.85rem;border-radius:8px;border:1px solid rgba(87,46,136,0.2);background:#fff;color:rgba(87,46,136,0.5);font-size:0.8rem;font-weight:700;cursor:pointer;font-family: var(--bts-font);flex-shrink:0;">Cancel</button>
       <button type="button" id="reschedule-confirm-btn" onclick="confirmReschedule()" style="padding:0.38rem 1.1rem;border-radius:8px;border:none;background:#572e88;color:#fff;font-size:0.8rem;font-weight:700;cursor:pointer;font-family: var(--bts-font);flex-shrink:0;">Confirm</button>
     `;
   }
@@ -34792,7 +34792,7 @@ See you soon!
         <div style="font-size:0.9rem;font-weight:700;color:#1a1530;">Send an updated time email?</div>
         <div style="font-size:0.76rem;color:rgba(87,46,136,0.5);margin-top:0.12rem;">This will use the Booking Confirmation template with the new slot details.</div>
       </div>
-      <button type="button" onclick="cancelRescheduleSelection()" style="padding:0.38rem 0.85rem;border-radius:8px;border:1px solid rgba(87,46,136,0.2);background:#fff;color:rgba(87,46,136,0.5);font-size:0.8rem;font-weight:600;cursor:pointer;font-family: var(--bts-font);flex-shrink:0;">No thanks</button>
+      <button type="button" onclick="cancelRescheduleSelection()" style="padding:0.38rem 0.85rem;border-radius:8px;border:1px solid rgba(87,46,136,0.2);background:#fff;color:rgba(87,46,136,0.5);font-size:0.8rem;font-weight:700;cursor:pointer;font-family: var(--bts-font);flex-shrink:0;">No thanks</button>
       ${bookingId ? `<button type="button" onclick="sendUpdatedRescheduleEmail('${esc(String(bookingId))}')" style="padding:0.38rem 1.1rem;border-radius:8px;border:none;background:#572e88;color:#fff;font-size:0.8rem;font-weight:700;cursor:pointer;font-family: var(--bts-font);flex-shrink:0;">Send Email</button>` : ''}
     `;
     confirm.style.display = 'flex';
@@ -38832,7 +38832,7 @@ See you soon!
                 <h2 class="aud-visual-title">Dashboard</h2>
                 <p class="aud-visual-copy">Set up auditions first. Once performers start signing up, this page becomes your live overview.</p>
               </div>
-              ${teamAccessMode ? '' : '<button type="button" onclick="openAuditionsSubTab(\'setup\')" style="background:#efab45;color:#000;border:none;border-radius:8px;padding:0.55rem 1.1rem;font-weight:850;font-size:0.82rem;font-family:var(--bts-font);cursor:pointer;flex-shrink:0;">Set Up Auditions</button>'}
+              ${teamAccessMode ? '' : '<button type="button" onclick="openAuditionsSubTab(\'setup\')" style="background:#efab45;color:#000;border:none;border-radius:8px;padding:0.55rem 1.1rem;font-weight:900;font-size:0.82rem;font-family:var(--bts-font);cursor:pointer;flex-shrink:0;">Set Up Auditions</button>'}
             </div>
           </div>`;
         if (!teamAccessMode) {
@@ -38868,19 +38868,19 @@ See you soon!
                   <img src="/ASSETS/Images/Icons/navproductioncalendar.svg?v=20260705" style="width:80px;height:80px;opacity:0.18;flex-shrink:0;" alt="" aria-hidden="true" />
                   <div>
                     <div style="display:inline-flex;align-items:center;background:#efab45;color:#000;border-radius:20px;padding:0.22rem 0.7rem;font-size:0.7rem;font-weight:900;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem;">Start here</div>
-                    <h3 style="font-size:1.5rem;font-weight:950;color:#000;margin:0 0 0.55rem;line-height:1.1;">Build your production schedule first</h3>
+                    <h3 style="font-size:1.5rem;font-weight:900;color:#000;margin:0 0 0.55rem;line-height:1.1;">Build your production schedule first</h3>
                     <p style="font-size:0.86rem;color:rgba(26,21,48,0.6);line-height:1.6;margin:0 0 0.4rem;">Before you can schedule auditions, Build The Show needs to know when your production happens.</p>
                     <p style="font-size:0.86rem;color:rgba(26,21,48,0.6);line-height:1.6;margin:0 0 1.25rem;">Your rehearsal schedule, performances, callbacks, and auditions all work together. Once your production calendar is built, scheduling slots becomes much easier.</p>
                     <div style="font-size:0.7rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#572e88;margin-bottom:0.3rem;">Step 1 of 5</div>
                     <div style="height:4px;background:#efefef;border-radius:999px;margin-bottom:1.1rem;overflow:hidden;"><div style="width:20%;height:100%;background:#572e88;border-radius:999px;"></div></div>
-                    <button onclick="btsProdNav('plan-calendar.html')" style="display:inline-flex;align-items:center;gap:0.55rem;background:#572e88;color:#fff;border:none;border-radius:10px;padding:0.8rem 1.4rem;font-size:0.9rem;font-weight:850;font-family:var(--bts-font);cursor:pointer;margin-bottom:0.6rem;">
+                    <button onclick="btsProdNav('plan-calendar.html')" style="display:inline-flex;align-items:center;gap:0.55rem;background:#572e88;color:#fff;border:none;border-radius:10px;padding:0.8rem 1.4rem;font-size:0.9rem;font-weight:900;font-family:var(--bts-font);cursor:pointer;margin-bottom:0.6rem;">
                       Build Production Schedule &rarr;
                     </button>
                     <div style="font-size:0.74rem;color:rgba(26,21,48,0.4);">Estimated time: 5&ndash;10 minutes</div>
                   </div>
                 </div>
                 <div style="margin-top:1.75rem;border-top:1px solid rgba(87,46,136,0.08);padding-top:1.25rem;">
-                  <div style="font-size:0.88rem;font-weight:850;color:#000;margin-bottom:1rem;">What's next?</div>
+                  <div style="font-size:0.88rem;font-weight:900;color:#000;margin-bottom:1rem;">What's next?</div>
                   <div style="display:flex;align-items:flex-start;">${stepsHtml}</div>
                 </div>
               </div>`;
@@ -40082,7 +40082,7 @@ See you soon!
       const safeAppId  = esc(app.id);
       return `<div class="inroom-considered-chip${state === 'chosen' ? ' chosen' : ''}">
         <div class="inroom-considered-chip-header">
-          <div class="inroom-considered-chip-name">${esc(char.name || '')}${char.role_type === 'Group' ? ' <span style="font-size:0.7em;font-weight:600;opacity:0.65;">(group)</span>' : ''}</div>
+          <div class="inroom-considered-chip-name">${esc(char.name || '')}${char.role_type === 'Group' ? ' <span style="font-size:0.7em;font-weight:700;opacity:0.65;">(group)</span>' : ''}</div>
           ${char.role_type ? `<div class="inroom-considered-chip-type">${esc(char.role_type)}</div>` : ''}
         </div>
         <textarea class="inroom-considered-notes" id="inroom-role-notes-${safeCharId}" placeholder="Notes for this role…" oninput="scheduleInRoomRoleNotesSave('${safeAppId}','${esc(sessionId || '')}','${safeCharId}')">${esc(notes)}</textarea>
@@ -41058,7 +41058,7 @@ See you soon!
           <div style="font-size:0.82rem;color:rgba(87,46,136,0.5);margin-top:0.2rem;">Performers who registered for the general audition self tape. Callback self tapes are separate and only appear through the callback workflow.</div>
         </div>
         <div style="display:flex;align-items:center;gap:0.75rem;flex-shrink:0;">
-          <div style="font-size:0.78rem;color:#8a7ca5;font-weight:600;background:rgba(87,46,136,0.08);border-radius:8px;padding:0.35rem 0.75rem;">
+          <div style="font-size:0.78rem;color:#8a7ca5;font-weight:700;background:rgba(87,46,136,0.08);border-radius:8px;padding:0.35rem 0.75rem;">
             ${selfTapeApplicants.length} registered · ${submissions.length} tape${submissions.length !== 1 ? 's' : ''} received
           </div>
           ${selfTapeLink ? `
@@ -41072,7 +41072,7 @@ See you soon!
       html += `
         <div style="text-align:center;padding:4rem 2rem;color:rgba(87,46,136,0.5);">
           <div style="font-size:2rem;margin-bottom:0.75rem;">🎬</div>
-          <div style="font-size:0.9rem;font-weight:600;color:rgba(87,46,136,0.5);margin-bottom:0.3rem;">No general self tape registrations yet</div>
+          <div style="font-size:0.9rem;font-weight:700;color:rgba(87,46,136,0.5);margin-bottom:0.3rem;">No general self tape registrations yet</div>
           <div style="font-size:0.8rem;max-width:320px;margin:0 auto;line-height:1.5;">
             Share your registration link with performers to get them signed up.
             ${selfTapeLink ? `<div style="margin-top:0.75rem;"><code style="font-size:0.72rem;background:rgba(87,46,136,0.08);padding:0.25rem 0.5rem;border-radius:6px;word-break:break-all;">${esc(selfTapeLink)}</code></div>` : ''}
@@ -42192,7 +42192,7 @@ See you soon!
       subject: _applyEmailContext(template.subject || '', context),
       body:    _applyEmailContext(template.body    || '', context),
     };
-    if (row) row.innerHTML = `<span style="font-size:0.72rem;color:#572e88;font-weight:600;">Composing email…</span>`;
+    if (row) row.innerHTML = `<span style="font-size:0.72rem;color:#572e88;font-weight:700;">Composing email…</span>`;
     _apmRenderBody();
   }
 
@@ -42271,7 +42271,7 @@ See you soon!
             <p style="font-size:0.88rem;color:#1a1530;margin:0 0 1rem;">Are you sure you want to remove <strong>${name}</strong> from this production? This will delete their application and booking record and cannot be undone.</p>
             <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
               <button onclick="apmConfirmDelete()" style="background:#e74c3c;color:#fff;border:none;border-radius:8px;padding:0.45rem 1.1rem;font-size:0.82rem;font-weight:700;cursor:pointer;font-family:inherit;">Yes, remove them</button>
-              <button onclick="_apmDangerConfirming=false;_apmRenderBody();" style="background:#fff;color:rgba(87,46,136,0.5);border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;padding:0.45rem 1rem;font-size:0.82rem;font-weight:600;cursor:pointer;font-family:inherit;">Cancel</button>
+              <button onclick="_apmDangerConfirming=false;_apmRenderBody();" style="background:#fff;color:rgba(87,46,136,0.5);border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;padding:0.45rem 1rem;font-size:0.82rem;font-weight:700;cursor:pointer;font-family:inherit;">Cancel</button>
             </div>
           </div>
         </div>`;
@@ -42377,7 +42377,7 @@ See you soon!
             <div style="font-size:0.95rem;font-weight:700;color:#1a1530;">${esc(categoryLabel)}</div>
             <div style="font-size:0.8rem;color:rgba(87,46,136,0.5);margin-top:0.1rem;">To: <strong>${esc(toAddr)}</strong></div>
           </div>
-          <button onclick="_apmCancelCompose()" style="background:none;border:1.5px solid rgba(87,46,136,0.22);border-radius:7px;padding:0.28rem 0.85rem;font-size:0.78rem;font-weight:600;color:rgba(87,46,136,0.5);cursor:pointer;font-family:inherit;flex-shrink:0;margin-top:0.1rem;">Cancel</button>
+          <button onclick="_apmCancelCompose()" style="background:none;border:1.5px solid rgba(87,46,136,0.22);border-radius:7px;padding:0.28rem 0.85rem;font-size:0.78rem;font-weight:700;color:rgba(87,46,136,0.5);cursor:pointer;font-family:inherit;flex-shrink:0;margin-top:0.1rem;">Cancel</button>
         </div>
         <div style="padding:0.75rem 1.5rem 0;flex-shrink:0;">
           <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:rgba(87,46,136,0.5);margin-bottom:0.35rem;">Subject</div>
@@ -42402,7 +42402,7 @@ See you soon!
           <div id="apm-composer-body" class="et-body-editor" contenteditable="true" style="flex:1;min-height:0;"></div>
         </div>
         <div style="padding:0.85rem 1.5rem;display:flex;justify-content:flex-end;gap:0.6rem;flex-shrink:0;">
-          <button onclick="_apmCancelCompose()" style="background:#fff;border:1.5px solid rgba(87,46,136,0.25);border-radius:8px;padding:0.48rem 1.1rem;font-size:0.83rem;font-weight:600;color:rgba(87,46,136,0.5);cursor:pointer;font-family:inherit;">Cancel</button>
+          <button onclick="_apmCancelCompose()" style="background:#fff;border:1.5px solid rgba(87,46,136,0.25);border-radius:8px;padding:0.48rem 1.1rem;font-size:0.83rem;font-weight:700;color:rgba(87,46,136,0.5);cursor:pointer;font-family:inherit;">Cancel</button>
           <button onclick="apmSendComposedEmail('${esc(c.category)}')" style="background:#572e88;color:#fff;border:none;border-radius:8px;padding:0.48rem 1.3rem;font-size:0.83rem;font-weight:700;cursor:pointer;font-family:inherit;">Send Email</button>
         </div>
       </div>
@@ -42445,7 +42445,7 @@ See you soon!
       const attendanceChanged = pendingAttendance !== null;
       const sid = esc(session.id);
       const attendanceOptions = [['in_person','In Person'],['video_call','Video Call'],['self_tape','Self Tape'],['n/a','N/A']];
-      const btnStyle = (active) => `background:${active?'#572e88':'#fff'};color:${active?'#fff':'#572e88'};border:1.5px solid ${active?'#572e88':'rgba(87,46,136,0.25)'};border-radius:20px;padding:0.18rem 0.65rem;font-size:0.75rem;font-weight:600;cursor:${active?'default':'pointer'};`;
+      const btnStyle = (active) => `background:${active?'#572e88':'#fff'};color:${active?'#fff':'#572e88'};border:1.5px solid ${active?'#572e88':'rgba(87,46,136,0.25)'};border-radius:20px;padding:0.18rem 0.65rem;font-size:0.75rem;font-weight:700;cursor:${active?'default':'pointer'};`;
       const confirmLabel = confirmingMode === 'self_tape'
         ? 'Convert to Self Tape? This will clear their slot.'
         : confirmingMode === 'n/a'
@@ -42459,9 +42459,9 @@ See you soon!
       }
       const attendanceRow = confirmingMode
         ? `<div style="display:flex;gap:0.5rem;padding:0 1rem 0.75rem;align-items:center;flex-wrap:wrap;">
-             <span style="font-size:0.8rem;color:#1a1530;font-weight:600;">${confirmLabel}</span>
-             <button onclick="apmConfirmAttendance('${sid}','${esc(confirmingMode)}')" style="background:#572e88;color:#fff;border:none;border-radius:6px;padding:0.22rem 0.7rem;font-size:0.75rem;font-weight:600;cursor:pointer;">Yes</button>
-             <button onclick="apmCancelAttendanceConfirm('${sid}')" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:6px;padding:0.22rem 0.7rem;font-size:0.75rem;font-weight:600;color:rgba(87,46,136,0.5);cursor:pointer;">Cancel</button>
+             <span style="font-size:0.8rem;color:#1a1530;font-weight:700;">${confirmLabel}</span>
+             <button onclick="apmConfirmAttendance('${sid}','${esc(confirmingMode)}')" style="background:#572e88;color:#fff;border:none;border-radius:6px;padding:0.22rem 0.7rem;font-size:0.75rem;font-weight:700;cursor:pointer;">Yes</button>
+             <button onclick="apmCancelAttendanceConfirm('${sid}')" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:6px;padding:0.22rem 0.7rem;font-size:0.75rem;font-weight:700;color:rgba(87,46,136,0.5);cursor:pointer;">Cancel</button>
            </div>`
         : `<div style="display:flex;gap:0.4rem;padding:0 1rem 0.75rem;align-items:center;flex-wrap:wrap;">
              <span style="font-size:0.72rem;font-weight:700;color:rgba(87,46,136,0.5);text-transform:uppercase;letter-spacing:0.05em;margin-right:0.25rem;">Attendance:</span>
@@ -42470,7 +42470,7 @@ See you soon!
                return `<button onclick="${active ? '' : `apmRequestAttendance('${sid}','${val}')`}" style="${btnStyle(active)}${active?'pointer-events:none;':''}">${lbl}</button>`;
              }).join('')}
              ${savedIsSelfTape ? `<button onclick="openSelfTapeEmailPreview(_apmApp)" style="margin-left:0.25rem;background:#efab45;color:#000;border:none;border-radius:6px;padding:0.22rem 0.8rem;font-size:0.75rem;font-weight:700;cursor:pointer;font-family:inherit;">Send Link</button><button onclick="copySelfTapeSubmissionLink(_apmApp, this)" style="background:#fff;color:#572e88;border:1.5px solid rgba(87,46,136,0.25);border-radius:6px;padding:0.2rem 0.75rem;font-size:0.75rem;font-weight:700;cursor:pointer;font-family:inherit;">Copy Link</button>` : ''}
-             ${attendanceChanged ? `<span style="font-size:0.72rem;color:#572e88;font-weight:600;">· changed</span>` : ''}
+             ${attendanceChanged ? `<span style="font-size:0.72rem;color:#572e88;font-weight:700;">· changed</span>` : ''}
            </div>`;
       const isOpen = _apmPickingSessions.has(session.id);
       return `
@@ -42801,7 +42801,7 @@ See you soon!
         ? `<img src="${esc(currentUrl)}" class="apm-headshot-preview" alt="Current" onerror="this.outerHTML='<div class=\\'apm-headshot-placeholder-lg\\' style=\\'width:100px;height:125px;font-size:2rem;\\'>👤</div>'" />`
         : `<div class="apm-headshot-placeholder-lg" style="width:100px;height:125px;font-size:2rem;">👤</div>`;
       return `
-        <p style="font-size:0.82rem;color:#1a1530;font-weight:600;margin-bottom:1rem;">Replace this headshot?</p>
+        <p style="font-size:0.82rem;color:#1a1530;font-weight:700;margin-bottom:1rem;">Replace this headshot?</p>
         <div style="display:flex;gap:1.5rem;align-items:flex-start;margin-bottom:1.25rem;">
           <div style="text-align:center;">
             <div style="font-size:0.68rem;font-weight:700;color:rgba(87,46,136,0.5);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.4rem;">Current</div>
@@ -43844,7 +43844,7 @@ See you soon!
     if (!roles.length) {
       board.innerHTML = `<div style="text-align:center;padding:3rem 2rem;color:rgba(87,46,136,0.5);">
         <img src="/ASSETS/Images/Icons/Casting Board.svg" alt="" style="width:2.5rem;opacity:0.25;filter:brightness(0) saturate(100%) invert(60%) sepia(10%) saturate(500%) hue-rotate(230deg);margin-bottom:0.75rem;display:block;margin-left:auto;margin-right:auto;" />
-        <div style="font-size:0.875rem;font-weight:600;color:rgba(87,46,136,0.5);margin-bottom:0.3rem;">No roles yet</div>
+        <div style="font-size:0.875rem;font-weight:700;color:rgba(87,46,136,0.5);margin-bottom:0.3rem;">No roles yet</div>
         <div style="font-size:0.8rem;">Add a role to start building your cast list.</div>
       </div>`;
       return;
@@ -46345,7 +46345,7 @@ See you soon!
         +     '<strong style="font-size:0.9rem;color:#1a1530;">' + esc(row.name || 'Unknown') + '</strong>'
         +     '<span class="vol-req-badge vol-req-badge--pending" style="font-size:0.55rem;">' + esc(matchLabel) + '</span>'
         +   '</div>'
-        +   '<div style="font-size:0.76rem;color:#572e88;font-weight:750;overflow-wrap:anywhere;">' + esc(email) + '</div>'
+        +   '<div style="font-size:0.76rem;color:#572e88;font-weight:700;overflow-wrap:anywhere;">' + esc(email) + '</div>'
         +   '<div style="font-size:0.72rem;color:#6f6382;margin-top:0.18rem;line-height:1.4;">' + esc(roles) + ' &middot; ' + candidate.rows.length + ' request' + (candidate.rows.length === 1 ? '' : 's') + '</div>'
         +   '<div style="font-size:0.68rem;color:rgba(87,46,136,0.5);margin-top:0.2rem;">Current code: ' + esc(volReqSignupPasscode(row) || '—') + '</div>'
         + '</div>'
@@ -46364,7 +46364,7 @@ See you soon!
       + '<div style="background:#f8f7fc;border:1px solid rgba(87,46,136,0.1);border-radius:8px;padding:0.75rem;margin-bottom:1rem;">'
       +   '<div style="font-size:0.68rem;font-weight:900;text-transform:uppercase;letter-spacing:0.06em;color:rgba(87,46,136,0.5);margin-bottom:0.18rem;">Keep this account</div>'
       +   '<div style="font-weight:900;color:#1a1530;">' + esc(target.name || 'Unknown') + '</div>'
-      +   '<div style="font-size:0.76rem;color:#572e88;font-weight:750;overflow-wrap:anywhere;">' + esc(target.email || target.volunteer_email || '') + '</div>'
+      +   '<div style="font-size:0.76rem;color:#572e88;font-weight:700;overflow-wrap:anywhere;">' + esc(target.email || target.volunteer_email || '') + '</div>'
       +   '<div style="font-size:0.72rem;color:#6f6382;margin-top:0.18rem;">Production Code: <strong style="letter-spacing:0.08em;color:#352756;">' + esc(targetCode || '—') + '</strong></div>'
       + '</div>'
       + '<div style="display:flex;flex-direction:column;gap:0.65rem;">' + candidateRows + '</div>'
@@ -47406,19 +47406,19 @@ See you soon!
           <div id="vol-fill-error" style="display:none;font-size:0.75rem;font-weight:700;color:#b33a25;padding:0.4rem 0.6rem;background:rgba(179,58,37,0.08);border-radius:6px;"></div>
           <div style="display:flex;flex-direction:column;gap:0.3rem;">
             <label style="font-size:0.72rem;font-weight:800;color:#352756;">Full Name *</label>
-            <input id="vol-fill-name" type="text" placeholder="Jane Smith" style="border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;padding:0.55rem 0.75rem;font-family:inherit;font-size:0.86rem;font-weight:600;color:#1a1530;outline:none;width:100%;box-sizing:border-box;" />
+            <input id="vol-fill-name" type="text" placeholder="Jane Smith" style="border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;padding:0.55rem 0.75rem;font-family:inherit;font-size:0.86rem;font-weight:700;color:#1a1530;outline:none;width:100%;box-sizing:border-box;" />
           </div>
           <div style="display:flex;flex-direction:column;gap:0.3rem;">
-            <label style="font-size:0.72rem;font-weight:800;color:#352756;">Email <span style="font-weight:500;opacity:0.6;">(optional)</span></label>
-            <input id="vol-fill-email" type="email" placeholder="jane@example.com" style="border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;padding:0.55rem 0.75rem;font-family:inherit;font-size:0.86rem;font-weight:600;color:#1a1530;outline:none;width:100%;box-sizing:border-box;" />
+            <label style="font-size:0.72rem;font-weight:800;color:#352756;">Email <span style="font-weight:400;opacity:0.6;">(optional)</span></label>
+            <input id="vol-fill-email" type="email" placeholder="jane@example.com" style="border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;padding:0.55rem 0.75rem;font-family:inherit;font-size:0.86rem;font-weight:700;color:#1a1530;outline:none;width:100%;box-sizing:border-box;" />
           </div>
           <div style="display:flex;flex-direction:column;gap:0.3rem;">
-            <label style="font-size:0.72rem;font-weight:800;color:#352756;">Phone <span style="font-weight:500;opacity:0.6;">(optional)</span></label>
-            <input id="vol-fill-phone" type="tel" placeholder="(604) 555-0123" style="border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;padding:0.55rem 0.75rem;font-family:inherit;font-size:0.86rem;font-weight:600;color:#1a1530;outline:none;width:100%;box-sizing:border-box;" />
+            <label style="font-size:0.72rem;font-weight:800;color:#352756;">Phone <span style="font-weight:400;opacity:0.6;">(optional)</span></label>
+            <input id="vol-fill-phone" type="tel" placeholder="(604) 555-0123" style="border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;padding:0.55rem 0.75rem;font-family:inherit;font-size:0.86rem;font-weight:700;color:#1a1530;outline:none;width:100%;box-sizing:border-box;" />
           </div>
           <div style="display:flex;flex-direction:column;gap:0.3rem;">
-            <label style="font-size:0.72rem;font-weight:800;color:#352756;">Notes <span style="font-weight:500;opacity:0.6;">(optional)</span></label>
-            <textarea id="vol-fill-notes" placeholder="Any details about this volunteer..." rows="2" style="border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;padding:0.55rem 0.75rem;font-family:inherit;font-size:0.86rem;font-weight:600;color:#1a1530;outline:none;width:100%;box-sizing:border-box;resize:vertical;"></textarea>
+            <label style="font-size:0.72rem;font-weight:800;color:#352756;">Notes <span style="font-weight:400;opacity:0.6;">(optional)</span></label>
+            <textarea id="vol-fill-notes" placeholder="Any details about this volunteer..." rows="2" style="border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;padding:0.55rem 0.75rem;font-family:inherit;font-size:0.86rem;font-weight:700;color:#1a1530;outline:none;width:100%;box-sizing:border-box;resize:vertical;"></textarea>
           </div>
           <button type="button" id="vol-fill-save-btn" class="btn-primary" style="width:100%;justify-content:center;" onclick="volFillRoleSave('${esc(type)}','${esc(String(ri))}')">Mark as Filled</button>`;
     pop.innerHTML = `
@@ -47426,7 +47426,7 @@ See you soon!
         <div style="background:#572e88;color:#fff;padding:1rem 1.25rem;display:flex;justify-content:space-between;align-items:center;">
           <div>
             <div style="font-size:0.62rem;font-weight:900;letter-spacing:0.09em;text-transform:uppercase;opacity:0.78;">${esc(department)}</div>
-            <div style="font-size:1rem;font-weight:950;">${esc(roleName || 'Volunteer Role')}</div>
+            <div style="font-size:1rem;font-weight:900;">${esc(roleName || 'Volunteer Role')}</div>
           </div>
           <button type="button" style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.35);color:#fff;border-radius:6px;padding:0.22rem 0.6rem;font-size:0.68rem;font-weight:800;cursor:pointer;font-family:inherit;" onclick="this.closest('.vol-schedule-modal').remove()">✕ Close</button>
         </div>
@@ -47706,7 +47706,7 @@ See you soon!
 	            <input type="text" id="vol-add-custom-name" placeholder="e.g. Wardrobe Steamer" oninput="volRefreshAddRolePreview()" />
 	          </div>
 	          <div class="vol-schedule-field vol-schedule-field--full">
-	            <label>Description <span style="font-weight:500;text-transform:none;letter-spacing:0;">(optional)</span></label>
+	            <label>Description <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
 	            <textarea id="vol-add-desc" rows="2" placeholder="What does this person do?" oninput="this.dataset.userEdited='1'"></textarea>
 	          </div>
 	          <button type="button" class="vol-schedule-save" onclick="volConfirmAddRole('${type}')">Add role</button>

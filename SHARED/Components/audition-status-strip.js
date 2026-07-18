@@ -73,7 +73,7 @@
         margin: 0;
         font: inherit;
         font-size: 0.73rem;
-        font-weight: 600;
+        font-weight: 700;
         color: #8e82a7;
         cursor: pointer;
         line-height: 1.25;

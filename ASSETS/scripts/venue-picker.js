@@ -222,7 +222,7 @@
                      onmouseover="this.style.background='rgba(87,46,136,0.05)'"
                      onmouseout="this.style.background=''"
                      onclick="VenuePicker._selectSuggestion('${pickerId}', ${JSON.stringify({ name, address, lat: r.lat, lng: r.lon, place_id: String(r.place_id) }).replace(/"/g, '&quot;')})">
-                  <div style="font-weight:600;color:#1a1530;">${_esc(name)}</div>
+                  <div style="font-weight:700;color:#1a1530;">${_esc(name)}</div>
                   <div style="font-size:0.72rem;color:#9a90b0;margin-top:0.1rem;">${_esc(address)}</div>
                 </div>`;
       }).join('');

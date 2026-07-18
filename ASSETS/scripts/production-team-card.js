@@ -406,8 +406,8 @@ function renderCreativeTeamLayoutTemplate(member, options = {}) {
   const innerHtml = `
     <div style="display:grid;grid-template-columns:${dotColumn} minmax(0,1fr);align-items:center;column-gap:0.65rem;min-width:0;">
       <span aria-hidden="true" style="width:${dotSize};height:${dotSize};border-radius:999px;background:${color};box-shadow:0 0 0 ${dotHalo} ${halo};justify-self:center;align-self:center;grid-row:1 / span 2;"></span>
-      <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;color:#111;font-size:${roleSize};font-weight:950;line-height:0.95;text-transform:uppercase;">${role}</div>
-      <div style="grid-column:2;min-width:0;overflow:hidden;text-overflow:ellipsis;color:#242124;font-size:${nameSize};font-weight:500;line-height:1.12;text-transform:uppercase;margin-top:0.22rem;">${name}</div>
+      <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;color:#111;font-size:${roleSize};font-weight:900;line-height:0.95;text-transform:uppercase;">${role}</div>
+      <div style="grid-column:2;min-width:0;overflow:hidden;text-overflow:ellipsis;color:#242124;font-size:${nameSize};font-weight:400;line-height:1.12;text-transform:uppercase;margin-top:0.22rem;">${name}</div>
     </div>`;
 
   if (!framed) {

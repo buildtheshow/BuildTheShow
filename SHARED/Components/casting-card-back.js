@@ -196,7 +196,7 @@ function buildCastingCardBack(app, opts = {}) {
     const rowsHtml = entries.map(({ sessionLabel, charName, roleType, note, authorName, authorRole, authorColor }) =>
       `<div class="irb-inroom-role-note-block" style="${authorColor ? `border-left-color:${escStr(authorColor)};background:${escStr(authorColor)}12;` : ''}">
         <div class="irb-inroom-role-note-header">
-          <span class="irb-inroom-role-note-name">${sessionLabel ? `<span style="display:block;font-size:0.75em;font-weight:700;opacity:0.7;">${escStr(sessionLabel)}</span>` : ''}${escStr(charName)}${roleType === 'Group' ? ' <span style="font-size:0.85em;font-weight:600;opacity:0.65;">(group)</span>' : ''}</span>
+          <span class="irb-inroom-role-note-name">${sessionLabel ? `<span style="display:block;font-size:0.75em;font-weight:700;opacity:0.7;">${escStr(sessionLabel)}</span>` : ''}${escStr(charName)}${roleType === 'Group' ? ' <span style="font-size:0.85em;font-weight:700;opacity:0.65;">(group)</span>' : ''}</span>
           ${roleType && roleType !== 'Group' ? `<span class="irb-inroom-role-note-type">${escStr(roleType)}</span>` : ''}
         </div>
         ${authorName || authorRole ? `<div class="irb-inroom-note-label" style="${authorColor ? `color:${escStr(authorColor)};` : ''}">${escStr([authorName, authorRole].filter(Boolean).join(' · '))}</div>` : ''}
@@ -628,7 +628,7 @@ function buildCastingCardBack(app, opts = {}) {
       return `<div class="irb-session-block" style="background:#ecf3ee;border:1.5px solid rgba(118,158,123,0.3);border-radius:6px;padding:0.45rem 0.5rem;margin-bottom:0.4rem;">
         <div style="font-size:0.72rem;font-weight:800;color:#769e7b;margin-bottom:0.2rem;">${label}</div>
         <a href="${url}" target="_blank" rel="noopener"
-           style="font-size:0.7rem;color:#476aaa;font-weight:600;word-break:break-all;text-decoration:underline;line-height:1.35;display:block;">
+           style="font-size:0.7rem;color:#476aaa;font-weight:700;word-break:break-all;text-decoration:underline;line-height:1.35;display:block;">
           ${url}
         </a>
         ${date ? `<div style="font-size:0.65rem;color:#769e7b;margin-top:0.2rem;">${date}</div>` : ''}

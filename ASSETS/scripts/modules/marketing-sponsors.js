@@ -1582,7 +1582,7 @@
         '<div style="background:#572e88;height:6px;border-radius:3px 3px 0 0;margin:-1rem -1.4rem 0;"></div>' +
         '<div style="padding-top:1.25rem;">' +
           '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">' +
-            '<div><div style="font-size:1.5rem;font-weight:950;color:#1a1530;letter-spacing:-0.01em;">INVOICE ' + esc(invNum) + '</div>' +
+            '<div><div style="font-size:1.5rem;font-weight:900;color:#1a1530;letter-spacing:-0.01em;">INVOICE ' + esc(invNum) + '</div>' +
               '<div style="font-size:0.78rem;color:#9a90b0;margin-top:4px;"><strong>Date of issue:</strong> ' + esc(new Date(today).toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' })) + '</div>' +
             '</div>' +
             (logoHtml ? '<div>' + logoHtml + '</div>' : '') +
@@ -1610,7 +1610,7 @@
               '<th style="text-align:right;padding:10px 12px;font-size:0.62rem;font-weight:800;color:#9a90b0;text-transform:uppercase;letter-spacing:0.06em;width:100px;">Amount</th>' +
             '</tr></thead>' +
             '<tbody><tr style="border-bottom:1px solid rgba(87,46,136,0.06);">' +
-              '<td style="padding:12px;font-size:0.82rem;color:#1a1530;font-weight:600;">' + esc(itemDesc) + '</td>' +
+              '<td style="padding:12px;font-size:0.82rem;color:#1a1530;font-weight:700;">' + esc(itemDesc) + '</td>' +
               '<td style="padding:12px;text-align:right;font-size:0.82rem;color:#4a3570;">1</td>' +
               '<td style="padding:12px;text-align:right;font-size:0.82rem;color:#4a3570;">' + amountStr + '</td>' +
               '<td style="padding:12px;text-align:right;font-size:0.82rem;color:#1a1530;font-weight:700;">' + amountStr + '</td>' +
@@ -1620,7 +1620,7 @@
             '<div style="width:220px;">' +
               '<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:0.78rem;color:#4a3570;"><span>Subtotal</span><span>' + amountStr + '</span></div>' +
               '<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:0.78rem;color:#4a3570;"><span>Tax</span><span>$0.00</span></div>' +
-              '<div style="display:flex;justify-content:space-between;padding:10px 0 6px;font-size:1rem;font-weight:950;color:#1a1530;border-top:2px solid #572e88;margin-top:4px;"><span>TOTAL</span><span style="color:#572e88;">' + amountStr + '</span></div>' +
+              '<div style="display:flex;justify-content:space-between;padding:10px 0 6px;font-size:1rem;font-weight:900;color:#1a1530;border-top:2px solid #572e88;margin-top:4px;"><span>TOTAL</span><span style="color:#572e88;">' + amountStr + '</span></div>' +
             '</div>' +
           '</div>' +
           '<div style="background:rgba(87,46,136,0.03);border-radius:8px;padding:12px 16px;font-size:0.72rem;color:#4a3570;line-height:1.6;">' +
@@ -1721,15 +1721,15 @@
         '<div style="display:flex;gap:12px;margin-bottom:12px;">' +
           '<div style="flex:1;background:rgba(87,46,136,0.03);border-radius:8px;padding:10px 12px;text-align:center;">' +
             '<div style="font-size:0.55rem;font-weight:800;color:#9a90b0;text-transform:uppercase;">Total</div>' +
-            '<div style="font-size:1rem;font-weight:950;color:#1a1530;">$' + (totalCents/100).toFixed(2) + '</div>' +
+            '<div style="font-size:1rem;font-weight:900;color:#1a1530;">$' + (totalCents/100).toFixed(2) + '</div>' +
           '</div>' +
           '<div style="flex:1;background:rgba(118,158,123,0.08);border-radius:8px;padding:10px 12px;text-align:center;">' +
             '<div style="font-size:0.55rem;font-weight:800;color:#9a90b0;text-transform:uppercase;">Already Paid</div>' +
-            '<div style="font-size:1rem;font-weight:950;color:#769e7b;">$' + (alreadyPaid/100).toFixed(2) + '</div>' +
+            '<div style="font-size:1rem;font-weight:900;color:#769e7b;">$' + (alreadyPaid/100).toFixed(2) + '</div>' +
           '</div>' +
           '<div style="flex:1;background:rgba(209,82,61,0.06);border-radius:8px;padding:10px 12px;text-align:center;">' +
             '<div style="font-size:0.55rem;font-weight:800;color:#9a90b0;text-transform:uppercase;">Owing</div>' +
-            '<div style="font-size:1rem;font-weight:950;color:#d1523d;">$' + (owing/100).toFixed(2) + '</div>' +
+            '<div style="font-size:1rem;font-weight:900;color:#d1523d;">$' + (owing/100).toFixed(2) + '</div>' +
           '</div>' +
         '</div>' +
         '<div class="spn-crm-modal-field"><label>Amount received</label><input type="number" id="spn-crm-pay-amount" step="0.01" min="0" value="' + (owing/100).toFixed(2) + '" /></div>' +

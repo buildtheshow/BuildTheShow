@@ -275,7 +275,7 @@
       }).catch(e => {
         console.warn('[BTS] ticketing dashboard render error:', e?.message);
         const root = document.getElementById('tix-dashboard-root');
-        if (root) root.innerHTML = '<div style="text-align:center;padding:3rem 1.5rem;color:rgba(26,21,48,0.45);font-size:0.88rem;font-weight:600;">Could not load the ticketing dashboard. Try refreshing the page.</div>';
+        if (root) root.innerHTML = '<div style="text-align:center;padding:3rem 1.5rem;color:rgba(26,21,48,0.45);font-size:0.88rem;font-weight:700;">Could not load the ticketing dashboard. Try refreshing the page.</div>';
       });
     }
   }
@@ -1042,7 +1042,7 @@
     const discountRows = _tixSetup.discounts.map((d, i) => `
       <div class="tix-row">
         <input type="text" value="${esc(d.name || '')}" placeholder="e.g. Early Bird" style="flex:1;" onblur="tixSaveDiscount(${i},'name',this.value)" />
-        <select style="border:1.5px solid rgba(87,46,136,0.18);border-radius:6px;padding:0.35rem;font-family:inherit;font-size:0.78rem;font-weight:600;" onchange="tixSaveDiscount(${i},'type',this.value)">
+        <select style="border:1.5px solid rgba(87,46,136,0.18);border-radius:6px;padding:0.35rem;font-family:inherit;font-size:0.78rem;font-weight:700;" onchange="tixSaveDiscount(${i},'type',this.value)">
           <option value="percent" ${d.type === 'percent' ? 'selected' : ''}>% Off</option>
           <option value="fixed" ${d.type === 'fixed' ? 'selected' : ''}>$ Off</option>
           <option value="free" ${d.type === 'free' ? 'selected' : ''}>Free</option>

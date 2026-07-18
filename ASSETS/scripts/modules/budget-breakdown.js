@@ -96,7 +96,7 @@
         return '<div class="bgt-list-row bgt-income-cols">' +
           '<div class="bgt-list-name">' + s.esc(c.name) + '</div>' +
           '<div style="display:flex;align-items:center;gap:0.4rem">' +
-            '<span style="font-size:0.82rem;font-weight:600;color:#9a90b0">$</span>' +
+            '<span style="font-size:0.82rem;font-weight:700;color:#9a90b0">$</span>' +
             '<input class="bgt-amount-input" type="number" min="0" step="0.01" value="' + ((c.planned_cents || 0) / 100).toFixed(2) + '" onchange="BudgetBreakdownModule.updatePlanned(\'' + c.id + '\',this.value)" />' +
           '</div>' +
           '<div class="bgt-row-actions">' +
@@ -114,7 +114,7 @@
         return '<div class="bgt-list-row bgt-expense-cols">' +
           '<div class="bgt-list-name">' + s.esc(c.name) + '</div>' +
           '<div style="display:flex;align-items:center;gap:0.4rem">' +
-            '<span style="font-size:0.82rem;font-weight:600;color:#9a90b0">$</span>' +
+            '<span style="font-size:0.82rem;font-weight:700;color:#9a90b0">$</span>' +
             '<input class="bgt-amount-input" type="number" min="0" step="0.01" value="' + (planned / 100).toFixed(2) + '" onchange="BudgetBreakdownModule.updatePlanned(\'' + c.id + '\',this.value)" />' +
           '</div>' +
           '<div class="bgt-list-sub" style="text-align:right">' + s.fmt$(actual) + '</div>' +

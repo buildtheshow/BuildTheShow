@@ -61,7 +61,7 @@
 
     .bts-pl-msg {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      font-size: 1.05rem; font-weight: 500; color: rgba(255,255,255,0.72);
+      font-size: 1.05rem; font-weight: 400; color: rgba(255,255,255,0.72);
       min-height: 1.5em; text-align: center;
       transition: opacity 0.3s ease;
     }

@@ -279,7 +279,7 @@
       .pp-table tbody tr:last-child { border-bottom:none; }
       .pp-table tbody tr:hover { background:rgba(87,46,136,0.025); }
       .pp-table tbody td { padding:0.85rem 0.9rem; font-size:0.82rem; color:#1a1530; vertical-align:middle; }
-      .pp-table tbody td.pp-col-num { color:rgba(26,21,48,0.6); font-weight:600; }
+      .pp-table tbody td.pp-col-num { color:rgba(26,21,48,0.6); font-weight:700; }
       .pp-table tbody td.pp-col-menu { text-align:right; padding-right:0.75rem; }
       .pp-show-cell { display:flex; align-items:center; gap:0.75rem; }
       .pp-show-thumb { height:44px; width:44px; border-radius:8px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:1rem; font-weight:900; color:#fff; }
@@ -298,7 +298,7 @@
 
       /* ---- row overflow dropdown ---- */
       .pp-row-menu { position:fixed; background:#fff; border:1px solid rgba(87,46,136,0.14); border-radius:10px; box-shadow:0 8px 28px rgba(26,21,48,0.14); z-index:3100; min-width:160px; padding:0.3rem 0; }
-      .pp-row-menu-item { display:block; width:100%; text-align:left; padding:0.55rem 1rem; font-family:var(--bts-font); font-size:0.83rem; color:#1a1530; font-weight:600; background:none; border:none; cursor:pointer; transition:background 0.1s; }
+      .pp-row-menu-item { display:block; width:100%; text-align:left; padding:0.55rem 1rem; font-family:var(--bts-font); font-size:0.83rem; color:#1a1530; font-weight:700; background:none; border:none; cursor:pointer; transition:background 0.1s; }
       .pp-row-menu-item:hover { background:rgba(87,46,136,0.06); }
       .pp-row-menu-item.danger { color:#d1523d; }
       .pp-row-menu-sep { height:1px; background:rgba(87,46,136,0.08); margin:0.25rem 0; }
@@ -385,7 +385,7 @@
       .pp-sc-menu-btn { background:none; border:none; cursor:pointer; padding:0.2rem 0.4rem; border-radius:6px; color:rgba(255,255,255,0.6); font-size:1.05rem; line-height:1; font-weight:900; transition:background 0.12s,color 0.12s; }
       .pp-sc-menu-btn:hover { background:rgba(255,255,255,0.12); color:#fff; }
       .pp-sc-year { font-size:0.78rem; font-weight:700; color:rgba(255,255,255,0.65); line-height:1; margin-bottom:0.18rem; }
-      .pp-sc-title { font-size:1.75rem; font-weight:950; color:#fff; line-height:1; margin-bottom:0.42rem; max-width:75%; }
+      .pp-sc-title { font-size:1.75rem; font-weight:900; color:#fff; line-height:1; margin-bottom:0.42rem; max-width:75%; }
       .pp-sc-passcode { display:flex; align-items:center; gap:0.4rem; font-size:0.72rem; font-weight:700; color:rgba(255,255,255,0.55); letter-spacing:0.06em; margin-bottom:0.7rem; }
       .pp-sc-passcode-copy { background:none; border:none; cursor:pointer; padding:0; display:flex; align-items:center; opacity:0.5; transition:opacity 0.15s; flex-shrink:0; }
       .pp-sc-passcode-copy:hover { opacity:1; }
@@ -654,11 +654,11 @@
                     <div class="form-group" style="margin:0;"><label class="form-label">Accepting Pitches?</label><select class="form-select" id="ppi-is-open" style="height:42px;"><option value="yes">Yes</option><option value="no">No</option></select></div>
                   </div>
                   <div class="form-group" style="margin:0;">
-                    <label class="form-label">Passcode <span style="font-weight:500;opacity:0.45;text-transform:none;letter-spacing:0;">(set at creation, cannot be changed)</span></label>
+                    <label class="form-label">Passcode <span style="font-weight:400;opacity:0.45;text-transform:none;letter-spacing:0;">(set at creation, cannot be changed)</span></label>
                     <input class="form-input" id="ppi-access-code" type="text" readonly style="height:42px;background:rgba(26,21,48,0.03);color:rgba(26,21,48,0.4);cursor:default;letter-spacing:0.06em;" />
                   </div>
                   <div class="form-group" style="margin:0;">
-                    <label class="form-label">Description <span style="font-weight:500;opacity:0.45;text-transform:none;letter-spacing:0;">(optional)</span></label>
+                    <label class="form-label">Description <span style="font-weight:400;opacity:0.45;text-transform:none;letter-spacing:0;">(optional)</span></label>
                     <textarea class="form-textarea" id="ppi-description" placeholder="Tell pitchers what you're looking for this season." style="height:100px;resize:none;display:block;width:100%;box-sizing:border-box;"></textarea>
                   </div>
                 </div>
@@ -1505,23 +1505,23 @@
       .ppv-review-notes { width:100%; min-height:72px; border:1.5px solid rgba(26,21,48,0.12); border-radius:10px; padding:0.55rem 0.7rem; font-size:0.78rem; color:#1a1530; resize:vertical; font-family:inherit; outline:none; transition:border-color 0.14s; box-sizing:border-box; }
       .ppv-review-notes:focus { border-color:#572e88; }
       .ppv-save-row { display:flex; justify-content:flex-end; padding-top:0.1rem; }
-      .ppv-save-status { font-size:0.7rem; color:rgba(26,21,48,0.3); font-weight:600; transition:opacity 0.2s; }
+      .ppv-save-status { font-size:0.7rem; color:rgba(26,21,48,0.3); font-weight:700; transition:opacity 0.2s; }
       .ppvl-layout { display:flex; gap:2rem; align-items:flex-start; }
       .ppvl-sidebar { width:190px; flex-shrink:0; display:flex; flex-direction:column; gap:1.25rem; }
       .ppvl-poster { border-radius:14px; overflow:hidden; background:#1a1530; }
       .ppvl-poster img { width:100%; display:block; }
       .ppvl-poster-fallback { aspect-ratio:2/3; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#572e88,#476aaa); color:rgba(255,255,255,0.35); font-size:2.5rem; font-weight:900; }
       .ppvl-basics { display:flex; flex-direction:column; gap:0.75rem; }
-      .ppvl-basics-title { font-size:0.7rem; font-weight:600; color:rgba(26,21,48,0.35); margin-bottom:0.1rem; }
-      .ppvl-content-label { font-size:0.72rem; font-weight:600; color:rgba(26,21,48,0.4); margin-bottom:0.2rem; }
+      .ppvl-basics-title { font-size:0.7rem; font-weight:700; color:rgba(26,21,48,0.35); margin-bottom:0.1rem; }
+      .ppvl-content-label { font-size:0.72rem; font-weight:700; color:rgba(26,21,48,0.4); margin-bottom:0.2rem; }
       .ppvl-basic-item { display:flex; align-items:center; gap:0.55rem; }
       .ppvl-basic-icon { width:18px; height:18px; flex-shrink:0; opacity:0.28; }
       .ppvl-basic-value { font-size:0.9rem; font-weight:900; color:#1a1530; line-height:1.1; }
-      .ppvl-basic-label { font-size:0.68rem; font-weight:500; color:rgba(26,21,48,0.38); }
+      .ppvl-basic-label { font-size:0.68rem; font-weight:400; color:rgba(26,21,48,0.38); }
       .ppvl-content { flex:1; min-width:0; display:flex; flex-direction:column; gap:1.5rem; overflow-wrap:break-word; }
-      .ppvl-kicker { font-size:0.72rem; font-weight:600; color:rgba(26,21,48,0.35); margin-bottom:0.1rem; }
+      .ppvl-kicker { font-size:0.72rem; font-weight:700; color:rgba(26,21,48,0.35); margin-bottom:0.1rem; }
       .ppvl-title { font-size:2.1rem; font-weight:900; color:#1a1530; line-height:1.05; letter-spacing:-0.01em; word-break:break-word; }
-      .ppvl-genre { font-size:0.84rem; font-weight:600; color:rgba(26,21,48,0.45); margin-top:0.25rem; font-style:italic; }
+      .ppvl-genre { font-size:0.84rem; font-weight:700; color:rgba(26,21,48,0.45); margin-top:0.25rem; font-style:italic; }
       .ppvl-logline { font-size:0.97rem; font-weight:700; color:#1a1530; line-height:1.65; margin:0; }
       .ppvl-synopsis { font-size:0.86rem; color:rgba(26,21,48,0.65); line-height:1.85; white-space:pre-wrap; overflow-wrap:break-word; }
       .ppvl-review-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
@@ -1537,8 +1537,8 @@
       .ppvl-review-list-icon { width:15px; height:15px; flex-shrink:0; margin-top:0.1rem; }
       .ppvl-footer-fields { display:flex; gap:2rem; flex-wrap:wrap; border-top:1px solid rgba(26,21,48,0.08); padding-top:1.25rem; }
       .ppvl-footer-field { display:flex; flex-direction:column; gap:0.25rem; }
-      .ppvl-footer-lbl { font-size:0.7rem; font-weight:500; color:rgba(26,21,48,0.38); }
-      .ppvl-footer-val { font-size:0.83rem; font-weight:600; color:#1a1530; overflow-wrap:break-word; word-break:break-all; }
+      .ppvl-footer-lbl { font-size:0.7rem; font-weight:400; color:rgba(26,21,48,0.38); }
+      .ppvl-footer-val { font-size:0.83rem; font-weight:700; color:#1a1530; overflow-wrap:break-word; word-break:break-all; }
       .ppvl-footer-val.empty { color:rgba(26,21,48,0.28); font-style:italic; }
       .ppvl-details { display:flex; flex-direction:column; gap:1rem; border-top:1px solid rgba(26,21,48,0.08); padding-top:1.5rem; margin-top:0.25rem; }
       .ppvl-detail-section { border-radius:14px; overflow:hidden; }
@@ -1548,14 +1548,14 @@
       .ppvl-detail-section-body { background:#fff; border:1px solid rgba(26,21,48,0.07); border-top:none; border-radius:0 0 14px 14px; padding:1.1rem 1.2rem; display:flex; flex-direction:column; gap:0.75rem; }
       .ppvl-detail-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:0.75rem; }
       .ppvl-detail-field { display:flex; flex-direction:column; gap:0.2rem; }
-      .ppvl-detail-field-lbl { font-size:0.7rem; font-weight:500; color:rgba(26,21,48,0.4); }
+      .ppvl-detail-field-lbl { font-size:0.7rem; font-weight:400; color:rgba(26,21,48,0.4); }
       .ppvl-detail-field-val { font-size:0.86rem; font-weight:700; color:#1a1530; }
       .ppvl-detail-qa { display:flex; flex-direction:column; gap:0.3rem; padding-bottom:0.65rem; border-bottom:1px solid rgba(26,21,48,0.06); }
       .ppvl-detail-qa:last-child { padding-bottom:0; border-bottom:none; }
-      .ppvl-detail-qa-lbl { font-size:0.72rem; font-weight:600; color:rgba(26,21,48,0.45); }
+      .ppvl-detail-qa-lbl { font-size:0.72rem; font-weight:700; color:rgba(26,21,48,0.45); }
       .ppvl-detail-qa-val { font-size:0.87rem; color:#1a1530; line-height:1.75; overflow-wrap:break-word; }
       .ppvl-detail-pills { display:flex; flex-wrap:wrap; gap:0.3rem; }
-      .ppvl-detail-pill { background:rgba(26,21,48,0.07); border-radius:99px; padding:0.22rem 0.65rem; font-size:0.72rem; font-weight:600; color:rgba(26,21,48,0.65); }
+      .ppvl-detail-pill { background:rgba(26,21,48,0.07); border-radius:99px; padding:0.22rem 0.65rem; font-size:0.72rem; font-weight:700; color:rgba(26,21,48,0.65); }
       .ppvl-detail-pill.warning { background:rgba(209,82,61,0.09); color:#d1523d; }
     `;
     document.head.appendChild(s);

@@ -416,7 +416,7 @@ window.SeatMapBuilder = (function() {
     .sm-stage-btn--active { border-color: #572e88; background: #572e88; color: #fff; }
     .sm-section-cfg-head { display: grid; grid-template-columns: 1fr 80px; gap: 0.65rem; font-size: 0.58rem; font-weight: 900; color: #8e82a7; text-transform: uppercase; letter-spacing: 0.08em; padding-bottom: 0.3rem; border-bottom: 1.5px solid #eceaf3; margin-bottom: 0.15rem; }
     .sm-section-cfg-row { display: grid; grid-template-columns: 1fr 80px; gap: 0.65rem; align-items: end; padding: 0.5rem 0; border-bottom: 1px solid #f5f3fa; }
-    .sm-generate-btn { width: 100%; padding: 0.85rem; border: none; border-radius: 10px; background: #572e88; color: #fff; font: inherit; font-size: 0.88rem; font-weight: 950; cursor: pointer; }
+    .sm-generate-btn { width: 100%; padding: 0.85rem; border: none; border-radius: 10px; background: #572e88; color: #fff; font: inherit; font-size: 0.88rem; font-weight: 900; cursor: pointer; }
     .sm-generate-btn:hover { background: #6b3ba6; }
     .sm-capacity-bar { display: flex; align-items: center; gap: 1.25rem; font-size: 0.72rem; font-weight: 800; margin-bottom: 1rem; }
     .sm-capacity-bar--ok { color: #769e7b; } .sm-capacity-bar--over { color: #d1523d; }

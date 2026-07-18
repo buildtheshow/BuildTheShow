@@ -117,7 +117,7 @@
       #aci-picker-upload-btn {
         width: 100%; padding: 0.6rem 1rem; border: 1.5px dashed rgba(87,46,136,0.3);
         border-radius: 8px; background: rgba(87,46,136,0.04); color: #572e88;
-        font-size: 0.85rem; font-weight: 600; cursor: pointer;
+        font-size: 0.85rem; font-weight: 700; cursor: pointer;
         margin-bottom: 0.5rem; text-align: center;
       }
       #aci-picker-upload-btn:hover { background: rgba(87,46,136,0.08); }
@@ -126,7 +126,7 @@
         text-align: center; font-size: 0.75rem; color: #9a8aa0; margin: 0.5rem 0;
       }
       #aci-picker-text-label {
-        font-size: 0.8rem; font-weight: 600; color: #4a3a70; margin-bottom: 0.35rem; display: block;
+        font-size: 0.8rem; font-weight: 700; color: #4a3a70; margin-bottom: 0.35rem; display: block;
       }
       #aci-picker-textarea {
         width: 100%; box-sizing: border-box; padding: 0.55rem 0.75rem;
@@ -164,7 +164,7 @@
       }
       #aci-modal-body { padding: 1.2rem 1.4rem; overflow-y: auto; flex: 1; }
       #aci-status {
-        font-size: 0.82rem; color: #572e88; font-weight: 600;
+        font-size: 0.82rem; color: #572e88; font-weight: 700;
         text-align: center; padding: 0.6rem 0; display: none;
       }
       #aci-status.error { color: #c0392b; }
@@ -174,7 +174,7 @@
       }
       #aci-table th {
         text-align: left; padding: 0.4rem 0.6rem; color: #8a7aa0;
-        font-weight: 600; font-size: 0.75rem; text-transform: uppercase;
+        font-weight: 700; font-size: 0.75rem; text-transform: uppercase;
         letter-spacing: 0.04em; border-bottom: 1px solid rgba(87,46,136,0.12);
       }
       #aci-modal-footer {
@@ -184,7 +184,7 @@
       #aci-count { font-size: 0.82rem; color: #8a7aa0; }
       #aci-save-btn {
         background: #572e88; color: #fff; border: none; border-radius: 7px;
-        padding: 0.55rem 1.2rem; font-size: 0.88rem; font-weight: 600;
+        padding: 0.55rem 1.2rem; font-size: 0.88rem; font-weight: 700;
         cursor: pointer;
       }
       #aci-save-btn:disabled { opacity: 0.6; cursor: not-allowed; }

@@ -182,7 +182,7 @@
     } = config;
 
     return `<div class="template-checkin-rail" data-bts-template="checked-in-rail" style="display:grid;grid-template-columns:48px minmax(0,1fr);gap:0.5rem;align-items:stretch;min-width:0;border-radius:0 0 16px 16px;background:#fff;padding:0.55rem 0.65rem 0.75rem;overflow:hidden;">
-      <div class="template-checkin-label" style="position:relative;display:flex;align-items:center;justify-content:center;align-self:stretch;min-height:100%;margin:-0.55rem 0 -0.75rem;padding:0.55rem 0 0.75rem;border-left:2px solid rgba(87,46,136,0.12);color:#1a1530;font-size:0.66rem;font-weight:950;letter-spacing:0.08em;line-height:1.1;text-align:center;text-transform:uppercase;writing-mode:vertical-rl;transform:rotate(180deg);user-select:none;">${esc(label)}</div>
+      <div class="template-checkin-label" style="position:relative;display:flex;align-items:center;justify-content:center;align-self:stretch;min-height:100%;margin:-0.55rem 0 -0.75rem;padding:0.55rem 0 0.75rem;border-left:2px solid rgba(87,46,136,0.12);color:#1a1530;font-size:0.66rem;font-weight:900;letter-spacing:0.08em;line-height:1.1;text-align:center;text-transform:uppercase;writing-mode:vertical-rl;transform:rotate(180deg);user-select:none;">${esc(label)}</div>
       <div class="template-checkin-row" style="display:flex;flex-direction:row;flex-wrap:nowrap;align-items:flex-start;gap:0.55rem;min-width:0;max-width:100%;min-height:7.25rem;overflow-x:auto;overflow-y:hidden;padding:0.05rem 0.1rem 0.45rem;scrollbar-width:thin;-webkit-overflow-scrolling:touch;perspective:900px;">${trayCards}</div>
     </div>`;
   }
@@ -243,7 +243,7 @@
         .team-access-login-logo { height:22px; display:block; position:relative; z-index:1; margin-bottom:0.7rem; }
         .team-access-login-label { font-size:0.68rem; font-weight:900; letter-spacing: var(--bts-tracking-label); text-transform:uppercase; color:rgba(255,255,255,0.55); position:relative; z-index:1; }
         .team-access-login-body { padding:1.5rem; }
-        .team-access-login-body h1 { margin:0 0 0.3rem; font-size:1.45rem; font-weight:950; letter-spacing: 0; color:#1a1530; }
+        .team-access-login-body h1 { margin:0 0 0.3rem; font-size:1.45rem; font-weight:900; letter-spacing: 0; color:#1a1530; }
         .team-access-login-body p { color:#6a5a80; margin:0 0 1.1rem; line-height:1.5; font-size:0.88rem; }
         .team-access-login-error { color:#b91c1c; font-size:0.82rem; font-weight:800; margin-top:0.55rem; min-height:1.2em; }
       </style>
@@ -295,7 +295,7 @@
 
     return `<div class="${className}" style="${style}">
             ${icon ? `<div style="font-size:2rem;margin-bottom:0.75rem;">${icon}</div>` : ''}
-            ${title ? `<div style="font-size:0.9rem;font-weight:600;color:#6a5a80;margin-bottom:0.3rem;">${title}</div>` : ''}
+            ${title ? `<div style="font-size:0.9rem;font-weight:700;color:#6a5a80;margin-bottom:0.3rem;">${title}</div>` : ''}
             ${message ? `<div style="font-size:0.8rem;">${message}</div>` : ''}
           </div>`;
   }
@@ -565,10 +565,10 @@
     return `<div class="template-checkedin-preview" style="border-radius:16px;border:1.5px solid #e4deed;background:#fff;box-shadow:none;overflow:visible;">
       <div class="template-checkedin-head" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:0.95rem 1.05rem 0.8rem;border-bottom:1px solid #e9e2f2;">
         <div>
-          <div class="template-checkedin-title" style="color:#1f1235;font-size:1rem;font-weight:950;line-height:1.15;">${esc(title)}</div>
+          <div class="template-checkedin-title" style="color:#1f1235;font-size:1rem;font-weight:900;line-height:1.15;">${esc(title)}</div>
           ${meta ? `<div class="template-checkedin-meta" style="color:#7a6c90;font-size:0.76rem;font-weight:800;line-height:1.25;margin-top:0.1rem;">${esc(meta)}</div>` : ''}
         </div>
-        ${pill ? `<div class="template-checkedin-pill" style="display:inline-flex;align-items:center;min-height:1.9rem;padding:0 0.72rem;border-radius:999px;background:#eef6f0;color:#4f8a5c;font-size:0.72rem;font-weight:950;white-space:nowrap;">${esc(pill)}</div>` : ''}
+        ${pill ? `<div class="template-checkedin-pill" style="display:inline-flex;align-items:center;min-height:1.9rem;padding:0 0.72rem;border-radius:999px;background:#eef6f0;color:#4f8a5c;font-size:0.72rem;font-weight:900;white-space:nowrap;">${esc(pill)}</div>` : ''}
       </div>
       ${railHtml}
     </div>`;

@@ -341,7 +341,7 @@
       .pp-table tbody tr:last-child { border-bottom:none; }
       .pp-table tbody tr:hover { background:rgba(87,46,136,0.025); }
       .pp-table tbody td { padding:0.85rem 0.9rem; font-size:0.82rem; color:#1a1530; vertical-align:middle; }
-      .pp-table tbody td.pp-col-num { color:rgba(26,21,48,0.6); font-weight:600; }
+      .pp-table tbody td.pp-col-num { color:rgba(26,21,48,0.6); font-weight:700; }
       .pp-table tbody td.pp-col-menu { text-align:right; padding-right:0.75rem; }
       .pp-show-cell { display:flex; align-items:center; gap:0.75rem; }
       .pp-show-thumb { width:44px; height:44px; border-radius:8px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:1rem; font-weight:900; color:#fff; }
@@ -359,7 +359,7 @@
 
       /* ---- row overflow dropdown ---- */
       .pp-row-menu { position:fixed; background:#fff; border:1px solid rgba(87,46,136,0.14); border-radius:10px; box-shadow:0 8px 28px rgba(26,21,48,0.14); z-index:3100; min-width:160px; padding:0.3rem 0; }
-      .pp-row-menu-item { display:block; width:100%; text-align:left; padding:0.55rem 1rem; font-family:var(--bts-font); font-size:0.83rem; color:#1a1530; font-weight:600; background:none; border:none; cursor:pointer; transition:background 0.1s; }
+      .pp-row-menu-item { display:block; width:100%; text-align:left; padding:0.55rem 1rem; font-family:var(--bts-font); font-size:0.83rem; color:#1a1530; font-weight:700; background:none; border:none; cursor:pointer; transition:background 0.1s; }
       .pp-row-menu-item:hover { background:rgba(87,46,136,0.06); }
       .pp-row-menu-item.danger { color:#d1523d; }
       .pp-row-menu-sep { height:1px; background:rgba(87,46,136,0.08); margin:0.25rem 0; }
@@ -446,7 +446,7 @@
       .pp-sc-menu-btn { background:none; border:none; cursor:pointer; padding:0.2rem 0.4rem; border-radius:6px; color:rgba(255,255,255,0.6); font-size:1.05rem; line-height:1; font-weight:900; transition:background 0.12s,color 0.12s; }
       .pp-sc-menu-btn:hover { background:rgba(255,255,255,0.12); color:#fff; }
       .pp-sc-year { font-size:0.78rem; font-weight:700; color:rgba(255,255,255,0.65); line-height:1; margin-bottom:0.18rem; }
-      .pp-sc-title { font-size:1.75rem; font-weight:950; color:#fff; line-height:1; margin-bottom:0.42rem; max-width:75%; }
+      .pp-sc-title { font-size:1.75rem; font-weight:900; color:#fff; line-height:1; margin-bottom:0.42rem; max-width:75%; }
       .pp-sc-passcode { display:flex; align-items:center; gap:0.4rem; font-size:0.72rem; font-weight:700; color:rgba(255,255,255,0.55); letter-spacing:0.06em; margin-bottom:0.7rem; }
       .pp-sc-passcode-copy { background:none; border:none; cursor:pointer; padding:0; display:flex; align-items:center; opacity:0.5; transition:opacity 0.15s; flex-shrink:0; }
       .pp-sc-passcode-copy:hover { opacity:1; }
@@ -667,11 +667,11 @@
                     <div class="form-group" style="margin:0;"><label class="form-label">Accepting Pitches?</label><select class="form-select" id="ppi-is-open" style="height:42px;"><option value="yes">Yes</option><option value="no">No</option></select></div>
                   </div>
                   <div class="form-group" style="margin:0;">
-                    <label class="form-label">Passcode <span style="font-weight:500;opacity:0.45;text-transform:none;letter-spacing:0;">(set at creation, cannot be changed)</span></label>
+                    <label class="form-label">Passcode <span style="font-weight:400;opacity:0.45;text-transform:none;letter-spacing:0;">(set at creation, cannot be changed)</span></label>
                     <input class="form-input" id="ppi-access-code" type="text" readonly style="height:42px;background:rgba(26,21,48,0.03);color:rgba(26,21,48,0.4);cursor:default;letter-spacing:0.06em;" />
                   </div>
                   <div class="form-group" style="margin:0;">
-                    <label class="form-label">Description <span style="font-weight:500;opacity:0.45;text-transform:none;letter-spacing:0;">(optional)</span></label>
+                    <label class="form-label">Description <span style="font-weight:400;opacity:0.45;text-transform:none;letter-spacing:0;">(optional)</span></label>
                     <textarea class="form-textarea" id="ppi-description" placeholder="Tell pitchers what you're looking for this season." style="height:100px;resize:none;display:block;width:100%;box-sizing:border-box;"></textarea>
                   </div>
                 </div>

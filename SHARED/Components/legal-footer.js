@@ -119,9 +119,9 @@
     const year = new Date().getFullYear();
 
     footer.innerHTML = `
-      <a href="${privacyUrl}" target="_blank" rel="noopener" style="font-size:0.78rem;color:#a098b8;text-decoration:none;font-weight:500;">Privacy Policy</a>
-      <a href="${termsUrl}"   target="_blank" rel="noopener" style="font-size:0.78rem;color:#a098b8;text-decoration:none;font-weight:500;">Terms of Service</a>
-      <a href="mailto:privacy@buildtheshow.com" style="font-size:0.78rem;color:#a098b8;text-decoration:none;font-weight:500;">Contact</a>
+      <a href="${privacyUrl}" target="_blank" rel="noopener" style="font-size:0.78rem;color:#a098b8;text-decoration:none;font-weight:400;">Privacy Policy</a>
+      <a href="${termsUrl}"   target="_blank" rel="noopener" style="font-size:0.78rem;color:#a098b8;text-decoration:none;font-weight:400;">Terms of Service</a>
+      <a href="mailto:privacy@buildtheshow.com" style="font-size:0.78rem;color:#a098b8;text-decoration:none;font-weight:400;">Contact</a>
       <span style="font-size:0.78rem;color:#c8c0d8;">© ${year} Build The Show</span>
     `;
 
