@@ -5165,6 +5165,8 @@
       const logoUrl = doc.logoUrl || '';
       const lineLabel = doc.lineLabel || `${showName} registration`;
       const invoiceTitle = doc.invoiceTitle || 'Invoice';
+      const lineItems = Array.isArray(doc.lineItems) ? doc.lineItems : [];
+      const paymentItems = Array.isArray(doc.paymentItems) ? doc.paymentItems : [];
       return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5192,12 +5194,17 @@
     .label{font-size:11px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:#9b92ae;margin-bottom:8px;}
     .value{font-size:15px;font-weight:900;line-height:1.4;}
     .sub{font-size:13px;color:#7b7192;line-height:1.45;margin-top:4px;}
+    .section-title{padding:18px 32px 8px;font-size:11px;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;color:#9b92ae;}
     table{width:100%;border-collapse:collapse;}
     th{padding:14px 32px;border-bottom:1px solid #eee8f7;background:#faf8fd;text-align:left;font-size:11px;font-weight:900;letter-spacing:0.1em;text-transform:uppercase;color:#9b92ae;}
     th.right, td.right{text-align:right;}
     td{padding:18px 32px;border-bottom:1px solid #f3eff8;vertical-align:top;}
     .item-name{font-size:15px;font-weight:900;}
     .item-sub{font-size:13px;color:#7b7192;line-height:1.45;margin-top:4px;}
+    .item-meta{font-size:12px;color:#9b92ae;line-height:1.4;margin-top:4px;text-transform:uppercase;letter-spacing:0.04em;}
+    .amount-negative{color:#7a6e8a;}
+    .payment-table th,.payment-table td{padding-top:14px;padding-bottom:14px;}
+    .payment-empty{padding:0 32px 24px;font-size:13px;color:#7b7192;}
     .totals{padding:20px 32px 28px;display:flex;justify-content:flex-end;}
     .totals-box{width:min(320px,100%);}
     .total-row{display:flex;justify-content:space-between;gap:16px;padding:6px 0;font-size:14px;color:#534c64;}
@@ -5252,15 +5259,46 @@
         </tr>
       </thead>
       <tbody>
+        ${(lineItems.length ? lineItems : [{ label: lineLabel, sub: showName, amountLabel: amountPaid }]).map(item => `
         <tr>
           <td>
-            <div class="item-name">${esc(lineLabel)}</div>
-            <div class="item-sub">${esc(showName)}</div>
+            <div class="item-name">${esc(item.label || lineLabel)}</div>
+            ${item.sub ? `<div class="item-sub">${esc(item.sub)}</div>` : ''}
+            ${item.meta ? `<div class="item-meta">${esc(item.meta)}</div>` : ''}
           </td>
-          <td class="right"><strong>${esc(amountPaid)}</strong></td>
-        </tr>
+          <td class="right"><strong class="${String(item.amountLabel || '').trim().startsWith('-') ? 'amount-negative' : ''}">${esc(item.amountLabel || amountPaid)}</strong></td>
+        </tr>`).join('')}
       </tbody>
     </table>
+    <div class="section-title">Payment History</div>
+    ${paymentItems.length ? `<table class="payment-table">
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>Payment</th>
+          <th>Who</th>
+          <th class="right">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${paymentItems.map(item => `
+        <tr>
+          <td>
+            <div class="item-name">${esc(item.when || 'Recorded')}</div>
+            ${item.reference ? `<div class="item-sub">${esc(item.reference)}</div>` : ''}
+          </td>
+          <td>
+            <div class="item-name">${esc(item.label || 'Payment')}</div>
+            ${item.method ? `<div class="item-sub">${esc(item.method)}</div>` : ''}
+          </td>
+          <td>
+            <div class="item-name">${esc(item.who || 'Not specified')}</div>
+            ${item.note ? `<div class="item-sub">${esc(item.note)}</div>` : ''}
+          </td>
+          <td class="right"><strong>${esc(item.amountLabel || '$0')}</strong></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>` : `<div class="payment-empty">No payments have been recorded on this invoice yet.</div>`}
     <div class="totals">
       <div class="totals-box">
         <div class="total-row"><span>Total Fee</span><span><strong>${esc(totalFee)}</strong></span></div>
@@ -5488,6 +5526,49 @@
       const invoiceNumber = accountCode
         ? `INV-${String(accountCode).replace(/[^0-9A-Z]+/gi, '').toUpperCase()}`
         : `INV-${String(prod?.slug || prod?.id || 'PORTAL').replace(/[^0-9A-Z]+/gi, '').toUpperCase()}`;
+      const invoiceLineItems = feeRows.flatMap(row => ([
+        {
+          label: `Production Fee - ${row.name}`,
+          sub: prodTitle,
+          meta: 'Charge',
+          amountLabel: moneyLabel(row.baseTotal),
+        },
+        ...row.discounts.map(discount => ({
+          label: discount.label,
+          sub: row.name,
+          meta: 'Discount',
+          amountLabel: `-${moneyLabel(discount.amount)}`,
+        })),
+      ]));
+      const invoicePaymentItems = isFamily
+        ? [...hhLogs]
+            .filter(record => (record.amount_cents || 0) > 0 || record.paid_at)
+            .sort((a, b) => String(a.paid_at || '').localeCompare(String(b.paid_at || '')))
+            .map((record, index) => ({
+              when: record.paid_at ? fmtDate(record.paid_at, { short: true }) : `Payment ${index + 1}`,
+              label: paymentMethodLabel(record.payment_method || '') || 'Payment',
+              who: paymentWhoLabel(record.paid_by || '') || (householdName || performerName),
+              note: record.transaction_ref ? `Transaction ID: ${record.transaction_ref}` : '',
+              reference: record.payment_notes || memoText,
+              amountLabel: moneyLabel(paymentRecordAmount(record, {})),
+            }))
+        : allPay.flatMap(({ performer, pay }) => {
+            const performerLabel = performerDisplayName(performer);
+            return (pay.records || [])
+              .filter(record => record?.paid)
+              .sort((a, b) => String(a.paid_at || '').localeCompare(String(b.paid_at || '')))
+              .map(record => {
+                const installment = (pay.installments || [])[record.installment_index] || {};
+                return {
+                  when: record.paid_at ? fmtDate(record.paid_at, { short: true }) : 'Payment recorded',
+                  label: installment.label || 'Payment',
+                  who: paymentWhoLabel(record.paid_by || '') || performerLabel,
+                  note: paymentMethodLabel(record.payment_method || '') || '',
+                  reference: record.transaction_ref ? `Transaction ID: ${record.transaction_ref}` : (record.payment_notes || ''),
+                  amountLabel: moneyLabel(paymentRecordAmount(record, installment)),
+                };
+              });
+          });
       const invoiceSource = isFamily
         ? (hhLogs.filter(r => (r.amount_cents || 0) > 0 && r.paid_at).slice().sort((a, b) => String(b.paid_at || '').localeCompare(String(a.paid_at || '')))[0] || null)
         : ([...allPaidRecs].sort((a, b) => String(b.paid_at || '').localeCompare(String(a.paid_at || '')))[0] || null);
@@ -5514,6 +5595,8 @@
         reference: invoiceSource?.payment_notes || memoText,
         balanceLabel: balanceDue <= 0 ? `${currencySymbol()}0` : moneyLabel(balanceDue),
         lineLabel: isFamily ? `${prodTitle} household registration` : `${prodTitle} registration`,
+        lineItems: invoiceLineItems,
+        paymentItems: invoicePaymentItems,
       };
 
       // Icons
