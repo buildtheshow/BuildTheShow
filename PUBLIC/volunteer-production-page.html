@@ -3947,8 +3947,8 @@
         }
       } catch (err) { console.warn('[BTS portal] household expansion failed', err); }
 
-      // Household payment pool: load ALL payment records for ALL assignment IDs across ALL matching households.
-      // Treats the household as the billing unit — payments may be on any member's assignment.
+      // Household payment logs: load from household_payment_logs by household_id.
+      // Household payments are NOT per-performer — they belong to the household as a unit.
       let householdPaymentRecords = [];
       if (basePerformers.length > 1 && prod?.id) {
         try {
@@ -3959,14 +3959,11 @@
             const mAssignIds = (hh.members || []).map(m => String(m.assignment_id || '')).filter(Boolean);
             return myAssignIds.some(id => mids.includes(id) || mAssignIds.includes(id));
           });
-          const hhAssignIds = [...new Set([
-            ...matchedHh.flatMap(hh => (hh.member_ids || []).map(String)),
-            ...matchedHh.flatMap(hh => (hh.members || []).map(m => String(m.assignment_id || '')).filter(Boolean)),
-          ])].filter(Boolean);
-          if (hhAssignIds.length) {
-            const { data: hhPay } = await sb.from('registration_payment_records')
-              .select('*').in('casting_assignment_id', hhAssignIds).order('installment_index', { ascending: true });
-            householdPaymentRecords = hhPay || [];
+          const hhIds = [...new Set(matchedHh.map(hh => String(hh.id)).filter(Boolean))];
+          if (hhIds.length) {
+            const { data: hhLogs } = await sb.from('household_payment_logs')
+              .select('*').in('household_id', hhIds).order('paid_at', { ascending: true });
+            householdPaymentRecords = hhLogs || [];
           }
         } catch (_) {}
       }
@@ -5127,15 +5124,18 @@
       const allPay = performers.map(p => ({ performer: p, pay: performerPaymentSummary(p) }));
       const totalExpected = allPay.reduce((s, x) => s + x.pay.total, 0);
       const baseInstallmentsForPool = paymentInstallments();
-      // For households: use the pre-loaded household payment pool (all records across all member assignments).
-      // Treats the household as the billing unit — don't split payments per performer.
+      // For households: read from household_payment_logs (keyed by household_id, not casting_assignment_id).
+      // Each log entry is a payment made by the household — sum amount_cents for totalPaid.
+      const hhLogs = isFamily ? (currentPortalData?.householdPaymentRecords || []) : [];
       const allPaidRecs = isFamily
-        ? (currentPortalData?.householdPaymentRecords || []).filter(r => r.paid)
+        ? hhLogs
         : allPay.flatMap(({ pay }) => (pay.records || []).filter(r => r.paid));
-      const totalPaid = allPaidRecs.reduce((sum, r) => sum + paymentRecordAmount(r, baseInstallmentsForPool[r.installment_index] || {}), 0);
+      const totalPaid = isFamily
+        ? hhLogs.reduce((sum, r) => sum + ((r.amount_cents || 0) / 100), 0)
+        : allPay.reduce((s, x) => s + x.pay.paid, 0);
       const balanceDue    = Math.max(0, totalExpected - totalPaid);
       const allFullyPaid  = paymentEnabled && balanceDue <= 0 && totalPaid > 0;
-      const lastPaidRec   = allPaidRecs.sort((a, b) => (b.paid_at || '').localeCompare(a.paid_at || ''))[0];
+      const lastPaidRec   = [...allPaidRecs].sort((a, b) => (b.paid_at || '').localeCompare(a.paid_at || ''))[0];
       const orgName     = org?.name || org?.organization_name || 'Build The Show';
       const logoUrl     = org?.logo_url || '';
       const prodTitle   = prod?.title || 'Production';
@@ -5183,8 +5183,11 @@
         const instAmt = inst.amount || 0;
         const paid = runningPaid >= instAmt;
         if (paid) runningPaid -= instAmt;
-        const paidRec = allPaidRecs.find(r => r.installment_index === i);
-        return { label: inst.label || `Payment ${i + 1}`, amount: instAmt, dueDate: inst.dueDate || '', paid, paidAt: paidRec?.paid_at || '' };
+        // For household logs, use earliest paid_at; for solo, match by installment_index
+        const paidAt = isFamily
+          ? (hhLogs.find(r => r.paid_at)?.paid_at || '')
+          : (allPaidRecs.find(r => r.installment_index === i)?.paid_at || '');
+        return { label: inst.label || `Payment ${i + 1}`, amount: instAmt, dueDate: inst.dueDate || '', paid, paidAt };
       });
       const nextInst      = scheduleRows.find(r => !r.paid);
       const daysUntilNext = nextInst?.dueDate ? Math.ceil((new Date(nextInst.dueDate) - new Date()) / 86400000) : null;
@@ -5327,11 +5330,17 @@
 
             <div class="vp-rsc-block">
               <div class="vp-rsc-block-label">Payments</div>
-              ${allScheduleRows.filter(r => r.paid).length
-                ? allScheduleRows.filter(r => r.paid).map(r => `<div class="vp-rsc-row vp-rsc-paid-row">
-                    <span>${esc(fmtDate(r.paidAt, { short: true }))}${r.pName ? ` <span style="color:rgba(0,0,0,0.35);font-size:0.7rem;">&ndash; ${esc(r.pName)}</span>` : ''}</span>
-                    <span>${esc(moneyLabel(r.amount))}</span>
-                  </div>`).join('')
+              ${(isFamily ? hhLogs : allScheduleRows.filter(r => r.paid)).length
+                ? (isFamily
+                    ? hhLogs.map(r => `<div class="vp-rsc-row vp-rsc-paid-row">
+                        <span>${esc(fmtDate(r.paid_at, { short: true }))}</span>
+                        <span>${esc(moneyLabel((r.amount_cents || 0) / 100))}</span>
+                      </div>`)
+                    : allScheduleRows.filter(r => r.paid).map(r => `<div class="vp-rsc-row vp-rsc-paid-row">
+                        <span>${esc(fmtDate(r.paidAt, { short: true }))}${r.pName ? ` <span style="color:rgba(0,0,0,0.35);font-size:0.7rem;">&ndash; ${esc(r.pName)}</span>` : ''}</span>
+                        <span>${esc(moneyLabel(r.amount))}</span>
+                      </div>`)
+                  ).join('')
                 : `<div class="vp-rsc-none">No payments recorded yet</div>`}
               <div class="vp-rsc-balance ${stateClass}">
                 <span>${allFullyPaid ? 'Paid in Full' : 'Balance Owing'}${!allFullyPaid && nextInst?.dueDate ? `<span style="font-size:0.7rem;font-weight:700;opacity:0.7;display:block;margin-top:0.1rem;">Due ${esc(fmtDate(nextInst.dueDate, { short: true }))}</span>` : ''}</span>
