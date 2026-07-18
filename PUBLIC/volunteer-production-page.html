@@ -3947,7 +3947,31 @@
         }
       } catch (err) { console.warn('[BTS portal] household expansion failed', err); }
 
-      return basePerformers;
+      // Household payment pool: load ALL payment records for ALL assignment IDs across ALL matching households.
+      // Treats the household as the billing unit — payments may be on any member's assignment.
+      let householdPaymentRecords = [];
+      if (basePerformers.length > 1 && prod?.id) {
+        try {
+          const allHouseholds = Array.isArray(prod?.registration_households) ? prod.registration_households : [];
+          const myAssignIds = basePerformers.flatMap(p => (p.assignments || []).map(a => String(a.id))).filter(Boolean);
+          const matchedHh = allHouseholds.filter(hh => {
+            const mids = (hh.member_ids || []).map(String);
+            const mAssignIds = (hh.members || []).map(m => String(m.assignment_id || '')).filter(Boolean);
+            return myAssignIds.some(id => mids.includes(id) || mAssignIds.includes(id));
+          });
+          const hhAssignIds = [...new Set([
+            ...matchedHh.flatMap(hh => (hh.member_ids || []).map(String)),
+            ...matchedHh.flatMap(hh => (hh.members || []).map(m => String(m.assignment_id || '')).filter(Boolean)),
+          ])].filter(Boolean);
+          if (hhAssignIds.length) {
+            const { data: hhPay } = await sb.from('registration_payment_records')
+              .select('*').in('casting_assignment_id', hhAssignIds).order('installment_index', { ascending: true });
+            householdPaymentRecords = hhPay || [];
+          }
+        } catch (_) {}
+      }
+
+      return { performers: basePerformers, householdPaymentRecords };
     }
     async function loadVolunteerLinkedPerformers(signups = []) {
       if (!prod?.id || !Array.isArray(signups) || !signups.length) return [];
@@ -4024,12 +4048,14 @@
         resolveVolunteerPortal(email, code, options),
         findPerformerPortalApplicants(email, code),
       ]);
-      const [performers, volunteerLinkedPerformers] = await Promise.all([
+      const [performerResult, volunteerLinkedPerformers] = await Promise.all([
         loadPortalPerformerDetails(performerApps, email),
         loadVolunteerLinkedPerformers(volunteer.rows),
       ]);
+      const performers = performerResult.performers ?? performerResult;
+      const householdPaymentRecords = performerResult.householdPaymentRecords ?? [];
       volunteer.linkedPerformers = volunteerLinkedPerformers;
-      return { email, code, volunteer, performers };
+      return { email, code, volunteer, performers, householdPaymentRecords };
     }
 
     function showPortalLogin() {
@@ -5100,13 +5126,13 @@
       const isFamily    = performers.length > 1;
       const allPay = performers.map(p => ({ performer: p, pay: performerPaymentSummary(p) }));
       const totalExpected = allPay.reduce((s, x) => s + x.pay.total, 0);
-      // For households: pool all paid records across all assignments using base installment amounts.
-      // Families pay one combined bill — payments may all be on one performer's assignment.
       const baseInstallmentsForPool = paymentInstallments();
-      const allPaidRecs = allPay.flatMap(({ pay }) => (pay.records || []).filter(r => r.paid));
-      const totalPaid = isFamily
-        ? allPaidRecs.reduce((sum, r) => sum + paymentRecordAmount(r, baseInstallmentsForPool[r.installment_index] || {}), 0)
-        : allPay.reduce((s, x) => s + x.pay.paid, 0);
+      // For households: use the pre-loaded household payment pool (all records across all member assignments).
+      // Treats the household as the billing unit — don't split payments per performer.
+      const allPaidRecs = isFamily
+        ? (currentPortalData?.householdPaymentRecords || []).filter(r => r.paid)
+        : allPay.flatMap(({ pay }) => (pay.records || []).filter(r => r.paid));
+      const totalPaid = allPaidRecs.reduce((sum, r) => sum + paymentRecordAmount(r, baseInstallmentsForPool[r.installment_index] || {}), 0);
       const balanceDue    = Math.max(0, totalExpected - totalPaid);
       const allFullyPaid  = paymentEnabled && balanceDue <= 0 && totalPaid > 0;
       const lastPaidRec   = allPaidRecs.sort((a, b) => (b.paid_at || '').localeCompare(a.paid_at || ''))[0];
