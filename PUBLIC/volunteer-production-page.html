@@ -5055,27 +5055,28 @@
         console.warn('[BTS portal copy]', err);
       }
     }
-    function portalReceiptDocHtml(doc = {}) {
+    function portalInvoiceDocHtml(doc = {}) {
       const orgName = doc.orgName || 'Build The Show';
       const showName = doc.showName || 'Production';
       const payerName = doc.payerName || 'Payer';
       const payerEmail = doc.payerEmail || '';
       const amountPaid = doc.amountPaidLabel || '$0';
+      const totalFee = doc.totalFeeLabel || '$0';
       const paymentDate = doc.paymentDateLabel || '';
       const paymentMethod = doc.paymentMethod || 'Payment';
       const whoLabel = doc.whoLabel || '';
-      const receiptRef = doc.reference || '';
+      const reference = doc.reference || '';
       const transactionRef = doc.transactionRef || '';
       const balanceLabel = doc.balanceLabel || '$0';
       const logoUrl = doc.logoUrl || '';
-      const lineLabel = doc.lineLabel || `${showName} payment`;
-      const receiptTitle = doc.receiptTitle || 'Receipt';
+      const lineLabel = doc.lineLabel || `${showName} registration`;
+      const invoiceTitle = doc.invoiceTitle || 'Invoice';
       return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${esc(receiptTitle)} - ${esc(showName)}</title>
+  <title>${esc(invoiceTitle)} - ${esc(showName)}</title>
   <style>
     body{margin:0;padding:32px;background:#f6f4fb;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#1a1530;}
     .receipt{max-width:920px;margin:0 auto;background:#fff;border:1px solid #e8e1f3;border-radius:18px;box-shadow:0 18px 48px rgba(26,21,48,0.08);overflow:hidden;}
@@ -5116,7 +5117,7 @@
         ${logoUrl ? `<div class="brand-show">${esc(orgName)}</div>` : ''}
       </div>
       <div class="title">
-        <div class="title-main">${esc(receiptTitle)}</div>
+        <div class="title-main">${esc(invoiceTitle)}</div>
         <div class="title-sub">${esc(showName)}</div>
       </div>
     </div>
@@ -5127,11 +5128,11 @@
         ${payerEmail ? `<div class="sub">${esc(payerEmail)}</div>` : ''}
       </div>
       <div class="meta-cell">
-        ${paymentDate ? `<div class="label">Receipt Date</div><div class="value">${esc(paymentDate)}</div>` : ''}
+        ${paymentDate ? `<div class="label">Updated</div><div class="value">${esc(paymentDate)}</div>` : ''}
         ${paymentMethod ? `<div class="sub">Payment Method: ${esc(paymentMethod)}</div>` : ''}
         ${whoLabel ? `<div class="sub">Who: ${esc(whoLabel)}</div>` : ''}
         ${transactionRef ? `<div class="sub">Transaction ID: ${esc(transactionRef)}</div>` : ''}
-        ${receiptRef ? `<div class="sub">Reference: ${esc(receiptRef)}</div>` : ''}
+        ${reference ? `<div class="sub">Reference: ${esc(reference)}</div>` : ''}
       </div>
     </div>
     <table>
@@ -5153,26 +5154,26 @@
     </table>
     <div class="totals">
       <div class="totals-box">
+        <div class="total-row"><span>Total Fee</span><span><strong>${esc(totalFee)}</strong></span></div>
         <div class="total-row"><span>Amount Paid</span><span><strong>${esc(amountPaid)}</strong></span></div>
         <div class="total-row balance"><span>Balance Owing</span><span>${esc(balanceLabel)}</span></div>
       </div>
     </div>
     <div class="footer">
-      Thank you for your payment.<br />
-      Please contact the production team if you have any questions about this receipt.
+      This invoice has been updated to reflect the current payment status on your account.<br />
+      Please contact the production team if you have any questions.
     </div>
   </div>
 </body>
 </html>`;
     }
-    function openPortalReceipt(index) {
-      const docs = Array.isArray(window._portalReceiptDocs) ? window._portalReceiptDocs : [];
-      const doc = docs[Number(index)];
+    function openPortalInvoice() {
+      const doc = window._portalInvoiceDoc || null;
       if (!doc) return;
       const win = window.open('', '_blank', 'noopener');
       if (!win) return;
       win.document.open();
-      win.document.write(portalReceiptDocHtml(doc));
+      win.document.write(portalInvoiceDocHtml(doc));
       win.document.close();
     }
     function paymentHowToHtml(rawInstructions = '', performers = [], orgName = '', meta = {}) {
@@ -5339,33 +5340,26 @@
         const url = String(ca.__bts_registration_pdf_url || ca.registration_pdf_url || '').trim();
         return url ? { name: performerDisplayName(performer), url } : null;
       }).filter(Boolean);
-      const receiptDocs = (isFamily
-        ? hhLogs.filter(r => (r.amount_cents || 0) > 0 && r.paid_at)
-        : allPay.flatMap(({ performer, pay }) => (pay.records || [])
-            .filter(r => r.paid)
-            .map(r => ({
-              ...r,
-              _performerName: performerDisplayName(performer),
-              _performerEmail: applicantCustomAnswers(performer.app || {}).email || performer.app?.email || currentPortalData?.email || '',
-              _amountLabel: moneyLabel(paymentRecordAmount(r, pay.installments[r.installment_index] || {})),
-            }))))
-        .map((r, idx) => ({
-          receiptTitle: `Receipt ${idx + 1}`,
-          orgName,
-          showName: prodTitle,
-          logoUrl,
-          payerName: isFamily ? (householdName || performerName) : (r._performerName || performerName),
-          payerEmail: isFamily ? (currentPortalData?.email || '') : (r._performerEmail || ''),
-          amountPaidLabel: isFamily ? moneyLabel((r.amount_cents || 0) / 100) : (r._amountLabel || '$0'),
-          paymentDateLabel: fmtDate(r.paid_at, { short: true }),
-          paymentMethod: paymentMethodLabel(r.payment_method || ''),
-          whoLabel: paymentWhoLabel(r.paid_by || '') || (isFamily ? '' : (r._performerName || '')),
-          transactionRef: r.transaction_ref || '',
-          reference: r.payment_notes || memoText,
-          balanceLabel: balanceDue <= 0 ? `${currencySymbol()}0` : moneyLabel(balanceDue),
-          lineLabel: isFamily ? `${prodTitle} household payment` : `${prodTitle} registration payment`,
-        }));
-      window._portalReceiptDocs = receiptDocs;
+      const invoiceSource = isFamily
+        ? (hhLogs.filter(r => (r.amount_cents || 0) > 0 && r.paid_at).slice().sort((a, b) => String(b.paid_at || '').localeCompare(String(a.paid_at || '')))[0] || null)
+        : ([...allPaidRecs].sort((a, b) => String(b.paid_at || '').localeCompare(String(a.paid_at || '')))[0] || null);
+      window._portalInvoiceDoc = {
+        invoiceTitle: 'Updated Invoice',
+        orgName,
+        showName: prodTitle,
+        logoUrl,
+        payerName: isFamily ? (householdName || performerName) : performerName,
+        payerEmail: currentPortalData?.email || '',
+        totalFeeLabel: moneyLabel(totalExpected),
+        amountPaidLabel: moneyLabel(totalPaid),
+        paymentDateLabel: invoiceSource?.paid_at ? fmtDate(invoiceSource.paid_at, { short: true }) : '',
+        paymentMethod: paymentMethodLabel(invoiceSource?.payment_method || ''),
+        whoLabel: paymentWhoLabel(invoiceSource?.paid_by || '') || '',
+        transactionRef: invoiceSource?.transaction_ref || '',
+        reference: invoiceSource?.payment_notes || memoText,
+        balanceLabel: balanceDue <= 0 ? `${currencySymbol()}0` : moneyLabel(balanceDue),
+        lineLabel: isFamily ? `${prodTitle} household registration` : `${prodTitle} registration`,
+      };
 
       // Icons
       const iconCheckW  = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
@@ -5520,11 +5514,11 @@
                   <span class="vp-reg2-dl-name">${isFamily ? esc(name) + ' - ' : ''}Registration Form</span>
                   <a href="${esc(url)}" target="_blank" rel="noopener" class="vp-reg2-dl-link">${iconDl} Download</a>
                 </div>`),
-                ...receiptDocs.map((doc, index) => `
+                ...(window._portalInvoiceDoc ? [`
                 <div class="vp-reg2-dl-row">
-                  <span class="vp-reg2-dl-name">Receipt${receiptDocs.length > 1 ? ` ${index + 1}` : ''}</span>
-                  <button type="button" class="vp-reg2-dl-link vp-reg2-dl-btn" onclick="openPortalReceipt(${index})">${iconDl} View</button>
-                </div>`),
+                  <span class="vp-reg2-dl-name">Updated Invoice</span>
+                  <button type="button" class="vp-reg2-dl-link vp-reg2-dl-btn" onclick="openPortalInvoice()">${iconDl} View</button>
+                </div>`] : []),
               ].join('') || `<div class="vp-reg2-dl-row"><span class="vp-reg2-dl-name">Registration Form</span><span style="font-size:0.72rem;color:#b0a8c0;">Not available</span></div>`}
             </div>
           </div>
