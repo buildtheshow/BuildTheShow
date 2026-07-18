@@ -5167,6 +5167,7 @@
       const invoiceTitle = doc.invoiceTitle || 'Invoice';
       const lineItems = Array.isArray(doc.lineItems) ? doc.lineItems : [];
       const paymentItems = Array.isArray(doc.paymentItems) ? doc.paymentItems : [];
+      const scheduleItems = Array.isArray(doc.scheduleItems) ? doc.scheduleItems : [];
       return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5203,6 +5204,10 @@
     .item-sub{font-size:13px;color:#7b7192;line-height:1.45;margin-top:4px;}
     .item-meta{font-size:12px;color:#9b92ae;line-height:1.4;margin-top:4px;text-transform:uppercase;letter-spacing:0.04em;}
     .amount-negative{color:#7a6e8a;}
+    .status-badge{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;}
+    .status-badge.paid{background:#e5f4e7;color:#3e7b4d;}
+    .status-badge.unpaid{background:#f6f1ff;color:#6f5e97;}
+    .status-badge.overdue{background:#fff1f0;color:#b04a40;}
     .payment-table th,.payment-table td{padding-top:14px;padding-bottom:14px;}
     .payment-empty{padding:0 32px 24px;font-size:13px;color:#7b7192;}
     .totals{padding:20px 32px 28px;display:flex;justify-content:flex-end;}
@@ -5251,32 +5256,60 @@
         ${reference ? `<div class="sub">Reference: ${esc(reference)}</div>` : ''}
       </div>
     </div>
+    <div class="section-title">Line Items</div>
     <table>
       <thead>
         <tr>
           <th>Description</th>
+          <th>Person</th>
+          <th>Type</th>
           <th class="right">Amount</th>
         </tr>
       </thead>
       <tbody>
-        ${(lineItems.length ? lineItems : [{ label: lineLabel, sub: showName, amountLabel: amountPaid }]).map(item => `
+        ${(lineItems.length ? lineItems : [{ label: lineLabel, person: showName, type: 'Charge', amountLabel: amountPaid }]).map(item => `
         <tr>
           <td>
             <div class="item-name">${esc(item.label || lineLabel)}</div>
-            ${item.sub ? `<div class="item-sub">${esc(item.sub)}</div>` : ''}
-            ${item.meta ? `<div class="item-meta">${esc(item.meta)}</div>` : ''}
+            ${item.detail ? `<div class="item-sub">${esc(item.detail)}</div>` : ''}
           </td>
+          <td>${item.person ? `<div class="item-sub">${esc(item.person)}</div>` : `<div class="item-sub">-</div>`}</td>
+          <td>${item.type ? `<div class="item-meta">${esc(item.type)}</div>` : `<div class="item-meta">-</div>`}</td>
           <td class="right"><strong class="${String(item.amountLabel || '').trim().startsWith('-') ? 'amount-negative' : ''}">${esc(item.amountLabel || amountPaid)}</strong></td>
         </tr>`).join('')}
       </tbody>
     </table>
+    ${scheduleItems.length ? `<div class="section-title">Payment Schedule</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Milestone</th>
+          <th>Due</th>
+          <th>Status</th>
+          <th class="right">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${scheduleItems.map(item => `
+        <tr>
+          <td>
+            <div class="item-name">${esc(item.label || 'Payment')}</div>
+            ${item.note ? `<div class="item-sub">${esc(item.note)}</div>` : ''}
+          </td>
+          <td><div class="item-sub">${esc(item.due || 'No due date')}</div></td>
+          <td><span class="status-badge ${esc(item.statusClass || 'unpaid')}">${esc(item.status || 'Unpaid')}</span></td>
+          <td class="right"><strong>${esc(item.amountLabel || '$0')}</strong></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>` : ''}
     <div class="section-title">Payment History</div>
     ${paymentItems.length ? `<table class="payment-table">
       <thead>
         <tr>
-          <th>When</th>
-          <th>Payment</th>
-          <th>Who</th>
+          <th>Date</th>
+          <th>Method</th>
+          <th>Paid By</th>
+          <th>Reference</th>
           <th class="right">Amount</th>
         </tr>
       </thead>
@@ -5285,14 +5318,16 @@
         <tr>
           <td>
             <div class="item-name">${esc(item.when || 'Recorded')}</div>
-            ${item.reference ? `<div class="item-sub">${esc(item.reference)}</div>` : ''}
           </td>
           <td>
-            <div class="item-name">${esc(item.label || 'Payment')}</div>
-            ${item.method ? `<div class="item-sub">${esc(item.method)}</div>` : ''}
+            <div class="item-name">${esc(item.method || item.label || 'Payment')}</div>
+            ${item.label && item.label !== item.method ? `<div class="item-sub">${esc(item.label)}</div>` : ''}
           </td>
           <td>
             <div class="item-name">${esc(item.who || 'Not specified')}</div>
+          </td>
+          <td>
+            ${item.reference ? `<div class="item-sub">${esc(item.reference)}</div>` : `<div class="item-sub">-</div>`}
             ${item.note ? `<div class="item-sub">${esc(item.note)}</div>` : ''}
           </td>
           <td class="right"><strong>${esc(item.amountLabel || '$0')}</strong></td>
@@ -5528,18 +5563,33 @@
         : `INV-${String(prod?.slug || prod?.id || 'PORTAL').replace(/[^0-9A-Z]+/gi, '').toUpperCase()}`;
       const invoiceLineItems = feeRows.flatMap(row => ([
         {
-          label: `Production Fee - ${row.name}`,
-          sub: prodTitle,
-          meta: 'Charge',
+          label: 'Production Fee',
+          person: row.name,
+          type: 'Charge',
+          detail: prodTitle,
           amountLabel: moneyLabel(row.baseTotal),
         },
         ...row.discounts.map(discount => ({
           label: discount.label,
-          sub: row.name,
-          meta: 'Discount',
+          person: row.name,
+          type: 'Discount',
+          detail: prodTitle,
           amountLabel: `-${moneyLabel(discount.amount)}`,
         })),
       ]));
+      const todayDate = new Date('2026-07-18T00:00:00');
+      const invoiceScheduleItems = scheduleRows.map(row => {
+        const dueDate = row.dueDate ? new Date(`${String(row.dueDate).slice(0,10)}T12:00:00`) : null;
+        const isOverdue = !!(dueDate && !isNaN(dueDate) && dueDate < todayDate && !row.paid);
+        return {
+          label: row.label || 'Payment',
+          due: row.dueDate ? fmtDate(row.dueDate, { short: true }) : 'No due date',
+          status: row.paid ? 'Paid' : (isOverdue ? 'Overdue' : 'Unpaid'),
+          statusClass: row.paid ? 'paid' : (isOverdue ? 'overdue' : 'unpaid'),
+          note: row.paid && row.paidAt ? `Paid ${fmtDate(row.paidAt, { short: true })}` : '',
+          amountLabel: moneyLabel(row.amount || 0),
+        };
+      });
       const invoicePaymentItems = isFamily
         ? [...hhLogs]
             .filter(record => (record.amount_cents || 0) > 0 || record.paid_at)
@@ -5547,6 +5597,7 @@
             .map((record, index) => ({
               when: record.paid_at ? fmtDate(record.paid_at, { short: true }) : `Payment ${index + 1}`,
               label: paymentMethodLabel(record.payment_method || '') || 'Payment',
+              method: paymentMethodLabel(record.payment_method || '') || 'Payment',
               who: paymentWhoLabel(record.paid_by || '') || (householdName || performerName),
               note: record.transaction_ref ? `Transaction ID: ${record.transaction_ref}` : '',
               reference: record.payment_notes || memoText,
@@ -5562,6 +5613,7 @@
                 return {
                   when: record.paid_at ? fmtDate(record.paid_at, { short: true }) : 'Payment recorded',
                   label: installment.label || 'Payment',
+                  method: paymentMethodLabel(record.payment_method || '') || '',
                   who: paymentWhoLabel(record.paid_by || '') || performerLabel,
                   note: paymentMethodLabel(record.payment_method || '') || '',
                   reference: record.transaction_ref ? `Transaction ID: ${record.transaction_ref}` : (record.payment_notes || ''),
@@ -5596,6 +5648,7 @@
         balanceLabel: balanceDue <= 0 ? `${currencySymbol()}0` : moneyLabel(balanceDue),
         lineLabel: isFamily ? `${prodTitle} household registration` : `${prodTitle} registration`,
         lineItems: invoiceLineItems,
+        scheduleItems: invoiceScheduleItems,
         paymentItems: invoicePaymentItems,
       };
 
