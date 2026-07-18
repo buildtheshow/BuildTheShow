@@ -4966,6 +4966,13 @@
       if (record.payment_notes) parts.push(record.payment_notes);
       return parts.filter(Boolean).join(' · ');
     }
+    function paymentWhoLabel(who = '') {
+      const value = String(who || '').trim();
+      if (!value) return '';
+      if (value === 'personal') return 'Personal payment';
+      if (value === 'production') return 'Production payment';
+      return value;
+    }
     function paymentDiscountLines(label = '') {
       return String(label || '').split(' · ').map(s => s.trim()).filter(Boolean);
     }
@@ -5177,7 +5184,16 @@
           const rec  = (pay.records || []).find(r => r.installment_index === i);
           const paid = !!rec?.paid;
           const amount = paymentRecordAmount(rec || {}, inst);
-          return { label: inst.label || `Payment ${i + 1}`, amount: paid ? amount : (inst.amount || 0), dueDate: inst.dueDate || '', paid, paidAt: rec?.paid_at || '', pName };
+          return {
+            label: inst.label || `Payment ${i + 1}`,
+            amount: paid ? amount : (inst.amount || 0),
+            dueDate: inst.dueDate || '',
+            paid,
+            paidAt: rec?.paid_at || '',
+            pName,
+            paymentMethod: rec?.payment_method || '',
+            paidBy: rec?.paid_by || '',
+          };
         });
       });
       // Milestone cards: one per installment slot, paid status based on pooled totalPaid vs cumulative threshold
@@ -5229,6 +5245,8 @@
           .vp-rsc-deduct{color:rgba(0,0,0,0.42);font-weight:400;}
           .vp-rsc-total{font-size:0.92rem;font-weight:700;border-top:1px solid rgba(0,0,0,0.08);padding-top:0.55rem;margin-top:0.35rem;}
           .vp-rsc-paid-row{font-weight:400;color:rgba(0,0,0,0.52);}
+          .vp-rsc-paid-main{display:block;font-size:0.84rem;font-weight:700;color:#1a1530;line-height:1.35;}
+          .vp-rsc-paid-meta{display:block;color:rgba(0,0,0,0.38);font-size:0.7rem;line-height:1.35;margin-top:0.12rem;}
           .vp-rsc-none{color:rgba(0,0,0,0.3);font-size:0.74rem;padding:0.1rem 0 0.25rem;}
           .vp-rsc-balance{display:flex;justify-content:space-between;align-items:flex-start;gap:0.75rem;border-radius:12px;padding:0.9rem 1rem;margin-top:0.9rem;font-size:0.92rem;font-weight:700;}
           .vp-rsc-balance.full{background:#dff1e5;color:#16823b;}
@@ -5288,16 +5306,23 @@
               ${(isFamily ? hhLogs : allScheduleRows.filter(r => r.paid)).length
                 ? (isFamily
                     ? hhLogs.map(r => {
-                        const method = r.payment_method ? esc(r.payment_method) : '';
-                        const paidBy = r.paid_by ? esc(r.paid_by) : '';
-                        const meta = [method, paidBy].filter(Boolean).join(' &ndash; ');
+                        const method = r.payment_method ? paymentMethodLabel(r.payment_method) : '';
+                        const paidBy = paymentWhoLabel(r.paid_by);
                         return `<div class="vp-rsc-row vp-rsc-paid-row">
-                          <span>${esc(fmtDate(r.paid_at, { short: true }))}${meta ? `<span style="color:rgba(0,0,0,0.35);font-size:0.7rem;display:block;margin-top:0.08rem;line-height:1.35;">${meta}</span>` : ''}</span>
+                          <span>
+                            <span class="vp-rsc-paid-main">${esc(fmtDate(r.paid_at, { short: true }))}</span>
+                            ${method ? `<span class="vp-rsc-paid-meta">Type: ${esc(method)}</span>` : ''}
+                            ${paidBy ? `<span class="vp-rsc-paid-meta">Who: ${esc(paidBy)}</span>` : ''}
+                          </span>
                           <span>${esc(moneyLabel((r.amount_cents || 0) / 100))}</span>
                         </div>`;
                       })
                     : allScheduleRows.filter(r => r.paid).map(r => `<div class="vp-rsc-row vp-rsc-paid-row">
-                        <span>${esc(fmtDate(r.paidAt, { short: true }))}${r.pName ? ` <span style="color:rgba(0,0,0,0.35);font-size:0.7rem;">&ndash; ${esc(r.pName)}</span>` : ''}</span>
+                        <span>
+                          <span class="vp-rsc-paid-main">${esc(fmtDate(r.paidAt, { short: true }))}</span>
+                          ${r.paymentMethod ? `<span class="vp-rsc-paid-meta">Type: ${esc(paymentMethodLabel(r.paymentMethod))}</span>` : ''}
+                          ${r.paidBy || r.pName ? `<span class="vp-rsc-paid-meta">Who: ${esc(paymentWhoLabel(r.paidBy) || r.pName)}</span>` : ''}
+                        </span>
                         <span>${esc(moneyLabel(r.amount))}</span>
                       </div>`)
                   ).join('')
