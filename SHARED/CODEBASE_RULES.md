@@ -1037,6 +1037,35 @@ These rules cover charts, metrics, timelines, comparisons, and any display of qu
 
 These rules cover how type should support clarity, hierarchy, and reading comfort.
 
+### Typeface — LOCKED July 2026
+
+**One font across the entire platform: Inter.**
+
+- Load via Google Fonts preconnect + stylesheet in every HTML `<head>`:
+  ```html
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" />
+  ```
+- CSS variable (defined in `styles.css`): `--bts-font: 'Inter', system-ui, sans-serif;`
+- `body`, `button`, `input`, `textarea`, `select` all use `font-family: var(--bts-font)`
+- Never introduce a second typeface. Never hardcode `Segoe UI`, `Helvetica`, `Arial`, or any other family.
+
+### Font Weights — LOCKED July 2026
+
+**Four weights only: 400 / 700 / 800 / 900.**
+
+| Weight | Use |
+|---|---|
+| 400 | Body text, captions, metadata, helper copy |
+| 700 | Buttons, nav items, secondary labels |
+| 800 | Section headings, card titles, emphasis labels |
+| 900 | Page titles, hero headings, kickers, badges |
+
+- Never use 100, 200, 300, 500, 600 — not in CSS files, not in inline styles, not in JS-generated HTML.
+- When adding new UI, pick the closest value from the four above.
+- The cleanup script `fix_weights.py` was used July 2026 to normalise 234 files — do not reintroduce drift.
+
 ### Readability First
 
 1. Typography must support reading before style.
