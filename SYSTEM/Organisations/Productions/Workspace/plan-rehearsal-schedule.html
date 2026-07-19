@@ -627,16 +627,42 @@
       return d.innerHTML;
     }
 
+    function toLocalDateTimeValue(val) {
+      if (!val) return '';
+      if (typeof val === 'string') {
+        if (val.length === 10) return val + 'T00:00';
+        return val.slice(0, 16);
+      }
+      const pad = n => String(n).padStart(2, '0');
+      return val.getUTCFullYear() + '-' + pad(val.getUTCMonth() + 1) + '-' + pad(val.getUTCDate()) +
+        'T' + pad(val.getUTCHours()) + ':' + pad(val.getUTCMinutes());
+    }
+
+    function parseLocalDateTime(val) {
+      const normalized = toLocalDateTimeValue(val);
+      if (!normalized) return null;
+      const [datePart, timePart = '00:00'] = normalized.split('T');
+      const [year, month, day] = datePart.split('-').map(Number);
+      const [hour, minute] = timePart.split(':').map(Number);
+      if ([year, month, day, hour, minute].some(n => !Number.isFinite(n))) return null;
+      return new Date(year, month - 1, day, hour, minute);
+    }
+
     function fmtDate(iso) {
       if (!iso) return '';
-      const d = new Date(iso);
+      const d = parseLocalDateTime(iso);
       if (Number.isNaN(d.getTime())) return '';
       return d.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' });
     }
 
     function fmtTime(iso) {
       if (!iso) return '';
-      const d = new Date(iso);
+      const normalized = toLocalDateTimeValue(iso);
+      if (!normalized) return '';
+      const timePart = normalized.slice(11, 16);
+      const [hourRaw, minuteRaw] = timePart.split(':').map(Number);
+      if (!Number.isFinite(hourRaw) || !Number.isFinite(minuteRaw)) return '';
+      const d = new Date(2000, 0, 1, hourRaw, minuteRaw);
       if (Number.isNaN(d.getTime())) return '';
       return d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' });
     }
@@ -646,7 +672,7 @@
     }
 
     function isPastEvent(ev) {
-      const start = new Date(ev?.start_time || '');
+      const start = parseLocalDateTime(ev?.start_time || '');
       const today = new Date('2026-07-19T00:00:00');
       if (Number.isNaN(start.getTime())) return false;
       return start < today;
@@ -661,7 +687,7 @@
 
     function eventDateChip(ev) {
       if (!ev?.start_time) return 'No date';
-      const d = new Date(ev.start_time);
+      const d = parseLocalDateTime(ev.start_time);
       if (Number.isNaN(d.getTime())) return 'No date';
       return d.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' });
     }
