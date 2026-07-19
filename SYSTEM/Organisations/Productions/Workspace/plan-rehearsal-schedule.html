@@ -618,6 +618,8 @@
     let _selectedEventId = null;
     let _draft = null;
     let _hasCalledCastColumn = false;
+    let _autosaveTimer = null;
+    let _autosaveQueued = false;
 
     function esc(s) {
       const d = document.createElement('div');
@@ -727,8 +729,54 @@
         mode: eventCallMode(ev),
         calledIds: eventCalledCharacterIds(ev),
         saving: false,
-        message: ''
+        message: '',
+        dirty: false
       };
+    }
+
+    function updateSaveUi(message) {
+      if (_draft) _draft.message = message || '';
+      const msgEl = document.getElementById('sched-save-msg');
+      if (msgEl) msgEl.textContent = message || '';
+      const saveBtn = document.getElementById('sched-save-btn');
+      if (saveBtn) saveBtn.disabled = !!(_draft && _draft.saving);
+    }
+
+    function markDraftDirty(message = 'Unsaved changes') {
+      if (!_draft) return;
+      _draft.dirty = true;
+      updateSaveUi(message);
+    }
+
+    function queueAutosave(delay = 900) {
+      if (!_draft) return;
+      markDraftDirty('Saving automatically...');
+      if (_autosaveTimer) clearTimeout(_autosaveTimer);
+      _autosaveTimer = setTimeout(() => {
+        _autosaveTimer = null;
+        saveSchedule({ autosave: true });
+      }, delay);
+    }
+
+    function currentDraftPayload() {
+      const calledIds = _draft.mode === 'all'
+        ? _chars.map(ch => Number(ch.id)).filter(n => !Number.isNaN(n))
+        : _draft.mode === 'individuals'
+          ? [..._draft.calledIds].map(Number).filter(n => !Number.isNaN(n))
+          : [];
+
+      const payload = {
+        notes: _draft.notes || '',
+        called_character_ids: calledIds
+      };
+      if (_hasCalledCastColumn) {
+        payload.called_cast = _draft.mode === 'all'
+          ? { type: 'all' }
+          : _draft.mode === 'individuals'
+            ? { type: 'individuals', character_ids: calledIds }
+            : { type: 'tbd' };
+      }
+      return { payload, calledIds };
     }
 
     function renderSummary() {
@@ -845,6 +893,7 @@
                 '<div class="sched-save-msg" id="sched-save-msg">' + esc(_draft.message || '') + '</div>' +
                 '<div style="display:flex;gap:0.7rem;flex-wrap:wrap;">' +
                   '<button type="button" class="sched-secondary-btn" onclick="resetDraft()">Reset</button>' +
+                  '<button type="button" class="sched-secondary-btn" onclick="applyPlanToAllRehearsals()">Apply to all rehearsals</button>' +
                   '<button type="button" class="sched-save-btn" id="sched-save-btn" onclick="saveSchedule()"' + (_draft.saving ? ' disabled' : '') + '>Save rehearsal plan</button>' +
                 '</div>' +
               '</div>' +
@@ -878,8 +927,12 @@
 
       const notesEl = document.getElementById('sched-notes');
       if (notesEl) notesEl.addEventListener('input', function () {
-        if (_draft) _draft.notes = this.value;
+        if (_draft) {
+          _draft.notes = this.value;
+          queueAutosave();
+        }
       });
+      updateSaveUi(_draft.message || '');
     }
 
     function renderAll() {
@@ -903,6 +956,7 @@
         _draft.calledIds = new Set();
       }
       renderDetail();
+      queueAutosave(500);
     }
 
     function toggleCharacter(id) {
@@ -911,44 +965,41 @@
       if (_draft.calledIds.has(id)) _draft.calledIds.delete(id);
       else _draft.calledIds.add(id);
       renderDetail();
+      queueAutosave(500);
     }
 
     function resetDraft() {
+      if (_autosaveTimer) {
+        clearTimeout(_autosaveTimer);
+        _autosaveTimer = null;
+      }
       const ev = currentEvent();
       syncDraftFromEvent(ev);
       renderDetail();
     }
 
-    async function saveSchedule() {
+    async function saveSchedule(options = {}) {
+      const { autosave = false, suppressRerender = false } = options;
       const ev = currentEvent();
       if (!ev || !_draft) return;
-      _draft.saving = true;
-      _draft.message = 'Saving...';
-      renderDetail();
-
-      const calledIds = _draft.mode === 'all'
-        ? _chars.map(ch => Number(ch.id)).filter(n => !Number.isNaN(n))
-        : _draft.mode === 'individuals'
-          ? [..._draft.calledIds].map(Number).filter(n => !Number.isNaN(n))
-          : [];
-
-      const payload = {
-        notes: _draft.notes || '',
-        called_character_ids: calledIds
-      };
-      if (_hasCalledCastColumn) {
-        payload.called_cast = _draft.mode === 'all'
-          ? { type: 'all' }
-          : _draft.mode === 'individuals'
-            ? { type: 'individuals', character_ids: calledIds }
-            : { type: 'tbd' };
+      if (_draft.saving) {
+        _autosaveQueued = true;
+        return;
       }
+      if (_autosaveTimer) {
+        clearTimeout(_autosaveTimer);
+        _autosaveTimer = null;
+      }
+      _draft.saving = true;
+      updateSaveUi(autosave ? 'Saving automatically...' : 'Saving...');
+
+      const { payload, calledIds } = currentDraftPayload();
 
       const { error } = await sb.from('production_events').update(payload).eq('id', ev.id);
       if (error) {
         _draft.saving = false;
-        _draft.message = 'Could not save yet.';
-        renderDetail();
+        markDraftDirty('Could not save yet');
+        if (!suppressRerender && !autosave) renderDetail();
         return;
       }
 
@@ -956,7 +1007,54 @@
       ev.called_character_ids = calledIds;
       if (_hasCalledCastColumn) ev.called_cast = payload.called_cast;
       _draft.saving = false;
-      _draft.message = 'Saved.';
+      _draft.dirty = false;
+      updateSaveUi(autosave ? 'Saved automatically' : 'Saved');
+      if (!suppressRerender) {
+        if (autosave) {
+          renderSummary();
+          renderList();
+        } else {
+          renderAll();
+        }
+      }
+      if (_autosaveQueued) {
+        _autosaveQueued = false;
+        queueAutosave(250);
+      }
+    }
+
+    async function applyPlanToAllRehearsals() {
+      const ev = currentEvent();
+      if (!ev || !_draft || !_events.length) return;
+      if (_autosaveTimer) {
+        clearTimeout(_autosaveTimer);
+        _autosaveTimer = null;
+      }
+      if (_draft.saving) {
+        _autosaveQueued = true;
+        return;
+      }
+      _draft.saving = true;
+      updateSaveUi('Applying this plan to all rehearsals...');
+
+      const { payload, calledIds } = currentDraftPayload();
+      const updates = _events.map(row => sb.from('production_events').update(payload).eq('id', row.id));
+      const results = await Promise.all(updates);
+      const failed = results.find(result => result.error);
+      if (failed) {
+        _draft.saving = false;
+        markDraftDirty('Could not apply to all rehearsals');
+        return;
+      }
+
+      _events.forEach(row => {
+        row.notes = payload.notes;
+        row.called_character_ids = [...calledIds];
+        if (_hasCalledCastColumn) row.called_cast = payload.called_cast;
+      });
+      _draft.saving = false;
+      _draft.dirty = false;
+      updateSaveUi('Applied to all rehearsals');
       renderAll();
     }
 
@@ -1004,6 +1102,7 @@
     window.toggleCharacter = toggleCharacter;
     window.resetDraft = resetDraft;
     window.saveSchedule = saveSchedule;
+    window.applyPlanToAllRehearsals = applyPlanToAllRehearsals;
   </script>
 </body>
 </html>
