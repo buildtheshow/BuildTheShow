@@ -6133,13 +6133,37 @@
       return `<div class="vpd-detail-note"><div class="vpd-detail-note-title">${esc(label)}</div><div class="vpd-detail-note-body">${esc(value)}</div></div>`;
     }
 
+    function portalCalendarPlaceDetail(item = {}) {
+      const source = item.source || {};
+      const values = [
+        source.full_address,
+        source.venue_address,
+        source.location_address,
+        source.event_address,
+        source.address,
+        source.location,
+        source.event_location,
+        source.where,
+        source.venue,
+        item.place,
+      ].map(value => String(value || '').trim()).filter(Boolean);
+      const unique = [];
+      values.forEach(value => {
+        if (!unique.some(existing => existing.toLowerCase() === value.toLowerCase())) unique.push(value);
+      });
+      if (!unique.length) return '';
+      if (unique.length === 1) return unique[0];
+      return `${unique[unique.length - 1]} - ${unique[0]}`;
+    }
+
     function portalCalendarItemDetailHtml(item = {}) {
       const kind = portalItemKind(item);
       const source = item.source || {};
+      const placeDetail = portalCalendarPlaceDetail(item);
       const rows = [
         portalDetailRowHtml('Date', item.date ? fmtDate(item.date, { short: false }) : ''),
         portalDetailRowHtml('Time', item.time || ''),
-        portalDetailRowHtml(kind === 'deadline' ? 'For' : 'Where', item.place || ''),
+        portalDetailRowHtml(kind === 'deadline' ? 'For' : 'Where', placeDetail || item.place || ''),
       ];
       const notes = [];
       if (kind === 'volunteer') {
@@ -7254,7 +7278,7 @@
 
         const [planResult, eventResult, signupResult, contactResult] = await Promise.all([
           sb.from('productions').select('volunteer_staffing_plan').eq('id', prod.id).single(),
-          sb.from('production_events').select('id,event_type,title,start_time,end_time,venue,notes,arrive_note,bring_note,know_note,show_in_cast_schedule,is_deadline').eq('production_id', prod.id).order('start_time', { ascending: true }),
+          sb.from('production_events').select('*').eq('production_id', prod.id).order('start_time', { ascending: true }),
           sb.from('volunteer_signups').select('role_name,shift_date,required_dates,status').eq('production_id', prod.id).in('status', ['pending','approved','partially_filled']),
           sb.rpc('public_production_contact', { p_production_id: prod.id })
         ]);
