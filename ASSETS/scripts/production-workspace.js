@@ -24361,6 +24361,7 @@ See you soon!
   async function finalCastingSetOfferAssignmentState(appId, role, nextState) {
     if (!appId || !role) return;
     const isEnsembleRole = role.id === '__ensemble__';
+    const ensembleCharId = isEnsembleRole ? (getEnsembleCharacter()?.id || null) : null;
     if (role.assignmentId) {
       const { error } = await sb.from('casting_assignments')
         .update({ state: nextState })
@@ -24374,14 +24375,14 @@ See you soon!
       .eq('applicant_id', appId)
       .limit(1);
     findQuery = isEnsembleRole
-      ? findQuery.is('character_id', null)
+      ? (ensembleCharId ? findQuery.or(`character_id.eq.${ensembleCharId},character_id.is.null`) : findQuery.is('character_id', null))
       : findQuery.eq('character_id', role.id);
     const { data: existingRows, error: findError } = await findQuery;
     if (findError) throw findError;
     const existing = existingRows?.[0];
     if (existing?.id) {
       const { error } = await sb.from('casting_assignments')
-        .update({ state: nextState })
+        .update({ state: nextState, character_id: isEnsembleRole ? ensembleCharId : role.id })
         .eq('id', existing.id);
       if (error) throw error;
       return;
@@ -24389,7 +24390,7 @@ See you soon!
     const insertRow = {
       production_id: prodId,
       applicant_id: appId,
-      character_id: isEnsembleRole ? null : role.id,
+      character_id: isEnsembleRole ? ensembleCharId : role.id,
       state: nextState,
     };
     const { error } = await sb.from('casting_assignments').insert(insertRow);
@@ -24454,8 +24455,9 @@ See you soon!
         const roleKey = role.id === '__ensemble__' ? '' : String(role.id || '');
         finalCastingOfferAcceptanceState.set(`${item.app.id}::${roleKey}`, nextState);
         if (!isDecline) {
-          const charName = role.id === '__ensemble__' ? 'Ensemble' : (role.name || '');
-          await upsertCastMember(item.app, role.id === '__ensemble__' ? null : role.id, charName, 'offer_accepted');
+          const isEnsembleRole = role.id === '__ensemble__';
+          const charName = isEnsembleRole ? 'Ensemble' : (role.name || '');
+          await upsertCastMember(item.app, isEnsembleRole ? (getEnsembleCharacter()?.id || null) : role.id, charName, 'offer_accepted');
         }
       }
       await saveCastOfferState(item.app, {
@@ -36673,7 +36675,7 @@ See you soon!
         try {
           await sb.from('casting_assignments').insert({
             production_id: prodId,
-            character_id: null,
+            character_id: getEnsembleCharacter()?.id || null,
             applicant_id: appId,
             state: 'ensemble_manual'
           });

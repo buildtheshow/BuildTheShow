@@ -2401,25 +2401,33 @@
         }
       }
 
+      const allCharIds = [...new Set(assignments.map(row => row.character_id).filter(Boolean))];
+      const { data: allChars } = allCharIds.length
+        ? await sb.from('production_characters').select('id,name,role_type,description').in('id', allCharIds)
+        : { data: [] };
+      const charMap = new Map((allChars || []).map(c => [String(c.id), c]));
+      function rowLooksLikeEnsemble(row) {
+        if (!row.character_id) return true;
+        const c = charMap.get(String(row.character_id));
+        const name = String(c?.name || '').trim().toLowerCase();
+        const roleType = String(c?.role_type || '').trim().toLowerCase();
+        return name === 'ensemble' || roleType === 'ensemble';
+      }
+
       offeredAssignments = assignments.filter(row => {
         if (!roleIds.length) return true;
-        if (!row.character_id) return roleIds.includes('__ensemble__');
+        if (rowLooksLikeEnsemble(row)) return roleIds.includes('__ensemble__');
         return roleIds.includes(String(row.character_id));
       });
       if (!offeredAssignments.length) throw new Error('This offer no longer has any roles attached.');
 
-      const charIds = offeredAssignments.map(row => row.character_id).filter(Boolean);
-      const { data: chars } = charIds.length
-        ? await sb.from('production_characters').select('id,name,role_type,description').in('id', charIds)
-        : { data: [] };
-      const hasEnsembleOffer = offeredAssignments.some(row => !row.character_id);
+      const hasEnsembleOffer = offeredAssignments.some(rowLooksLikeEnsemble);
       const { data: ensembleChars } = hasEnsembleOffer
         ? await sb.from('production_characters')
             .select('id,name,role_type,description')
             .eq('production_id', prod.id)
             .or('name.ilike.%ensemble%,role_type.eq.Ensemble')
         : { data: [] };
-      const charMap = new Map((chars || []).map(c => [String(c.id), c]));
       const ensembleBreakdown = String((ensembleChars || [])
         .find(c => String(c?.description || '').trim())?.description || '').trim();
       roleNames = offeredAssignments.map(row => row.character_id
