@@ -702,6 +702,64 @@
       color: var(--sched-text-grey);
       text-align: center;
     }
+    .sched-role-card {
+      display: grid;
+      gap: 0.6rem;
+      min-height: 100%;
+      border-radius: 18px;
+      border: 1.5px solid rgba(87,46,136,0.12);
+      background: #ffffff;
+      padding: 0.95rem;
+      box-shadow: 0 5px 16px rgba(15,23,42,0.08);
+    }
+    .sched-role-card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.55rem;
+    }
+    .sched-role-card-title {
+      font-size: 0.88rem;
+      font-weight: var(--sched-type-strong);
+      color: var(--sched-text-black);
+      line-height: 1.18;
+    }
+    .sched-role-card-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 1.35rem;
+      padding: 0.12rem 0.48rem;
+      border-radius: 999px;
+      background: rgba(87,46,136,0.08);
+      color: var(--sched-text-purple);
+      font-size: 0.62rem;
+      font-weight: var(--sched-type-strong);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .sched-role-card-copy {
+      font-size: 0.76rem;
+      font-weight: var(--sched-type-plain);
+      color: var(--sched-text-grey);
+      line-height: 1.42;
+    }
+    .sched-role-card-names {
+      display: grid;
+      gap: 0.26rem;
+    }
+    .sched-role-card-name {
+      font-size: 0.8rem;
+      font-weight: var(--sched-type-strong);
+      color: var(--sched-text-purple);
+      line-height: 1.25;
+    }
+    .sched-role-card-empty {
+      min-height: 4.9rem;
+      align-content: center;
+    }
     .sched-char-row {
       display: flex;
       gap: 0.8rem;
@@ -1264,27 +1322,60 @@
       return 'Call list still TBD';
     }
 
-    function castNamesByCharacterId() {
-      const byId = {};
-      _assignments.forEach(a => {
-        const charId = a.character_id ? String(a.character_id) : '';
-        if (!charId) return;
-        if (!byId[charId]) byId[charId] = [];
-        const p = _people[a.applicant_id] || {};
-        const name = p.name || p.email || '';
-        if (name && !byId[charId].includes(name)) byId[charId].push(name);
-      });
-      return byId;
+    function answerValue(source, keys = []) {
+      const ca = source?.custom_answers || source || {};
+      const exactKeys = Object.keys(ca || {});
+      const normalized = new Map(exactKeys.map(key => [String(key).toLowerCase().replace(/[^a-z0-9]+/g, ''), key]));
+      for (const key of keys) {
+        if (ca[key] !== undefined && ca[key] !== null && String(ca[key]).trim() !== '') return String(ca[key]).trim();
+        const normalizedKey = String(key).toLowerCase().replace(/[^a-z0-9]+/g, '');
+        const actual = normalized.get(normalizedKey);
+        if (actual && ca[actual] !== undefined && ca[actual] !== null && String(ca[actual]).trim() !== '') return String(ca[actual]).trim();
+      }
+      return '';
     }
 
-    function castPeopleByCharacterId() {
+    function personDisplayName(person) {
+      if (!person) return '';
+      const preferred = answerValue(person, ['Preferred Name', 'preferred_name']);
+      const legalFirst = answerValue(person, ['Legal first name', 'Legal First Name', 'first_name']);
+      const legalLast = answerValue(person, ['Legal last name', 'Legal Last Name', 'last_name']);
+      if (preferred && legalLast) return [preferred, legalLast].filter(Boolean).join(' ').trim();
+      if (preferred) {
+        const base = String(person.name || '').trim().split(/\s+/).filter(Boolean);
+        return [preferred, ...base.slice(1)].join(' ').trim();
+      }
+      if (legalFirst || legalLast) return [legalFirst, legalLast].filter(Boolean).join(' ').trim();
+      return String(person.name || person.email || '').trim();
+    }
+
+    function assignmentPriority(state) {
+      if (state === 'offer_accepted') return 0;
+      if (state === 'chosen') return 1;
+      if (state === 'ensemble_manual') return 2;
+      return 3;
+    }
+
+    function castEntriesByCharacterId() {
       const byId = {};
-      _assignments.forEach(a => {
-        const charId = a.character_id ? String(a.character_id) : '';
-        if (!charId || byId[charId]) return;
-        const p = _people[a.applicant_id] || {};
-        byId[charId] = p;
-      });
+      [..._assignments]
+        .filter(a => a?.character_id)
+        .sort((a, b) => {
+          const stateDiff = assignmentPriority(a.state) - assignmentPriority(b.state);
+          if (stateDiff) return stateDiff;
+          const aName = personDisplayName(_people[a.applicant_id] || {});
+          const bName = personDisplayName(_people[b.applicant_id] || {});
+          return aName.localeCompare(bName);
+        })
+        .forEach(a => {
+          const charId = String(a.character_id);
+          if (!byId[charId]) byId[charId] = [];
+          const person = _people[a.applicant_id] || null;
+          if (!person) return;
+          const personId = String(a.applicant_id || '');
+          if (byId[charId].some(entry => String(entry.person?.id || '') === personId)) return;
+          byId[charId].push({ person, assignment: a });
+        });
       return byId;
     }
 
@@ -1297,14 +1388,15 @@
 
     function renderCalledCharacterEntry(ch, active, castMap) {
       const id = String(ch.id);
-      const castPerson = castMap[id] || null;
-      if (castPerson && typeof renderCastingCard === 'function') {
-        const split = splitDisplayName(castPerson.name || castPerson.email || 'Cast Member');
+      const castEntries = Array.isArray(castMap[id]) ? castMap[id] : [];
+      if (castEntries.length === 1 && typeof renderCastingCard === 'function') {
+        const castPerson = castEntries[0].person || null;
+        const split = splitDisplayName(personDisplayName(castPerson) || 'Cast Member');
         const cardHtml = renderCastingCard({
           first_name: split.first,
           last_name: split.last,
           character_name: ch.name || '',
-          headshot_url: castPerson.headshot_url || '',
+          headshot_url: castPerson?.headshot_url || '',
         }, {
           size: 'compact',
           hasPadding: true,
@@ -1321,14 +1413,35 @@
           '</button>';
       }
 
+      if (castEntries.length > 1) {
+        return '' +
+          '<button type="button" class="sched-cast-card-btn' + (active ? ' active' : '') + '" onclick="toggleCharacter(\'' + esc(id) + '\')">' +
+            '<div class="sched-cast-card-shell">' +
+              '<div class="sched-role-card">' +
+                '<div class="sched-role-card-top">' +
+                  '<div class="sched-role-card-title">' + esc(ch.name || 'Role') + '</div>' +
+                  '<div class="sched-role-card-badge">Cast</div>' +
+                '</div>' +
+                '<div class="sched-role-card-copy">Registration-confirmed performers</div>' +
+                '<div class="sched-role-card-names">' +
+                  castEntries.map(entry => '<div class="sched-role-card-name">' + esc(personDisplayName(entry.person) || entry.person?.email || 'Cast Member') + '</div>').join('') +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+          '</button>';
+      }
+
       return '' +
-        '<button type="button" class="sched-char-row is-uncast' + (active ? ' active' : '') + '" onclick="toggleCharacter(\'' + esc(id) + '\')">' +
-          '<span class="sched-char-cb">' + (active ? '&#10003;' : '') + '</span>' +
-          '<span class="sched-char-meta">' +
-            '<div class="sched-char-name">' + esc(ch.name) + '</div>' +
-            '<div class="sched-char-cast">Not yet cast</div>' +
-          '</span>' +
-          '<span class="sched-char-tag">Needs casting</span>' +
+        '<button type="button" class="sched-cast-card-btn' + (active ? ' active' : '') + '" onclick="toggleCharacter(\'' + esc(id) + '\')">' +
+          '<div class="sched-cast-card-shell">' +
+            '<div class="sched-role-card sched-role-card-empty">' +
+              '<div class="sched-role-card-top">' +
+                '<div class="sched-role-card-title">' + esc(ch.name) + '</div>' +
+                '<div class="sched-role-card-badge">Open</div>' +
+              '</div>' +
+              '<div class="sched-role-card-copy">Not yet cast</div>' +
+            '</div>' +
+          '</div>' +
         '</button>';
     }
 
@@ -1470,8 +1583,7 @@
         return;
       }
 
-      const byChar = castNamesByCharacterId();
-      const castPeople = castPeopleByCharacterId();
+      const castPeople = castEntriesByCharacterId();
       const selectedCount = _draft.mode === 'all' ? _chars.length : _draft.calledIds.size;
       const status = eventStatusMeta(ev);
       const indicator = eventIndicatorMeta(ev, sortedEventsForList());
@@ -1480,8 +1592,8 @@
         : _draft.mode === 'all'
           ? 'Every character is currently called for this rehearsal.'
           : selectedCount + ' character' + (selectedCount === 1 ? '' : 's') + ' selected for this rehearsal.';
-      const castedChars = _chars.filter(ch => !!castPeople[String(ch.id)]);
-      const uncastChars = _chars.filter(ch => !castPeople[String(ch.id)]);
+      const castedChars = _chars.filter(ch => (castPeople[String(ch.id)] || []).length);
+      const uncastChars = _chars.filter(ch => !(castPeople[String(ch.id)] || []).length);
 
       host.innerHTML = '' +
         '<div class="sched-focus">' +
@@ -1685,7 +1797,7 @@
       const [eventRes, charRes, assignRes, appRes, bookRes] = await Promise.all([
         sb.from('production_events').select(eventSelect).eq('production_id', prodId).in('event_type', REHEARSAL_TYPES).order('start_time'),
         sb.from('production_characters').select('id,name,sort_order').eq('production_id', prodId).order('sort_order'),
-        sb.from('casting_assignments').select('id,character_id,applicant_id,state').eq('production_id', prodId).in('state', ['chosen', 'offer_accepted']),
+        sb.from('casting_assignments').select('id,character_id,applicant_id,state,created_at,updated_at').eq('production_id', prodId).in('state', ['chosen', 'offer_accepted', 'ensemble_manual']),
         sb.from('audition_applications').select('id,name,email,pronouns,headshot_url,custom_answers').eq('production_id', prodId).order('name'),
         sb.from('audition_bookings').select('id,name,email,headshot_url,custom_answers').eq('production_id', prodId).order('name')
       ]);
