@@ -712,8 +712,14 @@
       color: var(--sched-text-grey);
       text-align: center;
     }
+    .sched-uncast-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
     .sched-char-row {
       display: flex;
+      width: 100%;
       gap: 0.8rem;
       align-items: flex-start;
       padding: 0.9rem 0.95rem;
@@ -722,6 +728,12 @@
       background: #faf8fd;
       cursor: pointer;
       text-align: left;
+      font: inherit;
+      margin: 0;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .sched-char-row:hover {
+      border-color: rgba(87,46,136,0.2);
     }
     .sched-char-row.active {
       border-color: rgba(87,46,136,0.3);
@@ -1340,49 +1352,45 @@
       return { first: parts.slice(0, -1).join(' '), last: parts.slice(-1).join(' ') };
     }
 
-    function renderCalledCharacterEntry(ch, active, castMap) {
+    function renderCastCharacterCard(ch, active, castEntries) {
       const id = String(ch.id);
-      const castEntries = Array.isArray(castMap[id]) ? castMap[id] : [];
-      if (typeof renderCastingCard === 'function') {
-        const castPerson = castEntries[0]?.person || null;
-        const displayName = personDisplayName(castPerson) || (castEntries.length ? 'Cast Member' : 'Open Role');
-        const split = splitDisplayName(displayName);
-        const cardHtml = renderCastingCard({
-          first_name: split.first,
-          last_name: split.last,
-          character_name: ch.name || '',
-          headshot_url: castPerson?.headshot_url || '',
-        }, {
-          size: 'compact',
-          hasPadding: true,
-          hasIcons: false,
-          draggable: false,
-          state: null,
-          variant: 'inTheShow',
-        });
-        return '' +
-          '<button type="button" class="sched-cast-card-btn' + (active ? ' active' : '') + '" onclick="toggleCharacter(\'' + esc(id) + '\')">' +
-            '<div class="sched-cast-card-shell">' +
-              cardHtml +
-            '</div>' +
-            (castEntries.length > 1
-              ? '<div class="sched-cast-card-note">' + esc(castEntries.slice(1).map(entry => personDisplayName(entry.person) || entry.person?.email || 'Cast Member').join(' · ')) + '</div>'
-              : (!castEntries.length ? '<div class="sched-cast-card-note">Not yet cast</div>' : '')) +
-          '</button>';
-      }
-
+      const castPerson = castEntries[0]?.person || null;
+      const displayName = personDisplayName(castPerson) || 'Cast Member';
+      const split = splitDisplayName(displayName);
+      const cardHtml = renderCastingCard({
+        first_name: split.first,
+        last_name: split.last,
+        character_name: ch.name || '',
+        headshot_url: castPerson?.headshot_url || '',
+      }, {
+        size: 'compact',
+        hasPadding: true,
+        hasIcons: false,
+        draggable: false,
+        state: null,
+        variant: 'inTheShow',
+      });
       return '' +
         '<button type="button" class="sched-cast-card-btn' + (active ? ' active' : '') + '" onclick="toggleCharacter(\'' + esc(id) + '\')">' +
           '<div class="sched-cast-card-shell">' +
-            '<div class="sched-char-row is-uncast' + (active ? ' active' : '') + '">' +
-              '<span class="sched-char-cb">' + (active ? '&#10003;' : '') + '</span>' +
-              '<span class="sched-char-meta">' +
-                '<div class="sched-char-name">' + esc(ch.name) + '</div>' +
-                '<div class="sched-char-cast">Not yet cast</div>' +
-              '</span>' +
-              '<span class="sched-char-tag">Needs casting</span>' +
-            '</div>' +
+            cardHtml +
           '</div>' +
+          (castEntries.length > 1
+            ? '<div class="sched-cast-card-note">' + esc(castEntries.slice(1).map(entry => personDisplayName(entry.person) || entry.person?.email || 'Cast Member').join(' · ')) + '</div>'
+            : '') +
+        '</button>';
+    }
+
+    function renderUncastCharacterRow(ch, active) {
+      const id = String(ch.id);
+      return '' +
+        '<button type="button" class="sched-char-row is-uncast' + (active ? ' active' : '') + '" onclick="toggleCharacter(\'' + esc(id) + '\')">' +
+          '<span class="sched-char-cb">' + (active ? '&#10003;' : '') + '</span>' +
+          '<span class="sched-char-meta">' +
+            '<div class="sched-char-name">' + esc(ch.name) + '</div>' +
+            '<div class="sched-char-cast">Not yet cast</div>' +
+          '</span>' +
+          '<span class="sched-char-tag">Needs casting</span>' +
         '</button>';
     }
 
@@ -1574,7 +1582,7 @@
                     '<div class="sched-cast-card-grid">' +
                       castedChars.map(ch => {
                         const id = String(ch.id);
-                        return renderCalledCharacterEntry(ch, _draft.calledIds.has(id), castPeople);
+                        return renderCastCharacterCard(ch, _draft.calledIds.has(id), castPeople[id] || []);
                       }).join('') +
                     '</div>' +
                   '</div>'
@@ -1582,10 +1590,12 @@
                 (uncastChars.length ? (
                   '<div class="sched-cast-section">' +
                     '<div class="sched-cast-section-label">' + esc(castedChars.length ? 'Still uncast' : 'Roles still waiting on casting') + '</div>' +
-                    uncastChars.map(ch => {
-                      const id = String(ch.id);
-                      return renderCalledCharacterEntry(ch, _draft.calledIds.has(id), castPeople);
-                    }).join('') +
+                    '<div class="sched-uncast-list">' +
+                      uncastChars.map(ch => {
+                        const id = String(ch.id);
+                        return renderUncastCharacterRow(ch, _draft.calledIds.has(id));
+                      }).join('') +
+                    '</div>' +
                   '</div>'
                 ) : '') +
               '</div>' +
