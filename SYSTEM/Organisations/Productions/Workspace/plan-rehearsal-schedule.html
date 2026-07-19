@@ -177,6 +177,38 @@
       font-size: 0.68rem;
       font-weight: var(--sched-type-strong);
     }
+    .sched-card-indicators {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-bottom: 0.65rem;
+    }
+    .sched-card-indicator {
+      display: inline-flex;
+      align-items: center;
+      min-height: 1.55rem;
+      padding: 0.22rem 0.52rem;
+      border-radius: 999px;
+      font-size: 0.66rem;
+      font-weight: var(--sched-type-strong);
+      line-height: 1;
+    }
+    .sched-card-indicator.is-next {
+      background: rgba(71,106,170,0.12);
+      color: #476aaa;
+    }
+    .sched-card-indicator.is-today {
+      background: rgba(87,46,136,0.12);
+      color: #572e88;
+    }
+    .sched-card-indicator.is-tomorrow {
+      background: rgba(118,158,123,0.18);
+      color: #5f7f63;
+    }
+    .sched-card-indicator.is-past {
+      background: rgba(26,21,48,0.08);
+      color: rgba(26,21,48,0.58);
+    }
     .sched-card-type,
     .sched-card-status {
       display: inline-flex;
@@ -676,6 +708,19 @@
       return start < today;
     }
 
+    function eventDayStart(ev) {
+      const start = parseLocalDateTime(ev?.start_time || '');
+      if (!(start instanceof Date) || Number.isNaN(start.getTime())) return null;
+      return new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    }
+
+    function dayDiffFromToday(ev) {
+      const day = eventDayStart(ev);
+      if (!day) return null;
+      const today = new Date(2026, 6, 19);
+      return Math.round((day.getTime() - today.getTime()) / 86400000);
+    }
+
     function eventTimeRange(ev) {
       if (!ev?.start_time) return '';
       const start = fmtTime(ev.start_time);
@@ -695,6 +740,37 @@
       if (isPastEvent(ev)) return { label: 'Past session', className: 'is-past' };
       if (mode === 'tbd') return { label: 'Call list TBD', className: 'is-tbd' };
       return { label: 'Call list set', className: 'is-ready' };
+    }
+
+    function sortedEventsForList() {
+      return [..._events].sort((a, b) => {
+        const aDiff = dayDiffFromToday(a);
+        const bDiff = dayDiffFromToday(b);
+        const aPast = aDiff != null && aDiff < 0;
+        const bPast = bDiff != null && bDiff < 0;
+        if (aPast !== bPast) return aPast ? 1 : -1;
+        const aStart = parseLocalDateTime(a?.start_time || '');
+        const bStart = parseLocalDateTime(b?.start_time || '');
+        const aTime = aStart instanceof Date && !Number.isNaN(aStart.getTime()) ? aStart.getTime() : 0;
+        const bTime = bStart instanceof Date && !Number.isNaN(bStart.getTime()) ? bStart.getTime() : 0;
+        return aPast && bPast ? bTime - aTime : aTime - bTime;
+      });
+    }
+
+    function eventIndicatorMeta(ev, sortedEvents) {
+      const diff = dayDiffFromToday(ev);
+      if (diff == null) return null;
+      if (diff < 0) return { label: 'Past', className: 'is-past' };
+      if (diff === 0) return { label: 'Today', className: 'is-today' };
+      if (diff === 1) return { label: 'Tomorrow', className: 'is-tomorrow' };
+      const nextUpcoming = sortedEvents.find(item => {
+        const itemDiff = dayDiffFromToday(item);
+        return itemDiff != null && itemDiff >= 0;
+      });
+      if (nextUpcoming && String(nextUpcoming.id) === String(ev.id)) {
+        return { label: 'Next up', className: 'is-next' };
+      }
+      return null;
     }
 
     function eventCalledCharacterIds(ev) {
@@ -839,12 +915,15 @@
         host.innerHTML = '<div class="sched-empty-list">No rehearsals yet. Add rehearsal events in Calendar, then plan them here.</div>';
         return;
       }
-      host.innerHTML = _events.map(ev => {
+      const listEvents = sortedEventsForList();
+      host.innerHTML = listEvents.map(ev => {
         const active = String(ev.id) === String(_selectedEventId);
         const title = ev.title || typeLabel(ev.event_type);
         const status = eventStatusMeta(ev);
+        const indicator = eventIndicatorMeta(ev, listEvents);
         return '' +
           '<button type="button" class="sched-card' + (active ? ' active' : '') + '" onclick="selectEvent(\'' + esc(ev.id) + '\')">' +
+            (indicator ? '<div class="sched-card-indicators"><span class="sched-card-indicator ' + esc(indicator.className) + '">' + esc(indicator.label) + '</span></div>' : '') +
             '<div class="sched-card-date">' + esc(eventDateChip(ev)) + '</div>' +
             '<div class="sched-card-top">' +
               '<div>' +
