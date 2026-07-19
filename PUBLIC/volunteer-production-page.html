@@ -4355,6 +4355,17 @@
       }
       return base.getTime();
     }
+    function portalCalendarStartValue(item = {}) {
+      const sourceStart = String(item.source?.start_time || item.source_item?.source?.start_time || '').trim();
+      if (sourceStart) {
+        const sourceDate = new Date(sourceStart);
+        if (!isNaN(sourceDate)) return sourceStart;
+      }
+      return String(item.date || '').slice(0, 10);
+    }
+    function portalCalendarAllDayValue(item = {}) {
+      return !String(item.source?.start_time || item.source_item?.source?.start_time || '').trim();
+    }
     function dashboardShiftStartText(row = {}) {
       return fmtTime(row.shift_start_time) || 'Flexible';
     }
@@ -6189,8 +6200,8 @@
         return {
           id: `portal-${index}`,
           title: item.title || portalKindLabel(kind),
-          start: item.date,
-          allDay: true,
+          start: portalCalendarStartValue(item),
+          allDay: portalCalendarAllDayValue(item),
           backgroundColor: color,
           borderColor: color,
           textColor: '#ffffff',
@@ -6261,7 +6272,9 @@
       function showMobileDayPanel(dateStr) {
         const panel = document.getElementById('vpd-fc-day-panel');
         if (!panel) return;
-        const items = (_portalCalItems || []).filter(i => i.date === dateStr);
+        const items = (_portalCalItems || [])
+          .filter(i => i.date === dateStr)
+          .sort((a, b) => portalScheduleSortValue(a) - portalScheduleSortValue(b));
         if (!items.length) { panel.innerHTML = ''; panel.style.display = 'none'; return; }
         const d = new Date(dateStr + 'T12:00:00');
         const label = d.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' });
@@ -6289,6 +6302,7 @@
         nowIndicator: true,
         dayMaxEvents: isMobileCalendar ? false : 4,
         eventDisplay: 'block',
+        eventOrder: 'start,title',
         events: portalFullCalendarEvents(),
         eventContent(arg) {
           if (isMobileCalendar) {
@@ -6345,7 +6359,7 @@
       const fcEvents = performerItems.map((item, i) => {
         const kind = portalItemKind(item);
         const color = portalKindColor(kind);
-        return { id: `perf-${i}`, title: item.title, start: item.date, allDay: true, backgroundColor: color, borderColor: color, textColor: '#fff', extendedProps: { item_index: _portalCalItems.indexOf(item), display_time: item.time || '', kind } };
+        return { id: `perf-${i}`, title: item.title, start: portalCalendarStartValue(item), allDay: portalCalendarAllDayValue(item), backgroundColor: color, borderColor: color, textColor: '#fff', extendedProps: { item_index: _portalCalItems.indexOf(item), display_time: item.time || '', kind } };
       });
       el.innerHTML = '';
       _performerFcCalendar = new FullCalendar.Calendar(el, {
@@ -6359,6 +6373,7 @@
         nowIndicator: true,
         dayMaxEvents: isMobile ? false : 4,
         eventDisplay: 'block',
+        eventOrder: 'start,title',
         events: fcEvents,
         eventContent(arg) {
           if (isMobile) {
