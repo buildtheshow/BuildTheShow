@@ -334,6 +334,7 @@ let _cast = [];
 let _search = '', _activeTab = 'everyone', _statusFilter = '';
 let _pendingKioskPerson = null;
 let _eventStart = null;
+let _hasCalledCastColumn = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
   _sb = supabase.createClient(SUPA_URL, SUPA_KEY);
@@ -422,12 +423,54 @@ function pillHtml(status) {
   return '<span class="dci-pill ' + esc(cls) + '">' + esc(lbl) + '</span>';
 }
 
+function eventCalledCharacterIds(ev) {
+  const ids = new Set();
+  const legacyIds = Array.isArray(ev?.called_character_ids) ? ev.called_character_ids.filter(Boolean).map(String) : [];
+  legacyIds.forEach(id => ids.add(id));
+  const calledCast = ev?.called_cast;
+  if (calledCast && typeof calledCast === 'object' && calledCast.type === 'individuals') {
+    (Array.isArray(calledCast.character_ids) ? calledCast.character_ids : [])
+      .filter(Boolean)
+      .map(String)
+      .forEach(id => ids.add(id));
+  }
+  return ids;
+}
+
+function calledCastMetaForDay(events) {
+  let hasExplicit = false;
+  let allCast = false;
+  const ids = new Set();
+  (events || []).forEach(ev => {
+    const legacyIds = Array.isArray(ev?.called_character_ids) ? ev.called_character_ids.filter(Boolean) : [];
+    if (legacyIds.length) hasExplicit = true;
+    legacyIds.map(String).forEach(id => ids.add(id));
+    const calledCast = ev?.called_cast;
+    if (!calledCast || typeof calledCast !== 'object') return;
+    if (calledCast.type === 'all') {
+      hasExplicit = true;
+      allCast = true;
+      return;
+    }
+    if (calledCast.type === 'individuals') {
+      hasExplicit = true;
+      eventCalledCharacterIds(ev).forEach(id => ids.add(id));
+    }
+  });
+  return { hasExplicit, allCast, ids };
+}
+
 // ── Data loading ──────────────────────────────────────────────────────────────
 
 async function loadAll() {
+  const calledCastProbe = await _sb.from('production_events').select('called_cast').eq('production_id', _prodId).limit(1);
+  _hasCalledCastColumn = !calledCastProbe.error;
+  const eventSelect = _hasCalledCastColumn
+    ? 'id,title,event_type,start_time,end_time,is_deadline,called_cast,called_character_ids'
+    : 'id,title,event_type,start_time,end_time,is_deadline,called_character_ids';
   const [evRes, volRes, regRes, assignRes, appsRes, booksRes, ciRes, prodRes] = await Promise.all([
     _sb.from('production_events')
-       .select('id,title,event_type,start_time,end_time,is_deadline')
+       .select(eventSelect)
        .eq('production_id', _prodId)
        .gte('start_time', _date + 'T00:00:00')
        .lte('start_time', _date + 'T23:59:59'),
@@ -439,7 +482,7 @@ async function loadAll() {
        .select('id,casting_assignment_id,performer_name')
        .eq('production_id', _prodId),
     _sb.from('casting_assignments')
-       .select('id,applicant_id,role_name,character_name')
+       .select('id,applicant_id,character_id,role_name,character_name,state')
        .eq('production_id', _prodId),
     _sb.from('audition_applications')
        .select('id,name,first_name,last_name')
@@ -462,6 +505,7 @@ async function loadAll() {
   const firstEv = _todayEvents[0];
   _eventStart = firstEv && firstEv.start_time ? String(firstEv.start_time).split('T')[1].slice(0, 5) : null;
   const evEnd   = firstEv && firstEv.end_time   ? String(firstEv.end_time).split('T')[1].slice(0, 5)   : null;
+  const dayCallMeta = calledCastMetaForDay(_todayEvents);
 
   const ciMap = {};
   (ciRes.data || []).forEach(c => {
@@ -510,7 +554,12 @@ async function loadAll() {
       refId: String(r.id), expectedStart: _eventStart, expectedEnd: evEnd,
       checkedIn: !!ci.checkedIn, checkedInAt: ci.checkedInAt || null,
       signedOutAt: ci.signedOutAt || null, awayToday: !!ci.awayToday,
+      characterId: assignment.character_id ? String(assignment.character_id) : '',
     };
+  }).filter(p => {
+    if (dayCallMeta.allCast) return true;
+    if (!dayCallMeta.hasExplicit) return false;
+    return p.characterId && dayCallMeta.ids.has(String(p.characterId));
   });
   _cast.sort((a, b) => a.name.localeCompare(b.name));
 
