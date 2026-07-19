@@ -138,7 +138,7 @@
       border-radius: 22px;
       border: 1px solid rgba(87,46,136,0.12);
       background: #ffffff;
-      padding: 1rem 1rem 0.95rem;
+      padding: 1rem;
       cursor: pointer;
       transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
       text-align: left;
@@ -153,36 +153,78 @@
       box-shadow: 0 18px 30px rgba(61,29,104,0.12);
       background: #ffffff;
     }
+    .sched-card-layout {
+      display: grid;
+      grid-template-columns: 5.3rem minmax(0, 1fr);
+      gap: 0.95rem;
+      align-items: start;
+    }
+    .sched-card-date-rail {
+      display: grid;
+      justify-items: center;
+      gap: 0.55rem;
+    }
     .sched-card-top {
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
       gap: 0.7rem;
-      margin-bottom: 0.65rem;
+      margin-bottom: 0.45rem;
     }
     .sched-card-title {
-      font-size: 1.05rem;
+      font-size: 1.15rem;
       font-weight: var(--sched-type-strong);
       color: #1a1530;
       line-height: 1.15;
     }
     .sched-card-date {
-      display: inline-flex;
+      width: 100%;
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1.5px solid rgba(87,46,136,0.14);
+      background: #fff;
+      box-shadow: 0 8px 20px rgba(61,29,104,0.08);
+    }
+    .sched-card-date-month {
+      display: flex;
       align-items: center;
-      gap: 0.35rem;
-      margin-bottom: 0.6rem;
-      padding: 0.34rem 0.55rem;
-      border-radius: 999px;
-      background: rgba(87,46,136,0.08);
-      color: #572e88;
-      font-size: 0.68rem;
+      justify-content: center;
+      min-height: 2rem;
+      padding: 0.2rem 0.35rem;
+      color: #fff;
+      font-size: 0.72rem;
       font-weight: var(--sched-type-strong);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .sched-card-date-day {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 4rem;
+      padding: 0.2rem 0.35rem 0.28rem;
+      color: #1a1530;
+      font-size: 2.5rem;
+      font-weight: var(--sched-type-strong);
+      line-height: 1;
+      background: #fff;
+    }
+    .sched-card-date-weekday {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 0.08rem 0.2rem 0;
+      color: rgba(26,21,48,0.58);
+      font-size: 0.92rem;
+      font-weight: var(--sched-type-strong);
+      line-height: 1.1;
     }
     .sched-card-indicators {
       display: flex;
       flex-wrap: wrap;
       gap: 0.4rem;
-      margin-bottom: 0.65rem;
+      margin-bottom: 0.2rem;
     }
     .sched-card-indicator {
       display: inline-flex;
@@ -221,8 +263,7 @@
       white-space: nowrap;
     }
     .sched-card-type {
-      background: rgba(116,162,180,0.18);
-      color: #476aaa;
+      color: #ffffff;
     }
     .sched-card-status.is-ready {
       background: rgba(118,158,123,0.18);
@@ -237,21 +278,21 @@
       color: rgba(26,21,48,0.56);
     }
     .sched-card-venue {
-      margin-top: 0.18rem;
-      font-size: 0.7rem;
+      margin-top: 0.12rem;
+      font-size: 0.78rem;
       font-weight: var(--sched-type-plain);
       color: rgba(26,21,48,0.52);
-      line-height: 1.45;
+      line-height: 1.35;
     }
     .sched-card-meta,
     .sched-card-callout {
-      font-size: 0.84rem;
+      font-size: 0.82rem;
       font-weight: var(--sched-type-plain);
       color: rgba(26,21,48,0.62);
-      line-height: 1.45;
+      line-height: 1.35;
     }
     .sched-card-callout {
-      margin-top: 0.7rem;
+      margin-top: 0.5rem;
       color: #572e88;
       font-weight: var(--sched-type-strong);
     }
@@ -754,6 +795,13 @@
       tech: 'Tech',
       dress: 'Dress'
     };
+    const TYPE_COLOURS = {
+      rehearsal: '#74a2b4',
+      music_rehearsal: '#74a2b4',
+      choreography: '#74a2b4',
+      tech: '#5b9fc0',
+      dress: '#4f78a8'
+    };
 
     let _events = [];
     let _chars = [];
@@ -847,6 +895,22 @@
       const d = parseLocalDateTime(ev.start_time);
       if (Number.isNaN(d.getTime())) return 'No date';
       return d.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' });
+    }
+
+    function eventDateParts(ev) {
+      const d = parseLocalDateTime(ev?.start_time || '');
+      if (!(d instanceof Date) || Number.isNaN(d.getTime())) {
+        return { month: 'TBD', day: '--', weekday: '' };
+      }
+      return {
+        month: d.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase(),
+        day: String(d.getDate()),
+        weekday: d.toLocaleDateString('en-CA', { weekday: 'short' })
+      };
+    }
+
+    function typeColour(type) {
+      return TYPE_COLOURS[type] || '#572e88';
     }
 
     function eventStatusMeta(ev) {
@@ -1091,20 +1155,32 @@
         const title = ev.title || typeLabel(ev.event_type);
         const status = eventStatusMeta(ev);
         const indicator = eventIndicatorMeta(ev, listEvents);
+        const dateParts = eventDateParts(ev);
+        const colour = typeColour(ev.event_type);
         return '' +
           '<button type="button" class="sched-card' + (active ? ' active' : '') + '" onclick="selectEvent(\'' + esc(ev.id) + '\')">' +
-            (indicator ? '<div class="sched-card-indicators"><span class="sched-card-indicator ' + esc(indicator.className) + '">' + esc(indicator.label) + '</span></div>' : '') +
-            '<div class="sched-card-date">' + esc(eventDateChip(ev)) + '</div>' +
-            '<div class="sched-card-top">' +
-              '<div>' +
-                '<div class="sched-card-title">' + esc(title) + '</div>' +
-                '<div class="sched-card-venue">' + esc(ev.venue || 'No venue set') + '</div>' +
+            '<div class="sched-card-layout">' +
+              '<div class="sched-card-date-rail">' +
+                '<div class="sched-card-date">' +
+                  '<div class="sched-card-date-month" style="background:' + esc(colour) + ';">' + esc(dateParts.month) + '</div>' +
+                  '<div class="sched-card-date-day">' + esc(dateParts.day) + '</div>' +
+                '</div>' +
+                '<div class="sched-card-date-weekday">' + esc(dateParts.weekday) + '</div>' +
               '</div>' +
-              '<div class="sched-card-type">' + esc(typeLabel(ev.event_type)) + '</div>' +
+              '<div>' +
+                (indicator ? '<div class="sched-card-indicators"><span class="sched-card-indicator ' + esc(indicator.className) + '">' + esc(indicator.label) + '</span></div>' : '') +
+                '<div class="sched-card-top">' +
+                  '<div>' +
+                    '<div class="sched-card-title">' + esc(title) + '</div>' +
+                    '<div class="sched-card-venue">' + esc(ev.venue || 'No venue set') + '</div>' +
+                  '</div>' +
+                  '<div class="sched-card-type" style="background:' + esc(colour) + '22;color:' + esc(colour) + ';">' + esc(typeLabel(ev.event_type)) + '</div>' +
+                '</div>' +
+                '<div class="sched-card-meta">' + esc(fmtDate(ev.start_time) || '') + ' · ' + esc(eventTimeRange(ev) || 'Time TBD') + '</div>' +
+                '<div class="sched-card-callout">' + esc(callSummary(ev)) + '</div>' +
+                '<div style="margin-top:0.55rem;"><span class="sched-card-status ' + esc(status.className) + '">' + esc(status.label) + '</span></div>' +
+              '</div>' +
             '</div>' +
-            '<div class="sched-card-meta">' + esc(fmtDate(ev.start_time) || '') + ' · ' + esc(eventTimeRange(ev) || 'Time TBD') + '</div>' +
-            '<div class="sched-card-callout">' + esc(callSummary(ev)) + '</div>' +
-            '<div style="margin-top:0.65rem;"><span class="sched-card-status ' + esc(status.className) + '">' + esc(status.label) + '</span></div>' +
           '</button>';
       }).join('');
     }
