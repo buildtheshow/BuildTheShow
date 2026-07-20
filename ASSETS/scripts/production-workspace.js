@@ -48437,18 +48437,6 @@ See you soon!
 	        icon: '/ASSETS/Images/Icons/volunteer-not-interested.svg',
 	        label: `${emptyCount} Empty`,
 	        desc: `${emptyPct}% of needed`
-	      },
-	      {
-	        className: 'vd-summary-chip--published',
-	        icon: '/ASSETS/Images/Icons/navproductioncalendar.svg',
-	        label: `${publishedRoles} Roles Published`,
-	        desc: 'Open for sign-up'
-	      },
-	      {
-	        className: 'vd-summary-chip--confirmed',
-	        icon: '/ASSETS/Images/Icons/navproductionteam.svg',
-	        label: `${confirmedCount} Confirmed`,
-	        desc: 'Volunteers accepted'
 	      }
 	    ];
 
