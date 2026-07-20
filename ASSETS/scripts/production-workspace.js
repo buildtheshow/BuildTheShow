@@ -48434,30 +48434,10 @@ See you soon!
 	          ${topGaps.length > 0 ? `<button class="vd-view-gaps-btn" onclick="navigateToVolunteers('plan')">Edit in Plan →</button>` : ''}
 	        </div>
 	      </div>
-	      ${acceptedSignups.length > 0 ? `
-	      <div style="margin:0.85rem 0 0.5rem;padding:1rem;background:#fff;border:1.5px solid rgba(118,158,123,0.2);border-radius:8px;box-shadow:0 2px 8px rgba(26,21,48,0.04);">
-	        <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:0.75rem;flex-wrap:wrap;">
-	          <div>
-	            <div style="font-size:0.9rem;font-weight:900;color:#1a1530;">Confirmed Volunteers</div>
-	            <div style="font-size:0.75rem;color:rgba(26,21,48,0.5);margin-top:0.1rem;">${confirmedCount} accepted</div>
-	          </div>
-	          <button style="font-size:0.76rem;padding:0.3rem 0.7rem;border-radius:6px;border:1.5px solid rgba(87,46,136,0.18);background:rgba(87,46,136,0.05);color:#572e88;font-family:inherit;font-weight:700;cursor:pointer;" onclick="navigateToVolunteers('requests')">View all requests →</button>
-	        </div>
-	        <div style="display:flex;flex-wrap:wrap;gap:0.5rem;">
-	          ${acceptedSignups.map(s => {
-	            const linked = opportunities.find(o => o.id === s.opportunity_id);
-	            const roleName = linked ? (linked.production_title || linked.volunteer_role || linked.summary || 'Volunteer') : (s.volunteer_role || s.department || 'Volunteer');
-	            return `<div style="display:flex;flex-direction:column;gap:0.1rem;padding:0.42rem 0.72rem;background:rgba(118,158,123,0.1);border:1px solid rgba(118,158,123,0.22);border-radius:6px;min-width:0;">
-	              <div style="font-size:0.8rem;font-weight:800;color:#1a1530;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;">${esc(s.name || 'Unknown')}</div>
-	              <div style="font-size:0.7rem;color:rgba(26,21,48,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;">${esc(roleName)}</div>
-	            </div>`;
-	          }).join('')}
-	        </div>
-	      </div>` : ''}
 	      <div class="vd-url-banner">
 	        <span class="vd-url-label">Volunteer page link to share:</span>
 	        <code class="vd-url-code">${esc(fullVolUrl)}</code>
-	        <button class="vd-url-copy" onclick="navigator.clipboard.writeText(${JSON.stringify(fullVolUrl)}).then(()=>showToast('Link copied!'))">Copy</button>
+	        <button class="vd-url-copy" onclick='navigator.clipboard.writeText(${JSON.stringify(fullVolUrl)}).then(()=>showToast("Link copied!"))'>Copy</button>
 	      </div>
 	      <div class="vd-nav-row">
 	        <div style="display:flex;align-items:center;gap:0.5rem;">
