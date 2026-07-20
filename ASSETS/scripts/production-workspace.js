@@ -48374,6 +48374,7 @@ See you soon!
 
 	    function opportunityShiftRowsByDate() {
 	      const rowsByDate = {};
+	      const eventIdsWithRows = new Set();
 	      (opportunities || [])
 	        .filter(opp => opp.opportunity_type === 'volunteer')
 	        .forEach(opp => {
@@ -48403,8 +48404,9 @@ See you soon!
 	          };
 	          if (!rowsByDate[shiftDate]) rowsByDate[shiftDate] = [];
 	          rowsByDate[shiftDate].push(row);
+	          if (event?.id) eventIdsWithRows.add(String(event.id));
 	        });
-	      return rowsByDate;
+	      return { rowsByDate, eventIdsWithRows };
 	    }
 
 	    function renderShiftCard(shift) {
@@ -48442,12 +48444,16 @@ See you soon!
 	      </div>`;
 	    }
 
-	    const opportunityRowsByDate = opportunityShiftRowsByDate();
+	    const { rowsByDate: opportunityRowsByDate, eventIdsWithRows } = opportunityShiftRowsByDate();
 	    const renderedRowsByDate = {};
 	    weekDays.forEach(d => {
 	      const ds = toDateStr(d);
-	      renderedRowsByDate[ds] = [...(opportunityRowsByDate[ds] || [])]
-	        .sort((a, b) => shiftSortKey(a).localeCompare(shiftSortKey(b)));
+	      const rows = [...(opportunityRowsByDate[ds] || [])];
+	      (eventsByDate[ds] || []).forEach(ev => {
+	        if (eventIdsWithRows.has(String(ev.id))) return;
+	        rows.push(...plannedShiftRowsForEvent(ev));
+	      });
+	      renderedRowsByDate[ds] = rows.sort((a, b) => shiftSortKey(a).localeCompare(shiftSortKey(b)));
 	    });
 
 	    const visibleShiftRows = Object.values(renderedRowsByDate)
