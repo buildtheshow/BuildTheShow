@@ -48374,7 +48374,6 @@ See you soon!
 
 	    function opportunityShiftRowsByDate() {
 	      const rowsByDate = {};
-	      const eventIdsWithRows = new Set();
 	      (opportunities || [])
 	        .filter(opp => opp.opportunity_type === 'volunteer')
 	        .forEach(opp => {
@@ -48386,6 +48385,10 @@ See you soon!
 	            : parseCommitmentRange(opp.time_commitment || '');
 	          const shiftDate = timing.shift_date || opp.event_date || event?.start_time?.slice(0, 10) || null;
 	          if (!shiftDate) return;
+	          const roleName = opp.production_title || opp.volunteer_role || 'Volunteer Shift';
+	          const roleKey = `${String(roleName || '').toLowerCase()}|${shiftDate}`;
+	          const matchedFilled = approvedByRoleDate[roleKey];
+	          const matchedNames = namesByRoleDate[roleKey];
 	          const row = {
 	            kind: 'shift',
 	            id: `opp-${opp.id}`,
@@ -48393,16 +48396,15 @@ See you soon!
 	            shift_start_time: timing.shift_start_time || null,
 	            shift_end_time: timing.shift_end_time || null,
 	            color: eventColor(eventType),
-	            role_name: opp.production_title || opp.volunteer_role || 'Volunteer Shift',
-	            filled: approvedByOppId[String(opp.id)] || 0,
+	            role_name: roleName,
+	            filled: matchedFilled ?? approvedByOppId[String(opp.id)] ?? 0,
 	            needed: parseInt(opp.volunteers_needed, 10) || 0,
-	            names: namesByOppId[String(opp.id)] || [],
+	            names: matchedNames || namesByOppId[String(opp.id)] || [],
 	          };
 	          if (!rowsByDate[shiftDate]) rowsByDate[shiftDate] = [];
 	          rowsByDate[shiftDate].push(row);
-	          if (event?.id) eventIdsWithRows.add(String(event.id));
 	        });
-	      return { rowsByDate, eventIdsWithRows };
+	      return rowsByDate;
 	    }
 
 	    function renderShiftCard(shift) {
@@ -48440,16 +48442,12 @@ See you soon!
 	      </div>`;
 	    }
 
-	    const { rowsByDate: opportunityRowsByDate, eventIdsWithRows } = opportunityShiftRowsByDate();
+	    const opportunityRowsByDate = opportunityShiftRowsByDate();
 	    const renderedRowsByDate = {};
 	    weekDays.forEach(d => {
 	      const ds = toDateStr(d);
-	      const rows = [...(opportunityRowsByDate[ds] || [])];
-	      (eventsByDate[ds] || []).forEach(ev => {
-	        if (eventIdsWithRows.has(String(ev.id))) return;
-	        rows.push(...plannedShiftRowsForEvent(ev));
-	      });
-	      renderedRowsByDate[ds] = rows.sort((a, b) => shiftSortKey(a).localeCompare(shiftSortKey(b)));
+	      renderedRowsByDate[ds] = [...(opportunityRowsByDate[ds] || [])]
+	        .sort((a, b) => shiftSortKey(a).localeCompare(shiftSortKey(b)));
 	    });
 
 	    const visibleShiftRows = Object.values(renderedRowsByDate)
