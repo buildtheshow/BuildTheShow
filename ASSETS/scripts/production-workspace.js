@@ -48365,73 +48365,43 @@ See you soon!
 	    // ── Needs attention ─────────────────────────────────────
 	    const needsHtml = topGaps.length
 	      ? topGaps.map(([name, gaps]) => `<div class="vd-gap-row"><span class="vd-gap-dot"></span><span class="vd-gap-name">${esc(name)}</span><span class="vd-gap-count">${gaps} empty</span></div>`).join('')
-	      : `<div style="font-size:0.78rem;color:rgba(87,46,136,0.5);padding:0.25rem 0;">${totalNeeded > 0 ? 'All roles covered this week' : 'Set up roles in Plan first'}</div>`;
+	      : `<div class="vd-needs-empty">${totalNeeded > 0 ? 'All roles covered this week' : 'Set up roles in Plan first'}</div>`;
 
 	    root.innerHTML = `
 	      <div class="vd-stats-row">
-	        <div class="vd-stat-card">
-	          <div class="vd-stat-icon" style="background:#572e88;">
-	            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-	          </div>
-	          <div>
-	            <div class="vd-stat-num">${totalNeeded}</div>
-	            <div class="vd-stat-label">Volunteer Spots Needed</div>
-	            <div class="vd-stat-sub">This Week</div>
-	          </div>
+	        <div class="vd-stat-card vd-stat-card--spots">
+	          <div class="vd-stat-num">${totalNeeded}</div>
+	          <div class="vd-stat-label">Volunteer Spots Needed</div>
+	          <div class="vd-stat-sub">This week</div>
 	        </div>
-	        <div class="vd-stat-card">
-	          <div class="vd-stat-icon" style="background:#22c55e;">
-	            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-	          </div>
-	          <div>
-	            <div class="vd-stat-num" style="color:#22c55e;">${totalFilled}</div>
-	            <div class="vd-stat-label">Filled</div>
-	            <div class="vd-stat-sub">${filledPct}% of needed</div>
-	          </div>
+	        <div class="vd-stat-card vd-stat-card--filled">
+	          <div class="vd-stat-num">${totalFilled}</div>
+	          <div class="vd-stat-label">Filled</div>
+	          <div class="vd-stat-sub">${filledPct}% of needed</div>
 	        </div>
-	        <div class="vd-stat-card">
-	          <div class="vd-stat-icon" style="background:#f59e0b;">
-	            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-	          </div>
-	          <div>
-	            <div class="vd-stat-num" style="color:#f59e0b;">${partialCount}</div>
-	            <div class="vd-stat-label">Partially Filled</div>
-	            <div class="vd-stat-sub">${partialPct}% of needed</div>
-	          </div>
+	        <div class="vd-stat-card vd-stat-card--partial">
+	          <div class="vd-stat-num">${partialCount}</div>
+	          <div class="vd-stat-label">Partially Filled</div>
+	          <div class="vd-stat-sub">${partialPct}% of needed</div>
 	        </div>
-	        <div class="vd-stat-card">
-	          <div class="vd-stat-icon" style="background:#ef4444;">
-	            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-	          </div>
-	          <div>
-	            <div class="vd-stat-num" style="color:#ef4444;">${emptyCount}</div>
-	            <div class="vd-stat-label">Empty</div>
-	            <div class="vd-stat-sub">${emptyPct}% of needed</div>
-	          </div>
+	        <div class="vd-stat-card vd-stat-card--empty">
+	          <div class="vd-stat-num">${emptyCount}</div>
+	          <div class="vd-stat-label">Empty</div>
+	          <div class="vd-stat-sub">${emptyPct}% of needed</div>
 	        </div>
-	        <div class="vd-stat-card">
-	          <div class="vd-stat-icon" style="background:#476aaa;">
-	            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-	          </div>
-	          <div>
-	            <div class="vd-stat-num" style="color:#476aaa;">${publishedRoles}</div>
-	            <div class="vd-stat-label">Roles Published</div>
-	            <div class="vd-stat-sub">Open for sign-up</div>
-	          </div>
+	        <div class="vd-stat-card vd-stat-card--published">
+	          <div class="vd-stat-num">${publishedRoles}</div>
+	          <div class="vd-stat-label">Roles Published</div>
+	          <div class="vd-stat-sub">Open for sign-up</div>
 	        </div>
-	        <div class="vd-stat-card">
-	          <div class="vd-stat-icon" style="background:#769e7b;">
-	            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-	          </div>
-	          <div>
-	            <div class="vd-stat-num" style="color:#769e7b;">${confirmedCount}</div>
-	            <div class="vd-stat-label">Confirmed</div>
-	            <div class="vd-stat-sub">Volunteers accepted</div>
-	          </div>
+	        <div class="vd-stat-card vd-stat-card--confirmed">
+	          <div class="vd-stat-num">${confirmedCount}</div>
+	          <div class="vd-stat-label">Confirmed</div>
+	          <div class="vd-stat-sub">Volunteers accepted</div>
 	        </div>
 	        <div class="vd-needs-panel">
 	          <div class="vd-needs-head">
-	            <span>&#x1F514; Needs Attention</span>
+	            <span>Needs Attention</span>
 	            ${topGaps.length ? `<span class="vd-needs-badge">${topGaps.length}</span>` : ''}
 	          </div>
 	          ${needsHtml}
