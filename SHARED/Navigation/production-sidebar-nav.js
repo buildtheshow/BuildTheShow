@@ -222,7 +222,7 @@
     var id = new URLSearchParams(location.search).get('id') || '';
     var suffix = id ? '?id=' + encodeURIComponent(id) : '';
     var pages = {
-      calendar:    'volunteers.html',
+      calendar:    'volunteer-calendar.html',
       plan:        'volunteers.html',
       suggestions: 'volunteer-suggestions.html',
       roles:       'volunteer-roles.html',
