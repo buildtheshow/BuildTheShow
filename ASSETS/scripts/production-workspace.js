@@ -48329,36 +48329,68 @@ See you soon!
 	      return `${item.shift_date || ''}T${item.shift_start_time || '99:99:99'}|${item.role_name || ''}`;
 	    }
 
-	    function opportunityShiftRow(opp) {
-	      const ev = opp?.event_id ? volunteerPlanEvents.find(e => String(e.id) === String(opp.event_id)) : null;
-	      const normalizedType = ev ? volCalendarEventType(ev) : 'other';
+	    function dashboardStaffingEntry(eventType, roleName) {
+	      const normalizedName = String(roleName || '').toLowerCase();
+	      const eventRoles = PLAN_ROLE_MAP[eventType] || [];
+	      const eventIndex = eventRoles.findIndex(role => String(role.name || '').toLowerCase() === normalizedName);
+	      if (eventIndex >= 0) return _staffingPlan[`${eventType}-${eventIndex}`] || {};
+	      const custom = Object.entries(_staffingPlan).find(([key, val]) =>
+	        key.startsWith(`${eventType}-custom-`) && String(val?.roleName || '').toLowerCase() === normalizedName
+	      );
+	      if (custom?.[1]) return custom[1];
+	      const deptLeadIndex = (PLAN_ROLE_MAP.dept_leads || []).findIndex(role => String(role.name || '').toLowerCase() === normalizedName);
+	      if (deptLeadIndex >= 0) return _staffingPlan[`dept_leads-${deptLeadIndex}`] || {};
+	      return {};
+	    }
+
+	    function plannedShiftRowsForEvent(ev) {
+	      const normalizedType = volCalendarEventType(ev);
 	      const color = eventColor(normalizedType);
-	      const entry = staffingEntryForOpportunity(opp);
-	      const timing = ev ? volRoleShiftTiming(ev, entry) : {
-	        shift_date: opp.event_date || opp.shift_date || opp.start_date || null,
-	        shift_start_time: opp.shift_start_time || null,
-	        shift_end_time: opp.shift_end_time || null,
-	      };
-	      const shiftDate = timing.shift_date || opp.event_date || opp.shift_date || opp.start_date || null;
-	      const filled = approvedByOppId[String(opp.id)] ?? approvedByRoleDate[`${String(opp.production_title || '').toLowerCase()}|${shiftDate || ''}`] ?? 0;
-	      const names = namesByOppId[String(opp.id)] || namesByRoleDate[`${String(opp.production_title || '').toLowerCase()}|${shiftDate || ''}`] || [];
-	      const needed = parseInt(opp.volunteers_needed, 10) || 0;
-	      return {
-	        kind: 'shift',
-	        id: opp.id,
-	        event_id: opp.event_id || null,
-	        shift_date: shiftDate,
-	        shift_start_time: timing.shift_start_time || null,
-	        shift_end_time: timing.shift_end_time || null,
-	        color,
-	        role_name: opp.production_title || opp.volunteer_role || 'Volunteer Shift',
-	        filled,
-	        needed,
-	        names,
-	      };
+	      const eventDate = String(ev?.start_time || '').slice(0, 10) || null;
+	      const roles = plannedRolesForType(normalizedType);
+	      if (!roles.length) {
+	        return [{
+	          kind: 'empty',
+	          id: `empty-${ev.id}`,
+	          shift_date: eventDate,
+	          shift_start_time: ev?.start_time?.split('T')[1] || null,
+	          shift_end_time: ev?.end_time?.split('T')[1] || null,
+	          color,
+	        }];
+	      }
+	      return roles.map(role => {
+	        const entry = dashboardStaffingEntry(normalizedType, role.name);
+	        const timing = volRoleShiftTiming(ev, entry);
+	        const shiftDate = timing.shift_date || eventDate;
+	        const roleKey = `${String(role.name || '').toLowerCase()}|${shiftDate || ''}`;
+	        const filled = approvedByRoleDate[roleKey] || 0;
+	        const names = namesByRoleDate[roleKey] || [];
+	        return {
+	          kind: 'shift',
+	          id: `${ev.id}-${role.name}`,
+	          shift_date: shiftDate,
+	          shift_start_time: timing.shift_start_time || null,
+	          shift_end_time: timing.shift_end_time || null,
+	          color,
+	          role_name: role.name,
+	          filled,
+	          needed: role.needed,
+	          names,
+	        };
+	      });
 	    }
 
 	    function renderShiftCard(shift) {
+	      if (shift.kind === 'empty') {
+	        const timeStr = [volFmtShiftTime(shift.shift_start_time), volFmtShiftTime(shift.shift_end_time)].filter(Boolean).join(' – ') || 'Time not set';
+	        return `<div class="vd-event-card vd-event-card--empty" style="border-left:3px solid ${shift.color};">
+	          <div class="vd-event-time">${esc(timeStr)}</div>
+	          <div class="vd-no-role">No volunteer shifts set yet</div>
+	          <div class="vd-event-footer">
+	            <button class="vd-add-role-btn" onclick="navigateToVolunteers('plan')">Set volunteer shifts →</button>
+	          </div>
+	        </div>`;
+	      }
 	      const timeStr = [volFmtShiftTime(shift.shift_start_time), volFmtShiftTime(shift.shift_end_time)].filter(Boolean).join(' – ') || 'Time not set';
 	      const dot = shift.filled >= shift.needed ? '#22c55e' : shift.filled > 0 ? '#f59e0b' : '#ef4444';
 	      const cls = shift.filled >= shift.needed ? 'filled' : shift.filled > 0 ? 'partial' : 'empty';
@@ -48389,10 +48421,9 @@ See you soon!
 	    const cols = weekDays.map(d => {
 	      const ds = toDateStr(d);
 	      const isToday = ds === toDateStr(today);
-	      const shifts = opportunities
-	        .filter(opp => opp.opportunity_type === 'volunteer')
-	        .map(opportunityShiftRow)
-	        .filter(shift => shift.shift_date === ds)
+	      const shifts = (eventsByDate[ds] || [])
+	        .sort((a,b) => (a.start_time||'').localeCompare(b.start_time||''))
+	        .flatMap(plannedShiftRowsForEvent)
 	        .sort((a, b) => shiftSortKey(a).localeCompare(shiftSortKey(b)));
 	      const cardsHtml = shifts.map(renderShiftCard).join('');
 	      return `<div class="vd-day-col${isToday?' vd-today':''}">
