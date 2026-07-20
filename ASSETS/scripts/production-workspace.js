@@ -48429,10 +48429,12 @@ See you soon!
 	            <div class="vd-role-row">
 	              <span class="vd-role-dot" style="background:${dot}"></span>
 	              <span class="vd-role-name">${esc(shift.role_name)}</span>
-	              <span class="vd-role-count ${cls}">${shift.filled}/${shift.needed}</span>
 	            </div>
 	            <div class="vd-event-time">${esc(timeStr)}</div>
 	            ${namesHtml}
+	            <div class="vd-role-count-row">
+	              <span class="vd-role-count ${cls}">${shift.filled}/${shift.needed}</span>
+	            </div>
 	          </div>
 	        </div>
 	      </div>`;
