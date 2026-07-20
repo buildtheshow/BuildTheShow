@@ -468,7 +468,7 @@ async function loadAll() {
   const eventSelect = _hasCalledCastColumn
     ? 'id,title,event_type,start_time,end_time,is_deadline,called_cast,called_character_ids'
     : 'id,title,event_type,start_time,end_time,is_deadline,called_character_ids';
-  const [evRes, volRes, regRes, assignRes, appsRes, booksRes, ciRes, prodRes] = await Promise.all([
+  const [evRes, volRes, assignRes, appsRes, booksRes, ciRes, prodRes] = await Promise.all([
     _sb.from('production_events')
        .select(eventSelect)
        .eq('production_id', _prodId)
@@ -478,17 +478,15 @@ async function loadAll() {
        .select('id,name,role_name,shift_date,required_dates,status,shift_start_time,shift_end_time')
        .eq('production_id', _prodId)
        .eq('status', 'approved'),
-    _sb.from('registration_payment_records')
-       .select('id,casting_assignment_id,performer_name')
-       .eq('production_id', _prodId),
     _sb.from('casting_assignments')
        .select('id,applicant_id,character_id,role_name,character_name,state')
-       .eq('production_id', _prodId),
+       .eq('production_id', _prodId)
+       .in('state', ['chosen', 'offer_accepted']),
     _sb.from('audition_applications')
-       .select('id,name,first_name,last_name')
+       .select('id,name,first_name,last_name,email,custom_answers')
        .eq('production_id', _prodId),
     _sb.from('audition_bookings')
-       .select('id,name,first_name,last_name')
+       .select('id,name,first_name,last_name,email,custom_answers')
        .eq('production_id', _prodId),
     _sb.from('daily_checkins')
        .select('*')
@@ -533,33 +531,55 @@ async function loadAll() {
   });
   _volunteers.sort((a, b) => a.name.localeCompare(b.name));
 
-  // Build name map from audition records (fallback for cast name lookup)
-  const nameMap = {};
-  (appsRes.data || []).forEach(a => { nameMap[a.id] = [a.first_name, a.last_name].filter(Boolean).join(' ') || a.name; });
-  (booksRes.data || []).forEach(b => { nameMap[b.id] = [b.first_name, b.last_name].filter(Boolean).join(' ') || b.name; });
+  // Build cast from accepted casting assignments so Check In matches Rehearsal Schedule.
+  const peopleById = {};
+  (appsRes.data || []).forEach(a => {
+    peopleById[String(a.id)] = {
+      name: [a.first_name, a.last_name].filter(Boolean).join(' ') || a.name || 'Performer',
+      email: a.email || '',
+      custom_answers: a.custom_answers || {},
+    };
+  });
+  (booksRes.data || []).forEach(b => {
+    const key = String(b.id);
+    if (peopleById[key]) return;
+    peopleById[key] = {
+      name: [b.first_name, b.last_name].filter(Boolean).join(' ') || b.name || 'Performer',
+      email: b.email || '',
+      custom_answers: b.custom_answers || {},
+    };
+  });
 
-  // Build casting assignment map for role/character lookup
-  const assignMap = {};
-  (assignRes.data || []).forEach(a => { assignMap[String(a.id)] = a; });
+  const assignmentsByApplicant = new Map();
+  (assignRes.data || []).forEach(a => {
+    const key = String(a.applicant_id || '').trim();
+    if (!key) return;
+    if (!assignmentsByApplicant.has(key)) assignmentsByApplicant.set(key, []);
+    assignmentsByApplicant.get(key).push(a);
+  });
 
-  // Cast = everyone registered for this production (registration is the source of truth)
-  // Character/role comes from their casting assignment if linked
-  _cast = (regRes.data || []).map(r => {
-    const assignment = r.casting_assignment_id ? (assignMap[String(r.casting_assignment_id)] || {}) : {};
-    const name = r.performer_name || nameMap[assignment.applicant_id] || 'Performer';
-    const role = assignment.character_name || assignment.role_name || '';
-    const ci = ciMap['cast::' + r.id] || {};
+  _cast = [...assignmentsByApplicant.entries()].map(([applicantId, assignments]) => {
+    const person = peopleById[String(applicantId)] || {};
+    const roleNames = [...new Set(assignments.map(a => a.character_name || a.role_name).filter(Boolean))];
+    const characterIds = [...new Set(assignments.map(a => a.character_id).filter(Boolean).map(String))];
+    const ci = ciMap['cast::' + applicantId] || {};
     return {
-      id: r.id, name, role,
-      refId: String(r.id), expectedStart: _eventStart, expectedEnd: evEnd,
-      checkedIn: !!ci.checkedIn, checkedInAt: ci.checkedInAt || null,
-      signedOutAt: ci.signedOutAt || null, awayToday: !!ci.awayToday,
-      characterId: assignment.character_id ? String(assignment.character_id) : '',
+      id: applicantId,
+      name: person.name || 'Performer',
+      role: roleNames.join(', '),
+      refId: String(applicantId),
+      expectedStart: _eventStart,
+      expectedEnd: evEnd,
+      checkedIn: !!ci.checkedIn,
+      checkedInAt: ci.checkedInAt || null,
+      signedOutAt: ci.signedOutAt || null,
+      awayToday: !!ci.awayToday,
+      characterIds,
     };
   }).filter(p => {
     if (dayCallMeta.allCast) return true;
     if (!dayCallMeta.hasExplicit) return false;
-    return p.characterId && dayCallMeta.ids.has(String(p.characterId));
+    return p.characterIds.some(id => dayCallMeta.ids.has(String(id)));
   });
   _cast.sort((a, b) => a.name.localeCompare(b.name));
 
