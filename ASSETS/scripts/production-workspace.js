@@ -44459,6 +44459,7 @@ See you soon!
 	      title: 'Requests',
 	      copy: 'Review volunteer requests and keep each shift moving toward approval.',
 	      actions: [
+	        ['+ Create Role', 'openCreateInternalVolunteerRole()', 'primary'],
 	        ['View Sign-Up Page', 'openVolunteerPublicPage()'],
 	        ['Open Calendar', 'openVolunteerCalendar()'],
 	      ],
@@ -45625,20 +45626,10 @@ See you soon!
         + '<div class="vol-req-actions-note"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg> Individual shift buttons save without email. Use the email buttons when you want to review and send one summary email.</div>';
     }
 
-    root.innerHTML = '<div class="vol-req-header">'
-      + '<div><div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span><span class="page-hierarchy"><span class="page-hierarchy-page">Volunteers</span></span></div>'
-      +     '<div class="vol-section-title" style="font-size:1.35rem;margin-top:0.15rem;">Role Requests</div>'
-      +     '<div class="vol-dept-sub">Review and respond to volunteers who have requested roles.</div>'
-      + '</div>'
-      + '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">'
-      +   '<button class="btn-secondary" style="font-size:0.78rem;" onclick="openVolunteerPublicPage()">View Sign-Up Page</button>'
-      +   '<button class="btn-secondary" style="font-size:0.78rem;" onclick="openVolunteerCalendar()">Open Calendar</button>'
-      +   '<button class="btn-primary" style="font-size:0.78rem;" onclick="openCreateInternalVolunteerRole()">+ Create Role</button>'
-      + '</div></div>'
-      + statsHtml
-      + '<div class="vol-req-panel-outer">'
-      +   tabsHtml
-      +   '<div class="vol-req-layout">'
+	    root.innerHTML = statsHtml
+	      + '<div class="vol-req-panel-outer">'
+	      +   tabsHtml
+	      +   '<div class="vol-req-layout">'
       +     '<div class="vol-req-list-panel">'
       +       '<div class="vol-req-list" id="vol-req-list">' + listItemsHtml + '</div>'
       +     '</div>'
