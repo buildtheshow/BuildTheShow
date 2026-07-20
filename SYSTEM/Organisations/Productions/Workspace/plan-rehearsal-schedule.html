@@ -643,6 +643,28 @@
       margin-bottom: 0.8rem;
       line-height: 1.45;
     }
+    .sched-sort-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.7rem;
+      margin-bottom: 1rem;
+      padding-top: 0.8rem;
+      border-top: 1px solid rgba(87,46,136,0.08);
+    }
+    .sched-sort-row .sched-mode-list { margin-bottom: 0; }
+    .sched-sort-row .sched-mode-btn {
+      padding: 0.4rem 0.8rem;
+      font-size: 0.72rem;
+    }
+    .sched-sort-label {
+      font-size: 0.7rem;
+      font-weight: var(--sched-type-strong);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--sched-text-purple);
+      flex-shrink: 0;
+    }
     .sched-checklist {
       display: flex;
       flex-direction: column;
@@ -1086,6 +1108,33 @@
     let _hasCalledCastColumn = false;
     let _autosaveTimer = null;
     let _autosaveQueued = false;
+    let _sortBy = 'order';
+
+    const ROLE_TYPE_SECTIONS = ['Principal', 'Featured', 'Supporting', 'Cameo', 'Group', 'Ensemble'];
+    function sectionForChar(ch) {
+      const roleType = String(ch.role_type || '').trim();
+      const match = ROLE_TYPE_SECTIONS.find(s => s.toLowerCase() === roleType.toLowerCase());
+      return match || 'Other';
+    }
+    function sortChars(chars, castPeople) {
+      const list = [...chars];
+      if (_sortBy === 'name') {
+        return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      }
+      if (_sortBy === 'status') {
+        return list.sort((a, b) => {
+          const aCast = (castPeople[String(a.id)] || []).length ? 0 : 1;
+          const bCast = (castPeople[String(b.id)] || []).length ? 0 : 1;
+          if (aCast !== bCast) return aCast - bCast;
+          return (a.name || '').localeCompare(b.name || '');
+        });
+      }
+      return list;
+    }
+    function setSortBy(value) {
+      _sortBy = value;
+      renderDetail();
+    }
 
     function esc(s) {
       const d = document.createElement('div');
@@ -1578,6 +1627,32 @@
           : selectedCount + ' character' + (selectedCount === 1 ? '' : 's') + ' selected for this rehearsal.';
       const castedChars = _chars.filter(ch => (castPeople[String(ch.id)] || []).length);
       const uncastChars = _chars.filter(ch => !(castPeople[String(ch.id)] || []).length);
+      const sectionsHtml = ROLE_TYPE_SECTIONS.concat(['Other']).map(section => {
+        const chars = sortChars(_chars.filter(ch => sectionForChar(ch) === section), castPeople);
+        if (!chars.length) return '';
+        const sectionCast = chars.filter(ch => (castPeople[String(ch.id)] || []).length);
+        const sectionUncast = chars.filter(ch => !(castPeople[String(ch.id)] || []).length);
+        return '' +
+          '<div class="sched-cast-section">' +
+            '<div class="sched-cast-section-label">' + esc(section) + '</div>' +
+            (sectionCast.length ? (
+              '<div class="sched-cast-card-grid">' +
+                sectionCast.map(ch => {
+                  const id = String(ch.id);
+                  return renderCastCharacterCard(ch, _draft.calledIds.has(id), castPeople[id] || []);
+                }).join('') +
+              '</div>'
+            ) : '') +
+            (sectionUncast.length ? (
+              '<div class="sched-uncast-list">' +
+                sectionUncast.map(ch => {
+                  const id = String(ch.id);
+                  return renderUncastCharacterRow(ch, _draft.calledIds.has(id));
+                }).join('') +
+              '</div>'
+            ) : '') +
+          '</div>';
+      }).join('');
 
       host.innerHTML = '' +
         '<div class="sched-focus">' +
@@ -1610,29 +1685,16 @@
                 '<button type="button" class="sched-mode-btn' + (_draft.mode === 'individuals' ? ' active' : '') + '" onclick="setMode(\'individuals\')">Specific Cast</button>' +
               '</div>' +
               '<div class="sched-note">' + esc(castCopy) + '</div>' +
+              '<div class="sched-sort-row">' +
+                '<span class="sched-sort-label">Sort by</span>' +
+                '<div class="sched-mode-list">' +
+                  '<button type="button" class="sched-mode-btn' + (_sortBy === 'order' ? ' active' : '') + '" onclick="setSortBy(\'order\')">Character order</button>' +
+                  '<button type="button" class="sched-mode-btn' + (_sortBy === 'name' ? ' active' : '') + '" onclick="setSortBy(\'name\')">A&ndash;Z</button>' +
+                  '<button type="button" class="sched-mode-btn' + (_sortBy === 'status' ? ' active' : '') + '" onclick="setSortBy(\'status\')">Cast status</button>' +
+                '</div>' +
+              '</div>' +
               '<div class="sched-checklist"' + (_draft.mode === 'individuals' ? '' : ' style="opacity:0.55;pointer-events:none;"') + '>' +
-                (castedChars.length ? (
-                  '<div class="sched-cast-section">' +
-                    '<div class="sched-cast-section-label">Cast roles</div>' +
-                    '<div class="sched-cast-card-grid">' +
-                      castedChars.map(ch => {
-                        const id = String(ch.id);
-                        return renderCastCharacterCard(ch, _draft.calledIds.has(id), castPeople[id] || []);
-                      }).join('') +
-                    '</div>' +
-                  '</div>'
-                ) : '') +
-                (uncastChars.length ? (
-                  '<div class="sched-cast-section">' +
-                    '<div class="sched-cast-section-label">' + esc(castedChars.length ? 'Still uncast' : 'Roles still waiting on casting') + '</div>' +
-                    '<div class="sched-uncast-list">' +
-                      uncastChars.map(ch => {
-                        const id = String(ch.id);
-                        return renderUncastCharacterRow(ch, _draft.calledIds.has(id));
-                      }).join('') +
-                    '</div>' +
-                  '</div>'
-                ) : '') +
+                sectionsHtml +
               '</div>' +
             '</div>' +
           '</div>' +
@@ -1816,6 +1878,7 @@
 
     window.selectEvent = selectEvent;
     window.setMode = setMode;
+    window.setSortBy = setSortBy;
     window.toggleCharacter = toggleCharacter;
     window.resetDraft = resetDraft;
     window.saveSchedule = saveSchedule;
