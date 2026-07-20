@@ -41854,7 +41854,9 @@ See you soon!
     const app = (allApplicants || []).find(a => String(a.id) === String(appId));
     if (!app) return;
     _apmAppId = appId; _apmApp = app; _apmTab = 'scheduling'; _apmEmailCompose = null;
-    _apmPendingSlots = {}; _apmPickingSessions = new Set(); _apmEdits = {};
+    _apmPendingSlots = {}; _apmPickingSessions = new Set(); _apmEdits = {
+      dateConflicts: applicantConflictDetails(app) === '—' ? '' : applicantConflictDetails(app),
+    };
     const photoWrap = document.getElementById('apm-header-photo');
     if (photoWrap) photoWrap.innerHTML = app.headshot_url
       ? `<img src="${esc(app.headshot_url)}" class="apm-header-photo" alt="${esc(app.name||'')}" onerror="this.outerHTML='<div class=\\'apm-header-photo-placeholder\\'>👤</div>'" />`
@@ -42421,7 +42423,7 @@ See you soon!
     const sessions = getAuditionScheduleViewSessions();
     if (!sessions.length) return `<div style="text-align:center;padding:2rem;color:rgba(87,46,136,0.5);font-size:0.85rem;">No audition sessions set up yet.</div>`;
     const assignments = Array.isArray(_apmApp?.slot_assignments) ? _apmApp.slot_assignments : [];
-    return sessions.map(session => {
+    const sessionsHtml = sessions.map(session => {
       const colour = getAuditionScheduleSidebarMarkerColor(session.type || 'audition');
       const assignment = assignments.find(x => x.session_id === session.id);
       const pendingSlotId = _apmPendingSlots.hasOwnProperty(session.id) ? _apmPendingSlots[session.id] : undefined;
@@ -42489,6 +42491,31 @@ See you soon!
           ${!isNonSlot && isOpen ? _apmSlotPickerHTML(session, effectiveSlotId) : ''}
         </div>`;
     }).join('');
+    const conflictText = typeof _apmEdits?.dateConflicts === 'string'
+      ? _apmEdits.dateConflicts
+      : (applicantConflictDetails(_apmApp) === '—' ? '' : applicantConflictDetails(_apmApp));
+    return `
+      ${sessionsHtml}
+      <div class="apm-session-card" style="margin-top:1rem;">
+        <div class="apm-session-head" style="align-items:flex-start;">
+          <div class="apm-session-dot" style="background:#efab45;margin-top:0.25rem;"></div>
+          <div class="apm-session-info" style="width:100%;">
+            <div class="apm-session-name">Conflicts</div>
+            <div class="apm-session-slot" style="color:rgba(87,46,136,0.5);">Edit this performer&apos;s known scheduling conflicts here too.</div>
+          </div>
+        </div>
+        <div style="padding:0 1rem 1rem;">
+          <textarea
+            id="apm-conflicts"
+            oninput="_apmEdits.dateConflicts=this.value"
+            placeholder="List unavailable dates, vacations, school conflicts, or anything the team should know."
+            style="width:100%;min-height:7rem;resize:vertical;border:1.5px solid rgba(87,46,136,0.18);border-radius:14px;padding:0.9rem 1rem;font-size:0.88rem;line-height:1.45;color:#1a1530;background:#fff;box-sizing:border-box;font-family:inherit;outline:none;"
+          >${esc(conflictText)}</textarea>
+          <div style="margin-top:0.55rem;font-size:0.76rem;color:rgba(87,46,136,0.5);line-height:1.45;">
+            Saving here updates the same conflict notes shown on the performer list and audition info pages.
+          </div>
+        </div>
+      </div>`;
   }
 
   function _apmSlotPickerHTML(session, selectedSlotId) {
@@ -42965,6 +42992,9 @@ See you soon!
       if (genderPref !== (_apmApp.gender_preference || '')) update.gender_preference = genderPref || null;
       const notes = document.getElementById('apm-notes')?.value.trim() || '';
       if (notes !== (_apmApp.notes || '')) update.notes = notes || null;
+      const conflictText = (document.getElementById('apm-conflicts')?.value ?? _apmEdits.dateConflicts ?? '').trim();
+      const currentConflictText = applicantConflictDetails(_apmApp) === '—' ? '' : applicantConflictDetails(_apmApp);
+      if (conflictText !== currentConflictText) update.date_conflicts = conflictText ? { manual_notes: conflictText } : null;
       // Contact tab
       const email = document.getElementById('apm-email')?.value.trim() || '';
       if (email !== (_apmApp.email || '')) update.email = email || null;
