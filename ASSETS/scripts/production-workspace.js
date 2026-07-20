@@ -48354,10 +48354,6 @@ See you soon!
 	      monthHtml = headRow + cells.join('');
 	    }
 
-	    // ── Volunteer page URL ──────────────────────────────────
-	    const volPageUrl = volunteerPublicPageUrl();
-	    const fullVolUrl = `${window.location.origin}${volPageUrl}`;
-
 	    // ── Needs attention ─────────────────────────────────────
 	    const needsHtml = topGaps.length
 	      ? topGaps.map(([name, gaps]) => `<div class="vd-gap-row"><span class="vd-gap-dot"></span><span class="vd-gap-name">${esc(name)}</span><span class="vd-gap-count">${gaps} empty</span></div>`).join('')
@@ -48433,11 +48429,6 @@ See you soon!
 	          ${needsHtml}
 	          ${topGaps.length > 0 ? `<button class="vd-view-gaps-btn" onclick="navigateToVolunteers('plan')">Edit in Plan →</button>` : ''}
 	        </div>
-	      </div>
-	      <div class="vd-url-banner">
-	        <span class="vd-url-label">Volunteer page link to share:</span>
-	        <code class="vd-url-code">${esc(fullVolUrl)}</code>
-	        <button class="vd-url-copy" onclick='navigator.clipboard.writeText(${JSON.stringify(fullVolUrl)}).then(()=>showToast("Link copied!"))'>Copy</button>
 	      </div>
 	      <div class="vd-nav-row">
 	        <div style="display:flex;align-items:center;gap:0.5rem;">
