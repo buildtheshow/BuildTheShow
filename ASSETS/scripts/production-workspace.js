@@ -48119,8 +48119,8 @@ See you soon!
 	  let _volDashViewMode = 'week'; // 'week' | 'month'
 
 	  function renderVolunteerDashboard() {
-	    const root = document.getElementById('vol-dashboard-root');
-	    if (!root) return;
+	    const roots = Array.from(document.querySelectorAll('#vol-dashboard-root'));
+	    if (!roots.length) return;
 
 	    // ── Role lookup: maps _staffingPlan key index → role name + dept ─
 	    const PLAN_ROLE_MAP = {
@@ -48502,7 +48502,7 @@ See you soon!
 	      }
 	    ];
 
-	    root.innerHTML = `
+	    const dashboardHtml = `
 	      <div class="vd-stats-row">
 	        ${metricCards.map(card => `
 	          <div class="dash-nav-chip vd-summary-chip ${card.className}" style="--chip-colour:transparent;">
@@ -48536,6 +48536,7 @@ See you soon!
 	          <button class="btn-primary" style="font-size:0.78rem;" onclick="switchProdTab('calendar')">+ Add Event</button>
 	        </span>
 	      </div>`;
+	    roots.forEach(root => { root.innerHTML = dashboardHtml; });
 	  }
 
 	  function volDashNav(dir) {
