@@ -44271,11 +44271,26 @@ See you soon!
 	    try { return fmtDate(String(raw).slice(0, 10)); } catch { return String(raw).slice(0, 10); }
 	  }
 
+	  function volCrewSubtypeFromTitle(title) {
+	    if (/costume/i.test(title)) return 'crew_costumes';
+	    if (/prop/i.test(title)) return 'crew_props';
+	    if (/paint/i.test(title)) return 'crew_set_painting';
+	    if (/(hair|make.?up)/i.test(title)) return 'crew_hair_makeup';
+	    if (/wig/i.test(title)) return 'crew_wigs';
+	    if (/light/i.test(title)) return 'crew_lighting';
+	    if (/sound/i.test(title)) return 'crew_sound';
+	    if (/(set\s*(build|dress)|build|construction)/i.test(title)) return 'crew_set';
+	    return null;
+	  }
+
 	  function volCalendarEventType(event = {}) {
 	    const rawType = event.event_type || 'event';
 	    const title = String(event.title || '').trim();
 	    if (event.is_deadline || rawType === 'deadline' || calendarNotesHaveDeadlineMarker(event.notes)) return 'deadline';
 	    if (/cast\s*party/i.test(title)) return 'cast_party';
+	    // Generic "crew" events default to Set Builder, so use the title to route
+	    // to the actual crew type (Costume Creation, Prop Building, etc.) when possible.
+	    if (rawType === 'crew') return volCrewSubtypeFromTitle(title) || rawType;
 	    return rawType;
 	  }
 
@@ -48180,7 +48195,21 @@ See you soon!
 	      const custom = Object.entries(_staffingPlan)
 	        .filter(([k, v]) => k.startsWith(`${eventType}-custom-`) && v.roleName && (v.count ?? 0) > 0)
 	        .map(([, v]) => ({ name: v.roleName, dept: v.department || 'Other', needed: v.count }));
-	      return [...fixed, ...custom];
+	      const roles = [...fixed, ...custom];
+	      // Pull in any department lead/head whose department matches a role already
+	      // planned for this event type, so e.g. a Set Building day also shows the
+	      // Lead Builder, not just the Set Builder crew.
+	      if (eventType !== 'dept_leads') {
+	        const deptsInScope = new Set(roles.map(r => r.dept));
+	        const leadRoles = (PLAN_ROLE_MAP.dept_leads || []).map((role, ri) => {
+	          if (!deptsInScope.has(role.dept)) return null;
+	          if (roles.some(r => r.name === role.name)) return null;
+	          const count = _staffingPlan[`dept_leads-${ri}`]?.count ?? 0;
+	          return count > 0 ? { name: role.name, dept: role.dept, needed: count } : null;
+	        }).filter(Boolean);
+	        roles.push(...leadRoles);
+	      }
+	      return roles;
 	    }
 
 	    // ── Week dates ──────────────────────────────────────────
@@ -48220,7 +48249,7 @@ See you soon!
 	    const approvedByRoleDate = {};
 	    const namesByRoleDate = {};
 	    (volunteerSignups || []).forEach(s => {
-	      if (s.status === 'cancelled' || s.status === 'declined') return;
+	      if (s.status !== 'approved') return;
 	      const role = (s.role_name || '').toLowerCase().trim();
 	      if (!role) return;
 	      const dates = [];
@@ -48366,47 +48395,64 @@ See you soon!
 	    const needsHtml = topGaps.length
 	      ? topGaps.map(([name, gaps]) => `<div class="vd-gap-row"><span class="vd-gap-dot"></span><span class="vd-gap-name">${esc(name)}</span><span class="vd-gap-count">${gaps} empty</span></div>`).join('')
 	      : `<div class="vd-needs-empty">${totalNeeded > 0 ? 'All roles covered this week' : 'Set up roles in Plan first'}</div>`;
+	    const metricCards = [
+	      {
+	        className: 'vd-summary-chip--spots',
+	        icon: '/ASSETS/Images/Icons/page-volunteers.svg',
+	        label: `${totalNeeded} Volunteer Spots Needed`,
+	        desc: 'This week'
+	      },
+	      {
+	        className: 'vd-summary-chip--filled',
+	        icon: '/ASSETS/Images/Icons/volunteer-approved.svg',
+	        label: `${totalFilled} Filled`,
+	        desc: `${filledPct}% of needed`
+	      },
+	      {
+	        className: 'vd-summary-chip--partial',
+	        icon: '/ASSETS/Images/Icons/volunteer-interested.svg',
+	        label: `${partialCount} Partially Filled`,
+	        desc: `${partialPct}% of needed`
+	      },
+	      {
+	        className: 'vd-summary-chip--empty',
+	        icon: '/ASSETS/Images/Icons/volunteer-not-interested.svg',
+	        label: `${emptyCount} Empty`,
+	        desc: `${emptyPct}% of needed`
+	      },
+	      {
+	        className: 'vd-summary-chip--published',
+	        icon: '/ASSETS/Images/Icons/calendar-date.svg',
+	        label: `${publishedRoles} Roles Published`,
+	        desc: 'Open for sign-up'
+	      },
+	      {
+	        className: 'vd-summary-chip--confirmed',
+	        icon: '/ASSETS/Images/Icons/check-in.svg',
+	        label: `${confirmedCount} Confirmed`,
+	        desc: 'Volunteers accepted'
+	      }
+	    ];
 
 	    root.innerHTML = `
 	      <div class="vd-stats-row">
-	        <div class="vd-stat-card vd-stat-card--spots">
-	          <div class="vd-stat-num">${totalNeeded}</div>
-	          <div class="vd-stat-label">Volunteer Spots Needed</div>
-	          <div class="vd-stat-sub">This week</div>
-	        </div>
-	        <div class="vd-stat-card vd-stat-card--filled">
-	          <div class="vd-stat-num">${totalFilled}</div>
-	          <div class="vd-stat-label">Filled</div>
-	          <div class="vd-stat-sub">${filledPct}% of needed</div>
-	        </div>
-	        <div class="vd-stat-card vd-stat-card--partial">
-	          <div class="vd-stat-num">${partialCount}</div>
-	          <div class="vd-stat-label">Partially Filled</div>
-	          <div class="vd-stat-sub">${partialPct}% of needed</div>
-	        </div>
-	        <div class="vd-stat-card vd-stat-card--empty">
-	          <div class="vd-stat-num">${emptyCount}</div>
-	          <div class="vd-stat-label">Empty</div>
-	          <div class="vd-stat-sub">${emptyPct}% of needed</div>
-	        </div>
-	        <div class="vd-stat-card vd-stat-card--published">
-	          <div class="vd-stat-num">${publishedRoles}</div>
-	          <div class="vd-stat-label">Roles Published</div>
-	          <div class="vd-stat-sub">Open for sign-up</div>
-	        </div>
-	        <div class="vd-stat-card vd-stat-card--confirmed">
-	          <div class="vd-stat-num">${confirmedCount}</div>
-	          <div class="vd-stat-label">Confirmed</div>
-	          <div class="vd-stat-sub">Volunteers accepted</div>
-	        </div>
-	        <div class="vd-needs-panel">
-	          <div class="vd-needs-head">
-	            <span>Needs Attention</span>
-	            ${topGaps.length ? `<span class="vd-needs-badge">${topGaps.length}</span>` : ''}
+	        ${metricCards.map(card => `
+	          <div class="dash-nav-chip vd-summary-chip ${card.className}" style="--chip-colour:transparent;">
+	            <div class="dash-nav-chip-top">
+	              <img class="dash-nav-chip-icon" src="${card.icon}" alt="" aria-hidden="true" />
+	              <div class="dash-nav-chip-label">${esc(card.label)}</div>
+	            </div>
+	            <div class="dash-nav-chip-desc">${esc(card.desc)}</div>
 	          </div>
-	          ${needsHtml}
-	          ${topGaps.length > 0 ? `<button class="vd-view-gaps-btn" onclick="navigateToVolunteers('plan')">Edit in Plan →</button>` : ''}
+	        `).join('')}
+	      </div>
+	      <div class="vd-needs-panel">
+	        <div class="vd-needs-head">
+	          <span>Needs Attention</span>
+	          ${topGaps.length ? `<span class="vd-needs-badge">${topGaps.length}</span>` : ''}
 	        </div>
+	        ${needsHtml}
+	        ${topGaps.length > 0 ? `<button class="vd-view-gaps-btn" onclick="navigateToVolunteers('plan')">Edit in Plan →</button>` : ''}
 	      </div>
 	      <div class="vd-nav-row">
 	        <div style="display:flex;align-items:center;gap:0.5rem;">
