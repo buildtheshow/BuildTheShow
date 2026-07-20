@@ -45351,9 +45351,9 @@ See you soon!
 
     // Stats
     const statsHtml = '<div class="vol-req-stats">'
-      + '<div class="vol-req-stat-card vol-req-stat-card--pending"><div class="vol-req-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div class="vol-req-stat-content"><div class="vol-req-stat-value">' + pendingPeopleCount + ' Pending Requests</div><div class="vol-req-stat-desc">People still waiting for approval.</div></div></div>'
-      + '<div class="vol-req-stat-card vol-req-stat-card--approved"><div class="vol-req-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg></div><div class="vol-req-stat-content"><div class="vol-req-stat-value">' + approved.length + ' Approved Total</div><div class="vol-req-stat-desc">Requests already confirmed.</div></div></div>'
-      + '<div class="vol-req-stat-card vol-req-stat-card--hours"><div class="vol-req-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2"><path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2H5z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div><div class="vol-req-stat-content"><div class="vol-req-stat-value">' + Math.round(totalHours) + ' Hours Approved</div><div class="vol-req-stat-desc">Approved volunteer time.</div></div></div>'
+      + '<div class="vol-req-stat-card vol-req-stat-card--pending"><div class="vol-req-stat-icon"><img src="/ASSETS/Images/Icons/time.svg" alt="" /></div><div class="vol-req-stat-content"><div class="vol-req-stat-value">' + pendingPeopleCount + ' Pending Requests</div><div class="vol-req-stat-desc">People still waiting for approval.</div></div></div>'
+      + '<div class="vol-req-stat-card vol-req-stat-card--approved"><div class="vol-req-stat-icon"><img src="/ASSETS/Images/Icons/volunteer-approved.svg" alt="" /></div><div class="vol-req-stat-content"><div class="vol-req-stat-value">' + approved.length + ' Approved Total</div><div class="vol-req-stat-desc">Requests already confirmed.</div></div></div>'
+      + '<div class="vol-req-stat-card vol-req-stat-card--hours"><div class="vol-req-stat-icon"><img src="/ASSETS/Images/Icons/Shifts.svg" alt="" /></div><div class="vol-req-stat-content"><div class="vol-req-stat-value">' + Math.round(totalHours) + ' Hours Approved</div><div class="vol-req-stat-desc">Approved volunteer time.</div></div></div>'
       + '</div>';
 
     // Tabs + filters
