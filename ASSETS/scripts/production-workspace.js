@@ -46549,9 +46549,12 @@ See you soon!
       +   '</div>'
       +   '<div style="font-size:0.7rem;color:#7a6a95;line-height:1.5;">Choose a suggested shift, or type a custom date and time. Saving here updates this volunteer’s requested shift directly.</div>'
       +   '<div id="vrr-error" style="display:none;font-size:0.76rem;font-weight:800;color:#b33a25;"></div>'
-      +   '<div style="display:flex;gap:0.7rem;justify-content:flex-end;">'
+      +   '<div style="display:flex;gap:0.7rem;justify-content:space-between;align-items:center;flex-wrap:wrap;">'
+      +     '<button type="button" id="vrr-remove-btn" onclick="volReqRemoveShift()" style="padding:0.65rem 1rem;border:1px solid rgba(209,82,61,0.24);border-radius:8px;background:#fff;color:#d1523d;font-weight:800;font-family:inherit;cursor:pointer;">Remove</button>'
+      +     '<div style="display:flex;gap:0.7rem;justify-content:flex-end;align-items:center;flex-wrap:wrap;">'
       +     '<button type="button" onclick="volReqCloseReschedule()" style="padding:0.65rem 1rem;border:1px solid rgba(87,46,136,0.22);border-radius:8px;background:#fff;color:#572e88;font-weight:800;font-family:inherit;cursor:pointer;">Cancel</button>'
       +     '<button type="button" id="vrr-save-btn" onclick="volReqSaveReschedule()" style="padding:0.65rem 1rem;border:none;border-radius:8px;background:#572e88;color:#fff;font-weight:900;font-family:inherit;cursor:pointer;">Save Reschedule</button>'
+      +     '</div>'
       +   '</div>'
       + '</div>'
       + '</div>';
@@ -46620,6 +46623,42 @@ See you soon!
         saveBtn.disabled = false;
         saveBtn.textContent = 'Save Reschedule';
       }
+    }
+  }
+
+  async function volReqRemoveShift() {
+    const review = window._volReqRescheduleReview;
+    if (!review?.signupId) return;
+    const signup = volunteerRequests.find(row => String(row.id) === String(review.signupId));
+    if (!signup) return;
+    const errEl = document.getElementById('vrr-error');
+    const removeBtn = document.getElementById('vrr-remove-btn');
+    const saveBtn = document.getElementById('vrr-save-btn');
+    const roleLabel = signup.role_name || 'this shift';
+    const shiftLabel = volReqShiftRangeLabel(signup) || 'this volunteer shift';
+    if (!window.confirm(`Remove ${roleLabel} on ${shiftLabel}?`)) return;
+    if (errEl) errEl.style.display = 'none';
+    if (removeBtn) {
+      removeBtn.disabled = true;
+      removeBtn.textContent = 'Removing...';
+    }
+    if (saveBtn) saveBtn.disabled = true;
+    try {
+      const { error } = await sb.from('volunteer_signups').delete().eq('id', signup.id);
+      if (error) throw error;
+      await loadVolunteerRequests();
+      volReqCloseReschedule();
+      showToast('Shift removed.');
+    } catch (e) {
+      if (errEl) {
+        errEl.textContent = 'Could not remove shift: ' + (e.message || 'Unknown error');
+        errEl.style.display = 'block';
+      }
+      if (removeBtn) {
+        removeBtn.disabled = false;
+        removeBtn.textContent = 'Remove';
+      }
+      if (saveBtn) saveBtn.disabled = false;
     }
   }
 
