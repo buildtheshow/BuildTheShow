@@ -457,6 +457,11 @@ function calledCastMetaForDay(events) {
   return { hasExplicit, allCast, ids };
 }
 
+function isRegisteredPerformer(customAnswers) {
+  if (!customAnswers || typeof customAnswers !== 'object') return false;
+  return customAnswers.__bts_registration_status === 'complete' || customAnswers.__bts_registration_complete === true;
+}
+
 // ── Data loading ──────────────────────────────────────────────────────────────
 
 async function loadAll() {
@@ -538,6 +543,7 @@ async function loadAll() {
     return String(name || '').trim().toLowerCase() + '|' + String(email || '').trim().toLowerCase();
   }
   (appsRes.data || []).forEach(a => {
+    if (!isRegisteredPerformer(a.custom_answers || {})) return;
     const id = String(a.id);
     const name = fullNameFromRecord(a);
     const email = a.email || '';
@@ -545,6 +551,7 @@ async function loadAll() {
     normalizedPeopleKeyToId.set(personKey(name, email), id);
   });
   (booksRes.data || []).forEach(b => {
+    if (!isRegisteredPerformer(b.custom_answers || {})) return;
     const id = String(b.id);
     if (peopleById[id]) return;
     const name = fullNameFromRecord(b);
@@ -554,13 +561,26 @@ async function loadAll() {
     if (!normalizedPeopleKeyToId.has(key)) normalizedPeopleKeyToId.set(key, id);
   });
 
-  const assignmentLookupRows = [...(appsRes.data || []), ...(booksRes.data || [])];
+  const assignmentIds = [...new Set((assignRes.data || []).map(a => String(a.applicant_id || '').trim()).filter(Boolean))];
+  let assignmentLookupRows = [];
+  if (assignmentIds.length) {
+    const [assignmentAppsRes, assignmentBooksRes] = await Promise.all([
+      _sb.from('audition_applications').select('id,name,first_name,last_name,email,custom_answers').in('id', assignmentIds),
+      _sb.from('audition_bookings').select('id,name,first_name,last_name,email,custom_answers').in('id', assignmentIds),
+    ]);
+    assignmentLookupRows = [...(assignmentAppsRes.data || []), ...(assignmentBooksRes.data || [])];
+  }
   const assignmentIdToResolvedPersonId = new Map();
   assignmentLookupRows.forEach(row => {
     const assignmentId = String(row.id || '').trim();
     if (!assignmentId) return;
-    const resolvedId = normalizedPeopleKeyToId.get(personKey(fullNameFromRecord(row), row.email || '')) || assignmentId;
+    const name = fullNameFromRecord(row);
+    const email = row.email || '';
+    const resolvedId = normalizedPeopleKeyToId.get(personKey(name, email)) || assignmentId;
     assignmentIdToResolvedPersonId.set(assignmentId, resolvedId);
+    if (!peopleById[resolvedId]) {
+      peopleById[resolvedId] = { name, email, custom_answers: row.custom_answers || {} };
+    }
   });
 
   const assignmentsByResolvedPerson = new Map();
@@ -618,20 +638,9 @@ function renderDateDisplay() {
 
 function render() {
   renderDateDisplay();
-  renderEventTagsBar();
   renderStats();
   renderAlerts();
   renderContent();
-}
-
-function renderEventTagsBar() {
-  const el = document.getElementById('dci-event-tags-bar');
-  if (!el) return;
-  el.innerHTML = _todayEvents.map(ev => {
-    const col = EV_COL[ev.event_type] || '#572e88';
-    const lbl = ev.title || EV_LBL[ev.event_type] || 'Event';
-    return '<span class="dci-event-tag-sm" style="background:' + esc(col) + '">' + esc(lbl) + '</span>';
-  }).join('');
 }
 
 function renderStats() {
