@@ -45228,6 +45228,13 @@ See you soon!
     const [h, m] = String(t).slice(0,5).split(':').map(Number);
     return `${h%12||12}:${String(m).padStart(2,'0')} ${h<12?'AM':'PM'}`;
   }
+  function volReqShiftRangeLabel(signup = {}) {
+    const dateLabel = volReqDateLabel(signup);
+    const start = volReqFmtTime(signup.shift_start_time);
+    const end = volReqFmtTime(signup.shift_end_time);
+    const timeLabel = start && end ? `${start} – ${end}` : start || end || '';
+    return [dateLabel, timeLabel].filter(Boolean).join(' · ');
+  }
   function volReqDateLabel(req) {
     if (req.shift_date) {
       const d = new Date(req.shift_date + 'T12:00:00');
@@ -45510,12 +45517,13 @@ See you soon!
         const desc     = s.description || opp?.description || opp?.summary || '';
         const timeCommit = s.time_commitment || opp?.time_commitment || '';
 
-        const rowActions = isPending
-          ? '<div class="vol-req-shift-row-actions">'
-          +   '<button type="button" class="vol-req-shift-approve" data-id="' + esc(s.id) + '" title="Approve this shift without sending an email" aria-label="Approve ' + esc(s.role_name || 'this shift') + '" onclick="volReqQuickRespond(this.dataset.id, \'approved\', this)"><span aria-hidden="true">&#10003;</span> Approve</button>'
-          +   '<button type="button" class="vol-req-shift-decline" data-id="' + esc(s.id) + '" title="Decline this shift without sending an email" aria-label="Decline ' + esc(s.role_name || 'this shift') + '" onclick="volReqQuickRespond(this.dataset.id, \'declined\', this)"><span aria-hidden="true">&#10005;</span> Decline</button>'
-          + '</div>'
-          : '';
+        const rowActions = '<div class="vol-req-shift-row-actions">'
+          +   '<button type="button" class="vol-req-shift-reschedule" data-id="' + esc(s.id) + '" title="Change the date or time for this shift" aria-label="Reschedule ' + esc(s.role_name || 'this shift') + '" onclick="volReqOpenReschedule(this.dataset.id)">Reschedule</button>'
+          +   (isPending
+            ? '<button type="button" class="vol-req-shift-approve" data-id="' + esc(s.id) + '" title="Approve this shift without sending an email" aria-label="Approve ' + esc(s.role_name || 'this shift') + '" onclick="volReqQuickRespond(this.dataset.id, \'approved\', this)"><span aria-hidden="true">&#10003;</span> Approve</button>'
+            + '<button type="button" class="vol-req-shift-decline" data-id="' + esc(s.id) + '" title="Decline this shift without sending an email" aria-label="Decline ' + esc(s.role_name || 'this shift') + '" onclick="volReqQuickRespond(this.dataset.id, \'declined\', this)"><span aria-hidden="true">&#10005;</span> Decline</button>'
+            : '')
+          + '</div>';
 
         return '<div class="vol-req-shift-row' + (hasConflict ? ' vol-req-shift-conflict' : '') + '" style="' + _dateGap + 'border-left:3px solid ' + colour + ';padding-left:0.75rem;padding-top:0.6rem;padding-bottom:0.6rem;">'
           + '<div style="flex:1;min-width:0;">'
@@ -46455,6 +46463,179 @@ See you soon!
 
   async function volReqRespondAll(ids, newStatus) {
     await openVolReqEmailReview(ids, newStatus);
+  }
+
+  function volReqMatchingOpportunities(signup = {}) {
+    const signupRole = volCanonicalSignupRoleName(signup.role_name || signup.volunteer_role || '');
+    const signupDept = String(signup.department || '').trim().toLowerCase();
+    return (opportunities || [])
+      .filter(opp => String(opp.status || '').toLowerCase() !== 'cancelled')
+      .filter(opp => {
+        if (signup.opportunity_id && String(opp.id) === String(signup.opportunity_id)) return true;
+        const oppRole = volCanonicalSignupRoleName(opp.production_title || opp.volunteer_role || opp.role_name || '');
+        const oppDept = String(opp.department || '').trim().toLowerCase();
+        return (signupRole && oppRole === signupRole) || (signupDept && oppDept === signupDept);
+      })
+      .sort((a, b) => {
+        const aKey = `${a.shift_date || a.start_date || ''}T${a.shift_start_time || '00:00:00'}`;
+        const bKey = `${b.shift_date || b.start_date || ''}T${b.shift_start_time || '00:00:00'}`;
+        return aKey.localeCompare(bKey);
+      });
+  }
+
+  function volReqOpportunitySummary(opp = {}) {
+    const date = opp.shift_date || opp.start_date || '';
+    const dateLabel = date
+      ? new Date(date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' })
+      : '';
+    const start = volReqFmtTime(opp.shift_start_time);
+    const end = volReqFmtTime(opp.shift_end_time);
+    const timeLabel = start && end ? `${start} – ${end}` : start || end || '';
+    return [dateLabel, timeLabel].filter(Boolean).join(' · ') || 'No fixed date';
+  }
+
+  function volReqCloseReschedule() {
+    document.getElementById('vol-req-reschedule-overlay')?.remove();
+  }
+
+  function volReqPickRescheduleOption(index) {
+    const review = window._volReqRescheduleReview;
+    const picked = review?.options?.[index];
+    if (!picked) return;
+    const dateInput = document.getElementById('vrr-date');
+    const startInput = document.getElementById('vrr-start');
+    const endInput = document.getElementById('vrr-end');
+    if (dateInput) dateInput.value = picked.shift_date || '';
+    if (startInput) startInput.value = String(picked.shift_start_time || '').slice(0, 5);
+    if (endInput) endInput.value = String(picked.shift_end_time || '').slice(0, 5);
+    const hiddenInput = document.getElementById('vrr-opp-id');
+    if (hiddenInput) hiddenInput.value = picked.id || '';
+    document.querySelectorAll('[data-vrr-option]').forEach((node, nodeIndex) => {
+      node.style.borderColor = nodeIndex === index ? '#572e88' : 'rgba(87,46,136,0.12)';
+      node.style.background = nodeIndex === index ? 'rgba(87,46,136,0.08)' : '#fff';
+    });
+  }
+
+  function volReqOpenReschedule(signupId) {
+    const signup = volunteerRequests.find(row => String(row.id) === String(signupId));
+    if (!signup) {
+      showToast('Could not find that shift to reschedule.', true);
+      return;
+    }
+    const existing = document.getElementById('vol-req-reschedule-overlay');
+    if (existing) existing.remove();
+    const options = volReqMatchingOpportunities(signup);
+    window._volReqRescheduleReview = { signupId: signup.id, options };
+    const optionRows = options.length
+      ? options.map((opp, index) => {
+          const isCurrent = signup.opportunity_id && String(opp.id) === String(signup.opportunity_id);
+          return '<button type="button" data-vrr-option style="width:100%;text-align:left;border:1.5px solid ' + (isCurrent ? '#572e88' : 'rgba(87,46,136,0.12)') + ';background:' + (isCurrent ? 'rgba(87,46,136,0.08)' : '#fff') + ';border-radius:9px;padding:0.7rem 0.8rem;cursor:pointer;font-family:inherit;" onclick="volReqPickRescheduleOption(' + index + ')">'
+            + '<div style="font-size:0.82rem;font-weight:900;color:#1a1530;">' + esc(opp.production_title || opp.volunteer_role || signup.role_name || 'Shift') + '</div>'
+            + '<div style="font-size:0.76rem;color:#572e88;font-weight:700;margin-top:0.18rem;">' + esc(volReqOpportunitySummary(opp)) + '</div>'
+            + '<div style="font-size:0.72rem;color:#7a6a95;margin-top:0.16rem;">' + esc(opp.department || signup.department || '') + (opp.check_in_with ? ' · Checks in with ' + esc(opp.check_in_with) : '') + '</div>'
+            + (isCurrent ? '<div style="font-size:0.64rem;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;color:#572e88;margin-top:0.28rem;">Current shift</div>' : '')
+            + '</button>';
+        }).join('')
+      : '<div style="font-size:0.78rem;color:#7a6a95;line-height:1.5;">No matching scheduled shift was found for this role, so you can enter the new date and time manually below.</div>';
+
+    const overlay = document.createElement('div');
+    overlay.id = 'vol-req-reschedule-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10002;background:rgba(23,18,43,0.55);display:flex;align-items:center;justify-content:center;padding:1rem;';
+    overlay.innerHTML =
+      '<div style="background:#fff;border-radius:14px;width:min(560px,100%);max-height:90vh;overflow:auto;padding:1.4rem;box-shadow:0 24px 80px rgba(26,21,48,0.3);">'
+      + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1rem;">'
+      +   '<div>'
+      +     '<div style="font-size:1rem;font-weight:900;color:#1a1530;">Reschedule Shift</div>'
+      +     '<div style="font-size:0.78rem;color:#6f6382;margin-top:0.18rem;">' + esc(signup.name || 'Volunteer') + ' · ' + esc(signup.role_name || 'Shift') + '</div>'
+      +     '<div style="font-size:0.74rem;color:#572e88;font-weight:700;margin-top:0.22rem;">Current: ' + esc(volReqShiftRangeLabel(signup) || 'No fixed date') + '</div>'
+      +   '</div>'
+      +   '<button type="button" onclick="volReqCloseReschedule()" style="background:none;border:none;color:#6f6382;font-size:1.4rem;cursor:pointer;line-height:1;padding:0;">&times;</button>'
+      + '</div>'
+      + '<div style="display:flex;flex-direction:column;gap:1rem;">'
+      +   '<div>'
+      +     '<div style="font-size:0.72rem;font-weight:900;color:#1a1530;margin-bottom:0.45rem;">Suggested shifts</div>'
+      +     '<div style="display:flex;flex-direction:column;gap:0.55rem;">' + optionRows + '</div>'
+      +   '</div>'
+      +   '<input id="vrr-opp-id" type="hidden" value="' + esc(signup.opportunity_id || '') + '" />'
+      +   '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0.7rem;">'
+      +     '<div><label style="display:block;font-size:0.7rem;font-weight:900;color:#1a1530;margin-bottom:0.22rem;">Date</label><input id="vrr-date" type="date" value="' + esc(signup.shift_date || '') + '" style="width:100%;box-sizing:border-box;border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;padding:0.58rem 0.68rem;font-family:inherit;font-size:0.88rem;color:#1a1530;" /></div>'
+      +     '<div><label style="display:block;font-size:0.7rem;font-weight:900;color:#1a1530;margin-bottom:0.22rem;">Start</label><input id="vrr-start" type="time" value="' + esc(String(signup.shift_start_time || '').slice(0, 5)) + '" style="width:100%;box-sizing:border-box;border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;padding:0.58rem 0.68rem;font-family:inherit;font-size:0.88rem;color:#1a1530;" /></div>'
+      +     '<div><label style="display:block;font-size:0.7rem;font-weight:900;color:#1a1530;margin-bottom:0.22rem;">End</label><input id="vrr-end" type="time" value="' + esc(String(signup.shift_end_time || '').slice(0, 5)) + '" style="width:100%;box-sizing:border-box;border:1.5px solid rgba(87,46,136,0.2);border-radius:8px;padding:0.58rem 0.68rem;font-family:inherit;font-size:0.88rem;color:#1a1530;" /></div>'
+      +   '</div>'
+      +   '<div style="font-size:0.7rem;color:#7a6a95;line-height:1.5;">Choose a suggested shift, or type a custom date and time. Saving here updates this volunteer’s requested shift directly.</div>'
+      +   '<div id="vrr-error" style="display:none;font-size:0.76rem;font-weight:800;color:#b33a25;"></div>'
+      +   '<div style="display:flex;gap:0.7rem;justify-content:flex-end;">'
+      +     '<button type="button" onclick="volReqCloseReschedule()" style="padding:0.65rem 1rem;border:1px solid rgba(87,46,136,0.22);border-radius:8px;background:#fff;color:#572e88;font-weight:800;font-family:inherit;cursor:pointer;">Cancel</button>'
+      +     '<button type="button" id="vrr-save-btn" onclick="volReqSaveReschedule()" style="padding:0.65rem 1rem;border:none;border-radius:8px;background:#572e88;color:#fff;font-weight:900;font-family:inherit;cursor:pointer;">Save Reschedule</button>'
+      +   '</div>'
+      + '</div>'
+      + '</div>';
+    overlay.onclick = e => { if (e.target === overlay) volReqCloseReschedule(); };
+    document.body.appendChild(overlay);
+  }
+
+  async function volReqSaveReschedule() {
+    const review = window._volReqRescheduleReview;
+    if (!review?.signupId) return;
+    const signup = volunteerRequests.find(row => String(row.id) === String(review.signupId));
+    if (!signup) return;
+    const dateVal = (document.getElementById('vrr-date')?.value || '').trim();
+    const startVal = (document.getElementById('vrr-start')?.value || '').trim();
+    const endVal = (document.getElementById('vrr-end')?.value || '').trim();
+    const oppId = (document.getElementById('vrr-opp-id')?.value || '').trim();
+    const errEl = document.getElementById('vrr-error');
+    const saveBtn = document.getElementById('vrr-save-btn');
+    if (!dateVal) {
+      if (errEl) {
+        errEl.textContent = 'Please choose a new date.';
+        errEl.style.display = 'block';
+      }
+      return;
+    }
+    if ((startVal && !endVal) || (!startVal && endVal)) {
+      if (errEl) {
+        errEl.textContent = 'Enter both start and end time, or leave both blank.';
+        errEl.style.display = 'block';
+      }
+      return;
+    }
+    if (errEl) errEl.style.display = 'none';
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+    }
+    try {
+      const matchedOpp = review.options.find(opp => String(opp.id) === String(oppId)) || null;
+      const patch = {
+        opportunity_id: oppId || signup.opportunity_id || null,
+        shift_date: dateVal,
+        shift_start_time: startVal ? `${startVal}:00` : null,
+        shift_end_time: endVal ? `${endVal}:00` : null,
+        required_dates: [],
+      };
+      if (matchedOpp) {
+        patch.department = matchedOpp.department || signup.department || null;
+        patch.description = matchedOpp.description || matchedOpp.summary || signup.description || null;
+        patch.check_in_with = matchedOpp.check_in_with || matchedOpp.checkInWith || signup.check_in_with || null;
+      }
+      const merged = { ...signup, ...patch };
+      const approvedHours = volReqApprovedHoursForSignup(merged);
+      if (approvedHours > 0) patch.approved_hours = approvedHours;
+      const { error } = await sb.from('volunteer_signups').update(patch).eq('id', signup.id);
+      if (error) throw error;
+      await loadVolunteerRequests();
+      volReqCloseReschedule();
+      showToast('Shift rescheduled.');
+    } catch (e) {
+      if (errEl) {
+        errEl.textContent = 'Could not reschedule shift: ' + (e.message || 'Unknown error');
+        errEl.style.display = 'block';
+      }
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Reschedule';
+      }
+    }
   }
 
   async function volSendStatusEmail(signup, status) {
@@ -48578,4 +48759,3 @@ See you soon!
     console.error('[BTS] workspace boot failed', err);
     if (window.PageLoader) window.PageLoader.showError("Couldn't load the workspace. Try refreshing.");
   });
-
