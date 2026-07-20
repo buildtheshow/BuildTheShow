@@ -48324,7 +48324,6 @@ See you soon!
 	      const timeStr = [start, end].filter(Boolean).join(' – ');
 	      const normalizedType = volCalendarEventType(ev);
 	      const color = eventColor(normalizedType);
-	      const label = ev.title || (normalizedType || 'Event').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
 	      const planRoles = plannedRolesForType(normalizedType);
 
 	      const rolesHtml = planRoles.map(pr => {
@@ -48338,22 +48337,23 @@ See you soon!
 	        const namesHtml = names.length
 	          ? `<div class="vd-role-names">${names.map(n => `<span class="vd-role-name-item">${esc(n)}</span>`).join('')}</div>`
 	          : '';
-	        return `<div class="vd-role-row">
+	        return `<div class="vd-role-block"><div class="vd-role-row">
 	          <span class="vd-role-dot" style="background:${dot}"></span>
 	          <span class="vd-role-name">${esc(pr.name)}</span>
 	          <span class="vd-role-count ${cls}">${filled}/${needed}</span>
-	        </div>${namesHtml}`;
+	        </div>${namesHtml}</div>`;
 	      }).join('');
 
 	      const noRoles = planRoles.length === 0;
 	      return `<div class="vd-event-card" style="border-left:3px solid ${color};">
 	        <div class="vd-event-header">
-	          <span class="vd-event-label" style="color:${color};">${esc(label)}</span>
 	          <span class="vd-event-time">${esc(timeStr)}</span>
 	        </div>
 	        <div class="vd-roles-list">${rolesHtml}</div>
-	        ${noRoles ? `<div class="vd-no-role">No roles set — go to Plan to add them</div>` : ''}
-	        <button class="vd-add-role-btn" onclick="navigateToVolunteers('plan')">Edit in Plan →</button>
+	        ${noRoles ? `<div class="vd-no-role">No roles set yet</div>` : ''}
+	        <div class="vd-event-footer">
+	          <button class="vd-add-role-btn" onclick="navigateToVolunteers('plan')">Edit in Plan →</button>
+	        </div>
 	      </div>`;
 	    }
 
