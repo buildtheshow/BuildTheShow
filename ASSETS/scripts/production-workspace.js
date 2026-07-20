@@ -45843,7 +45843,12 @@ See you soon!
         </td>
       </tr>`;
     }).join('');
-    const volunteer_shifts_block = `<div style="background:${cardBg};border:1.5px solid ${cardBdr};border-radius:14px;padding:20px 24px;margin:22px 0;"><h2 style="font-size:18px;font-weight:900;color:${headCol};margin:0 0 16px;">${displayRows.length === 1 ? 'Your Shift' : 'Your Shifts'}</h2><table style="width:100%;border-collapse:collapse;">${shiftsBlockRows}</table></div>`;
+    const allDeadline = displayRows.length > 0 && displayRows.every(r => r.isDeadline);
+    const anyDeadline = displayRows.some(r => r.isDeadline);
+    const shiftsBlockHeading = displayRows.length === 1
+      ? (displayRows[0].isDeadline ? 'Your Deadline' : 'Your Shift')
+      : (allDeadline ? 'Your Deadlines' : anyDeadline ? 'Your Shifts & Deadlines' : 'Your Shifts');
+    const volunteer_shifts_block = `<div style="background:${cardBg};border:1.5px solid ${cardBdr};border-radius:14px;padding:20px 24px;margin:22px 0;"><h2 style="font-size:18px;font-weight:900;color:${headCol};margin:0 0 16px;">${shiftsBlockHeading}</h2><table style="width:100%;border-collapse:collapse;">${shiftsBlockRows}</table></div>`;
 
     return {
       ...volEmailOrgContext(),
