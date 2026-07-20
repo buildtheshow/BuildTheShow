@@ -24,16 +24,24 @@
     return new URLSearchParams(location.search).get('id') || '';
   }
 
+  // Every internal nav click stamps a fresh cache-busting param onto the
+  // destination URL so the browser can never reuse a stale cached copy of
+  // the page, regardless of HTTP cache headers or back/forward cache.
+  function cacheBust() {
+    return '_cb=' + Date.now().toString(36);
+  }
+
   function workspaceUrl(tab, sub) {
     const id = prodId();
     let url = '/SYSTEM/Organisations/Productions/Workspace/production-workspace.html?id=' + encodeURIComponent(id) + '&tab=' + tab;
     if (sub) url += '&sub=' + sub;
+    url += '&' + cacheBust();
     return url;
   }
 
   function pageUrl(file) {
     const id = prodId();
-    return '/SYSTEM/Organisations/Productions/Workspace/' + file + '?id=' + encodeURIComponent(id);
+    return '/SYSTEM/Organisations/Productions/Workspace/' + file + '?id=' + encodeURIComponent(id) + '&' + cacheBust();
   }
 
   window.btsProdNav = function (file) {
