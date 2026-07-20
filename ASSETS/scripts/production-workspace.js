@@ -48366,31 +48366,17 @@ See you soon!
 	        ? `<div class="vd-role-names">${shift.names.map(n => `<span class="vd-role-name-item">${esc(n)}</span>`).join('')}</div>`
 	        : '';
 	      return `<div class="vd-event-card" style="border-left:3px solid ${shift.color};">
-	        <div class="vd-event-header">
-	          <span class="vd-event-time">${esc(timeStr)}</span>
-	        </div>
 	        <div class="vd-roles-list">
-	          <div class="vd-role-block"><div class="vd-role-row">
-	            <span class="vd-role-dot" style="background:${dot}"></span>
-	            <span class="vd-role-name">${esc(shift.role_name)}</span>
-	            <span class="vd-role-count ${cls}">${shift.filled}/${shift.needed}</span>
-	          </div>${namesHtml}</div>
+	          <div class="vd-role-block">
+	            <div class="vd-role-row">
+	              <span class="vd-role-dot" style="background:${dot}"></span>
+	              <span class="vd-role-name">${esc(shift.role_name)}</span>
+	              <span class="vd-role-count ${cls}">${shift.filled}/${shift.needed}</span>
+	            </div>
+	            <div class="vd-event-time">${esc(timeStr)}</div>
+	            ${namesHtml}
+	          </div>
 	        </div>
-	        <div class="vd-event-footer">
-	          <button class="vd-add-role-btn" onclick="navigateToVolunteers('plan')">Edit in Plan →</button>
-	        </div>
-	      </div>`;
-	    }
-
-	    function renderEmptyEventCard(ev) {
-	      const normalizedType = volCalendarEventType(ev);
-	      const color = eventColor(normalizedType);
-	      const timeStr = [fmtTime(ev.start_time), fmtTime(ev.end_time)].filter(Boolean).join(' – ') || 'Time not set';
-	      return `<div class="vd-event-card" style="border-left:3px solid ${color};">
-	        <div class="vd-event-header">
-	          <span class="vd-event-time">${esc(timeStr)}</span>
-	        </div>
-	        <div class="vd-no-role">No volunteer shifts set yet</div>
 	        <div class="vd-event-footer">
 	          <button class="vd-add-role-btn" onclick="navigateToVolunteers('plan')">Edit in Plan →</button>
 	        </div>
@@ -48403,16 +48389,12 @@ See you soon!
 	    const cols = weekDays.map(d => {
 	      const ds = toDateStr(d);
 	      const isToday = ds === toDateStr(today);
-	      const evs = (eventsByDate[ds] || []).sort((a,b) => (a.start_time||'').localeCompare(b.start_time||''));
 	      const shifts = opportunities
 	        .filter(opp => opp.opportunity_type === 'volunteer')
 	        .map(opportunityShiftRow)
 	        .filter(shift => shift.shift_date === ds)
 	        .sort((a, b) => shiftSortKey(a).localeCompare(shiftSortKey(b)));
-	      const emptyEventCards = evs
-	        .filter(ev => !(oppsByEvent[ev.id] || []).length)
-	        .map(renderEmptyEventCard);
-	      const cardsHtml = [...shifts.map(renderShiftCard), ...emptyEventCards].join('');
+	      const cardsHtml = shifts.map(renderShiftCard).join('');
 	      return `<div class="vd-day-col${isToday?' vd-today':''}">
 	        <div class="vd-day-head">
 	          <span class="vd-day-name">${fmtDay(d)}</span>
