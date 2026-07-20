@@ -14347,8 +14347,8 @@ See you soon!
     const metric = key === 'dashboard'
       ? {
         statValue: registrationDashboardAcceptedMetricValue,
-        statKicker: metricNumber === 1 ? 'Role Accepted' : 'Roles Accepted',
-        statLabel: 'Accepted Cast'
+        statKicker: metricNumber === 1 ? 'Role accepted' : 'Roles accepted',
+        statLabel: 'Accepted cast'
       }
       : {};
     host.innerHTML = renderer('auditions.page-header', {
@@ -14376,8 +14376,8 @@ See you soon!
       title: meta.title,
       copy: meta.copy,
       statValue: registrationSettingsAcceptedMetricValue,
-      statKicker: metricNumber === 1 ? 'Role Accepted' : 'Roles Accepted',
-      statLabel: 'View Cast'
+      statKicker: metricNumber === 1 ? 'Role accepted' : 'Roles accepted',
+      statLabel: 'View cast'
     });
     const metric = host.querySelector('.aud-visual-total');
     if (metric) {
