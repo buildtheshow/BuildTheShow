@@ -48218,6 +48218,7 @@ See you soon!
 	    // ── Approved signups by role+date ───────────────────────
 	    // volunteer_signups uses role_name + shift_date/required_dates, not opportunity_id
 	    const approvedByRoleDate = {};
+	    const namesByRoleDate = {};
 	    (volunteerSignups || []).forEach(s => {
 	      if (s.status === 'cancelled' || s.status === 'declined') return;
 	      const role = (s.role_name || '').toLowerCase().trim();
@@ -48228,6 +48229,8 @@ See you soon!
 	      dates.forEach(d => {
 	        const k = `${role}|${d}`;
 	        approvedByRoleDate[k] = (approvedByRoleDate[k] || 0) + 1;
+	        if (!namesByRoleDate[k]) namesByRoleDate[k] = [];
+	        namesByRoleDate[k].push(s.name || 'Unknown');
 	      });
 	    });
 
@@ -48275,15 +48278,20 @@ See you soon!
 
 	      const rolesHtml = planRoles.map(pr => {
 	        const evDate2 = (ev.start_time || '').slice(0, 10);
-	        const filled = approvedByRoleDate[`${pr.name.toLowerCase()}|${evDate2}`] || 0;
+	        const key = `${pr.name.toLowerCase()}|${evDate2}`;
+	        const filled = approvedByRoleDate[key] || 0;
+	        const names = namesByRoleDate[key] || [];
 	        const needed = pr.needed;
 	        const dot = filled >= needed ? '#22c55e' : filled > 0 ? '#f59e0b' : '#ef4444';
 	        const cls = filled >= needed ? 'filled' : filled > 0 ? 'partial' : 'empty';
+	        const namesHtml = names.length
+	          ? `<div class="vd-role-names">${names.map(n => `<span class="vd-role-name-item">${esc(n)}</span>`).join('')}</div>`
+	          : '';
 	        return `<div class="vd-role-row">
 	          <span class="vd-role-dot" style="background:${dot}"></span>
 	          <span class="vd-role-name">${esc(pr.name)}</span>
 	          <span class="vd-role-count ${cls}">${filled}/${needed}</span>
-	        </div>`;
+	        </div>${namesHtml}`;
 	      }).join('');
 
 	      const noRoles = planRoles.length === 0;
