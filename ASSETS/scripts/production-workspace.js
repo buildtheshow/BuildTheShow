@@ -48485,7 +48485,7 @@ See you soon!
 	          <span class="vd-day-name">${fmtDay(d)}</span>
 	          <span class="vd-day-date ${isToday?'vd-today-badge':''}">${d.getDate()}</span>
 	        </div>
-	        <div class="vd-day-events">${cardsHtml || '<div class="vd-empty-day"></div>'}</div>
+	        <div class="vd-day-events">${cardsHtml || '<div class="vd-empty-day">No shifts</div>'}</div>
 	      </div>`;
 	    }).join('');
 
