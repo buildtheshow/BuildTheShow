@@ -45317,11 +45317,6 @@ See you soon!
     else if (_volReqSort === 'date') people.sort((a,b) => (a.shifts[0]?.shift_date||'').localeCompare(b.shifts[0]?.shift_date||''));
     else people.sort((a,b) => (b.created_at||'').localeCompare(a.created_at||''));
 
-    const totalPages = Math.ceil(people.length / VOL_REQ_PAGE_SIZE);
-    const page = Math.min(_volReqPage, Math.max(0, totalPages - 1));
-    if (_volReqPage !== page) _volReqPage = page;
-    const pagePeople = people.slice(page * VOL_REQ_PAGE_SIZE, (page + 1) * VOL_REQ_PAGE_SIZE);
-
     function avatarHtml(name, avatarUrl, cls) {
       const initials = volReqInitials(name);
       return avatarUrl
@@ -45384,9 +45379,9 @@ See you soon!
       'Technical Crew': '#d1523d', 'Backstage & Rehearsal Support': '#dd8233',
       'Front of House': '#476aaa', 'Marketing & Publicity': '#efab45',
     };
-    const listItemsHtml = pagePeople.length === 0
+    const listItemsHtml = people.length === 0
       ? '<div class="vol-req-empty-list"><div>No requests in this category yet.</div></div>'
-      : pagePeople.map(person => {
+      : people.map(person => {
           const portalKey = person.portalToken || person.shifts[0]?.id || person.email;
           const active = _volReqSelected === portalKey ? ' active' : '';
           const status = personStatus(person);
@@ -45402,24 +45397,6 @@ See you soon!
             + '<svg class="vol-req-item-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>'
             + '</div>';
         }).join('');
-
-    // Pagination (by people)
-    let paginationHtml = '';
-    if (totalPages > 1) {
-      const prevDisabled = page === 0 ? ' disabled' : '';
-      const nextDisabled = page >= totalPages - 1 ? ' disabled' : '';
-      let pageBtns = '<button class="vol-req-page-btn"' + prevDisabled + ' onclick="volReqSetPage(' + (page - 1) + ')">&#8249;</button>';
-      for (let p = 0; p < totalPages; p++) {
-        if (p === 0 || p === totalPages - 1 || Math.abs(p - page) <= 1) {
-          pageBtns += '<button class="vol-req-page-btn' + (p === page ? ' active' : '') + '" onclick="volReqSetPage(' + p + ')">' + (p + 1) + '</button>';
-        } else if (Math.abs(p - page) === 2) {
-          pageBtns += '<span class="vol-req-page-ellipsis">&hellip;</span>';
-        }
-      }
-      pageBtns += '<button class="vol-req-page-btn"' + nextDisabled + ' onclick="volReqSetPage(' + (page + 1) + ')">&#8250;</button>';
-      const showing = 'Showing ' + (page * VOL_REQ_PAGE_SIZE + 1) + '–' + Math.min((page + 1) * VOL_REQ_PAGE_SIZE, people.length) + ' of ' + people.length + ' people';
-      paginationHtml = '<div class="vol-req-pagination"><div class="vol-req-page-info">' + esc(showing) + '</div><div class="vol-req-page-btns">' + pageBtns + '</div></div>';
-    }
 
     // Detail panel — shows all shifts for the selected person
     function detailHtml(selectedEmail) {
@@ -45664,7 +45641,6 @@ See you soon!
       +   '<div class="vol-req-layout">'
       +     '<div class="vol-req-list-panel">'
       +       '<div class="vol-req-list" id="vol-req-list">' + listItemsHtml + '</div>'
-      +       paginationHtml
       +     '</div>'
       +     '<div class="vol-req-detail-panel" id="vol-req-detail">' + detailHtml(_volReqSelected) + '</div>'
       +   '</div>'
