@@ -470,7 +470,7 @@ async function loadAll() {
   const eventSelect = _hasCalledCastColumn
     ? 'id,title,event_type,start_time,end_time,is_deadline,called_cast,called_character_ids'
     : 'id,title,event_type,start_time,end_time,is_deadline,called_character_ids';
-  const [evRes, volRes, assignRes, appsRes, booksRes, ciRes, prodRes] = await Promise.all([
+  const [evRes, volRes, assignRes, appsRes, booksRes, ciRes, prodRes, charsRes] = await Promise.all([
     _sb.from('production_events')
        .select(eventSelect)
        .eq('production_id', _prodId)
@@ -481,7 +481,7 @@ async function loadAll() {
        .eq('production_id', _prodId)
        .eq('status', 'approved'),
     _sb.from('casting_assignments')
-       .select('id,applicant_id,character_id,character_name,state')
+       .select('id,applicant_id,character_id,state')
        .eq('production_id', _prodId)
        .in('state', ['chosen', 'offer_accepted']),
     _sb.from('audition_applications')
@@ -498,7 +498,12 @@ async function loadAll() {
        .select('title,enabled_modules')
        .eq('id', _prodId)
        .single(),
+    _sb.from('production_characters')
+       .select('id,name')
+       .eq('production_id', _prodId),
   ]);
+  const characterNameById = {};
+  (charsRes.data || []).forEach(c => { characterNameById[String(c.id)] = c.name; });
 
   _todayEvents = (evRes.data || []).filter(e => !e.is_deadline);
 
@@ -594,7 +599,7 @@ async function loadAll() {
 
   _cast = [...assignmentsByResolvedPerson.entries()].map(([personId, assignments]) => {
     const person = peopleById[String(personId)] || {};
-    const roleNames = [...new Set(assignments.map(a => a.character_name || a.role_name).filter(Boolean))];
+    const roleNames = [...new Set(assignments.map(a => characterNameById[String(a.character_id)]).filter(Boolean))];
     const characterIds = [...new Set(assignments.map(a => a.character_id).filter(Boolean).map(String))];
     const ci = ciMap['cast::' + personId] || {};
     return {
