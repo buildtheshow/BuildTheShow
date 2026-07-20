@@ -705,6 +705,26 @@
     .sched-cast-card-btn .casting-card:hover {
       transform: none;
     }
+    /* Flip the card's visual hierarchy for this page: the role leads, the performer's name is secondary. */
+    .sched-cast-card-btn .casting-card--in-show > .casting-card-inshow-photo { order: 1; }
+    .sched-cast-card-btn .casting-card--in-show > .casting-card-inshow-char { order: 2; }
+    .sched-cast-card-btn .casting-card--in-show > div:nth-child(3) { order: 3; }
+    .sched-cast-card-btn .casting-card--in-show > .casting-card-inshow-name { order: 4; }
+    .sched-cast-card-btn .casting-card--in-show > div:nth-child(5) { order: 5; }
+    .sched-cast-card-btn .casting-card--in-show > .casting-card-inshow-meta { order: 6; }
+    .sched-cast-card-btn .casting-card--in-show > div:nth-child(7) { order: 7; }
+    .sched-cast-card-btn .casting-card-inshow-char {
+      font-weight: 800;
+      color: #111;
+      text-transform: uppercase;
+      letter-spacing: 0.015em;
+    }
+    .sched-cast-card-btn .casting-card-inshow-name {
+      font-weight: 400;
+      color: #444;
+      text-transform: none;
+      letter-spacing: 0.02em;
+    }
     .sched-uncast-list {
       display: flex;
       flex-direction: column;
@@ -1307,13 +1327,6 @@
       return String(person.name || person.email || '').trim();
     }
 
-    function assignmentPriority(state) {
-      if (state === 'offer_accepted') return 0;
-      if (state === 'chosen') return 1;
-      if (state === 'ensemble_manual') return 2;
-      return 3;
-    }
-
     function charLooksLikeEnsemble(char) {
       const name = String(char?.name || '').trim().toLowerCase();
       const roleType = String(char?.role_type || '').trim().toLowerCase();
@@ -1327,8 +1340,6 @@
         .map(a => (!a?.character_id && ensembleChar) ? { ...a, character_id: ensembleChar.id } : a)
         .filter(a => a?.character_id)
         .sort((a, b) => {
-          const stateDiff = assignmentPriority(a.state) - assignmentPriority(b.state);
-          if (stateDiff) return stateDiff;
           const aName = personDisplayName(_people[a.applicant_id] || {});
           const bName = personDisplayName(_people[b.applicant_id] || {});
           return aName.localeCompare(bName);
@@ -1745,7 +1756,7 @@
       const [eventRes, charRes, assignRes, appRes, bookRes] = await Promise.all([
         sb.from('production_events').select(eventSelect).eq('production_id', prodId).in('event_type', REHEARSAL_TYPES).order('start_time'),
         sb.from('production_characters').select('id,name,role_type,sort_order').eq('production_id', prodId).order('sort_order'),
-        sb.from('casting_assignments').select('id,character_id,applicant_id,state,created_at').eq('production_id', prodId).in('state', ['chosen', 'offer_accepted', 'ensemble_manual']),
+        sb.from('casting_assignments').select('id,character_id,applicant_id,state,created_at').eq('production_id', prodId).eq('state', 'offer_accepted'),
         sb.from('audition_applications').select('id,name,email,pronouns,headshot_url,custom_answers').eq('production_id', prodId).order('name'),
         sb.from('audition_bookings').select('id,name,email,headshot_url,custom_answers').eq('production_id', prodId).order('name')
       ]);
