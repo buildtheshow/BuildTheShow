@@ -48391,10 +48391,6 @@ See you soon!
 	      monthHtml = headRow + cells.join('');
 	    }
 
-	    // ── Needs attention ─────────────────────────────────────
-	    const needsHtml = topGaps.length
-	      ? topGaps.map(([name, gaps]) => `<div class="vd-gap-row"><span class="vd-gap-dot"></span><span class="vd-gap-name">${esc(name)}</span><span class="vd-gap-count">${gaps} empty</span></div>`).join('')
-	      : `<div class="vd-needs-empty">${totalNeeded > 0 ? 'All roles covered this week' : 'Set up roles in Plan first'}</div>`;
 	    const metricCards = [
 	      {
 	        className: 'vd-summary-chip--spots',
@@ -48422,13 +48418,13 @@ See you soon!
 	      },
 	      {
 	        className: 'vd-summary-chip--published',
-	        icon: '/ASSETS/Images/Icons/calendar-date.svg',
+	        icon: '/ASSETS/Images/Icons/navproductioncalendar.svg',
 	        label: `${publishedRoles} Roles Published`,
 	        desc: 'Open for sign-up'
 	      },
 	      {
 	        className: 'vd-summary-chip--confirmed',
-	        icon: '/ASSETS/Images/Icons/check-in.svg',
+	        icon: '/ASSETS/Images/Icons/navproductionteam.svg',
 	        label: `${confirmedCount} Confirmed`,
 	        desc: 'Volunteers accepted'
 	      }
@@ -48445,14 +48441,6 @@ See you soon!
 	            <div class="dash-nav-chip-desc">${esc(card.desc)}</div>
 	          </div>
 	        `).join('')}
-	      </div>
-	      <div class="vd-needs-panel">
-	        <div class="vd-needs-head">
-	          <span>Needs Attention</span>
-	          ${topGaps.length ? `<span class="vd-needs-badge">${topGaps.length}</span>` : ''}
-	        </div>
-	        ${needsHtml}
-	        ${topGaps.length > 0 ? `<button class="vd-view-gaps-btn" onclick="navigateToVolunteers('plan')">Edit in Plan →</button>` : ''}
 	      </div>
 	      <div class="vd-nav-row">
 	        <div style="display:flex;align-items:center;gap:0.5rem;">
