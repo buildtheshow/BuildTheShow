@@ -202,6 +202,29 @@
     let _approvedByRoleDate = {};
     let fcCalendar = null;
 
+    // Which dept_leads role(s) oversee each event type. Mirrors CREW_LEAD_BY_TYPE
+    // in production-workspace.js, keep these in sync.
+    const CREW_LEAD_BY_TYPE = {
+      rehearsal:         ['Stage Manager'],
+      music_rehearsal:   ['Stage Manager'],
+      choreography:      ['Stage Manager'],
+      tech:              ['Stage Manager', 'Lighting Designer / Technician'],
+      dress:             ['Stage Manager'],
+      performance:       ['Stage Manager', 'Front of House Manager', 'Concession Manager'],
+      crew_set:          ['Lead Builder'],
+      crew_set_dressing: ['Lead Builder'],
+      crew_set_painting: ['Lead Set Painter'],
+      crew_props:        ['Lead Prop Person'],
+      crew_costumes:     ['Costume Designer'],
+      crew_hair_makeup:  ['Costume Designer'],
+      crew_wigs:         ['Costume Designer'],
+      crew_lighting:     ['Lighting Designer / Technician'],
+      crew_sound:        ['Lighting Designer / Technician'],
+      cast_party:        ['Cast Party Coordinator'],
+      strike:            ['Lead Builder', 'Costume Designer'],
+      costume_moveout:   ['Costume Designer'],
+    };
+
     function plannedRolesForType(eventType) {
       const fixed = (PLAN_ROLE_MAP[eventType] || []).map((role, ri) => {
         const count = _staffingPlan[`${eventType}-${ri}`]?.count ?? 0;
@@ -211,10 +234,10 @@
         .filter(([k, v]) => k.startsWith(`${eventType}-custom-`) && v.roleName && (v.count ?? 0) > 0)
         .map(([, v]) => ({ name: v.roleName, dept: v.department || 'Other', needed: v.count }));
       const roles = [...fixed, ...custom];
-      if (eventType !== 'dept_leads') {
-        const deptsInScope = new Set(roles.map(r => r.dept));
+      const leadNames = CREW_LEAD_BY_TYPE[eventType];
+      if (leadNames) {
         const leadRoles = (PLAN_ROLE_MAP.dept_leads || []).map((role, ri) => {
-          if (!deptsInScope.has(role.dept)) return null;
+          if (!leadNames.includes(role.name)) return null;
           if (roles.some(r => r.name === role.name)) return null;
           const count = _staffingPlan[`dept_leads-${ri}`]?.count ?? 0;
           return count > 0 ? { name: role.name, dept: role.dept, needed: count } : null;

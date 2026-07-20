@@ -48186,6 +48186,31 @@ See you soon!
 	      ],
 	    };
 
+	    // Which dept_leads role(s) oversee each event type, so e.g. a Set Building
+	    // day also shows the Lead Builder, not just the Set Builder crew. Deliberately
+	    // explicit (rather than matching on shared department) so a lead only shows
+	    // up on the days that are actually theirs to run.
+	    const CREW_LEAD_BY_TYPE = {
+	      rehearsal:         ['Stage Manager'],
+	      music_rehearsal:   ['Stage Manager'],
+	      choreography:      ['Stage Manager'],
+	      tech:              ['Stage Manager', 'Lighting Designer / Technician'],
+	      dress:             ['Stage Manager'],
+	      performance:       ['Stage Manager', 'Front of House Manager', 'Concession Manager'],
+	      crew_set:          ['Lead Builder'],
+	      crew_set_dressing: ['Lead Builder'],
+	      crew_set_painting: ['Lead Set Painter'],
+	      crew_props:        ['Lead Prop Person'],
+	      crew_costumes:     ['Costume Designer'],
+	      crew_hair_makeup:  ['Costume Designer'],
+	      crew_wigs:         ['Costume Designer'],
+	      crew_lighting:     ['Lighting Designer / Technician'],
+	      crew_sound:        ['Lighting Designer / Technician'],
+	      cast_party:        ['Cast Party Coordinator'],
+	      strike:            ['Lead Builder', 'Costume Designer'],
+	      costume_moveout:   ['Costume Designer'],
+	    };
+
 	    // Derive planned roles for an event type from _staffingPlan
 	    function plannedRolesForType(eventType) {
 	      const fixed = (PLAN_ROLE_MAP[eventType] || []).map((role, ri) => {
@@ -48196,13 +48221,10 @@ See you soon!
 	        .filter(([k, v]) => k.startsWith(`${eventType}-custom-`) && v.roleName && (v.count ?? 0) > 0)
 	        .map(([, v]) => ({ name: v.roleName, dept: v.department || 'Other', needed: v.count }));
 	      const roles = [...fixed, ...custom];
-	      // Pull in any department lead/head whose department matches a role already
-	      // planned for this event type, so e.g. a Set Building day also shows the
-	      // Lead Builder, not just the Set Builder crew.
-	      if (eventType !== 'dept_leads') {
-	        const deptsInScope = new Set(roles.map(r => r.dept));
+	      const leadNames = CREW_LEAD_BY_TYPE[eventType];
+	      if (leadNames) {
 	        const leadRoles = (PLAN_ROLE_MAP.dept_leads || []).map((role, ri) => {
-	          if (!deptsInScope.has(role.dept)) return null;
+	          if (!leadNames.includes(role.name)) return null;
 	          if (roles.some(r => r.name === role.name)) return null;
 	          const count = _staffingPlan[`dept_leads-${ri}`]?.count ?? 0;
 	          return count > 0 ? { name: role.name, dept: role.dept, needed: count } : null;
