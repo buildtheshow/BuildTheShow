@@ -48260,18 +48260,26 @@ See you soon!
 	      if (d) { if (!eventsByDate[d]) eventsByDate[d] = []; eventsByDate[d].push(ev); }
 	    });
 
-	    // ── Opportunities by event_id ───────────────────────────
+	    // ── Opportunities + approved signups ────────────────────
 	    const oppsByEvent = {};
-	    opportunities.forEach(opp => {
-	      if (opp.event_id) { if (!oppsByEvent[opp.event_id]) oppsByEvent[opp.event_id] = []; oppsByEvent[opp.event_id].push(opp); }
-	    });
-
-	    // ── Approved signups by role+date ───────────────────────
-	    // volunteer_signups uses role_name + shift_date/required_dates, not opportunity_id
+	    const approvedByOppId = {};
+	    const namesByOppId = {};
 	    const approvedByRoleDate = {};
 	    const namesByRoleDate = {};
+	    opportunities.forEach(opp => {
+	      if (opp.event_id) {
+	        if (!oppsByEvent[opp.event_id]) oppsByEvent[opp.event_id] = [];
+	        oppsByEvent[opp.event_id].push(opp);
+	      }
+	    });
 	    (volunteerSignups || []).forEach(s => {
 	      if (s.status !== 'approved') return;
+	      if (s.opportunity_id) {
+	        const oppKey = String(s.opportunity_id);
+	        approvedByOppId[oppKey] = (approvedByOppId[oppKey] || 0) + 1;
+	        if (!namesByOppId[oppKey]) namesByOppId[oppKey] = [];
+	        namesByOppId[oppKey].push(s.name || 'Unknown');
+	      }
 	      const role = (s.role_name || '').toLowerCase().trim();
 	      if (!role) return;
 	      const dates = [];
@@ -48317,40 +48325,72 @@ See you soon!
 	    const EVENT_COLORS = { audition:'#572e88', performance:'#476aaa', rehearsal:'#78bbd4', music_rehearsal:'#78bbd4', choreography:'#78bbd4', tech:'#78bbd4', dress:'#476aaa', strike:'#d45239', costume_moveout:'#d17431', cast_party:'#aa2943', event:'#6c956f', deadline:'#c976a5', meeting:'#efab45', crew:'#572e88', other:'#572e88' };
 	    const eventColor = type => EVENT_COLORS[type] || '#572e88';
 
-	    // ── Render event card ───────────────────────────────────
-	    function renderEventCard(ev) {
-	      const start = fmtTime(ev.start_time);
-	      const end = fmtTime(ev.end_time);
-	      const timeStr = [start, end].filter(Boolean).join(' – ');
+	    function shiftSortKey(item) {
+	      return `${item.shift_date || ''}T${item.shift_start_time || '99:99:99'}|${item.role_name || ''}`;
+	    }
+
+	    function opportunityShiftRow(opp) {
+	      const ev = opp?.event_id ? volunteerPlanEvents.find(e => String(e.id) === String(opp.event_id)) : null;
+	      const normalizedType = ev ? volCalendarEventType(ev) : 'other';
+	      const color = eventColor(normalizedType);
+	      const entry = staffingEntryForOpportunity(opp);
+	      const timing = ev ? volRoleShiftTiming(ev, entry) : {
+	        shift_date: opp.event_date || opp.shift_date || opp.start_date || null,
+	        shift_start_time: opp.shift_start_time || null,
+	        shift_end_time: opp.shift_end_time || null,
+	      };
+	      const shiftDate = timing.shift_date || opp.event_date || opp.shift_date || opp.start_date || null;
+	      const filled = approvedByOppId[String(opp.id)] ?? approvedByRoleDate[`${String(opp.production_title || '').toLowerCase()}|${shiftDate || ''}`] ?? 0;
+	      const names = namesByOppId[String(opp.id)] || namesByRoleDate[`${String(opp.production_title || '').toLowerCase()}|${shiftDate || ''}`] || [];
+	      const needed = parseInt(opp.volunteers_needed, 10) || 0;
+	      return {
+	        kind: 'shift',
+	        id: opp.id,
+	        event_id: opp.event_id || null,
+	        shift_date: shiftDate,
+	        shift_start_time: timing.shift_start_time || null,
+	        shift_end_time: timing.shift_end_time || null,
+	        color,
+	        role_name: opp.production_title || opp.volunteer_role || 'Volunteer Shift',
+	        filled,
+	        needed,
+	        names,
+	      };
+	    }
+
+	    function renderShiftCard(shift) {
+	      const timeStr = [volFmtShiftTime(shift.shift_start_time), volFmtShiftTime(shift.shift_end_time)].filter(Boolean).join(' – ') || 'Time not set';
+	      const dot = shift.filled >= shift.needed ? '#22c55e' : shift.filled > 0 ? '#f59e0b' : '#ef4444';
+	      const cls = shift.filled >= shift.needed ? 'filled' : shift.filled > 0 ? 'partial' : 'empty';
+	      const namesHtml = shift.names.length
+	        ? `<div class="vd-role-names">${shift.names.map(n => `<span class="vd-role-name-item">${esc(n)}</span>`).join('')}</div>`
+	        : '';
+	      return `<div class="vd-event-card" style="border-left:3px solid ${shift.color};">
+	        <div class="vd-event-header">
+	          <span class="vd-event-time">${esc(timeStr)}</span>
+	        </div>
+	        <div class="vd-roles-list">
+	          <div class="vd-role-block"><div class="vd-role-row">
+	            <span class="vd-role-dot" style="background:${dot}"></span>
+	            <span class="vd-role-name">${esc(shift.role_name)}</span>
+	            <span class="vd-role-count ${cls}">${shift.filled}/${shift.needed}</span>
+	          </div>${namesHtml}</div>
+	        </div>
+	        <div class="vd-event-footer">
+	          <button class="vd-add-role-btn" onclick="navigateToVolunteers('plan')">Edit in Plan →</button>
+	        </div>
+	      </div>`;
+	    }
+
+	    function renderEmptyEventCard(ev) {
 	      const normalizedType = volCalendarEventType(ev);
 	      const color = eventColor(normalizedType);
-	      const planRoles = plannedRolesForType(normalizedType);
-
-	      const rolesHtml = planRoles.map(pr => {
-	        const evDate2 = (ev.start_time || '').slice(0, 10);
-	        const key = `${pr.name.toLowerCase()}|${evDate2}`;
-	        const filled = approvedByRoleDate[key] || 0;
-	        const names = namesByRoleDate[key] || [];
-	        const needed = pr.needed;
-	        const dot = filled >= needed ? '#22c55e' : filled > 0 ? '#f59e0b' : '#ef4444';
-	        const cls = filled >= needed ? 'filled' : filled > 0 ? 'partial' : 'empty';
-	        const namesHtml = names.length
-	          ? `<div class="vd-role-names">${names.map(n => `<span class="vd-role-name-item">${esc(n)}</span>`).join('')}</div>`
-	          : '';
-	        return `<div class="vd-role-block"><div class="vd-role-row">
-	          <span class="vd-role-dot" style="background:${dot}"></span>
-	          <span class="vd-role-name">${esc(pr.name)}</span>
-	          <span class="vd-role-count ${cls}">${filled}/${needed}</span>
-	        </div>${namesHtml}</div>`;
-	      }).join('');
-
-	      const noRoles = planRoles.length === 0;
+	      const timeStr = [fmtTime(ev.start_time), fmtTime(ev.end_time)].filter(Boolean).join(' – ') || 'Time not set';
 	      return `<div class="vd-event-card" style="border-left:3px solid ${color};">
 	        <div class="vd-event-header">
 	          <span class="vd-event-time">${esc(timeStr)}</span>
 	        </div>
-	        <div class="vd-roles-list">${rolesHtml}</div>
-	        ${noRoles ? `<div class="vd-no-role">No roles set yet</div>` : ''}
+	        <div class="vd-no-role">No volunteer shifts set yet</div>
 	        <div class="vd-event-footer">
 	          <button class="vd-add-role-btn" onclick="navigateToVolunteers('plan')">Edit in Plan →</button>
 	        </div>
@@ -48364,12 +48404,21 @@ See you soon!
 	      const ds = toDateStr(d);
 	      const isToday = ds === toDateStr(today);
 	      const evs = (eventsByDate[ds] || []).sort((a,b) => (a.start_time||'').localeCompare(b.start_time||''));
+	      const shifts = opportunities
+	        .filter(opp => opp.opportunity_type === 'volunteer')
+	        .map(opportunityShiftRow)
+	        .filter(shift => shift.shift_date === ds)
+	        .sort((a, b) => shiftSortKey(a).localeCompare(shiftSortKey(b)));
+	      const emptyEventCards = evs
+	        .filter(ev => !(oppsByEvent[ev.id] || []).length)
+	        .map(renderEmptyEventCard);
+	      const cardsHtml = [...shifts.map(renderShiftCard), ...emptyEventCards].join('');
 	      return `<div class="vd-day-col${isToday?' vd-today':''}">
 	        <div class="vd-day-head">
 	          <span class="vd-day-name">${fmtDay(d)}</span>
 	          <span class="vd-day-date ${isToday?'vd-today-badge':''}">${d.getDate()}</span>
 	        </div>
-	        <div class="vd-day-events">${evs.map(renderEventCard).join('') || '<div class="vd-empty-day"></div>'}</div>
+	        <div class="vd-day-events">${cardsHtml || '<div class="vd-empty-day"></div>'}</div>
 	      </div>`;
 	    }).join('');
 
