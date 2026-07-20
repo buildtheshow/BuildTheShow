@@ -111,11 +111,24 @@
     function calendarNotesHaveDeadlineMarker(notes) {
       return String(notes || '').includes(CALENDAR_DEADLINE_NOTE_MARKER) || String(notes || '').includes('[bts:deadline_area:');
     }
+    function volCrewSubtypeFromTitle(title) {
+      if (/costume/i.test(title)) return 'crew_costumes';
+      if (/prop/i.test(title)) return 'crew_props';
+      if (/paint/i.test(title)) return 'crew_set_painting';
+      if (/(hair|make.?up)/i.test(title)) return 'crew_hair_makeup';
+      if (/wig/i.test(title)) return 'crew_wigs';
+      if (/light/i.test(title)) return 'crew_lighting';
+      if (/sound/i.test(title)) return 'crew_sound';
+      if (/(set\s*(build|dress)|build|construction)/i.test(title)) return 'crew_set';
+      return null;
+    }
+
     function volCalendarEventType(event = {}) {
       const rawType = event.event_type || 'event';
       const title = String(event.title || '').trim();
       if (event.is_deadline || rawType === 'deadline' || calendarNotesHaveDeadlineMarker(event.notes)) return 'deadline';
       if (/cast\s*party/i.test(title)) return 'cast_party';
+      if (rawType === 'crew') return volCrewSubtypeFromTitle(title) || rawType;
       return rawType;
     }
 
@@ -197,7 +210,18 @@
       const custom = Object.entries(_staffingPlan)
         .filter(([k, v]) => k.startsWith(`${eventType}-custom-`) && v.roleName && (v.count ?? 0) > 0)
         .map(([, v]) => ({ name: v.roleName, dept: v.department || 'Other', needed: v.count }));
-      return [...fixed, ...custom];
+      const roles = [...fixed, ...custom];
+      if (eventType !== 'dept_leads') {
+        const deptsInScope = new Set(roles.map(r => r.dept));
+        const leadRoles = (PLAN_ROLE_MAP.dept_leads || []).map((role, ri) => {
+          if (!deptsInScope.has(role.dept)) return null;
+          if (roles.some(r => r.name === role.name)) return null;
+          const count = _staffingPlan[`dept_leads-${ri}`]?.count ?? 0;
+          return count > 0 ? { name: role.name, dept: role.dept, needed: count } : null;
+        }).filter(Boolean);
+        roles.push(...leadRoles);
+      }
+      return roles;
     }
 
     function statusColor(filled, needed) {
@@ -314,7 +338,7 @@
 
       _approvedByRoleDate = {};
       (signupsRes.data || []).forEach(s => {
-        if (s.status === 'cancelled' || s.status === 'declined') return;
+        if (s.status !== 'approved') return;
         const role = (s.role_name || '').toLowerCase().trim();
         if (!role) return;
         const dates = [];
