@@ -48261,17 +48261,10 @@ See you soon!
 	    });
 
 	    // ── Opportunities + approved signups ────────────────────
-	    const oppsByEvent = {};
 	    const approvedByOppId = {};
 	    const namesByOppId = {};
 	    const approvedByRoleDate = {};
 	    const namesByRoleDate = {};
-	    opportunities.forEach(opp => {
-	      if (opp.event_id) {
-	        if (!oppsByEvent[opp.event_id]) oppsByEvent[opp.event_id] = [];
-	        oppsByEvent[opp.event_id].push(opp);
-	      }
-	    });
 	    (volunteerSignups || []).forEach(s => {
 	      if (s.status !== 'approved') return;
 	      if (s.opportunity_id) {
@@ -48293,33 +48286,10 @@ See you soon!
 	      });
 	    });
 
-	    // ── Stats this week — from plan × events ────────────────
-	    const weekDateStrs = new Set(weekDays.map(toDateStr));
-	    const thisWeekEvents = volunteerPlanEvents.filter(ev => weekDateStrs.has(ev.start_time?.split('T')[0]));
-	    let totalNeeded=0, totalFilled=0, partialCount=0, emptyCount=0;
-	    const gapsByRole = {};
-	    thisWeekEvents.forEach(ev => {
-	      const planRoles = plannedRolesForType(volCalendarEventType(ev));
-	      planRoles.forEach(pr => {
-	        const evDate1 = (ev.start_time || '').slice(0, 10);
-	        const filled = approvedByRoleDate[`${pr.name.toLowerCase()}|${evDate1}`] || 0;
-	        const needed = pr.needed;
-	        totalNeeded += needed;
-	        totalFilled += filled;
-	        if (filled >= needed) { /* filled */ }
-	        else if (filled === 0) { emptyCount++; gapsByRole[pr.name] = (gapsByRole[pr.name]||0)+(needed-filled); }
-	        else partialCount++;
-	      });
-	    });
-	    const filledPct = totalNeeded ? Math.round(totalFilled/totalNeeded*100) : 0;
-	    const partialPct = totalNeeded ? Math.round(partialCount/totalNeeded*100) : 0;
-	    const emptyPct = totalNeeded ? Math.round(emptyCount/totalNeeded*100) : 0;
-	    const topGaps = Object.entries(gapsByRole).sort((a,b)=>b[1]-a[1]).slice(0,3);
-	    const publishedRoles = opportunities.filter(o => o.status === 'published').length;
-	    const acceptedSignups = (volunteerSignups || [])
-	      .filter(s => s.status === 'approved')
-	      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-	    const confirmedCount = acceptedSignups.length;
+	    let totalNeeded = 0;
+	    let totalFilled = 0;
+	    let partialCount = 0;
+	    let emptyCount = 0;
 
 	    // ── Event type colour map ───────────────────────────────
 	    const EVENT_COLORS = { audition:'#572e88', performance:'#476aaa', rehearsal:'#78bbd4', music_rehearsal:'#78bbd4', choreography:'#78bbd4', tech:'#78bbd4', dress:'#476aaa', strike:'#d45239', costume_moveout:'#d17431', cast_party:'#aa2943', event:'#6c956f', deadline:'#c976a5', meeting:'#efab45', crew:'#572e88', other:'#572e88' };
@@ -48327,6 +48297,28 @@ See you soon!
 
 	    function shiftSortKey(item) {
 	      return `${item.shift_date || ''}T${item.shift_start_time || '99:99:99'}|${item.role_name || ''}`;
+	    }
+
+	    function parseCommitmentTimeValue(raw) {
+	      const text = String(raw || '').trim().toLowerCase();
+	      const match = text.match(/(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)/);
+	      if (!match) return null;
+	      let hour = parseInt(match[1], 10) || 0;
+	      const minute = parseInt(match[2] || '0', 10) || 0;
+	      const meridiem = match[3].startsWith('p') ? 'pm' : 'am';
+	      if (meridiem === 'pm' && hour < 12) hour += 12;
+	      if (meridiem === 'am' && hour === 12) hour = 0;
+	      return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+	    }
+
+	    function parseCommitmentRange(label = '') {
+	      const cleaned = String(label || '').replace(/\u2013/g, '-').replace(/\u2014/g, '-');
+	      const parts = cleaned.split(/\s+-\s+/);
+	      if (parts.length < 2) return { shift_start_time: null, shift_end_time: null };
+	      return {
+	        shift_start_time: parseCommitmentTimeValue(parts[0]),
+	        shift_end_time: parseCommitmentTimeValue(parts[1]),
+	      };
 	    }
 
 	    function dashboardStaffingEntry(eventType, roleName) {
@@ -48380,6 +48372,39 @@ See you soon!
 	      });
 	    }
 
+	    function opportunityShiftRowsByDate() {
+	      const rowsByDate = {};
+	      const eventIdsWithRows = new Set();
+	      (opportunities || [])
+	        .filter(opp => opp.opportunity_type === 'volunteer')
+	        .forEach(opp => {
+	          const event = opp?.event_id ? volunteerPlanEvents.find(ev => String(ev.id) === String(opp.event_id)) : null;
+	          const eventType = event ? volCalendarEventType(event) : '';
+	          const staffingEntry = event ? staffingEntryForOpportunity(opp) : {};
+	          const timing = event
+	            ? volRoleShiftTiming(event, staffingEntry)
+	            : parseCommitmentRange(opp.time_commitment || '');
+	          const shiftDate = timing.shift_date || opp.event_date || event?.start_time?.slice(0, 10) || null;
+	          if (!shiftDate) return;
+	          const row = {
+	            kind: 'shift',
+	            id: `opp-${opp.id}`,
+	            shift_date: shiftDate,
+	            shift_start_time: timing.shift_start_time || null,
+	            shift_end_time: timing.shift_end_time || null,
+	            color: eventColor(eventType),
+	            role_name: opp.production_title || opp.volunteer_role || 'Volunteer Shift',
+	            filled: approvedByOppId[String(opp.id)] || 0,
+	            needed: parseInt(opp.volunteers_needed, 10) || 0,
+	            names: namesByOppId[String(opp.id)] || [],
+	          };
+	          if (!rowsByDate[shiftDate]) rowsByDate[shiftDate] = [];
+	          rowsByDate[shiftDate].push(row);
+	          if (event?.id) eventIdsWithRows.add(String(event.id));
+	        });
+	      return { rowsByDate, eventIdsWithRows };
+	    }
+
 	    function renderShiftCard(shift) {
 	      if (shift.kind === 'empty') {
 	        const timeStr = [volFmtShiftTime(shift.shift_start_time), volFmtShiftTime(shift.shift_end_time)].filter(Boolean).join(' – ') || 'Time not set';
@@ -48415,16 +48440,45 @@ See you soon!
 	      </div>`;
 	    }
 
+	    const { rowsByDate: opportunityRowsByDate, eventIdsWithRows } = opportunityShiftRowsByDate();
+	    const renderedRowsByDate = {};
+	    weekDays.forEach(d => {
+	      const ds = toDateStr(d);
+	      const rows = [...(opportunityRowsByDate[ds] || [])];
+	      (eventsByDate[ds] || []).forEach(ev => {
+	        if (eventIdsWithRows.has(String(ev.id))) return;
+	        rows.push(...plannedShiftRowsForEvent(ev));
+	      });
+	      renderedRowsByDate[ds] = rows.sort((a, b) => shiftSortKey(a).localeCompare(shiftSortKey(b)));
+	    });
+
+	    const visibleShiftRows = Object.values(renderedRowsByDate)
+	      .flat()
+	      .filter(row => row.kind === 'shift');
+	    totalNeeded = 0;
+	    totalFilled = 0;
+	    partialCount = 0;
+	    emptyCount = 0;
+	    visibleShiftRows.forEach(row => {
+	      const needed = row.needed || 0;
+	      const filled = row.filled || 0;
+	      totalNeeded += needed;
+	      totalFilled += filled;
+	      if (needed <= 0 || filled >= needed) return;
+	      if (filled === 0) emptyCount++;
+	      else partialCount++;
+	    });
+	    const filledPct = totalNeeded ? Math.round(totalFilled / totalNeeded * 100) : 0;
+	    const partialPct = visibleShiftRows.length ? Math.round(partialCount / visibleShiftRows.length * 100) : 0;
+	    const emptyPct = visibleShiftRows.length ? Math.round(emptyCount / visibleShiftRows.length * 100) : 0;
+
 	    // ── Columns ─────────────────────────────────────────────
 	    const weekStart = fmt(weekDays[0]);
 	    const weekEnd = fmt(weekDays[6]);
 	    const cols = weekDays.map(d => {
 	      const ds = toDateStr(d);
 	      const isToday = ds === toDateStr(today);
-	      const shifts = (eventsByDate[ds] || [])
-	        .sort((a,b) => (a.start_time||'').localeCompare(b.start_time||''))
-	        .flatMap(plannedShiftRowsForEvent)
-	        .sort((a, b) => shiftSortKey(a).localeCompare(shiftSortKey(b)));
+	      const shifts = renderedRowsByDate[ds] || [];
 	      const cardsHtml = shifts.map(renderShiftCard).join('');
 	      return `<div class="vd-day-col${isToday?' vd-today':''}">
 	        <div class="vd-day-head">
