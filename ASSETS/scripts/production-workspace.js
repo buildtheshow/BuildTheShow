@@ -45348,15 +45348,13 @@ See you soon!
     const statsHtml = '<div class="vol-req-stats">'
       + '<div class="vol-req-stat-card"><div class="vol-req-stat-icon" style="background:rgba(87,46,136,0.1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div><div class="vol-req-stat-value">' + pending.length + '</div><div class="vol-req-stat-label">Pending<br>Requests</div></div></div>'
       + '<div class="vol-req-stat-card"><div class="vol-req-stat-icon" style="background:rgba(118,158,123,0.15)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2d6e35" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg></div><div><div class="vol-req-stat-value">' + approved.length + '</div><div class="vol-req-stat-label">Approved<br>Total</div></div></div>'
-      + '<div class="vol-req-stat-card"><div class="vol-req-stat-icon" style="background:rgba(239,171,69,0.18)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8a4600" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div><div class="vol-req-stat-value">' + partial.length + '</div><div class="vol-req-stat-label">Partially<br>Filled</div></div></div>'
-      + '<div class="vol-req-stat-card"><div class="vol-req-stat-icon" style="background:rgba(209,82,61,0.12)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#b33a25" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div><div><div class="vol-req-stat-value">' + declined.length + '</div><div class="vol-req-stat-label">Declined<br>This production</div></div></div>'
       + '<div class="vol-req-stat-card"><div class="vol-req-stat-icon" style="background:rgba(87,46,136,0.1)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#572e88" stroke-width="2.2"><path d="M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2H5z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div><div><div class="vol-req-stat-value">' + Math.round(totalHours) + '</div><div class="vol-req-stat-label">Hours<br>Approved</div></div></div>'
       + '</div>';
 
     // Tabs + filters
     const tabDefs = [
       { key: 'pending', label: 'Pending' }, { key: 'approved', label: 'Approved' },
-      { key: 'declined', label: 'Declined' }, { key: 'all', label: 'All' },
+      { key: 'all', label: 'All' },
     ];
     const tabInner = tabDefs.map(t => {
         const cnt = counts[t.key];
