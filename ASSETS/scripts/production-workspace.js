@@ -48415,9 +48415,6 @@ See you soon!
 	        return `<div class="vd-event-card vd-event-card--empty" style="border-left:3px solid ${shift.color};">
 	          <div class="vd-event-time">${esc(timeStr)}</div>
 	          <div class="vd-no-role">No volunteer shifts set yet</div>
-	          <div class="vd-event-footer">
-	            <button class="vd-add-role-btn" onclick="navigateToVolunteers('plan')">Set volunteer shifts →</button>
-	          </div>
 	        </div>`;
 	      }
 	      const timeStr = [volFmtShiftTime(shift.shift_start_time), volFmtShiftTime(shift.shift_end_time)].filter(Boolean).join(' – ') || 'Time not set';
@@ -48437,9 +48434,6 @@ See you soon!
 	            <div class="vd-event-time">${esc(timeStr)}</div>
 	            ${namesHtml}
 	          </div>
-	        </div>
-	        <div class="vd-event-footer">
-	          <button class="vd-add-role-btn" onclick="navigateToVolunteers('plan')">Edit in Plan →</button>
 	        </div>
 	      </div>`;
 	    }
