@@ -533,41 +533,58 @@ async function loadAll() {
 
   // Build cast from accepted casting assignments so Check In matches Rehearsal Schedule.
   const peopleById = {};
+  const normalizedPeopleKeyToId = new Map();
+  function fullNameFromRecord(row = {}) {
+    return [row.first_name, row.last_name].filter(Boolean).join(' ') || row.name || 'Performer';
+  }
+  function personKey(name, email) {
+    return String(name || '').trim().toLowerCase() + '|' + String(email || '').trim().toLowerCase();
+  }
   (appsRes.data || []).forEach(a => {
-    peopleById[String(a.id)] = {
-      name: [a.first_name, a.last_name].filter(Boolean).join(' ') || a.name || 'Performer',
-      email: a.email || '',
-      custom_answers: a.custom_answers || {},
-    };
+    const id = String(a.id);
+    const name = fullNameFromRecord(a);
+    const email = a.email || '';
+    peopleById[id] = { name, email, custom_answers: a.custom_answers || {} };
+    normalizedPeopleKeyToId.set(personKey(name, email), id);
   });
   (booksRes.data || []).forEach(b => {
-    const key = String(b.id);
-    if (peopleById[key]) return;
-    peopleById[key] = {
-      name: [b.first_name, b.last_name].filter(Boolean).join(' ') || b.name || 'Performer',
-      email: b.email || '',
-      custom_answers: b.custom_answers || {},
-    };
+    const id = String(b.id);
+    if (peopleById[id]) return;
+    const name = fullNameFromRecord(b);
+    const email = b.email || '';
+    peopleById[id] = { name, email, custom_answers: b.custom_answers || {} };
+    const key = personKey(name, email);
+    if (!normalizedPeopleKeyToId.has(key)) normalizedPeopleKeyToId.set(key, id);
   });
 
-  const assignmentsByApplicant = new Map();
+  const assignmentLookupRows = [...(appsRes.data || []), ...(booksRes.data || [])];
+  const assignmentIdToResolvedPersonId = new Map();
+  assignmentLookupRows.forEach(row => {
+    const assignmentId = String(row.id || '').trim();
+    if (!assignmentId) return;
+    const resolvedId = normalizedPeopleKeyToId.get(personKey(fullNameFromRecord(row), row.email || '')) || assignmentId;
+    assignmentIdToResolvedPersonId.set(assignmentId, resolvedId);
+  });
+
+  const assignmentsByResolvedPerson = new Map();
   (assignRes.data || []).forEach(a => {
-    const key = String(a.applicant_id || '').trim();
-    if (!key) return;
-    if (!assignmentsByApplicant.has(key)) assignmentsByApplicant.set(key, []);
-    assignmentsByApplicant.get(key).push(a);
+    const applicantId = String(a.applicant_id || '').trim();
+    if (!applicantId) return;
+    const resolvedPersonId = assignmentIdToResolvedPersonId.get(applicantId) || applicantId;
+    if (!assignmentsByResolvedPerson.has(resolvedPersonId)) assignmentsByResolvedPerson.set(resolvedPersonId, []);
+    assignmentsByResolvedPerson.get(resolvedPersonId).push(a);
   });
 
-  _cast = [...assignmentsByApplicant.entries()].map(([applicantId, assignments]) => {
-    const person = peopleById[String(applicantId)] || {};
+  _cast = [...assignmentsByResolvedPerson.entries()].map(([personId, assignments]) => {
+    const person = peopleById[String(personId)] || {};
     const roleNames = [...new Set(assignments.map(a => a.character_name || a.role_name).filter(Boolean))];
     const characterIds = [...new Set(assignments.map(a => a.character_id).filter(Boolean).map(String))];
-    const ci = ciMap['cast::' + applicantId] || {};
+    const ci = ciMap['cast::' + personId] || {};
     return {
-      id: applicantId,
+      id: personId,
       name: person.name || 'Performer',
       role: roleNames.join(', '),
-      refId: String(applicantId),
+      refId: String(personId),
       expectedStart: _eventStart,
       expectedEnd: evEnd,
       checkedIn: !!ci.checkedIn,
