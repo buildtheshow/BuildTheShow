@@ -42752,7 +42752,7 @@ See you soon!
             }).join('')}
           </div>
         `
-      : `<div style="margin:0.1rem 0 1rem;font-size:0.76rem;color:rgba(87,46,136,0.5);">Select a rehearsal date above to mark it full day or add a specific time.</div>`;
+      : '';
     return `
       ${sessionsHtml}
       <div class="apm-session-card" style="margin-top:1rem;">
@@ -42764,8 +42764,8 @@ See you soon!
           </div>
         </div>
         <div style="padding:0 1rem 1rem;">
-          ${rehearsalDateIndicators}
           ${conflictTimeCards}
+          ${rehearsalDateIndicators}
           <textarea
             id="apm-conflicts"
             oninput="_apmEdits.dateConflicts=this.value"
