@@ -8,6 +8,7 @@
   <title>Sign In &amp; Sign Out - Build The Show</title>
   <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=20260718c" />
   <link rel="stylesheet" href="/ASSETS/styles/production-sidebar.css?v=20260718c" />
+  <link rel="stylesheet" href="/ASSETS/styles/casting-card.css?v=20260720" />
   <style>
     * { box-sizing: border-box; }
     html { width: 100%; max-width: 100%; overflow-x: hidden; }
@@ -172,6 +173,31 @@
       .prod-main::before { display: none; }
       .dci-section { break-inside: avoid; box-shadow: none; border: 1px solid #ddd; }
     }
+
+    /* ── Cast card grid (flippable casting cards) ── */
+    .dci-cast-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 1rem; padding: 1rem; }
+    .dci-cast-card-wrap { display: flex; flex-direction: column; gap: 0.5rem; }
+    .inroom-flip { perspective: 1400px; width: 100%; overflow: visible; position: relative; box-shadow: none; }
+    .inroom-flip-inner { position: relative; width: 100%; max-width: 100%; aspect-ratio: 4 / 5; min-height: 220px; transform-style: preserve-3d; transition: transform 0.7s cubic-bezier(0.2, 0.75, 0.25, 1); cursor: pointer; }
+    .inroom-flip.flipped .inroom-flip-inner { transform: rotateY(180deg); }
+    .inroom-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: 4px; }
+    .inroom-face.front { background: transparent; border: none; box-shadow: none; padding: 0; }
+    .inroom-face.back { transform: rotateY(180deg); overflow: hidden; background: transparent; border: none; box-shadow: none; padding: 0; }
+    .in-show-back-card { width: 100%; height: 100%; display: grid; grid-template-rows: auto 1fr auto; background: #fdfdfd; border-radius: 4px; overflow: hidden; box-sizing: border-box; box-shadow: 0 6px 16px rgba(15,23,42,0.12); }
+    .in-show-back-header { background: #572e88; padding: 6% 6% 5%; display: flex; flex-direction: column; gap: 0.22rem; }
+    .in-show-back-name { color: #ffffff; font-size: clamp(0.78rem, 5.8cqw, 1.24rem); font-weight: 900; letter-spacing: 0.01em; line-height: 0.92; text-transform: uppercase; }
+    .in-show-back-role { color: rgba(255,255,255,0.55); font-size: clamp(0.5rem, 3.2cqw, 0.72rem); font-weight: 400; line-height: 1.1; margin-top: 0.1rem; }
+    .in-show-back-body { display: grid; grid-template-columns: 1fr; align-content: start; gap: 5.5%; padding: 4.5% 5.5%; box-sizing: border-box; min-height: 0; overflow: hidden; }
+    .in-show-back-section { display: flex; flex-direction: column; gap: 0.14rem; min-width: 0; }
+    .in-show-back-section--wide { grid-column: 1 / -1; }
+    .in-show-back-label { color: #572e88; font-size: clamp(0.48rem, 3.1cqw, 0.65rem); font-weight: 900; letter-spacing: 0.09em; line-height: 1; text-transform: uppercase; text-decoration: underline; text-underline-offset: 0.2em; margin-bottom: 0.15rem; }
+    .in-show-back-line, .in-show-back-note { color: #1a1530; font-size: clamp(0.44rem, 2.75cqw, 0.6rem); font-weight: 700; line-height: 1.25; }
+    .in-show-back-note { font-weight: 400; }
+    .in-show-back-footer { background: #f0eafa; padding: 3% 5.5%; display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; }
+    .in-show-back-status-chip { color: #572e88; font-size: clamp(0.36rem, 2.2cqw, 0.48rem); font-weight: 900; letter-spacing: 0.09em; text-transform: uppercase; line-height: 1; }
+    .dci-cast-card-status { display: flex; justify-content: center; }
+    .dci-cast-card-acts .dci-row-acts { justify-content: center; }
+    .dci-cast-card-acts .dci-rbtn { flex: 1; }
   </style>
 </head>
 <body>
@@ -303,8 +329,84 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/SHARED/Navigation/production-sidebar-nav.js?v=78-20260720-cachebust"></script>
+<script src="/ASSETS/scripts/casting-card.js?v=20260720"></script>
+<script src="/SHARED/Components/audition-page-templates.js?v=20260720"></script>
 <script>
 'use strict';
+
+// ── Flippable "In The Show" cast card (mirrors production-workspace.js) ──
+function dciSplitName(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return { first: '', last: '' };
+  if (parts.length === 1) return { first: parts[0], last: '' };
+  return { first: parts.slice(0, -1).join(' '), last: parts.slice(-1).join(' ') };
+}
+function renderInTheShowCardFrontTemplate({ name = '', role = '', headshot_url = '' } = {}) {
+  const split = dciSplitName(name);
+  return renderCastingCard({
+    first_name: split.first,
+    last_name: split.last,
+    character_name: role,
+    headshot_url,
+  }, { size: 'compact', hasPadding: true, hasIcons: false, draggable: false, state: null, variant: 'inTheShow' });
+}
+function renderInTheShowCardBackTemplate({
+  name = '', role = '', contactName = '', phone = '', email = '',
+  emergencyName = '', emergencyPhone = '', absences = '', notes = '',
+} = {}) {
+  return `
+    <div class="in-show-back-card">
+      <div class="in-show-back-header">
+        <div class="in-show-back-name">${esc(name)}</div>
+        <div class="in-show-back-role">"${esc(role)}"</div>
+      </div>
+      <div class="in-show-back-body">
+        <div class="in-show-back-section">
+          <div class="in-show-back-label">Checks In / Out With</div>
+          ${contactName ? `<div class="in-show-back-line">${esc(contactName)}</div>` : ''}
+          <div class="in-show-back-line">${esc(phone)}</div>
+          <div class="in-show-back-line">${esc(email)}</div>
+        </div>
+        <div class="in-show-back-section">
+          <div class="in-show-back-label">Emergency</div>
+          <div class="in-show-back-line">${esc(emergencyName)}</div>
+          <div class="in-show-back-line">${esc(emergencyPhone)}</div>
+        </div>
+        <div class="in-show-back-section in-show-back-section--wide">
+          <div class="in-show-back-label">Requested Off</div>
+          <div class="in-show-back-note">${esc(absences) || 'None reported'}</div>
+        </div>
+        ${notes ? `<div class="in-show-back-section in-show-back-section--wide">
+          <div class="in-show-back-label">Notes</div>
+          <div class="in-show-back-note">${esc(notes)}</div>
+        </div>` : ''}
+      </div>
+      <div class="in-show-back-footer">
+        <span class="in-show-back-status-chip">Tap to flip back</span>
+      </div>
+    </div>`;
+}
+function renderInTheShowFlippableCardTemplate({ id = '', front = {}, back = {} } = {}) {
+  const flipClick = `(function(event){event.stopPropagation();event.currentTarget.closest('.inroom-flip')?.classList.toggle('flipped');})(event)`;
+  return window.BTSAuditionTemplates.renderCastingCardFlipShellTemplate({
+    shellClass: 'inroom-flip',
+    id,
+    frontHtml: renderInTheShowCardFrontTemplate(front),
+    backHtml: renderInTheShowCardBackTemplate(back),
+    frontClick: flipClick,
+    backClick: flipClick,
+  });
+}
+function dciFormatAbsences(dateConflicts) {
+  if (!dateConflicts || typeof dateConflicts !== 'object') return '';
+  const entries = Object.values(dateConflicts).filter(e => e && e.conflict && e.date);
+  if (!entries.length) return '';
+  entries.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  return entries.map(e => {
+    const d = new Date(e.date + 'T12:00:00');
+    return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) + (e.title ? ' (' + e.title + ')' : '');
+  }).join(', ');
+}
 
 window.initProductionPage('checkin');
 
@@ -485,10 +587,10 @@ async function loadAll() {
        .eq('production_id', _prodId)
        .in('state', ['chosen', 'offer_accepted']),
     _sb.from('audition_applications')
-       .select('id,name,email,custom_answers')
+       .select('id,name,email,phone,headshot_url,date_conflicts,custom_answers')
        .eq('production_id', _prodId),
     _sb.from('audition_bookings')
-       .select('id,name,email,custom_answers')
+       .select('id,name,email,phone,headshot_url,guardian_name,guardian_email,contact_name,custom_answers')
        .eq('production_id', _prodId),
     _sb.from('daily_checkins')
        .select('*')
@@ -547,12 +649,26 @@ async function loadAll() {
   function personKey(name, email) {
     return String(name || '').trim().toLowerCase() + '|' + String(email || '').trim().toLowerCase();
   }
+  function answerVal(ca, keys) {
+    for (const k of keys) { if (ca && ca[k]) return String(ca[k]).trim(); }
+    return '';
+  }
+  function dciContactInfo(person) {
+    const ca = person.custom_answers || {};
+    const name = person.guardian_name || person.contact_name
+      || answerVal(ca, ['Guardian Name', 'Contact Name']) || '';
+    const email = person.guardian_email
+      || answerVal(ca, ['Contact Email']) || person.email || '';
+    const phone = person.phone
+      || answerVal(ca, ['Contact Phone']) || '';
+    return { name, email, phone };
+  }
   (appsRes.data || []).forEach(a => {
     if (!isRegisteredPerformer(a.custom_answers || {})) return;
     const id = String(a.id);
     const name = fullNameFromRecord(a);
     const email = a.email || '';
-    peopleById[id] = { name, email, custom_answers: a.custom_answers || {} };
+    peopleById[id] = { name, email, phone: a.phone || '', headshot_url: a.headshot_url || '', date_conflicts: a.date_conflicts || null, custom_answers: a.custom_answers || {} };
     normalizedPeopleKeyToId.set(personKey(name, email), id);
   });
   (booksRes.data || []).forEach(b => {
@@ -561,7 +677,7 @@ async function loadAll() {
     if (peopleById[id]) return;
     const name = fullNameFromRecord(b);
     const email = b.email || '';
-    peopleById[id] = { name, email, custom_answers: b.custom_answers || {} };
+    peopleById[id] = { name, email, phone: b.phone || '', headshot_url: b.headshot_url || '', guardian_name: b.guardian_name || '', guardian_email: b.guardian_email || '', contact_name: b.contact_name || '', custom_answers: b.custom_answers || {} };
     const key = personKey(name, email);
     if (!normalizedPeopleKeyToId.has(key)) normalizedPeopleKeyToId.set(key, id);
   });
@@ -570,8 +686,8 @@ async function loadAll() {
   let assignmentLookupRows = [];
   if (assignmentIds.length) {
     const [assignmentAppsRes, assignmentBooksRes] = await Promise.all([
-      _sb.from('audition_applications').select('id,name,email,custom_answers').in('id', assignmentIds),
-      _sb.from('audition_bookings').select('id,name,email,custom_answers').in('id', assignmentIds),
+      _sb.from('audition_applications').select('id,name,email,phone,headshot_url,date_conflicts,custom_answers').in('id', assignmentIds),
+      _sb.from('audition_bookings').select('id,name,email,phone,headshot_url,guardian_name,guardian_email,contact_name,custom_answers').in('id', assignmentIds),
     ]);
     assignmentLookupRows = [...(assignmentAppsRes.data || []), ...(assignmentBooksRes.data || [])];
   }
@@ -584,7 +700,7 @@ async function loadAll() {
     const resolvedId = normalizedPeopleKeyToId.get(personKey(name, email)) || assignmentId;
     assignmentIdToResolvedPersonId.set(assignmentId, resolvedId);
     if (!peopleById[resolvedId]) {
-      peopleById[resolvedId] = { name, email, custom_answers: row.custom_answers || {} };
+      peopleById[resolvedId] = { name, email, phone: row.phone || '', headshot_url: row.headshot_url || '', date_conflicts: row.date_conflicts || null, guardian_name: row.guardian_name || '', guardian_email: row.guardian_email || '', contact_name: row.contact_name || '', custom_answers: row.custom_answers || {} };
     }
   });
 
@@ -614,6 +730,9 @@ async function loadAll() {
       signedOutAt: ci.signedOutAt || null,
       awayToday: !!ci.awayToday,
       characterIds,
+      headshotUrl: person.headshot_url || '',
+      contact: dciContactInfo(person),
+      absences: dciFormatAbsences(person.date_conflicts),
     };
   }).filter(p => {
     if (dayCallMeta.allCast) return true;
@@ -722,7 +841,7 @@ function filterList(list, now) {
 function buildSection(type, label, filtered, all, now) {
   const hereCount = all.filter(p => personStatus(p, now) === 'here').length;
   const dotCol = type === 'cast' ? '#572e88' : '#769e7b';
-  const tableHtml = type === 'cast' ? castTable(filtered, now) : volTable(filtered, now);
+  const tableHtml = type === 'cast' ? castCards(filtered, now) : volTable(filtered, now);
   return '<div class="dci-section" id="sec-' + esc(type) + '">' +
     '<div class="dci-sec-hdr">' +
       '<div class="dci-sec-title"><div class="dci-sec-dot" style="background:' + dotCol + '"></div>' + esc(label) + ' (' + esc(String(all.length)) + ' expected)</div>' +
@@ -734,23 +853,28 @@ function buildSection(type, label, filtered, all, now) {
   '</div>';
 }
 
-function castTable(people, now) {
-  const rows = people.map(p => {
+function castCards(people, now) {
+  const cards = people.map(p => {
     const s = personStatus(p, now);
-    const rowCls = s === 'here' ? 'r-here' : s === 'signed-out' ? 'r-out' : s === 'away' ? 'r-away' : '';
-    const expected = p.expectedStart ? fmtTime(p.expectedStart) + (p.expectedEnd ? ' – ' + fmtTime(p.expectedEnd) : '') : '—';
-    return '<tr class="' + esc(rowCls) + '" data-type="cast" data-ref="' + esc(p.refId) + '">' +
-      '<td style="width:32px"><input type="checkbox" class="dci-cb" /></td>' +
-      '<td><div class="dci-person-cell"><div class="dci-avatar">' + esc(initials(p.name)) + '</div>' +
-        '<div><div class="dci-pname">' + esc(p.name) + '</div>' + (p.role ? '<div class="dci-prole">' + esc(p.role) + '</div>' : '') + '</div></div></td>' +
-      '<td class="hm" style="font-size:0.78rem;color:rgba(26,21,48,0.45);">' + expected + '</td>' +
-      '<td>' + pillHtml(s) + '</td>' +
-      '<td class="dci-t' + (p.checkedInAt ? '' : ' empty') + '">' + (p.checkedInAt ? fmtStamp(p.checkedInAt) : '—') + '</td>' +
-      '<td class="dci-t' + (p.signedOutAt ? '' : ' empty') + ' hm">' + (p.signedOutAt ? fmtStamp(p.signedOutAt) : '—') + '</td>' +
-      '<td>' + rowActHtml(p, s, 'cast') + '</td>' +
-    '</tr>';
+    const flipId = 'dci-flip-' + p.refId.replace(/[^a-zA-Z0-9]/g, '');
+    const contact = p.contact || {};
+    const flipCard = renderInTheShowFlippableCardTemplate({
+      id: flipId,
+      front: { name: p.name, role: p.role, headshot_url: p.headshotUrl },
+      back: {
+        name: p.name, role: p.role,
+        contactName: contact.name, phone: contact.phone, email: contact.email,
+        emergencyName: contact.name, emergencyPhone: contact.phone,
+        absences: p.absences,
+      },
+    });
+    return '<div class="dci-cast-card-wrap" data-type="cast" data-ref="' + esc(p.refId) + '">' +
+      flipCard +
+      '<div class="dci-cast-card-status">' + pillHtml(s) + '</div>' +
+      '<div class="dci-cast-card-acts">' + rowActHtml(p, s, 'cast') + '</div>' +
+    '</div>';
   }).join('');
-  return '<table class="dci-tbl"><thead><tr><th style="width:32px"></th><th>Performer</th><th class="hm">Expected</th><th>Status</th><th>Sign In</th><th class="hm">Sign Out</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+  return '<div class="dci-cast-grid">' + cards + '</div>';
 }
 
 function volTable(people, now) {
