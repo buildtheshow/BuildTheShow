@@ -42000,7 +42000,7 @@ See you soon!
       if (justAdded) {
         requestAnimationFrame(() => {
           const el = document.querySelector(`[data-conflict-card="${eventId}"]`);
-          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         });
       }
     }
@@ -42684,21 +42684,15 @@ See you soon!
     const conflictMap = _apmEdits?.dateConflictMap && typeof _apmEdits.dateConflictMap === 'object'
       ? _apmEdits.dateConflictMap
       : applicantConflictEventMap(_apmApp);
-    const selectedConflictEvents = (_apmConflictEvents || [])
-      .filter(ev => !!conflictMap?.[ev.id]?.conflict)
-      .sort((a, b) => {
-        const byDate = String(a.date || '').localeCompare(String(b.date || ''));
-        if (byDate !== 0) return byDate;
-        return String(a.title || '').localeCompare(String(b.title || ''));
-      });
-    const rehearsalDateIndicators = (_apmConflictEvents || []).length
+    const conflictGridHtml = (_apmConflictEvents || []).length
       ? `
-          <div style="display:flex;flex-wrap:wrap;gap:0.8rem;margin-bottom:1rem;">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(5.5rem,1fr));gap:0.8rem;margin-bottom:1rem;">
             ${_apmConflictEvents.map(ev => {
-              const active = !!conflictMap?.[ev.id]?.conflict;
+              const value = conflictMap?.[ev.id] || {};
+              const active = !!value.conflict;
               const colour = apmConflictWeekdayColour(ev.date);
               const parts = apmConflictDateParts(ev.date);
-              return `
+              const dateBtn = `
                 <button
                   type="button"
                   onclick="apmToggleConflictEvent('${esc(ev.id)}')"
@@ -42711,20 +42705,11 @@ See you soon!
                   </div>
                   <div style="font-size:0.76rem;font-weight:800;color:${active ? '#572e88' : 'rgba(87,46,136,0.7)'};letter-spacing:0.03em;">${esc(parts.weekday)}</div>
                 </button>`;
-            }).join('')}
-          </div>
-        `
-      : `<div style="margin-bottom:1rem;font-size:0.78rem;color:rgba(87,46,136,0.5);">No rehearsal dates are in the calendar yet.</div>`;
-    const conflictTimeCards = selectedConflictEvents.length
-      ? `
-          <div style="display:grid;gap:0.75rem;margin:0.15rem 0 1rem;">
-            ${selectedConflictEvents.map(ev => {
-              const value = conflictMap?.[ev.id] || {};
-              const parts = apmConflictDateParts(ev.date);
-              const title = ev.title || 'Rehearsal';
+              if (!active) return dateBtn;
               const isFullDay = value.full_day !== false;
-              return `
-                <div data-conflict-card="${esc(ev.id)}" style="border:1.5px solid rgba(87,46,136,0.14);border-radius:14px;padding:0.8rem 0.9rem;background:rgba(87,46,136,0.03);">
+              const title = ev.title || 'Rehearsal';
+              const picker = `
+                <div data-conflict-card="${esc(ev.id)}" style="grid-column:1 / -1;border:1.5px solid rgba(87,46,136,0.14);border-radius:14px;padding:0.8rem 0.9rem;background:rgba(87,46,136,0.03);">
                   <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:0.6rem;">
                     <div style="font-size:0.82rem;font-weight:800;color:#1a1530;">${esc(title)}</div>
                     <div style="font-size:0.74rem;font-weight:700;color:rgba(87,46,136,0.6);letter-spacing:0.04em;">${esc(`${parts.month} ${parts.day} ${parts.weekday}`)}</div>
@@ -42749,10 +42734,11 @@ See you soon!
                     </label>
                   </div>`}
                 </div>`;
+              return dateBtn + picker;
             }).join('')}
           </div>
         `
-      : '';
+      : `<div style="margin-bottom:1rem;font-size:0.78rem;color:rgba(87,46,136,0.5);">No rehearsal dates are in the calendar yet.</div>`;
     return `
       ${sessionsHtml}
       <div class="apm-session-card" style="margin-top:1rem;">
@@ -42764,8 +42750,7 @@ See you soon!
           </div>
         </div>
         <div style="padding:0 1rem 1rem;">
-          ${conflictTimeCards}
-          ${rehearsalDateIndicators}
+          ${conflictGridHtml}
           <textarea
             id="apm-conflicts"
             oninput="_apmEdits.dateConflicts=this.value"
