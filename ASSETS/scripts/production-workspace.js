@@ -42727,7 +42727,7 @@ See you soon!
                   title="${esc(ev.title || 'Rehearsal')}"
                   style="background:${active ? 'rgba(87,46,136,0.06)' : '#fff'};border:${active ? '2px solid #572e88' : '1.5px solid rgba(87,46,136,0.18)'};border-radius:24px;padding:0.7rem 0.7rem 0.8rem;min-width:5.5rem;display:flex;flex-direction:column;align-items:center;gap:0.28rem;cursor:pointer;box-shadow:${active ? '0 10px 22px rgba(87,46,136,0.12)' : 'none'};font-family:inherit;">
                   <div style="width:4.1rem;border:1px solid rgba(87,46,136,0.12);border-radius:0.95rem;overflow:hidden;background:#fff;box-shadow:0 2px 10px rgba(87,46,136,0.08);">
-                    <div style="background:${esc(colour)};color:#fff;font-size:0.92rem;font-weight:800;line-height:1;padding:0.48rem 0 0.42rem;text-align:center;letter-spacing:0.04em;">${esc(parts.month)}</div>
+                    <div style="background:${active ? esc(colour) : '#b8b8c2'};color:#fff;font-size:0.92rem;font-weight:800;line-height:1;padding:0.48rem 0 0.42rem;text-align:center;letter-spacing:0.04em;">${esc(parts.month)}</div>
                     <div style="color:#1a1530;font-size:2.2rem;font-weight:900;line-height:1;padding:0.38rem 0 0.2rem;text-align:center;">${esc(parts.day)}</div>
                   </div>
                   <div style="font-size:0.76rem;font-weight:800;color:${active ? '#572e88' : 'rgba(87,46,136,0.7)'};letter-spacing:0.03em;">${esc(parts.weekday)}</div>
