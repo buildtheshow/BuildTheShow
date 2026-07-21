@@ -353,9 +353,14 @@ function renderInTheShowCardFrontTemplate({ name = '', role = '', headshot_url =
   }, { size: 'compact', hasPadding: true, hasIcons: false, draggable: false, state: null, variant: 'inTheShow' });
 }
 function renderInTheShowCardBackTemplate({
-  name = '', role = '', contactName = '', phone = '', email = '',
-  emergencyName = '', emergencyPhone = '', absences = '', notes = '',
+  name = '', role = '', solo = false, pickups = [],
+  absences = '', notes = '',
 } = {}) {
+  const pickupHtml = solo
+    ? `<div class="in-show-back-line">Can leave on their own</div>`
+    : pickups.length
+      ? pickups.map(p => `<div class="in-show-back-line">${esc(p.name)}${p.relationship ? ' (' + esc(p.relationship) + ')' : ''}${p.phone ? ' — ' + esc(p.phone) : ''}</div>`).join('')
+      : `<div class="in-show-back-line">Not on file</div>`;
   return `
     <div class="in-show-back-card">
       <div class="in-show-back-header">
@@ -363,16 +368,9 @@ function renderInTheShowCardBackTemplate({
         <div class="in-show-back-role">"${esc(role)}"</div>
       </div>
       <div class="in-show-back-body">
-        <div class="in-show-back-section">
+        <div class="in-show-back-section in-show-back-section--wide">
           <div class="in-show-back-label">Checks In / Out With</div>
-          ${contactName ? `<div class="in-show-back-line">${esc(contactName)}</div>` : ''}
-          <div class="in-show-back-line">${esc(phone)}</div>
-          <div class="in-show-back-line">${esc(email)}</div>
-        </div>
-        <div class="in-show-back-section">
-          <div class="in-show-back-label">Emergency</div>
-          <div class="in-show-back-line">${esc(emergencyName)}</div>
-          <div class="in-show-back-line">${esc(emergencyPhone)}</div>
+          ${pickupHtml}
         </div>
         <div class="in-show-back-section in-show-back-section--wide">
           <div class="in-show-back-label">Requested Off</div>
@@ -655,15 +653,32 @@ async function loadAll() {
     for (const k of keys) { if (ca && ca[k]) return String(ca[k]).trim(); }
     return '';
   }
-  function dciContactInfo(person) {
+  function dciPickupInfo(person) {
+    // Registration Step 3: Pickup & Dismissal — the authoritative source for
+    // who is allowed to check a performer in/out, not the audition form's
+    // general guardian/contact fields.
     const ca = person.custom_answers || {};
-    const name = person.guardian_name || person.contact_name
-      || answerVal(ca, ['Guardian Name', 'Contact Name']) || '';
-    const email = person.guardian_email
-      || answerVal(ca, ['Contact Email']) || person.email || '';
-    const phone = person.phone
-      || answerVal(ca, ['Contact Phone']) || '';
-    return { name, email, phone };
+    const soloRaw = ca['Performer can leave on their own'];
+    const solo = soloRaw === true || soloRaw === 'true' || soloRaw === 'Yes';
+    const pickups = [];
+    [1, 2].forEach(n => {
+      const name = answerVal(ca, ['Authorised pickup ' + n + ' full name', 'Authorized pickup ' + n + ' full name']);
+      if (!name) return;
+      pickups.push({
+        name,
+        relationship: answerVal(ca, ['Authorised pickup ' + n + ' relationship to performer', 'Authorized pickup ' + n + ' relationship to performer']),
+        phone: answerVal(ca, ['Authorised pickup ' + n + ' phone number', 'Authorized pickup ' + n + ' phone number']),
+      });
+    });
+    const notes = answerVal(ca, ['Additional pickup notes']);
+    // Fall back to the audition form's guardian/contact info only if
+    // registration hasn't been completed yet (no pickup people on file).
+    if (!solo && !pickups.length) {
+      const fallbackName = person.guardian_name || person.contact_name || answerVal(ca, ['Guardian Name', 'Contact Name']);
+      const fallbackPhone = person.phone || answerVal(ca, ['Contact Phone']);
+      if (fallbackName) pickups.push({ name: fallbackName, relationship: '', phone: fallbackPhone });
+    }
+    return { solo, pickups, notes };
   }
   (appsRes.data || []).forEach(a => {
     if (!isRegisteredPerformer(a.custom_answers || {})) return;
@@ -733,7 +748,7 @@ async function loadAll() {
       awayToday: !!ci.awayToday,
       characterIds,
       headshotUrl: person.headshot_url || '',
-      contact: dciContactInfo(person),
+      pickup: dciPickupInfo(person),
       absences: dciFormatAbsences(person.date_conflicts),
     };
   }).filter(p => {
@@ -859,15 +874,14 @@ function castCards(people, now) {
   const cards = people.map(p => {
     const s = personStatus(p, now);
     const flipId = 'dci-flip-' + p.refId.replace(/[^a-zA-Z0-9]/g, '');
-    const contact = p.contact || {};
+    const pickup = p.pickup || { solo: false, pickups: [], notes: '' };
     const flipCard = renderInTheShowFlippableCardTemplate({
       id: flipId,
       front: { name: p.name, role: p.role, headshot_url: p.headshotUrl },
       back: {
         name: p.name, role: p.role,
-        contactName: contact.name, phone: contact.phone, email: contact.email,
-        emergencyName: contact.name, emergencyPhone: contact.phone,
-        absences: p.absences,
+        solo: pickup.solo, pickups: pickup.pickups,
+        absences: p.absences, notes: pickup.notes,
       },
     });
     return '<div class="dci-cast-card-wrap" data-type="cast" data-ref="' + esc(p.refId) + '">' +
