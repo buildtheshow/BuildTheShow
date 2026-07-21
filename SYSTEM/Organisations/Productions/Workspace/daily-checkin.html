@@ -466,6 +466,20 @@ function dciIsOffToday(dateConflicts) {
   return Object.values(dateConflicts).some(e => e && e.conflict && e.date === _date);
 }
 
+function dciTodayOffLabel(dateConflicts) {
+  if (!dateConflicts || typeof dateConflicts !== 'object') return '';
+  const entry = Object.values(dateConflicts).find(e => e && e.conflict && e.date === _date);
+  if (!entry) return '';
+  if (entry.full_day === false) {
+    const start = dciFmtConflictTime(entry.start_time);
+    const end = dciFmtConflictTime(entry.end_time);
+    if (start && end) return 'Off today: ' + start + ' – ' + end;
+    if (start) return 'Off today from ' + start;
+    if (end) return 'Off today until ' + end;
+  }
+  return 'Requested off today';
+}
+
 window.initProductionPage('checkin');
 
 const SUPA_URL = 'https://tkmaiktxpwqfbgeojbnf.supabase.co';
@@ -830,6 +844,7 @@ async function loadAll() {
       pickup: dciPickupInfo(person),
       absences: dciFormatAbsences(person.date_conflicts),
       offToday: dciIsOffToday(person.date_conflicts),
+      offTodayLabel: dciTodayOffLabel(person.date_conflicts),
     };
   }).filter(p => {
     if (dayCallMeta.allCast) return true;
@@ -955,7 +970,7 @@ function castCards(people, now) {
     const s = personStatus(p, now);
     const pickup = p.pickup || { solo: false, pickups: [], notes: '' };
     const timeStr = p.expectedStart ? fmtTime(p.expectedStart) + (p.expectedEnd ? ' – ' + fmtTime(p.expectedEnd) : '') : '';
-    const offFlag = p.offToday ? '<div class="dci-cast-flags"><div class="dci-cast-flag dci-cast-flag--off">Requested off today</div></div>' : '';
+    const offFlag = p.offToday ? '<div class="dci-cast-flags"><div class="dci-cast-flag dci-cast-flag--off">' + esc(p.offTodayLabel || 'Requested off today') + '</div></div>' : '';
     const arrivedAt = p.checkedInAt ? fmtStamp(p.checkedInAt) : '—';
     const leftAt = p.signedOutAt ? fmtStamp(p.signedOutAt) : '—';
     const roleLabel = p.role || 'Ensemble';
