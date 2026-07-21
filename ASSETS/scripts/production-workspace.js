@@ -42009,6 +42009,15 @@ See you soon!
     }
   }
 
+  function apmDateTileClick(eventId) {
+    const current = _apmEdits.dateConflictMap ? _apmEdits.dateConflictMap[eventId] : null;
+    if (current?.conflict && !_apmConflictExpanded.has(eventId)) {
+      apmExpandConflict(eventId);
+    } else {
+      apmToggleConflictEvent(eventId);
+    }
+  }
+
   function apmExpandConflict(eventId) {
     _apmConflictExpanded.add(eventId);
     if (_apmTab === 'scheduling') _apmRenderBody();
@@ -42703,12 +42712,17 @@ See you soon!
             ${_apmConflictEvents.map(ev => {
               const value = conflictMap?.[ev.id] || {};
               const active = !!value.conflict;
+              const isExpanded = active && _apmConflictExpanded.has(ev.id);
               const colour = apmConflictWeekdayColour(ev.date);
               const parts = apmConflictDateParts(ev.date);
+              const isFullDay = value.full_day !== false;
+              const caption = active && !isExpanded
+                ? `<div style="font-size:0.56rem;font-weight:800;color:#572e88;letter-spacing:0.02em;text-align:center;line-height:1.15;">${esc(isFullDay ? 'FULL DAY' : (applicantConflictTimeLabel(value) || 'TIME SET'))}</div>`
+                : '';
               const dateBtn = `
                 <button
                   type="button"
-                  onclick="apmToggleConflictEvent('${esc(ev.id)}')"
+                  onclick="apmDateTileClick('${esc(ev.id)}')"
                   aria-pressed="${active ? 'true' : 'false'}"
                   title="${esc(ev.title || 'Rehearsal')}"
                   style="background:${active ? 'rgba(87,46,136,0.06)' : '#fff'};border:${active ? '2px solid #572e88' : '1.5px solid rgba(87,46,136,0.18)'};border-radius:24px;padding:0.7rem 0.7rem 0.8rem;min-width:5.5rem;display:flex;flex-direction:column;align-items:center;gap:0.28rem;cursor:pointer;box-shadow:${active ? '0 10px 22px rgba(87,46,136,0.12)' : 'none'};font-family:inherit;">
@@ -42717,19 +42731,10 @@ See you soon!
                     <div style="color:#1a1530;font-size:2.2rem;font-weight:900;line-height:1;padding:0.38rem 0 0.2rem;text-align:center;">${esc(parts.day)}</div>
                   </div>
                   <div style="font-size:0.76rem;font-weight:800;color:${active ? '#572e88' : 'rgba(87,46,136,0.7)'};letter-spacing:0.03em;">${esc(parts.weekday)}</div>
+                  ${caption}
                 </button>`;
-              if (!active) return dateBtn;
-              const isFullDay = value.full_day !== false;
+              if (!isExpanded) return dateBtn;
               const title = ev.title || 'Rehearsal';
-              if (!_apmConflictExpanded.has(ev.id)) {
-                const summary = isFullDay ? 'Full day' : (applicantConflictTimeLabel(value) || 'Specific time');
-                const compact = `
-                  <div data-conflict-card="${esc(ev.id)}" style="grid-column:1 / -1;display:flex;align-items:center;justify-content:space-between;gap:0.6rem;padding:0.55rem 0.85rem;border-radius:10px;border:1.5px solid rgba(87,46,136,0.14);background:rgba(87,46,136,0.03);">
-                    <div style="font-size:0.8rem;color:#1a1530;"><strong>${esc(title)}</strong> · ${esc(`${parts.month} ${parts.day}`)} — ${esc(summary)}</div>
-                    <button type="button" onclick="apmExpandConflict('${esc(ev.id)}')" style="background:none;border:none;color:#572e88;font-size:0.78rem;font-weight:700;cursor:pointer;font-family:inherit;padding:0.2rem 0.3rem;">Edit</button>
-                  </div>`;
-                return dateBtn + compact;
-              }
               const picker = `
                 <div data-conflict-card="${esc(ev.id)}" style="grid-column:1 / -1;border:1.5px solid rgba(87,46,136,0.14);border-radius:14px;padding:0.8rem 0.9rem;background:rgba(87,46,136,0.03);">
                   <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:0.6rem;">
