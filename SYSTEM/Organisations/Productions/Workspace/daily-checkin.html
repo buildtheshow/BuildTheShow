@@ -177,9 +177,29 @@
       .dci-section { break-inside: avoid; box-shadow: none; border: 1px solid #ddd; }
     }
 
-    /* ── Cast card grid (flippable casting cards) ── */
+    /* ── Cast card grid ── */
     .dci-cast-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 1rem; padding: 1rem; }
     .dci-cast-card-wrap { display: flex; flex-direction: column; gap: 0.5rem; }
+    .dci-cast-card-button { appearance: none; -webkit-appearance: none; width: 100%; background: transparent; border: none; padding: 0; margin: 0; font: inherit; color: inherit; text-align: inherit; cursor: pointer; border-radius: 6px; transition: transform 0.12s ease, filter 0.12s ease; }
+    .dci-cast-card-button:hover { transform: translateY(-1px); }
+    .dci-cast-card-button:active { transform: translateY(1px) scale(0.992); }
+    .dci-cast-card-wrap.is-here .dci-cast-card-button,
+    .dci-cast-card-wrap.is-signed-out .dci-cast-card-button { cursor: pointer; }
+    .dci-cast-card-wrap .casting-card { transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease; }
+    .dci-cast-card-wrap.is-here .casting-card {
+      transform: translateY(2px);
+      box-shadow: inset 0 8px 18px rgba(15, 23, 42, 0.14), inset 0 0 0 2px rgba(118,158,123,0.42);
+      filter: saturate(0.98) brightness(0.98);
+    }
+    .dci-cast-card-wrap.is-signed-out .casting-card {
+      box-shadow: inset 0 0 0 2px rgba(87,46,136,0.18);
+      filter: grayscale(0.08);
+    }
+    .dci-cast-card-wrap.is-away .casting-card {
+      box-shadow: inset 0 0 0 2px rgba(120,187,212,0.32);
+      filter: grayscale(0.08);
+    }
+    .dci-cast-card-wrap.is-not-arrived .casting-card { box-shadow: 0 6px 16px rgba(15, 23, 42, 0.1); }
     .dci-cast-card-wrap .casting-card { width: 100%; max-width: 100%; }
     .dci-cast-card-wrap .inroom-front-card-wrap { width: 100%; }
     .inroom-flip { perspective: 1400px; width: 100%; overflow: visible; position: relative; box-shadow: none; }
@@ -201,9 +221,20 @@
     .in-show-back-footer { background: #f0eafa; padding: 3% 5.5%; display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; }
     .in-show-back-status-chip { color: #572e88; font-size: clamp(0.36rem, 2.2cqw, 0.48rem); font-weight: 900; letter-spacing: 0.09em; text-transform: uppercase; line-height: 1; }
     .dci-cast-card-status { display: flex; justify-content: center; }
-    .dci-cast-card-acts .dci-row-acts { justify-content: center; }
-    .dci-cast-card-acts .dci-rbtn { flex: 1; }
     .dci-cast-card-time { text-align: center; font-size: 0.76rem; font-weight: 700; color: rgba(26,21,48,0.55); }
+    .dci-cast-card-times { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; }
+    .dci-cast-time-box { border-radius: 10px; border: 1px solid rgba(87,46,136,0.1); background: rgba(255,255,255,0.92); padding: 0.48rem 0.55rem; text-align: center; }
+    .dci-cast-time-label { font-size: 0.58rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(87,46,136,0.46); margin-bottom: 0.15rem; }
+    .dci-cast-time-value { font-size: 0.8rem; font-weight: 800; color: #1a1530; }
+    .dci-cast-time-value.empty { color: rgba(26,21,48,0.28); font-weight: 700; }
+    .dci-cast-pickup { border-radius: 12px; border: 1px solid rgba(87,46,136,0.1); background: linear-gradient(180deg, #fff 0%, #faf8ff 100%); padding: 0.58rem 0.68rem; min-height: 82px; }
+    .dci-cast-pickup-title { font-size: 0.58rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(87,46,136,0.46); margin-bottom: 0.24rem; }
+    .dci-cast-pickup-line { font-size: 0.72rem; line-height: 1.3; color: #1a1530; }
+    .dci-cast-pickup-line + .dci-cast-pickup-line { margin-top: 0.14rem; }
+    .dci-cast-press-hint { text-align: center; font-size: 0.68rem; font-weight: 800; color: rgba(87,46,136,0.56); }
+    .dci-cast-press-hint.here { color: #2d6e35; }
+    .dci-cast-press-hint.signed-out { color: #572e88; }
+    .dci-cast-press-hint.away { color: #2a6d8a; }
     .dci-cast-flags { display: flex; flex-direction: column; gap: 0.25rem; }
     .dci-cast-flag { text-align: center; font-size: 0.68rem; font-weight: 800; padding: 0.3rem 0.5rem; border-radius: 6px; }
     .dci-cast-flag--off { background: rgba(209,82,61,0.12); color: #b33a25; }
@@ -541,6 +572,30 @@ function pillHtml(status) {
   };
   const [lbl, cls] = map[status] || ['Unknown', 'not-arrived'];
   return '<span class="dci-pill ' + esc(cls) + '">' + esc(lbl) + '</span>';
+}
+
+function castCardActionLabel(status) {
+  if (status === 'here') return 'Tap card to sign out';
+  if (status === 'signed-out') return 'Tap card to sign back in';
+  if (status === 'away') return 'Tap card to check in';
+  return 'Tap card to sign in';
+}
+
+function castPickupPreviewHtml(pickup) {
+  const info = pickup || { solo: false, pickups: [], notes: '' };
+  const lines = [];
+  if (info.solo) lines.push('<div class="dci-cast-pickup-line">Self sign-out approved</div>');
+  if (info.pickups && info.pickups.length) {
+    lines.push(...info.pickups.map(person => {
+      const parts = [person.name || 'Approved pickup'];
+      if (person.relationship) parts.push('(' + person.relationship + ')');
+      if (person.phone) parts.push('— ' + person.phone);
+      return '<div class="dci-cast-pickup-line">' + esc(parts.join(' ')) + '</div>';
+    }));
+  }
+  if (info.notes) lines.push('<div class="dci-cast-pickup-line">' + esc(info.notes) + '</div>');
+  if (!lines.length) lines.push('<div class="dci-cast-pickup-line">No approved pickup listed yet</div>');
+  return lines.join('');
 }
 
 function eventCalledCharacterIds(ev) {
@@ -898,25 +953,24 @@ function buildSection(type, label, filtered, all, now) {
 function castCards(people, now) {
   const cards = people.map(p => {
     const s = personStatus(p, now);
-    const flipId = 'dci-flip-' + p.refId.replace(/[^a-zA-Z0-9]/g, '');
     const pickup = p.pickup || { solo: false, pickups: [], notes: '' };
-    const flipCard = renderInTheShowFlippableCardTemplate({
-      id: flipId,
-      front: { name: p.name, role: p.role, headshot_url: p.headshotUrl },
-      back: {
-        name: p.name, role: p.role,
-        solo: pickup.solo, pickups: pickup.pickups,
-        absences: p.absences, notes: pickup.notes,
-      },
-    });
     const timeStr = p.expectedStart ? fmtTime(p.expectedStart) + (p.expectedEnd ? ' – ' + fmtTime(p.expectedEnd) : '') : '';
     const offFlag = p.offToday ? '<div class="dci-cast-flags"><div class="dci-cast-flag dci-cast-flag--off">Requested off today</div></div>' : '';
-    return '<div class="dci-cast-card-wrap" data-type="cast" data-ref="' + esc(p.refId) + '">' +
-      flipCard +
+    const arrivedAt = p.checkedInAt ? fmtStamp(p.checkedInAt) : '—';
+    const leftAt = p.signedOutAt ? fmtStamp(p.signedOutAt) : '—';
+    const roleLabel = p.role || 'Ensemble';
+    return '<div class="dci-cast-card-wrap is-' + esc(s) + '" data-type="cast" data-ref="' + esc(p.refId) + '">' +
+      '<button type="button" class="dci-cast-card-button" onclick="pressCastCard(\'' + esc(p.refId) + '\')" aria-label="' + esc(castCardActionLabel(s) + ' for ' + p.name) + '">' +
+      renderInTheShowCardFrontTemplate({ name: p.name, role: roleLabel, headshot_url: p.headshotUrl }) +
+      '</button>' +
       (timeStr ? '<div class="dci-cast-card-time">' + esc(timeStr) + '</div>' : '') +
       offFlag +
-      '<div class="dci-cast-card-status">' + pillHtml(s) + '</div>' +
-      '<div class="dci-cast-card-acts">' + rowActHtml(p, s, 'cast') + '</div>' +
+      '<div class="dci-cast-pickup"><div class="dci-cast-pickup-title">Pickup / Drop Off</div>' + castPickupPreviewHtml(pickup) + '</div>' +
+      '<div class="dci-cast-card-times">' +
+        '<div class="dci-cast-time-box"><div class="dci-cast-time-label">Arrived</div><div class="dci-cast-time-value' + (p.checkedInAt ? '' : ' empty') + '">' + esc(arrivedAt) + '</div></div>' +
+        '<div class="dci-cast-time-box"><div class="dci-cast-time-label">Left</div><div class="dci-cast-time-value' + (p.signedOutAt ? '' : ' empty') + '">' + esc(leftAt) + '</div></div>' +
+      '</div>' +
+      '<div class="dci-cast-press-hint ' + esc(s) + '">' + esc(castCardActionLabel(s)) + '</div>' +
     '</div>';
   }).join('');
   return '<div class="dci-cast-grid">' + cards + '</div>';
@@ -950,6 +1004,24 @@ function rowActHtml(p, status, type) {
   if (status === 'signed-out') return '<div class="dci-row-acts"><button class="dci-rbtn ghost" onclick="doSignIn(\'' + t + '\',\'' + r + '\')">Sign in again</button></div>';
   if (status === 'here') return '<div class="dci-row-acts"><button class="dci-rbtn signout" onclick="doSignOut(\'' + t + '\',\'' + r + '\')">Sign out</button><button class="dci-rbtn away-btn" onclick="markAway(\'' + t + '\',\'' + r + '\',true)">Away</button></div>';
   return '<div class="dci-row-acts"><button class="dci-rbtn signin" onclick="tapSignIn(\'' + t + '\',\'' + r + '\')">Sign in</button><button class="dci-rbtn away-btn" onclick="markAway(\'' + t + '\',\'' + r + '\',true)">Away</button></div>';
+}
+
+function pressCastCard(refId) {
+  const person = getPerson('cast', refId);
+  if (!person) return;
+  const status = personStatus(person, new Date());
+  if (status === 'here') {
+    doSignOut('cast', refId);
+    return;
+  }
+  if (status === 'away') {
+    person.awayToday = false;
+  }
+  if (status === 'signed-out') {
+    doSignIn('cast', refId);
+    return;
+  }
+  tapSignIn('cast', refId);
 }
 
 // ── Interactions ──────────────────────────────────────────────────────────────
