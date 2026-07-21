@@ -491,9 +491,10 @@ function buildCastingCardBack(app, opts = {}) {
     if (typeof v === 'object' && v !== null) {
       const dateStr = v.date ? fmtConflictDate(v.date) : null;
       const title   = v.title || null;
-      if (dateStr && title)  return [`Conflict ${index + 1}`, `${dateStr} — ${title}`];
-      if (dateStr)           return [`Conflict ${index + 1}`, dateStr];
-      if (title)             return [`Conflict ${index + 1}`, title];
+      const timeLabel = String(v.time_label || v.time || v.details || '').trim();
+      if (dateStr && title)  return [`Conflict ${index + 1}`, [dateStr, title, timeLabel].filter(Boolean).join(' — ')];
+      if (dateStr)           return [`Conflict ${index + 1}`, [dateStr, timeLabel].filter(Boolean).join(' — ')];
+      if (title)             return [`Conflict ${index + 1}`, [title, timeLabel].filter(Boolean).join(' — ')];
     }
     return [`Conflict ${index + 1}`, 'Date not recorded'];
   }).filter(([k]) => k);

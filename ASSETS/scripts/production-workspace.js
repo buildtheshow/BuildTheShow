@@ -32428,8 +32428,10 @@ See you soon!
       return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : String(d || '');
     };
     const labels = entries.map(([, v]) => {
+      const timeLabel = applicantConflictTimeLabel(v);
       if (typeof v === 'object' && v.title) {
-        return v.date ? `(${v.title}) ${fmtDate(v.date)}` : v.title;
+        const base = v.date ? `(${v.title}) ${fmtDate(v.date)}` : v.title;
+        return timeLabel ? `${base} — ${timeLabel}` : base;
       }
       return null;
     }).filter(Boolean);
@@ -32451,12 +32453,22 @@ See you soon!
     return String(conflicts.manual_notes || '').trim();
   }
 
+  function applicantConflictTimeLabel(value) {
+    if (!value || typeof value !== 'object') return '';
+    return String(value.time_label || value.time || value.details || '').trim();
+  }
+
   function applicantConflictEventMap(app) {
     const conflicts = applicantConflictObject(app);
     const next = {};
     Object.entries(conflicts || {}).forEach(([key, value]) => {
       if (key === 'manual_notes') return;
-      if (value && typeof value === 'object' && value.conflict) next[key] = { ...value };
+      if (value && typeof value === 'object' && value.conflict) {
+        next[key] = {
+          ...value,
+          time_label: applicantConflictTimeLabel(value),
+        };
+      }
       else if (value === true || value === 'true') next[key] = { conflict: true };
     });
     return next;
@@ -32472,6 +32484,8 @@ See you soon!
         title: item.title || '',
         date: item.date || '',
       };
+      const timeLabel = applicantConflictTimeLabel(item);
+      if (timeLabel) payload[key].time_label = timeLabel;
     });
     const cleanNotes = String(manualNotes || '').trim();
     if (cleanNotes) payload.manual_notes = cleanNotes;
@@ -41965,9 +41979,20 @@ See you soon!
         conflict: true,
         title: event.title || 'Rehearsal',
         date: event.date || '',
+        time_label: '',
       };
     }
     if (_apmTab === 'scheduling') _apmRenderBody();
+  }
+
+  function apmUpdateConflictTime(eventId, value) {
+    if (!_apmEdits.dateConflictMap) _apmEdits.dateConflictMap = {};
+    const current = _apmEdits.dateConflictMap[eventId];
+    if (!current?.conflict) return;
+    _apmEdits.dateConflictMap[eventId] = {
+      ...current,
+      time_label: String(value || '').trim(),
+    };
   }
 
   function openApPerformerModal(appId) {
@@ -42621,6 +42646,13 @@ See you soon!
     const conflictMap = _apmEdits?.dateConflictMap && typeof _apmEdits.dateConflictMap === 'object'
       ? _apmEdits.dateConflictMap
       : applicantConflictEventMap(_apmApp);
+    const selectedConflictEvents = (_apmConflictEvents || [])
+      .filter(ev => !!conflictMap?.[ev.id]?.conflict)
+      .sort((a, b) => {
+        const byDate = String(a.date || '').localeCompare(String(b.date || ''));
+        if (byDate !== 0) return byDate;
+        return String(a.title || '').localeCompare(String(b.title || ''));
+      });
     const rehearsalDateIndicators = (_apmConflictEvents || []).length
       ? `
           <div style="display:flex;flex-wrap:wrap;gap:0.8rem;margin-bottom:1rem;">
@@ -42645,6 +42677,32 @@ See you soon!
           </div>
         `
       : `<div style="margin-bottom:1rem;font-size:0.78rem;color:rgba(87,46,136,0.5);">No rehearsal dates are in the calendar yet.</div>`;
+    const conflictTimeCards = selectedConflictEvents.length
+      ? `
+          <div style="display:grid;gap:0.75rem;margin:0.15rem 0 1rem;">
+            ${selectedConflictEvents.map(ev => {
+              const value = conflictMap?.[ev.id] || {};
+              const parts = apmConflictDateParts(ev.date);
+              const title = ev.title || 'Rehearsal';
+              return `
+                <label style="display:block;border:1.5px solid rgba(87,46,136,0.14);border-radius:14px;padding:0.8rem 0.9rem;background:rgba(87,46,136,0.03);">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:0.38rem;">
+                    <div style="font-size:0.82rem;font-weight:800;color:#1a1530;">${esc(title)}</div>
+                    <div style="font-size:0.74rem;font-weight:700;color:rgba(87,46,136,0.6);letter-spacing:0.04em;">${esc(`${parts.month} ${parts.day} ${parts.weekday}`)}</div>
+                  </div>
+                  <div style="font-size:0.73rem;font-weight:700;color:rgba(87,46,136,0.56);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.3rem;">Time Conflict (Optional)</div>
+                  <input
+                    type="text"
+                    value="${esc(applicantConflictTimeLabel(value))}"
+                    oninput="apmUpdateConflictTime('${esc(ev.id)}', this.value)"
+                    placeholder="Examples: arriving at 6:30pm, leaving early at 7pm, unavailable until 5pm"
+                    style="width:100%;box-sizing:border-box;border:1.5px solid rgba(87,46,136,0.16);border-radius:10px;padding:0.65rem 0.75rem;font-size:0.84rem;color:#1a1530;background:#fff;font-family:inherit;outline:none;"
+                  />
+                </label>`;
+            }).join('')}
+          </div>
+        `
+      : `<div style="margin:0.1rem 0 1rem;font-size:0.76rem;color:rgba(87,46,136,0.5);">Select a rehearsal date above if you want to add a specific time conflict for it.</div>`;
     return `
       ${sessionsHtml}
       <div class="apm-session-card" style="margin-top:1rem;">
@@ -42657,6 +42715,7 @@ See you soon!
         </div>
         <div style="padding:0 1rem 1rem;">
           ${rehearsalDateIndicators}
+          ${conflictTimeCards}
           <textarea
             id="apm-conflicts"
             oninput="_apmEdits.dateConflicts=this.value"
