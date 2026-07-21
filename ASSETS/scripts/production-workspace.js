@@ -227,6 +227,40 @@
     location.href = '/SYSTEM/Organisations/Productions/Workspace/' + file + '?id=' + encodeURIComponent(id);
   }
 
+  function btsDeptSectionNav(group, section, tab) {
+    const id = prodId || new URLSearchParams(location.search).get('id') || '';
+    location.href = '/SYSTEM/Organisations/Productions/Workspace/department-section.html?id=' + encodeURIComponent(id)
+      + '&group=' + encodeURIComponent(group || '')
+      + '&section=' + encodeURIComponent(section || '')
+      + '&tab=' + encodeURIComponent(tab || 'dashboard');
+  }
+
+  const DEPT_SUBMENU_SECTIONS = ['dept-front-of-house', 'dept-backstage', 'dept-technical', 'dept-design', 'dept-costume', 'dept-hair', 'dept-marketing-publicity', 'dept-stage-management'];
+
+  function syncDeptSidebarMenuA11y() {
+    DEPT_SUBMENU_SECTIONS.forEach(section => {
+      const wrap = document.getElementById(`${section}-wrap`);
+      const parent = document.getElementById(`${section}-parent-tab`);
+      const chevron = parent?.querySelector('.tab-chevron');
+      const expanded = wrap?.classList.contains('open') ? 'true' : 'false';
+      parent?.setAttribute('aria-expanded', expanded);
+      chevron?.setAttribute('aria-expanded', expanded);
+    });
+  }
+
+  function toggleDepartmentSubmenu(e, section) {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    const wrap = document.getElementById(`${section}-wrap`);
+    if (!wrap) return;
+    const isOpen = wrap.classList.contains('open');
+    DEPT_SUBMENU_SECTIONS.forEach(s => {
+      const w = document.getElementById(`${s}-wrap`);
+      if (w) w.classList.toggle('open', !isOpen && s === section);
+    });
+    syncDeptSidebarMenuA11y();
+  }
+
   let toastTimer;
   function showToast(msg, isError = false) {
     const t = document.getElementById('toast');
@@ -13748,6 +13782,7 @@ See you soon!
       });
     });
     syncSidebarMenuA11y();
+    syncDeptSidebarMenuA11y();
   }
 
   let activeAuditionNavSessionId = '';
@@ -22737,6 +22772,7 @@ See you soon!
     else if (section === 'marketing') toggleMarketingMenu(e);
     else if (section === 'sponsors') toggleSponsorsMenu(e);
     else if (section === 'budget') toggleBudgetMenu(e);
+    else if (String(section || '').indexOf('dept-') === 0) toggleDepartmentSubmenu(e, section);
   }
 
   function navToSessionType(type) {
