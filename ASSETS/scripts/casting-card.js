@@ -265,10 +265,10 @@ function renderCastingCard(data, options = {}) {
   // ── Build the card HTML ───────────────────────────────────────
   if (isInTheShow) {
     const fullName = [first_name, last_name].filter(Boolean).join(' ');
-    const nameSize    = getCastingCardTextSize(fullName,                8.5,  0, 22);
+    const nameSize    = getCastingCardTextSize(fullName,                7.1,  3.4, 18);
     const charLine    = character_name ? `"${esc(character_name)}"` : '';
-    const charSize    = getCastingCardTextSize(character_name || '',   6.4,  0, 28);
-    const metaSizeInShow = getCastingCardTextSize(thirdLine,           4.25, 0, 20);
+    const charSize    = getCastingCardTextSize(character_name || '',   5.6,  2.8, 24);
+    const metaSizeInShow = getCastingCardTextSize(thirdLine,           3.9,  2.4, 18);
     return `
       <div class="${cardClasses}" ${attrs.join(' ')}>
         <div class="casting-card-inshow-photo">
