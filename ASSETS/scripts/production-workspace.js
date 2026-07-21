@@ -1,4 +1,4 @@
-  console.log('[BTS] production-workspace.js version: vol-required-dates-display-20260713');
+  console.log('[BTS] production-workspace.js version: apm-conflict-time-20260721');
   /* SQL needed:
    * CREATE TABLE IF NOT EXISTS org_team_templates (
    *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -32455,6 +32455,15 @@ See you soon!
 
   function applicantConflictTimeLabel(value) {
     if (!value || typeof value !== 'object') return '';
+    if (value.full_day === false) {
+      const start = value.start_time ? formatTime12h(value.start_time) : '';
+      const end = value.end_time ? formatTime12h(value.end_time) : '';
+      if (start && end) return `${start} – ${end}`;
+      if (start) return `From ${start}`;
+      if (end) return `Until ${end}`;
+      return '';
+    }
+    // Legacy free-text fallback for conflicts saved before the time picker existed
     return String(value.time_label || value.time || value.details || '').trim();
   }
 
@@ -32464,12 +32473,9 @@ See you soon!
     Object.entries(conflicts || {}).forEach(([key, value]) => {
       if (key === 'manual_notes') return;
       if (value && typeof value === 'object' && value.conflict) {
-        next[key] = {
-          ...value,
-          time_label: applicantConflictTimeLabel(value),
-        };
+        next[key] = { ...value };
       }
-      else if (value === true || value === 'true') next[key] = { conflict: true };
+      else if (value === true || value === 'true') next[key] = { conflict: true, full_day: true };
     });
     return next;
   }
@@ -32483,9 +32489,12 @@ See you soon!
         conflict: true,
         title: item.title || '',
         date: item.date || '',
+        full_day: item.full_day !== false,
       };
-      const timeLabel = applicantConflictTimeLabel(item);
-      if (timeLabel) payload[key].time_label = timeLabel;
+      if (item.full_day === false) {
+        if (item.start_time) payload[key].start_time = item.start_time;
+        if (item.end_time) payload[key].end_time = item.end_time;
+      }
     });
     const cleanNotes = String(manualNotes || '').trim();
     if (cleanNotes) payload.manual_notes = cleanNotes;
@@ -41979,20 +41988,39 @@ See you soon!
         conflict: true,
         title: event.title || 'Rehearsal',
         date: event.date || '',
-        time_label: '',
+        full_day: true,
+        start_time: '',
+        end_time: '',
       };
     }
     if (_apmTab === 'scheduling') _apmRenderBody();
   }
 
-  function apmUpdateConflictTime(eventId, value) {
+  function apmSetConflictDayType(eventId, fullDay) {
     if (!_apmEdits.dateConflictMap) _apmEdits.dateConflictMap = {};
     const current = _apmEdits.dateConflictMap[eventId];
     if (!current?.conflict) return;
     _apmEdits.dateConflictMap[eventId] = {
       ...current,
-      time_label: String(value || '').trim(),
+      full_day: fullDay,
+      start_time: fullDay ? '' : (current.start_time || ''),
+      end_time: fullDay ? '' : (current.end_time || ''),
     };
+    if (_apmTab === 'scheduling') _apmRenderBody();
+  }
+
+  function apmUpdateConflictStartTime(eventId, value) {
+    if (!_apmEdits.dateConflictMap) _apmEdits.dateConflictMap = {};
+    const current = _apmEdits.dateConflictMap[eventId];
+    if (!current?.conflict) return;
+    _apmEdits.dateConflictMap[eventId] = { ...current, start_time: String(value || '').trim() };
+  }
+
+  function apmUpdateConflictEndTime(eventId, value) {
+    if (!_apmEdits.dateConflictMap) _apmEdits.dateConflictMap = {};
+    const current = _apmEdits.dateConflictMap[eventId];
+    if (!current?.conflict) return;
+    _apmEdits.dateConflictMap[eventId] = { ...current, end_time: String(value || '').trim() };
   }
 
   function openApPerformerModal(appId) {
@@ -42684,25 +42712,37 @@ See you soon!
               const value = conflictMap?.[ev.id] || {};
               const parts = apmConflictDateParts(ev.date);
               const title = ev.title || 'Rehearsal';
+              const isFullDay = value.full_day !== false;
               return `
-                <label style="display:block;border:1.5px solid rgba(87,46,136,0.14);border-radius:14px;padding:0.8rem 0.9rem;background:rgba(87,46,136,0.03);">
-                  <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:0.38rem;">
+                <div style="border:1.5px solid rgba(87,46,136,0.14);border-radius:14px;padding:0.8rem 0.9rem;background:rgba(87,46,136,0.03);">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:0.6rem;">
                     <div style="font-size:0.82rem;font-weight:800;color:#1a1530;">${esc(title)}</div>
                     <div style="font-size:0.74rem;font-weight:700;color:rgba(87,46,136,0.6);letter-spacing:0.04em;">${esc(`${parts.month} ${parts.day} ${parts.weekday}`)}</div>
                   </div>
-                  <div style="font-size:0.73rem;font-weight:700;color:rgba(87,46,136,0.56);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.3rem;">Time Conflict (Optional)</div>
-                  <input
-                    type="text"
-                    value="${esc(applicantConflictTimeLabel(value))}"
-                    oninput="apmUpdateConflictTime('${esc(ev.id)}', this.value)"
-                    placeholder="Examples: arriving at 6:30pm, leaving early at 7pm, unavailable until 5pm"
-                    style="width:100%;box-sizing:border-box;border:1.5px solid rgba(87,46,136,0.16);border-radius:10px;padding:0.65rem 0.75rem;font-size:0.84rem;color:#1a1530;background:#fff;font-family:inherit;outline:none;"
-                  />
-                </label>`;
+                  <div style="display:flex;gap:0.5rem;margin-bottom:${isFullDay ? '0' : '0.6rem'};">
+                    <button type="button" onclick="apmSetConflictDayType('${esc(ev.id)}', true)"
+                      style="flex:1;border:1.5px solid ${isFullDay ? '#572e88' : 'rgba(87,46,136,0.16)'};background:${isFullDay ? '#572e88' : '#fff'};color:${isFullDay ? '#fff' : '#1a1530'};border-radius:10px;padding:0.5rem 0.6rem;font-size:0.78rem;font-weight:700;cursor:pointer;font-family:inherit;">Full day</button>
+                    <button type="button" onclick="apmSetConflictDayType('${esc(ev.id)}', false)"
+                      style="flex:1;border:1.5px solid ${!isFullDay ? '#572e88' : 'rgba(87,46,136,0.16)'};background:${!isFullDay ? '#572e88' : '#fff'};color:${!isFullDay ? '#fff' : '#1a1530'};border-radius:10px;padding:0.5rem 0.6rem;font-size:0.78rem;font-weight:700;cursor:pointer;font-family:inherit;">Specific time</button>
+                  </div>
+                  ${isFullDay ? '' : `
+                  <div style="display:flex;gap:0.6rem;">
+                    <label style="flex:1;">
+                      <div style="font-size:0.7rem;font-weight:700;color:rgba(87,46,136,0.56);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.28rem;">From</div>
+                      <input type="time" value="${esc(value.start_time || '')}" oninput="apmUpdateConflictStartTime('${esc(ev.id)}', this.value)"
+                        style="width:100%;box-sizing:border-box;border:1.5px solid rgba(87,46,136,0.16);border-radius:10px;padding:0.5rem 0.6rem;font-size:0.84rem;color:#1a1530;background:#fff;font-family:inherit;outline:none;" />
+                    </label>
+                    <label style="flex:1;">
+                      <div style="font-size:0.7rem;font-weight:700;color:rgba(87,46,136,0.56);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.28rem;">To</div>
+                      <input type="time" value="${esc(value.end_time || '')}" oninput="apmUpdateConflictEndTime('${esc(ev.id)}', this.value)"
+                        style="width:100%;box-sizing:border-box;border:1.5px solid rgba(87,46,136,0.16);border-radius:10px;padding:0.5rem 0.6rem;font-size:0.84rem;color:#1a1530;background:#fff;font-family:inherit;outline:none;" />
+                    </label>
+                  </div>`}
+                </div>`;
             }).join('')}
           </div>
         `
-      : `<div style="margin:0.1rem 0 1rem;font-size:0.76rem;color:rgba(87,46,136,0.5);">Select a rehearsal date above if you want to add a specific time conflict for it.</div>`;
+      : `<div style="margin:0.1rem 0 1rem;font-size:0.76rem;color:rgba(87,46,136,0.5);">Select a rehearsal date above to mark it full day or add a specific time.</div>`;
     return `
       ${sessionsHtml}
       <div class="apm-session-card" style="margin-top:1rem;">

@@ -399,6 +399,15 @@ function renderInTheShowFlippableCardTemplate({ id = '', front = {}, back = {} }
     backClick: flipClick,
   });
 }
+function dciFmtConflictTime(t) {
+  const m = String(t || '').trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return '';
+  let h = Number(m[1]);
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return h + ':' + m[2] + ' ' + suffix;
+}
+
 function dciFormatAbsences(dateConflicts) {
   if (!dateConflicts || typeof dateConflicts !== 'object') return '';
   const entries = Object.values(dateConflicts).filter(e => e && e.conflict && e.date);
@@ -406,7 +415,14 @@ function dciFormatAbsences(dateConflicts) {
   entries.sort((a, b) => String(a.date).localeCompare(String(b.date)));
   return entries.map(e => {
     const d = new Date(e.date + 'T12:00:00');
-    return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) + (e.title ? ' (' + e.title + ')' : '');
+    let label = d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) + (e.title ? ' (' + e.title + ')' : '');
+    if (e.full_day === false) {
+      const start = dciFmtConflictTime(e.start_time);
+      const end = dciFmtConflictTime(e.end_time);
+      const timeStr = start && end ? start + ' – ' + end : start ? 'From ' + start : end ? 'Until ' + end : '';
+      if (timeStr) label += ': ' + timeStr;
+    }
+    return label;
   }).join(', ');
 }
 
