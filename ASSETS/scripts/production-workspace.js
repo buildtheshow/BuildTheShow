@@ -41979,6 +41979,7 @@ See you soon!
   function apmToggleConflictEvent(eventId) {
     if (!_apmEdits.dateConflictMap) _apmEdits.dateConflictMap = {};
     const current = _apmEdits.dateConflictMap[eventId];
+    let justAdded = false;
     if (current?.conflict) {
       delete _apmEdits.dateConflictMap[eventId];
     } else {
@@ -41992,8 +41993,17 @@ See you soon!
         start_time: '',
         end_time: '',
       };
+      justAdded = true;
     }
-    if (_apmTab === 'scheduling') _apmRenderBody();
+    if (_apmTab === 'scheduling') {
+      _apmRenderBody();
+      if (justAdded) {
+        requestAnimationFrame(() => {
+          const el = document.querySelector(`[data-conflict-card="${eventId}"]`);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+      }
+    }
   }
 
   function apmSetConflictDayType(eventId, fullDay) {
@@ -42714,7 +42724,7 @@ See you soon!
               const title = ev.title || 'Rehearsal';
               const isFullDay = value.full_day !== false;
               return `
-                <div style="border:1.5px solid rgba(87,46,136,0.14);border-radius:14px;padding:0.8rem 0.9rem;background:rgba(87,46,136,0.03);">
+                <div data-conflict-card="${esc(ev.id)}" style="border:1.5px solid rgba(87,46,136,0.14);border-radius:14px;padding:0.8rem 0.9rem;background:rgba(87,46,136,0.03);">
                   <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:0.6rem;">
                     <div style="font-size:0.82rem;font-weight:800;color:#1a1530;">${esc(title)}</div>
                     <div style="font-size:0.74rem;font-weight:700;color:rgba(87,46,136,0.6);letter-spacing:0.04em;">${esc(`${parts.month} ${parts.day} ${parts.weekday}`)}</div>
