@@ -32437,6 +32437,47 @@ See you soon!
     return `${entries.length} date conflict${entries.length === 1 ? '' : 's'}`;
   }
 
+  function applicantConflictObject(app) {
+    const raw = app?.date_conflicts;
+    if (!raw) return {};
+    if (typeof raw === 'string') {
+      try { return JSON.parse(raw || '{}') || {}; } catch { return {}; }
+    }
+    return typeof raw === 'object' ? { ...raw } : {};
+  }
+
+  function applicantConflictManualNotes(app) {
+    const conflicts = applicantConflictObject(app);
+    return String(conflicts.manual_notes || '').trim();
+  }
+
+  function applicantConflictEventMap(app) {
+    const conflicts = applicantConflictObject(app);
+    const next = {};
+    Object.entries(conflicts || {}).forEach(([key, value]) => {
+      if (key === 'manual_notes') return;
+      if (value && typeof value === 'object' && value.conflict) next[key] = { ...value };
+      else if (value === true || value === 'true') next[key] = { conflict: true };
+    });
+    return next;
+  }
+
+  function applicantConflictPayloadFromState(conflictMap = {}, manualNotes = '') {
+    const payload = {};
+    Object.keys(conflictMap || {}).sort().forEach(key => {
+      const item = conflictMap[key];
+      if (!item || item.conflict !== true) return;
+      payload[key] = {
+        conflict: true,
+        title: item.title || '',
+        date: item.date || '',
+      };
+    });
+    const cleanNotes = String(manualNotes || '').trim();
+    if (cleanNotes) payload.manual_notes = cleanNotes;
+    return payload;
+  }
+
   function applicantGuardianName(app) {
     const ca = applicantCustomAnswers(app);
     return ca['Guardian Name'] || app?.guardian_name || '';
@@ -41845,17 +41886,97 @@ See you soon!
 
   // ── All Performers Performer Modal (APM) ─────────────────────
   let _apmAppId = null, _apmApp = null, _apmTab = 'scheduling';
+  const APM_REHEARSAL_EVENT_TYPES = new Set(['rehearsal', 'music_rehearsal', 'choreography', 'tech', 'dress', 'tech_rehearsal', 'dress_rehearsal']);
   let _apmPendingSlots = {}, _apmPickingSessions = new Set(), _apmEdits = {}, _apmPendingAttendance = {}, _apmAttendanceConfirming = {};
   let _apmHeadshotFile = null, _apmHeadshotObjectUrl = null;
   let _apmDangerConfirming = false;
   let _apmEmailCompose = null; // { category, subject, body } when composing
+  let _apmConflictEvents = [];
+  let _apmConflictEventsLoaded = false;
+  let _apmConflictEventsPromise = null;
+
+  function apmConflictWeekdayColour(dateString) {
+    const d = dateString ? new Date(`${dateString}T12:00:00`) : null;
+    if (!(d instanceof Date) || Number.isNaN(d.getTime())) return '#74a2b4';
+    const colours = {
+      0: '#dd8233',
+      1: '#74a2b4',
+      2: '#476aaa',
+      3: '#769e7b',
+      4: '#ca7ea7',
+      5: '#572e88',
+      6: '#d1523d'
+    };
+    return colours[d.getDay()] || '#74a2b4';
+  }
+
+  function apmConflictDateParts(dateString) {
+    const d = dateString ? new Date(`${dateString}T12:00:00`) : null;
+    if (!(d instanceof Date) || Number.isNaN(d.getTime())) return { month: 'TBD', day: '--', weekday: '' };
+    return {
+      month: d.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase(),
+      day: String(d.getDate()),
+      weekday: d.toLocaleDateString('en-CA', { weekday: 'short' }).toUpperCase(),
+    };
+  }
+
+  async function loadApmConflictEvents(options = {}) {
+    const force = options.force === true;
+    if (_apmConflictEventsLoaded && !force) return _apmConflictEvents;
+    if (_apmConflictEventsPromise && !force) return _apmConflictEventsPromise;
+    _apmConflictEventsPromise = sb.from('production_events')
+      .select('id,title,event_type,start_time')
+      .eq('production_id', prodId)
+      .order('start_time', { ascending: true })
+      .then(({ data, error }) => {
+        if (error) throw error;
+        _apmConflictEvents = (data || [])
+          .filter(ev => ev?.id && ev?.start_time && APM_REHEARSAL_EVENT_TYPES.has(String(ev.event_type || '').toLowerCase()))
+          .map(ev => ({
+            id: ev.id,
+            title: ev.title || 'Rehearsal',
+            event_type: ev.event_type || 'rehearsal',
+            date: String(ev.start_time).slice(0, 10),
+          }));
+        _apmConflictEventsLoaded = true;
+        return _apmConflictEvents;
+      })
+      .catch(error => {
+        console.warn('[APM] load conflict rehearsal dates failed', error);
+        _apmConflictEvents = [];
+        _apmConflictEventsLoaded = true;
+        return _apmConflictEvents;
+      })
+      .finally(() => {
+        _apmConflictEventsPromise = null;
+      });
+    return _apmConflictEventsPromise;
+  }
+
+  function apmToggleConflictEvent(eventId) {
+    if (!_apmEdits.dateConflictMap) _apmEdits.dateConflictMap = {};
+    const current = _apmEdits.dateConflictMap[eventId];
+    if (current?.conflict) {
+      delete _apmEdits.dateConflictMap[eventId];
+    } else {
+      const event = (_apmConflictEvents || []).find(ev => String(ev.id) === String(eventId));
+      if (!event) return;
+      _apmEdits.dateConflictMap[eventId] = {
+        conflict: true,
+        title: event.title || 'Rehearsal',
+        date: event.date || '',
+      };
+    }
+    if (_apmTab === 'scheduling') _apmRenderBody();
+  }
 
   function openApPerformerModal(appId) {
     const app = (allApplicants || []).find(a => String(a.id) === String(appId));
     if (!app) return;
     _apmAppId = appId; _apmApp = app; _apmTab = 'scheduling'; _apmEmailCompose = null;
     _apmPendingSlots = {}; _apmPickingSessions = new Set(); _apmEdits = {
-      dateConflicts: applicantConflictDetails(app) === '—' ? '' : applicantConflictDetails(app),
+      dateConflicts: applicantConflictManualNotes(app),
+      dateConflictMap: applicantConflictEventMap(app),
     };
     const photoWrap = document.getElementById('apm-header-photo');
     if (photoWrap) photoWrap.innerHTML = app.headshot_url
@@ -41878,6 +41999,9 @@ See you soon!
     const modal = document.getElementById('ap-performer-modal');
     if (modal) modal.style.display = 'flex';
     _apmRenderBody();
+    loadApmConflictEvents().then(() => {
+      if (_apmApp && String(_apmApp.id) === String(appId) && _apmTab === 'scheduling') _apmRenderBody();
+    });
   }
 
   function closeApPerformerModal() {
@@ -42493,7 +42617,34 @@ See you soon!
     }).join('');
     const conflictText = typeof _apmEdits?.dateConflicts === 'string'
       ? _apmEdits.dateConflicts
-      : (applicantConflictDetails(_apmApp) === '—' ? '' : applicantConflictDetails(_apmApp));
+      : applicantConflictManualNotes(_apmApp);
+    const conflictMap = _apmEdits?.dateConflictMap && typeof _apmEdits.dateConflictMap === 'object'
+      ? _apmEdits.dateConflictMap
+      : applicantConflictEventMap(_apmApp);
+    const rehearsalDateIndicators = (_apmConflictEvents || []).length
+      ? `
+          <div style="display:flex;flex-wrap:wrap;gap:0.8rem;margin-bottom:1rem;">
+            ${_apmConflictEvents.map(ev => {
+              const active = !!conflictMap?.[ev.id]?.conflict;
+              const colour = apmConflictWeekdayColour(ev.date);
+              const parts = apmConflictDateParts(ev.date);
+              return `
+                <button
+                  type="button"
+                  onclick="apmToggleConflictEvent('${esc(ev.id)}')"
+                  aria-pressed="${active ? 'true' : 'false'}"
+                  title="${esc(ev.title || 'Rehearsal')}"
+                  style="background:${active ? 'rgba(87,46,136,0.06)' : '#fff'};border:${active ? '2px solid #572e88' : '1.5px solid rgba(87,46,136,0.18)'};border-radius:24px;padding:0.7rem 0.7rem 0.8rem;min-width:5.5rem;display:flex;flex-direction:column;align-items:center;gap:0.28rem;cursor:pointer;box-shadow:${active ? '0 10px 22px rgba(87,46,136,0.12)' : 'none'};font-family:inherit;">
+                  <div style="width:4.1rem;border:1px solid rgba(87,46,136,0.12);border-radius:0.95rem;overflow:hidden;background:#fff;box-shadow:0 2px 10px rgba(87,46,136,0.08);">
+                    <div style="background:${esc(colour)};color:#fff;font-size:0.92rem;font-weight:800;line-height:1;padding:0.48rem 0 0.42rem;text-align:center;letter-spacing:0.04em;">${esc(parts.month)}</div>
+                    <div style="color:#1a1530;font-size:2.2rem;font-weight:900;line-height:1;padding:0.38rem 0 0.2rem;text-align:center;">${esc(parts.day)}</div>
+                  </div>
+                  <div style="font-size:0.76rem;font-weight:800;color:${active ? '#572e88' : 'rgba(87,46,136,0.7)'};letter-spacing:0.03em;">${esc(parts.weekday)}</div>
+                </button>`;
+            }).join('')}
+          </div>
+        `
+      : `<div style="margin-bottom:1rem;font-size:0.78rem;color:rgba(87,46,136,0.5);">No rehearsal dates are in the calendar yet.</div>`;
     return `
       ${sessionsHtml}
       <div class="apm-session-card" style="margin-top:1rem;">
@@ -42501,18 +42652,19 @@ See you soon!
           <div class="apm-session-dot" style="background:#efab45;margin-top:0.25rem;"></div>
           <div class="apm-session-info" style="width:100%;">
             <div class="apm-session-name">Conflicts</div>
-            <div class="apm-session-slot" style="color:rgba(87,46,136,0.5);">Edit this performer&apos;s known scheduling conflicts here too.</div>
+            <div class="apm-session-slot" style="color:rgba(87,46,136,0.5);">Tap any rehearsal date that this performer can&apos;t attend.</div>
           </div>
         </div>
         <div style="padding:0 1rem 1rem;">
+          ${rehearsalDateIndicators}
           <textarea
             id="apm-conflicts"
             oninput="_apmEdits.dateConflicts=this.value"
-            placeholder="List unavailable dates, vacations, school conflicts, or anything the team should know."
+            placeholder="Add any extra notes like vacations, school conflicts, or details the team should know."
             style="width:100%;min-height:7rem;resize:vertical;border:1.5px solid rgba(87,46,136,0.18);border-radius:14px;padding:0.9rem 1rem;font-size:0.88rem;line-height:1.45;color:#1a1530;background:#fff;box-sizing:border-box;font-family:inherit;outline:none;"
           >${esc(conflictText)}</textarea>
           <div style="margin-top:0.55rem;font-size:0.76rem;color:rgba(87,46,136,0.5);line-height:1.45;">
-            Saving here updates the same conflict notes shown on the performer list and audition info pages.
+            These date indicators and notes save back to the same conflict record shown on the performer list and audition info pages.
           </div>
         </div>
       </div>`;
@@ -42993,8 +43145,11 @@ See you soon!
       const notes = document.getElementById('apm-notes')?.value.trim() || '';
       if (notes !== (_apmApp.notes || '')) update.notes = notes || null;
       const conflictText = (document.getElementById('apm-conflicts')?.value ?? _apmEdits.dateConflicts ?? '').trim();
-      const currentConflictText = applicantConflictDetails(_apmApp) === '—' ? '' : applicantConflictDetails(_apmApp);
-      if (conflictText !== currentConflictText) update.date_conflicts = conflictText ? { manual_notes: conflictText } : null;
+      const currentConflictPayload = applicantConflictPayloadFromState(applicantConflictEventMap(_apmApp), applicantConflictManualNotes(_apmApp));
+      const nextConflictPayload = applicantConflictPayloadFromState(_apmEdits.dateConflictMap || {}, conflictText);
+      if (JSON.stringify(nextConflictPayload) !== JSON.stringify(currentConflictPayload)) {
+        update.date_conflicts = Object.keys(nextConflictPayload).length ? nextConflictPayload : null;
+      }
       // Contact tab
       const email = document.getElementById('apm-email')?.value.trim() || '';
       if (email !== (_apmApp.email || '')) update.email = email || null;
