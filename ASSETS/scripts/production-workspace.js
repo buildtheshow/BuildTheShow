@@ -41917,6 +41917,7 @@ See you soon!
   let _apmConflictEvents = [];
   let _apmConflictEventsLoaded = false;
   let _apmConflictEventsPromise = null;
+  let _apmConflictExpanded = new Set();
 
   function apmConflictWeekdayColour(dateString) {
     const d = dateString ? new Date(`${dateString}T12:00:00`) : null;
@@ -41982,6 +41983,7 @@ See you soon!
     let justAdded = false;
     if (current?.conflict) {
       delete _apmEdits.dateConflictMap[eventId];
+      _apmConflictExpanded.delete(eventId);
     } else {
       const event = (_apmConflictEvents || []).find(ev => String(ev.id) === String(eventId));
       if (!event) return;
@@ -41993,6 +41995,7 @@ See you soon!
         start_time: '',
         end_time: '',
       };
+      _apmConflictExpanded.add(eventId);
       justAdded = true;
     }
     if (_apmTab === 'scheduling') {
@@ -42004,6 +42007,16 @@ See you soon!
         });
       }
     }
+  }
+
+  function apmExpandConflict(eventId) {
+    _apmConflictExpanded.add(eventId);
+    if (_apmTab === 'scheduling') _apmRenderBody();
+  }
+
+  function apmCollapseConflict(eventId) {
+    _apmConflictExpanded.delete(eventId);
+    if (_apmTab === 'scheduling') _apmRenderBody();
   }
 
   function apmSetConflictDayType(eventId, fullDay) {
@@ -42037,7 +42050,7 @@ See you soon!
     const app = (allApplicants || []).find(a => String(a.id) === String(appId));
     if (!app) return;
     _apmAppId = appId; _apmApp = app; _apmTab = 'scheduling'; _apmEmailCompose = null;
-    _apmPendingSlots = {}; _apmPickingSessions = new Set(); _apmEdits = {
+    _apmPendingSlots = {}; _apmPickingSessions = new Set(); _apmConflictExpanded = new Set(); _apmEdits = {
       dateConflicts: applicantConflictManualNotes(app),
       dateConflictMap: applicantConflictEventMap(app),
     };
@@ -42708,11 +42721,23 @@ See you soon!
               if (!active) return dateBtn;
               const isFullDay = value.full_day !== false;
               const title = ev.title || 'Rehearsal';
+              if (!_apmConflictExpanded.has(ev.id)) {
+                const summary = isFullDay ? 'Full day' : (applicantConflictTimeLabel(value) || 'Specific time');
+                const compact = `
+                  <div data-conflict-card="${esc(ev.id)}" style="grid-column:1 / -1;display:flex;align-items:center;justify-content:space-between;gap:0.6rem;padding:0.55rem 0.85rem;border-radius:10px;border:1.5px solid rgba(87,46,136,0.14);background:rgba(87,46,136,0.03);">
+                    <div style="font-size:0.8rem;color:#1a1530;"><strong>${esc(title)}</strong> · ${esc(`${parts.month} ${parts.day}`)} — ${esc(summary)}</div>
+                    <button type="button" onclick="apmExpandConflict('${esc(ev.id)}')" style="background:none;border:none;color:#572e88;font-size:0.78rem;font-weight:700;cursor:pointer;font-family:inherit;padding:0.2rem 0.3rem;">Edit</button>
+                  </div>`;
+                return dateBtn + compact;
+              }
               const picker = `
                 <div data-conflict-card="${esc(ev.id)}" style="grid-column:1 / -1;border:1.5px solid rgba(87,46,136,0.14);border-radius:14px;padding:0.8rem 0.9rem;background:rgba(87,46,136,0.03);">
                   <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:0.6rem;">
                     <div style="font-size:0.82rem;font-weight:800;color:#1a1530;">${esc(title)}</div>
-                    <div style="font-size:0.74rem;font-weight:700;color:rgba(87,46,136,0.6);letter-spacing:0.04em;">${esc(`${parts.month} ${parts.day} ${parts.weekday}`)}</div>
+                    <div style="display:flex;align-items:center;gap:0.6rem;">
+                      <div style="font-size:0.74rem;font-weight:700;color:rgba(87,46,136,0.6);letter-spacing:0.04em;">${esc(`${parts.month} ${parts.day} ${parts.weekday}`)}</div>
+                      <button type="button" onclick="apmCollapseConflict('${esc(ev.id)}')" style="background:#572e88;color:#fff;border:none;border-radius:7px;padding:0.28rem 0.7rem;font-size:0.74rem;font-weight:700;cursor:pointer;font-family:inherit;">Done</button>
+                    </div>
                   </div>
                   <div style="display:flex;gap:0.5rem;margin-bottom:${isFullDay ? '0' : '0.6rem'};">
                     <button type="button" onclick="apmSetConflictDayType('${esc(ev.id)}', true)"
