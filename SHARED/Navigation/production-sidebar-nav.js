@@ -48,6 +48,10 @@
     location.href = pageUrl(file);
   };
 
+  window.openCreativeTeamMembersFromProposals = function () {
+    location.href = pageUrl('plan-team.html') + '&nav=proposals';
+  };
+
   window.btsDeptSectionNav = function (group, section, tab) {
     var url = pageUrl('department-section.html') +
       '&group=' + encodeURIComponent(group || '') +
@@ -58,7 +62,7 @@
 
   // ── Group state ──────────────────────────────────────────────────────────
 
-  const ALL_GROUPS = ['overview', 'plan', 'cast', 'departments', 'promote', 'ticketing', 'volunteers', 'financials', 'wrapup', 'portals', 'settings', 'build'];
+  const ALL_GROUPS = ['overview', 'plan', 'proposals', 'cast', 'departments', 'promote', 'ticketing', 'volunteers', 'financials', 'wrapup', 'portals', 'settings', 'build'];
 
   window.openSidebarGroup = function (groupId) {
     ALL_GROUPS.forEach(function (id) {
@@ -464,7 +468,7 @@
   };
 
   window.loadProductionSidebar = function (activeGroup, activePage) {
-    const key = 'bts-prod-sidebar-v72';
+    const key = 'bts-prod-sidebar-v73';
     const cached = sessionStorage.getItem(key);
     const host = document.getElementById('prod-sidebar-host');
     if (!host) return;
@@ -495,7 +499,7 @@
 
     if (cached) applyAndInit(cached);
 
-    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v72-20260715')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v73-20260721')
       .then(function (res) { return res.text(); })
       .then(function (html) {
         sessionStorage.setItem(key, html);
@@ -650,6 +654,14 @@
   function markCurrentPageActive(explicitFile) {
     var currentFile = explicitFile || location.pathname.split('/').pop().split('?')[0];
     if (!currentFile) return;
+    if (currentFile === 'plan-team.html' && new URLSearchParams(location.search).get('nav') === 'proposals') {
+      var proposalTeamLink = document.getElementById('proposal-creative-team-nav');
+      if (proposalTeamLink) {
+        window.openSidebarGroup('proposals');
+        addActiveDot(proposalTeamLink);
+        return;
+      }
+    }
     if (currentFile === 'department-section.html') {
       var params = new URLSearchParams(location.search);
       var group = params.get('group') || '';

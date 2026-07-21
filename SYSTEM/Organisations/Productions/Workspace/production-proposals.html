@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="preconnect" href="https://tkmaiktxpwqfbgeojbnf.supabase.co" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Production Proposals - Build The Show</title>
+  <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=20260718c" />
+  <link rel="stylesheet" href="/ASSETS/styles/production-sidebar.css?v=20260718c" />
+  <style>
+    * { box-sizing: border-box; }
+    html { width: 100%; max-width: 100%; overflow-x: hidden; }
+    body { margin: 0; width: 100%; max-width: 100%; overflow-x: hidden; background: #ffffff; font-family: var(--bts-font); color: #1a1530; display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+    body.mobile-sidebar-open { overflow: hidden; }
+    .prod-main {
+      margin-left: 220px;
+      flex: 1;
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding: 2rem 2.25rem 3rem;
+      max-width: calc(100vw - 220px);
+      overflow-x: clip;
+      position: relative;
+      z-index: 0;
+    }
+    .prod-main::before {
+      content: '';
+      position: fixed;
+      inset: 0 0 0 220px;
+      background-image: url('/ASSETS/Images/Decrotive/Grid-purple.png');
+      background-repeat: repeat;
+      background-size: 720px;
+      opacity: 0.04;
+      pointer-events: none;
+      z-index: -1;
+    }
+    .prod-main-inner { position: relative; z-index: 1; max-width: 1440px; }
+    .proposal-page-shell { display: flex; flex-direction: column; gap: 1.1rem; }
+    .proposal-board-frame {
+      background: rgba(255,255,255,0.82);
+      border: 1px solid rgba(87,46,136,0.08);
+      border-radius: 18px;
+      padding: 1rem;
+      box-shadow: 0 10px 28px rgba(26,21,48,0.05);
+      backdrop-filter: blur(10px);
+    }
+    .proposal-loading-card,
+    .proposal-error-card {
+      background: #fff;
+      border: 1px solid rgba(87,46,136,0.12);
+      border-radius: 16px;
+      padding: 1.15rem 1.2rem;
+      color: #1a1530;
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+    .proposal-error-card { border-color: rgba(209,82,61,0.18); color: #8a2e20; }
+    @media (max-width: 900px) {
+      .prod-main { margin-left: 0; max-width: 100vw; width: 100%; padding: 4.5rem 1rem 2.25rem; }
+      .prod-main::before { inset: 0; }
+      .proposal-board-frame { padding: 0.8rem; border-radius: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="prod-sidebar-host"></div>
+
+  <div class="prod-main">
+    <div class="prod-main-inner">
+      <div class="proposal-page-shell">
+        <div class="aud-visual-hero" style="margin-bottom:0;">
+          <div class="aud-visual-hero-content">
+            <div>
+              <div class="aud-visual-kicker">
+                <span class="aud-visual-kicker-dot" aria-hidden="true"></span>
+                <span class="page-hierarchy"><span class="page-hierarchy-page">Proposals</span></span>
+              </div>
+              <h1 class="aud-visual-title">Production Proposals</h1>
+              <p class="aud-visual-copy">Everything submitted for this organisation's proposal seasons, brought into your production workspace.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="proposal-board-frame">
+          <div id="production-proposals-root">
+            <div class="proposal-loading-card">Setting the proposal board...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/SHARED/Navigation/production-sidebar-nav.js?v=79-20260721-proposals"></script>
+  <script src="/ASSETS/scripts/org-production-proposals-v36.js?v=51"></script>
+  <script>
+    window.initProductionPage('proposals');
+  </script>
+  <script>
+    const SUPABASE_URL = 'https://tkmaiktxpwqfbgeojbnf.supabase.co';
+    const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8';
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+    window.sb = sb;
+
+    async function bootstrapProductionProposalsPage() {
+      const root = document.getElementById('production-proposals-root');
+      const prodId = new URLSearchParams(location.search).get('id') || '';
+      if (!prodId) {
+        root.innerHTML = '<div class="proposal-error-card">Select a production first so Build The Show knows which organisation proposals to show.</div>';
+        return;
+      }
+
+      try {
+        const [{ data: authData }, { data: prod, error: prodError }] = await Promise.all([
+          sb.auth.getUser(),
+          sb.from('productions')
+            .select('organization_id, organizations(*)')
+            .eq('id', prodId)
+            .single(),
+        ]);
+
+        if (prodError) throw prodError;
+        if (!prod?.organization_id) throw new Error('This production is not connected to an organisation yet.');
+
+        window.currentUser = authData?.user || null;
+        window.currentOrg = prod.organizations ? { ...prod.organizations, id: prod.organization_id } : { id: prod.organization_id };
+
+        await window.loadProductionProposalsTab();
+      } catch (error) {
+        console.error('[BTS] bootstrap production proposals failed', error);
+        root.innerHTML = '<div class="proposal-error-card">' + String(error?.message || 'Could not load production proposals right now.') + '</div>';
+      }
+    }
+
+    bootstrapProductionProposalsPage();
+  </script>
+</body>
+</html>
