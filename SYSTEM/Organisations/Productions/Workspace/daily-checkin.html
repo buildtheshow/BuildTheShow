@@ -204,9 +204,6 @@
     .dci-cast-flags { display: flex; flex-direction: column; gap: 0.25rem; }
     .dci-cast-flag { text-align: center; font-size: 0.68rem; font-weight: 800; padding: 0.3rem 0.5rem; border-radius: 6px; }
     .dci-cast-flag--off { background: rgba(209,82,61,0.12); color: #b33a25; }
-    .dci-cast-flag--note { background: rgba(239,171,69,0.18); color: #8a4600; }
-    .dci-cast-note-input { width: 100%; font-size: 0.72rem; padding: 0.4rem 0.6rem; border-radius: 7px; border: 1.5px solid rgba(87,46,136,0.15); font-family: var(--bts-font); color: #1a1530; }
-    .dci-cast-note-input:focus { outline: none; border-color: #572e88; }
   </style>
 </head>
 <body>
@@ -633,7 +630,6 @@ async function loadAll() {
       checkedInAt: c.checked_in_at || null,
       signedOutAt: c.signed_out_at || null,
       awayToday:   !!c.away_today,
-      attendanceNote: c.attendance_note || '',
     };
   });
 
@@ -763,7 +759,6 @@ async function loadAll() {
       headshotUrl: person.headshot_url || '',
       pickup: dciPickupInfo(person),
       absences: dciFormatAbsences(person.date_conflicts),
-      attendanceNote: ci.attendanceNote || '',
       offToday: dciIsOffToday(person.date_conflicts),
     };
   }).filter(p => {
@@ -900,16 +895,13 @@ function castCards(people, now) {
       },
     });
     const timeStr = p.expectedStart ? fmtTime(p.expectedStart) + (p.expectedEnd ? ' – ' + fmtTime(p.expectedEnd) : '') : '';
-    const flags = [];
-    if (p.offToday) flags.push('<div class="dci-cast-flag dci-cast-flag--off">Requested off today</div>');
-    if (p.attendanceNote) flags.push('<div class="dci-cast-flag dci-cast-flag--note">' + esc(p.attendanceNote) + '</div>');
+    const offFlag = p.offToday ? '<div class="dci-cast-flags"><div class="dci-cast-flag dci-cast-flag--off">Requested off today</div></div>' : '';
     return '<div class="dci-cast-card-wrap" data-type="cast" data-ref="' + esc(p.refId) + '">' +
       flipCard +
       (timeStr ? '<div class="dci-cast-card-time">' + esc(timeStr) + '</div>' : '') +
-      (flags.length ? '<div class="dci-cast-flags">' + flags.join('') + '</div>' : '') +
+      offFlag +
       '<div class="dci-cast-card-status">' + pillHtml(s) + '</div>' +
       '<div class="dci-cast-card-acts">' + rowActHtml(p, s, 'cast') + '</div>' +
-      '<input type="text" class="dci-cast-note-input" placeholder="Note: arriving late, leaving early..." value="' + esc(p.attendanceNote || '') + '" onblur="setAttendanceNote(\'cast\',\'' + esc(p.refId) + '\',this.value)" onkeydown="if(event.key===\'Enter\')this.blur()" />' +
     '</div>';
   }).join('');
   return '<div class="dci-cast-grid">' + cards + '</div>';
@@ -1085,19 +1077,8 @@ async function persist(type, refId, person) {
       person_name: person.name, role_name: person.role || null,
       checked_in: !!person.checkedIn, checked_in_at: person.checkedInAt || null,
       signed_out_at: person.signedOutAt || null, away_today: !!person.awayToday,
-      attendance_note: person.attendanceNote || null,
     }, { onConflict: 'production_id,check_in_date,person_type,ref_id' });
   } catch (e) { console.warn('[BTS] checkin persist failed:', e && e.message); }
-}
-
-function setAttendanceNote(type, refId, value) {
-  const person = getPerson(type, refId);
-  if (!person) return;
-  const trimmed = value.trim();
-  if (trimmed === person.attendanceNote) return;
-  person.attendanceNote = trimmed;
-  persist(type, refId, person);
-  renderContent();
 }
 
 function closeKioskConfirm(confirmed) {
