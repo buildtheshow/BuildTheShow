@@ -626,9 +626,16 @@ function castPickupPreviewHtml(pickup) {
   const approved = dedupePickupPeople(info.pickups || []);
   const contacts = dedupePickupPeople(info.contacts || []).filter(contact => !approved.some(person => pickupPersonKey(person) === pickupPersonKey(contact)));
   const cards = [];
+  const cleanRelationship = rel => {
+    const value = String(rel || '').trim();
+    if (!value) return '';
+    const lowered = value.toLowerCase();
+    if (lowered === 'guardian' || lowered === 'contact' || lowered === 'secondary contact') return '';
+    return value;
+  };
 
   approved.forEach(person => {
-    const meta = [person.relationship, person.phone, person.email].filter(Boolean).join(' · ');
+    const meta = [cleanRelationship(person.relationship), person.phone, person.email].filter(Boolean).join(' · ');
     cards.push(
       '<div class="dci-cast-pickup-card">' +
         '<div class="dci-cast-pickup-name">' + esc(person.name || 'Approved pickup person') + '</div>' +
@@ -638,7 +645,7 @@ function castPickupPreviewHtml(pickup) {
   });
 
   contacts.forEach(person => {
-    const meta = [person.relationship, person.phone, person.email].filter(Boolean).join(' · ');
+    const meta = [cleanRelationship(person.relationship), person.phone, person.email].filter(Boolean).join(' · ');
     cards.push(
       '<div class="dci-cast-pickup-card">' +
         '<div class="dci-cast-pickup-name">' + esc(person.name || 'Contact person') + '</div>' +
@@ -832,6 +839,13 @@ async function loadAll() {
       'Guardian contact email',
       'Parent email'
     ]);
+    const guardianRelationship = answerVal(ca, [
+      'Guardian relationship to performer',
+      'Guardian Relationship to Performer',
+      'Parent/Guardian relationship',
+      'Parent or guardian relationship',
+      'Relationship to performer'
+    ]);
     const primaryContactName = person.contact_name || answerVal(ca, [
       'Contact Name',
       'Contact name',
@@ -859,7 +873,7 @@ async function loadAll() {
     if (guardianName || guardianEmail || guardianPhone) {
       contacts.push({
         name: guardianName,
-        relationship: 'Guardian',
+        relationship: guardianRelationship,
         phone: guardianPhone,
         email: guardianEmail,
       });
@@ -867,7 +881,7 @@ async function loadAll() {
     if (primaryContactName) {
       contacts.push({
         name: primaryContactName,
-        relationship: 'Contact',
+        relationship: '',
         phone: person.phone || '',
         email: '',
       });
@@ -875,7 +889,7 @@ async function loadAll() {
     if (secondaryContactName) {
       contacts.push({
         name: secondaryContactName,
-        relationship: 'Secondary contact',
+        relationship: '',
         phone: secondaryContactPhone,
         email: secondaryContactEmail,
       });
