@@ -165,6 +165,15 @@
     .signout-picker-name { font-size: 0.88rem; font-weight: 900; line-height: 1.15; }
     .signout-picker-meta { font-size: 0.72rem; color: rgba(87,46,136,0.68); line-height: 1.3; }
     .signout-picker-empty { font-size: 0.78rem; color: rgba(26,21,48,0.45); line-height: 1.45; margin-top: 0.8rem; }
+    .signout-choice-row { display: grid; gap: 0.6rem; margin-top: 1rem; }
+    .signout-choice-btn { width: 100%; padding: 0.9rem 1rem; border-radius: 12px; border: 1.5px solid rgba(87,46,136,0.14); background: #fff; color: #1a1530; font-family: var(--bts-font); cursor: pointer; text-align: left; }
+    .signout-choice-btn:hover { background: rgba(87,46,136,0.04); border-color: rgba(87,46,136,0.24); }
+    .signout-choice-btn.primary { background: #572e88; border-color: #572e88; color: #fff; }
+    .signout-choice-btn.primary:hover { background: #4a2575; }
+    .signout-choice-title { font-size: 0.88rem; font-weight: 900; line-height: 1.15; }
+    .signout-choice-copy { font-size: 0.72rem; line-height: 1.35; opacity: 0.84; margin-top: 0.18rem; }
+    .signout-other-wrap { display: none; }
+    .signout-other-wrap.visible { display: block; }
 
     /* ── Responsive ── */
     @media (max-width: 720px) {
@@ -389,14 +398,26 @@
   <div class="modal-box">
     <div class="modal-title" id="signout-picker-title">Sign out with…</div>
     <div class="signout-picker-empty" id="signout-picker-copy">Choose who this performer left with.</div>
-    <div class="signout-picker-list" id="signout-picker-list"></div>
-    <div class="modal-field" style="margin-top:1rem;">
-      <label class="modal-lbl" for="signout-other-name">Other person</label>
-      <input type="text" id="signout-other-name" class="modal-inp" placeholder="Type a name if they are not listed" />
+    <div class="signout-choice-row" id="signout-choice-row">
+      <button type="button" class="signout-choice-btn primary" id="signout-self-btn" onclick="chooseSelfSignout()">
+        <div class="signout-choice-title">I’m signing myself out</div>
+        <div class="signout-choice-copy">Use this when the performer is leaving on their own.</div>
+      </button>
+      <button type="button" class="signout-choice-btn" onclick="showOtherSignoutOptions()">
+        <div class="signout-choice-title">Someone else is picking me up</div>
+        <div class="signout-choice-copy">Choose the adult or contact they are leaving with.</div>
+      </button>
+    </div>
+    <div class="signout-other-wrap" id="signout-other-wrap">
+      <div class="signout-picker-list" id="signout-picker-list"></div>
+      <div class="modal-field" style="margin-top:1rem;">
+        <label class="modal-lbl" for="signout-other-name">Other person</label>
+        <input type="text" id="signout-other-name" class="modal-inp" placeholder="Type a name if they are not listed" />
+      </div>
     </div>
     <div class="modal-footer">
       <button class="modal-cancel" onclick="closeSignoutPicker()">Cancel</button>
-      <button class="modal-save" onclick="submitOtherSignoutChoice()">Sign out</button>
+      <button class="modal-save" id="signout-other-save" onclick="submitOtherSignoutChoice()">Sign out</button>
     </div>
   </div>
 </div>
@@ -1315,8 +1336,13 @@ function openSignoutPicker(type, refId) {
   if (!person || personStatus(person, new Date()) !== 'here') return;
   _pendingSignoutPerson = { type, refId };
   document.getElementById('signout-picker-title').textContent = 'Sign out ' + person.name;
-  document.getElementById('signout-picker-copy').textContent = 'Choose who ' + person.name + ' left with.';
+  document.getElementById('signout-picker-copy').textContent = 'Is ' + person.name + ' signing out on their own, or leaving with someone else?';
   document.getElementById('signout-other-name').value = '';
+  document.getElementById('signout-choice-row').style.display = '';
+  document.getElementById('signout-other-wrap').classList.remove('visible');
+  document.getElementById('signout-other-save').style.display = 'none';
+  const selfBtn = document.getElementById('signout-self-btn');
+  selfBtn.style.display = person?.pickup?.solo ? '' : 'none';
   const list = document.getElementById('signout-picker-list');
   const choices = type === 'cast' ? signoutChoicesForPerson(person) : [];
   _pendingSignoutChoices = choices;
@@ -1334,6 +1360,21 @@ function closeSignoutPicker() {
   document.getElementById('modal-signout-picker').classList.remove('visible');
   _pendingSignoutPerson = null;
   _pendingSignoutChoices = [];
+}
+
+function chooseSelfSignout() {
+  if (!_pendingSignoutPerson) return;
+  const pending = _pendingSignoutPerson;
+  const person = getPerson(pending.type, pending.refId);
+  closeSignoutPicker();
+  doSignOut(pending.type, pending.refId, { name: person?.name || 'Self', relationship: 'Self sign-out' });
+}
+
+function showOtherSignoutOptions() {
+  document.getElementById('signout-choice-row').style.display = 'none';
+  document.getElementById('signout-other-wrap').classList.add('visible');
+  document.getElementById('signout-picker-copy').textContent = 'Choose who this performer left with.';
+  document.getElementById('signout-other-save').style.display = '';
 }
 
 function chooseSignoutOptionByIndex(index) {
