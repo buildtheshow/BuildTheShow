@@ -228,14 +228,14 @@
     .dci-cast-time-value { font-size: 0.8rem; font-weight: 800; color: #1a1530; font-family: var(--bts-font); }
     .dci-cast-time-value.empty { color: rgba(26,21,48,0.28); font-weight: 700; }
     .dci-cast-pickup { border-radius: 16px; border: 1px solid rgba(87,46,136,0.08); background: #ffffff; padding: 0.78rem; display: grid; gap: 0.7rem; box-shadow: 0 8px 22px rgba(87,46,136,0.04); font-family: var(--bts-font); }
-    .dci-cast-pickup-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+    .dci-cast-pickup-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
     .dci-cast-pickup-title { font-size: 0.58rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(87,46,136,0.46); font-family: var(--bts-font); }
-    .dci-cast-pickup-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 0.26rem 0.56rem; background: rgba(118,158,123,0.18); color: #355e3c; font-size: 0.62rem; font-weight: 900; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; font-family: var(--bts-font); }
+    .dci-cast-pickup-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 0.26rem 0.56rem; background: rgba(118,158,123,0.18); color: #355e3c; font-size: 0.62rem; font-weight: 900; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; max-width: 100%; font-family: var(--bts-font); }
     .dci-cast-pickup-grid { display: grid; gap: 0.5rem; }
     .dci-cast-pickup-card { border-radius: 12px; border: 1px solid rgba(87,46,136,0.08); background: #fcfbfe; padding: 0.62rem 0.68rem; display: grid; gap: 0.14rem; font-family: var(--bts-font); }
     .dci-cast-pickup-name { font-size: 0.76rem; font-weight: 900; color: #1a1530; line-height: 1.2; font-family: var(--bts-font); }
     .dci-cast-pickup-meta { font-size: 0.68rem; color: rgba(87,46,136,0.7); line-height: 1.35; font-family: var(--bts-font); }
-    .dci-cast-pickup-note { border-radius: 12px; background: rgba(87,46,136,0.05); padding: 0.62rem 0.68rem; font-size: 0.7rem; line-height: 1.45; color: #5f4f79; font-family: var(--bts-font); }
+    .dci-cast-pickup-note { border-radius: 12px; background: rgba(87,46,136,0.05); padding: 0.62rem 0.68rem; font-size: 0.7rem; font-weight: 600; line-height: 1.45; color: #5f4f79; font-family: var(--bts-font); }
     .dci-cast-pickup-empty { font-size: 0.72rem; line-height: 1.45; color: rgba(26,21,48,0.45); font-family: var(--bts-font); }
     .dci-cast-press-hint { text-align: center; font-size: 0.68rem; font-weight: 800; color: rgba(87,46,136,0.56); font-family: var(--bts-font); }
     .dci-cast-press-hint.here { color: #2d6e35; }
@@ -610,15 +610,75 @@ function pickupPersonKey(person) {
   return [name, phone, email].join('|');
 }
 
+function canonicalPickupFirstName(name) {
+  const raw = String(name || '').trim().toLowerCase().replace(/[^a-z0-9\s'-]/g, '');
+  const first = raw.split(/\s+/).filter(Boolean)[0] || '';
+  const aliases = {
+    joe: 'joseph',
+    joey: 'joseph',
+    joseph: 'joseph',
+    tony: 'anthony',
+    anthony: 'anthony',
+    glen: 'glen',
+    glenn: 'glen',
+    jen: 'jennifer',
+    jenny: 'jennifer',
+    jenn: 'jennifer',
+    jennifer: 'jennifer',
+  };
+  return aliases[first] || first;
+}
+
+function canonicalPickupLastName(name) {
+  const parts = String(name || '').trim().toLowerCase().replace(/[^a-z0-9\s'-]/g, '').split(/\s+/).filter(Boolean);
+  return parts.length > 1 ? parts[parts.length - 1] : '';
+}
+
+function pickupMatchKey(person) {
+  const name = String(person?.name || '').trim().toLowerCase().replace(/[^a-z0-9\s'-]/g, '').replace(/\s+/g, ' ');
+  const phone = String(person?.phone || '').replace(/\D/g, '');
+  const first = canonicalPickupFirstName(name);
+  const last = canonicalPickupLastName(name);
+  if (phone && first && last) return 'phone-last-first|' + phone + '|' + last + '|' + first;
+  if (phone && name) return 'phone-name|' + phone + '|' + name;
+  if (name) return 'name|' + name;
+  return pickupPersonKey(person);
+}
+
+function mergePickupPeople(target, source) {
+  if (!target) return { ...source };
+  const targetName = String(target.name || '').trim();
+  const sourceName = String(source.name || '').trim();
+  const targetDigits = String(target.phone || '').replace(/\D/g, '');
+  const sourceDigits = String(source.phone || '').replace(/\D/g, '');
+  return {
+    name: sourceName.length > targetName.length ? sourceName : targetName,
+    relationship: String(target.relationship || '').trim() || String(source.relationship || '').trim(),
+    phone: targetDigits.length >= sourceDigits.length ? (target.phone || '') : (source.phone || ''),
+    email: String(target.email || '').trim() || String(source.email || '').trim(),
+  };
+}
+
 function dedupePickupPeople(people) {
-  const seen = new Set();
-  return (people || []).filter(person => {
-    const key = pickupPersonKey(person);
-    if (!key || key === '||') return false;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
+  const merged = [];
+  const keyToIndex = new Map();
+  (people || []).forEach(person => {
+    const key = pickupMatchKey(person);
+    if (!key || key === '||') return;
+    if (!keyToIndex.has(key)) {
+      keyToIndex.set(key, merged.length);
+      merged.push({
+        name: String(person?.name || '').trim(),
+        relationship: String(person?.relationship || '').trim(),
+        phone: String(person?.phone || '').trim(),
+        email: String(person?.email || '').trim(),
+      });
+      return;
+    }
+    const idx = keyToIndex.get(key);
+    merged[idx] = mergePickupPeople(merged[idx], person || {});
   });
+  return merged.filter(person => String(person?.name || '').trim());
 }
 
 function castPickupPreviewHtml(pickup) {
@@ -1109,7 +1169,7 @@ function castCards(people, now) {
       '</button>' +
       (timeStr ? '<div class="dci-cast-card-time">' + esc(timeStr) + '</div>' : '') +
       offFlag +
-      '<div class="dci-cast-pickup"><div class="dci-cast-pickup-title">Pickup / Drop Off</div>' + castPickupPreviewHtml(pickup) + '</div>' +
+      '<div class="dci-cast-pickup">' + castPickupPreviewHtml(pickup) + '</div>' +
       '<div class="dci-cast-card-times">' +
         '<div class="dci-cast-time-box"><div class="dci-cast-time-label">Arrived</div><div class="dci-cast-time-value' + (p.checkedInAt ? '' : ' empty') + '">' + esc(arrivedAt) + '</div></div>' +
         '<div class="dci-cast-time-box"><div class="dci-cast-time-label">Left</div><div class="dci-cast-time-value' + (p.signedOutAt ? '' : ' empty') + '">' + esc(leftAt) + '</div></div>' +
