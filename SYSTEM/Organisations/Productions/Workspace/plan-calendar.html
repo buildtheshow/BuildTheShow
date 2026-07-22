@@ -653,6 +653,16 @@
                 e.preventDefault(); e.stopPropagation();
                 openEventModal({ fcEvent: info.event });
               });
+              if (canEditProductionCalendar()) {
+                bar.draggable = true;
+                bar.style.cursor = 'grab';
+                bar.addEventListener('dragstart', e => {
+                  window._draggingDeadlineEvent = info.event;
+                  e.dataTransfer.effectAllowed = 'move';
+                  try { e.dataTransfer.setData('text/plain', String(info.event.id)); } catch {}
+                });
+                bar.addEventListener('dragend', () => { window._draggingDeadlineEvent = null; });
+              }
               stack.appendChild(bar);
             }
             return;
@@ -707,6 +717,25 @@
       if (legend && !legend.dataset.tapBound) {
         legend.dataset.tapBound = '1';
         legend.addEventListener('click', handleCalendarLegendTap);
+      }
+      const calEl = document.getElementById('fc-calendar');
+      if (calEl && !calEl.dataset.deadlineDropBound) {
+        calEl.dataset.deadlineDropBound = '1';
+        calEl.addEventListener('dragover', e => {
+          if (!window._draggingDeadlineEvent) return;
+          if (!e.target.closest('.fc-daygrid-day')) return;
+          e.preventDefault();
+        });
+        calEl.addEventListener('drop', e => {
+          const draggingEvent = window._draggingDeadlineEvent;
+          window._draggingDeadlineEvent = null;
+          if (!draggingEvent) return;
+          const cell = e.target.closest('.fc-daygrid-day');
+          if (!cell || !cell.dataset.date) return;
+          e.preventDefault();
+          const newDate = new Date(cell.dataset.date + 'T00:00:00');
+          showMoveDupModal(draggingEvent, { start: newDate, end: newDate });
+        });
       }
     }
 
