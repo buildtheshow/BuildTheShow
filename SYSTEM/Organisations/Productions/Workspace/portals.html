@@ -1390,9 +1390,7 @@
           const def = portalDefForKey(defKey);
           portalLabel = src === 'volunteer' ? 'Volunteer Portal' : src === 'treasurer' ? 'Treasurer Portal' : 'Department Lead Portal';
           portalColor = def.color; portalBg = def.bg; portalIcon = def.icon;
-          portalUrl = src === 'treasurer'
-            ? `${window.location.origin}/SYSTEM/Organisations/Productions/Workspace/treasurer-portal.html?id=${encodeURIComponent(_prodId)}`
-            : `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/volunteers`;
+          portalUrl = `${window.location.origin}/SYSTEM/Organisations/Productions/Workspace/treasurer-portal.html?id=${encodeURIComponent(_prodId)}`;
         } else if (src === 'board' || src === 'board_planned') {
           const def = PORTAL_DEFS.find(d => d.key === 'board');
           portalLabel = 'Organisation Members'; portalColor = def.color; portalBg = def.bg; portalIcon = def.icon;
@@ -1437,19 +1435,24 @@
           return treasurerPortalPreviewUrl(previewToken);
         }
       }
-      // Volunteer / dept lead: load their full portal at /{org}/{show}/portal with preview auto-login
+      // Volunteer / dept lead: load the permissions-driven team portal (same one treasurers use)
+      // so whatever modules were granted in Manage Access actually show up here, regardless of role.
       if (person.source === 'volunteer' || person.source === 'dept_lead') {
         const email    = person.data?.email || person.email;
         const passcode = personVolunteerPasscode(person);
-        if (email && passcode && _orgSlug && _showSlug) {
-          return `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/portal?pvw_email=${encodeURIComponent(email)}&pvw_code=${encodeURIComponent(passcode)}`;
+        if (email && passcode) {
+          const url = new URL(`${window.location.origin}/SYSTEM/Organisations/Productions/Workspace/treasurer-portal.html`);
+          if (_prodId) url.searchParams.set('id', _prodId);
+          url.searchParams.set('pvw_email', email);
+          url.searchParams.set('pvw_code', passcode);
+          return url.toString();
         }
-        const previewToken = createPortalPreviewToken(person.source);
-        if (previewToken) return publicPortalPreviewUrl(previewToken, person.source);
+        const previewToken = createPortalPreviewToken(person.source, person);
+        if (previewToken) return treasurerPortalPreviewUrl(previewToken);
       }
       if (person.source === 'dept_lead_planned') {
-        const previewToken = createPortalPreviewToken('dept_lead');
-        if (previewToken) return publicPortalPreviewUrl(previewToken, 'dept_lead');
+        const previewToken = createPortalPreviewToken('dept_lead', person);
+        if (previewToken) return treasurerPortalPreviewUrl(previewToken);
       }
       // Cast: load the actual cast portal at /{org}/{show}/portal with preview auto-login params
       if (person.source === 'cast') {

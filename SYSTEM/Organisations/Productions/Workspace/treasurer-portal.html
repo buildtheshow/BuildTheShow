@@ -5,7 +5,7 @@
   <link rel="preconnect" href="https://tkmaiktxpwqfbgeojbnf.supabase.co" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Treasurer Portal | Build The Show</title>
+  <title>Team Portal | Build The Show</title>
   <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=20260718c" />
   <link rel="stylesheet" href="/ASSETS/styles/production-sidebar.css?v=20260718c" />
   <link rel="stylesheet" href="/ASSETS/styles/budget.css?v=20260718c" />
@@ -254,7 +254,7 @@
 <div class="tr-login-overlay" id="tr-login-overlay">
   <div class="tr-login-box">
     <img src="/ASSETS/Images/LogoBrand/logo-long-black.png" alt="Build The Show" class="tr-login-logo" />
-    <div class="tr-login-title">Treasurer Portal</div>
+    <div class="tr-login-title">Team Portal</div>
     <div class="tr-login-sub">Enter your email and access code to continue.</div>
     <div class="tr-login-field">
       <label>Email</label>
@@ -311,6 +311,8 @@
   let _prod = null;
   let _org = null;
   let _volId = '';
+  let _volEmail = '';
+  let _volRole = '';
   let _currentNav = 'fin-dashboard';
   let _previewPerson = null;
   let _pendingSavedTreasurerSession = null;
@@ -361,19 +363,20 @@
       if (!resolvedProdId) { errEl.textContent = 'Production not found. Check your link.'; return; }
       _prodId = resolvedProdId;
 
-      const { data: vol, error: volErr } = await sb
+      const { data: vols, error: volErr } = await sb
         .from('volunteer_signups')
         .select('id,name,email,role_name,production_id,volunteer_passcode')
         .eq('production_id', _prodId)
         .eq('email', email)
-        .eq('role_name', 'Treasurer')
-        .in('status', ['approved','checked_in','completed'])
-        .maybeSingle();
+        .in('status', ['approved','checked_in','completed']);
 
-      const expectedCode = String(vol?.volunteer_passcode || '').trim() || trVolunteerPasscode(email, _prodId);
-      if (volErr || !vol || expectedCode !== code) { errEl.textContent = 'That email and code did not match. Contact your production team.'; return; }
+      const fallbackCode = trVolunteerPasscode(email, _prodId);
+      const vol = (vols || []).find(v => (String(v.volunteer_passcode || '').trim() || fallbackCode) === code) || null;
+      if (volErr || !vol) { errEl.textContent = 'That email and code did not match. Contact your production team.'; return; }
 
       _volId = vol.id;
+      _volEmail = email;
+      _volRole = vol.role_name || '';
       sessionStorage.setItem('bts_treasurer_session', JSON.stringify({ email, code, prodId: _prodId, volId: vol.id }));
       bootPortal();
     } catch (e) {
@@ -410,7 +413,7 @@
     box.innerHTML = `
       <img src="/ASSETS/Images/LogoBrand/logo-long-black.png" alt="Build The Show" class="tr-login-logo" />
       <div class="tr-login-title">Welcome Back</div>
-      <div class="tr-login-sub">This browser still has saved treasurer access for this production.</div>
+      <div class="tr-login-sub">This browser still has saved access for this production.</div>
       <div style="border:1.5px solid rgba(87,46,136,0.14);border-radius:12px;padding:1rem 1rem 0.9rem;margin-bottom:1rem;background:rgba(87,46,136,0.03);">
         <div style="font-size:0.72rem;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;color:rgba(26,21,48,0.45);margin-bottom:0.3rem;">Saved access</div>
         <div style="font-size:1rem;font-weight:900;color:#1a1530;">${esc(cleanEmail || 'Saved treasurer user')}</div>
@@ -442,6 +445,7 @@
       if (preview?.prodId && Date.now() - Number(preview.createdAt || 0) < 10 * 60 * 1000) {
         _prodId = preview.prodId;
         _previewPerson = preview.person || null;
+        _volEmail = String(_previewPerson?.email || '').trim().toLowerCase();
         try { sessionStorage.removeItem(key); } catch (_) {}
         try { localStorage.removeItem(key); } catch (_) {}
         try { sessionStorage.removeItem(legacyKey); } catch (_) {}
@@ -469,15 +473,9 @@
     }
   }
 
-  // Treasurer role defaults (matches ROLE_DEFAULT_ACCESS in portals.html)
-  const TREASURER_DEFAULTS = {
-    'financials': 'view',
-    'financials:dashboard': 'view', 'financials:budgeting': 'edit',
-    'financials:receipts': 'view', 'financials:reports': 'view',
-    'cast': 'none', 'cast:registration': 'view',
-    'cast:registration:dashboard': 'view', 'cast:registration:form': 'none',
-    'cast:registration:status': 'view', 'cast:registration:settings': 'none',
-  };
+  // This portal now serves any volunteer_signups person (not just treasurers), so
+  // access is driven entirely by explicit portal_permissions rows saved from the
+  // Manage Access modal — no hardcoded role defaults here. No saved row = no access.
 
   // Full sidebar definition: mirrors SIDEBAR_TREE from portals.html + main sidebar
   // Each section: { key, label, icon, items: [{ key, navKey, label, page } | { label, children: [...] }] }
@@ -518,6 +516,49 @@
     ]},
     { key: 'departments', label: 'Production Departments', icon: 'page-production-department.svg', items: [
       { key: 'departments:dashboard', navKey: 'dept-dash', label: 'Dashboard', page: 'departments-dashboard.html' },
+      { label: 'Front of House', parentKey: 'departments:foh', children: [
+        { key: 'departments:foh:ushers',      navKey: 'dept-foh-ushers',      label: 'Ushers',      page: 'department-section.html', params: { group: 'front-of-house', section: 'ushers' } },
+        { key: 'departments:foh:concessions', navKey: 'dept-foh-concessions', label: 'Concessions', page: 'department-section.html', params: { group: 'front-of-house', section: 'concessions' } },
+        { key: 'departments:foh:boxoffice',   navKey: 'dept-foh-boxoffice',   label: 'Box Office',  page: 'department-section.html', params: { group: 'front-of-house', section: 'box-office' } },
+      ]},
+      { label: 'Backstage & Rehearsal Support', parentKey: 'departments:backstage', children: [
+        { key: 'departments:backstage:crew',      navKey: 'dept-bs-crew',      label: 'Backstage Crew',   page: 'department-section.html', params: { group: 'backstage', section: 'backstage-crew' } },
+        { key: 'departments:backstage:changes',   navKey: 'dept-bs-changes',   label: 'Quick Changes',    page: 'department-section.html', params: { group: 'backstage', section: 'quick-changes' } },
+        { key: 'departments:backstage:wrangling', navKey: 'dept-bs-wrangling', label: 'Child Wrangling',  page: 'department-section.html', params: { group: 'backstage', section: 'child-wrangling' } },
+        { key: 'departments:backstage:rehearsal', navKey: 'dept-bs-rehearsal', label: 'Rehearsal Support',page: 'department-section.html', params: { group: 'backstage', section: 'rehearsal-support' } },
+      ]},
+      { label: 'Technical Crew', parentKey: 'departments:technical', children: [
+        { key: 'departments:technical:lighting',  navKey: 'dept-tech-lighting',  label: 'Lighting',  page: 'department-section.html', params: { group: 'technical', section: 'lighting' } },
+        { key: 'departments:technical:sound',     navKey: 'dept-tech-sound',     label: 'Sound',     page: 'department-section.html', params: { group: 'technical', section: 'sound' } },
+        { key: 'departments:technical:mics',      navKey: 'dept-tech-mics',      label: 'Mics',      page: 'department-section.html', params: { group: 'technical', section: 'mics' } },
+        { key: 'departments:technical:spotlight', navKey: 'dept-tech-spotlight', label: 'Spotlight', page: 'department-section.html', params: { group: 'technical', section: 'spotlight' } },
+      ]},
+      { label: 'Design & Construction', parentKey: 'departments:design', children: [
+        { key: 'departments:design:building', navKey: 'dept-design-building', label: 'Set Building', page: 'department-section.html', params: { group: 'design-construction', section: 'set-building' } },
+        { key: 'departments:design:painting', navKey: 'dept-design-painting', label: 'Set Painting', page: 'department-section.html', params: { group: 'design-construction', section: 'set-painting' } },
+        { key: 'departments:design:dressing', navKey: 'dept-design-dressing', label: 'Set Dressing', page: 'department-section.html', params: { group: 'design-construction', section: 'set-dressing' } },
+        { key: 'departments:design:props',    navKey: 'dept-design-props',    label: 'Props',        page: 'department-section.html', params: { group: 'design-construction', section: 'props' } },
+      ]},
+      { label: 'Costumes', parentKey: 'departments:costumes', children: [
+        { key: 'departments:costumes:costumes', navKey: 'dept-costumes-costumes', label: 'Costumes',           page: 'department-section.html', params: { group: 'costumes', section: 'costumes' } },
+        { key: 'departments:costumes:laundry',  navKey: 'dept-costumes-laundry',  label: 'Costume Laundry',    page: 'department-section.html', params: { group: 'costumes', section: 'costume-laundry' } },
+        { key: 'departments:costumes:moveout',  navKey: 'dept-costumes-moveout',  label: 'Costume Move-Out',   page: 'department-section.html', params: { group: 'costumes', section: 'costume-move-out' } },
+      ]},
+      { label: 'Hair & Makeup', parentKey: 'departments:hair', children: [
+        { key: 'departments:hair:hair',   navKey: 'dept-hair-hair',   label: 'Hair',   page: 'department-section.html', params: { group: 'hair-makeup', section: 'hair' } },
+        { key: 'departments:hair:makeup', navKey: 'dept-hair-makeup', label: 'Makeup', page: 'department-section.html', params: { group: 'hair-makeup', section: 'makeup' } },
+      ]},
+      { label: 'Marketing & Publicity', parentKey: 'departments:marketing', children: [
+        { key: 'departments:marketing:branding',  navKey: 'dept-mkt-branding',  label: 'Branding',                page: 'department-section.html', params: { group: 'marketing-publicity', section: 'branding' } },
+        { key: 'departments:marketing:programme', navKey: 'dept-mkt-programme', label: 'Programme',               page: 'department-section.html', params: { group: 'marketing-publicity', section: 'programme' } },
+        { key: 'departments:marketing:media',     navKey: 'dept-mkt-media',     label: 'Media',                   page: 'department-section.html', params: { group: 'marketing-publicity', section: 'media' } },
+        { key: 'departments:marketing:sponsors',  navKey: 'dept-mkt-sponsors',  label: 'Sponsors',                page: 'department-section.html', params: { group: 'marketing-publicity', section: 'sponsors' } },
+        { key: 'departments:marketing:promo',     navKey: 'dept-mkt-promo',     label: 'Promotion Distribution',  page: 'department-section.html', params: { group: 'marketing-publicity', section: 'promotion-distribution' } },
+      ]},
+      { label: 'Stage Management', parentKey: 'departments:stage', children: [
+        { key: 'departments:stage:management', navKey: 'dept-stage-mgmt', label: 'Stage Management', page: 'department-section.html', params: { group: 'stage-management', section: 'stage-management' } },
+      ]},
+      { key: 'departments:producer', navKey: 'dept-producer', label: 'Producer', page: 'department-section.html', params: { group: 'producer', section: 'producer' } },
     ]},
     { key: 'promote', label: 'Promote', icon: 'Notifications.svg', items: [
       { key: 'promote:dashboard', navKey: 'promo-dash', label: 'Dashboard', page: 'promote-dashboard.html' },
@@ -600,7 +641,7 @@
   };
 
   async function loadPortalPermissions() {
-    const personId = String(_volId || '');
+    const personId = String(_volEmail || '').trim().toLowerCase();
     if (!personId || !_prodId) return null;
     const { data } = await sb.from('portal_permissions')
       .select('module_key,access_level')
@@ -622,12 +663,6 @@
       const parent = parts.slice(0, i).join(':');
       if (perms && perms[parent] !== undefined) return perms[parent];
     }
-    if (TREASURER_DEFAULTS[key] !== undefined) return TREASURER_DEFAULTS[key];
-    const defParts = key.split(':');
-    for (let i = defParts.length - 1; i > 0; i--) {
-      const parent = defParts.slice(0, i).join(':');
-      if (TREASURER_DEFAULTS[parent] !== undefined) return TREASURER_DEFAULTS[parent];
-    }
     return 'none';
   }
 
@@ -637,10 +672,15 @@
 
   // Dynamic page map built from PORTAL_SIDEBAR
   const _pageMap = {};
+  const _paramsMap = {};
   const _allNavKeys = [];
   function _indexItems(items) {
     (items || []).forEach(item => {
-      if (item.navKey && item.page) { _pageMap[item.navKey] = item.page; _allNavKeys.push(item.navKey); }
+      if (item.navKey && item.page) {
+        _pageMap[item.navKey] = item.page;
+        if (item.params) _paramsMap[item.navKey] = item.params;
+        _allNavKeys.push(item.navKey);
+      }
       if (item.children) _indexItems(item.children);
     });
   }
@@ -799,7 +839,14 @@
     const page = _pageMap[key];
     if (!page) return;
     const frame = document.getElementById('tr-frame');
-    if (frame) frame.src = page + '?id=' + encodeURIComponent(_prodId) + '&portal=1';
+    const extraParams = _paramsMap[key];
+    let src = page + '?id=' + encodeURIComponent(_prodId);
+    if (extraParams) {
+      Object.keys(extraParams).forEach(k => { src += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(extraParams[k]); });
+      if (!('tab' in extraParams)) src += '&tab=dashboard';
+    }
+    src += '&portal=1';
+    if (frame) frame.src = src;
   }
 
   // ── (inline loaders removed — trNav now loads real workspace pages in iframe) ──
