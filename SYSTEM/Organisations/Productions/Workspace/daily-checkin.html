@@ -603,7 +603,7 @@ function renderInTheShowCardBackTemplate({
   const pickupHtml = solo
     ? `<div class="in-show-back-line">Can leave on their own</div>`
     : pickups.length
-      ? pickups.map(p => `<div class="in-show-back-line">${esc(p.name)}${p.relationship ? ' (' + esc(p.relationship) + ')' : ''}${p.phone ? ' — ' + esc(p.phone) : ''}</div>`).join('')
+      ? pickups.map(p => `<div class="in-show-back-line">${esc(dciDisplayPickupName(p.name))}${p.relationship ? ' (' + esc(dciDisplayRelationship(p.relationship)) + ')' : ''}${p.phone ? ' — ' + esc(p.phone) : ''}</div>`).join('')
       : `<div class="in-show-back-line">Not on file</div>`;
   return `
     <div class="in-show-back-card">
@@ -960,6 +960,34 @@ function signoutChoicesForPerson(person) {
   return dedupePickupPeople(combined);
 }
 
+function dciNormalizeWordCase(part) {
+  const value = String(part || '').trim();
+  if (!value) return '';
+  if (value !== value.toLowerCase() && value !== value.toUpperCase()) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+}
+
+function dciNormalizeDisplayText(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .split(/(\s+|-|')/)
+    .map(part => (/^\s+$|^[-']$/.test(part) ? part : dciNormalizeWordCase(part)))
+    .join('');
+}
+
+function dciDisplayPickupName(value) {
+  return dciNormalizeDisplayText(value);
+}
+
+function dciDisplayRelationship(value) {
+  return dciNormalizeDisplayText(value);
+}
+
+function dciDisplayPickupNote(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
 function castPickupPreviewHtml(pickup) {
   const info = pickup || { solo: false, pickups: [], contacts: [], notes: '' };
   const approved = dedupePickupPeople(info.pickups || []).filter(person => String(person?.name || '').trim());
@@ -969,20 +997,20 @@ function castPickupPreviewHtml(pickup) {
   const cards = [];
 
   approved.forEach(person => {
-    const meta = [person.relationship, person.phone].filter(Boolean).join(' · ');
+    const meta = [dciDisplayRelationship(person.relationship), person.phone].filter(Boolean).join(' · ');
     cards.push(
       '<div class="dci-cast-pickup-card">' +
-        '<div class="dci-cast-pickup-name">' + esc(person.name) + '</div>' +
+        '<div class="dci-cast-pickup-name">' + esc(dciDisplayPickupName(person.name)) + '</div>' +
         (meta ? '<div class="dci-cast-pickup-meta">' + esc(meta) + '</div>' : '') +
       '</div>'
     );
   });
 
   contacts.forEach(person => {
-    const meta = [person.relationship, person.phone].filter(Boolean).join(' · ');
+    const meta = [dciDisplayRelationship(person.relationship), person.phone].filter(Boolean).join(' · ');
     cards.push(
       '<div class="dci-cast-pickup-card">' +
-        '<div class="dci-cast-pickup-name">' + esc(person.name) + '</div>' +
+        '<div class="dci-cast-pickup-name">' + esc(dciDisplayPickupName(person.name)) + '</div>' +
         (meta ? '<div class="dci-cast-pickup-meta">' + esc(meta) + '</div>' : '') +
       '</div>'
     );
@@ -995,7 +1023,7 @@ function castPickupPreviewHtml(pickup) {
     (cards.length
       ? '<div class="dci-cast-pickup-grid">' + cards.join('') + '</div>'
       : '<div class="dci-cast-pickup-empty">No approved pickup or contact listed yet.</div>') +
-    (info.notes ? '<div class="dci-cast-pickup-note">' + esc(info.notes) + '</div>' : '');
+    (info.notes ? '<div class="dci-cast-pickup-note">' + esc(dciDisplayPickupNote(info.notes)) + '</div>' : '');
 }
 
 function eventCalledCharacterIds(ev) {
@@ -1446,7 +1474,7 @@ function castCards(people, now) {
     const offFlag = p.offToday ? '<div class="dci-cast-flags"><div class="dci-cast-flag dci-cast-flag--off">' + esc(p.offTodayLabel || 'Requested off today') + '</div></div>' : '';
     const arrivedAt = p.checkedInAt ? fmtStamp(p.checkedInAt) : '—';
     const leftAt = p.signedOutAt ? fmtStamp(p.signedOutAt) : '—';
-    const leftWith = p.leftWithName ? 'Left with ' + p.leftWithName + (p.leftWithRelationship ? ' (' + p.leftWithRelationship + ')' : '') : '';
+    const leftWith = p.leftWithName ? 'Left with ' + dciDisplayPickupName(p.leftWithName) + (p.leftWithRelationship ? ' (' + dciDisplayRelationship(p.leftWithRelationship) + ')' : '') : '';
     const roleLabel = p.role || 'Ensemble';
     const cardName = p.displayName || p.name;
     return '<div class="dci-cast-card-wrap is-' + esc(s) + '" data-type="cast" data-ref="' + esc(p.refId) + '">' +
@@ -1519,8 +1547,9 @@ function openSignoutPicker(type, refId) {
   const person = getPerson(type, refId);
   if (!person || personStatus(person, new Date()) !== 'here') return;
   _pendingSignoutPerson = { type, refId };
-  document.getElementById('signout-picker-title').textContent = 'Sign out ' + person.name;
-  document.getElementById('signout-picker-copy').textContent = 'Is ' + person.name + ' signing out on their own, or leaving with someone else?';
+  const personLabel = person.displayName || person.name;
+  document.getElementById('signout-picker-title').textContent = 'Sign out ' + personLabel;
+  document.getElementById('signout-picker-copy').textContent = 'Is ' + personLabel + ' signing out on their own, or leaving with someone else?';
   document.getElementById('signout-other-name').value = '';
   document.getElementById('signout-choice-row').style.display = '';
   document.getElementById('signout-other-wrap').classList.remove('visible');
@@ -1531,9 +1560,9 @@ function openSignoutPicker(type, refId) {
   const choices = type === 'cast' ? signoutChoicesForPerson(person) : [];
   _pendingSignoutChoices = choices;
   list.innerHTML = choices.map((choice, idx) => {
-    const meta = [choice.relationship, choice.phone].filter(Boolean).join(' · ');
+    const meta = [dciDisplayRelationship(choice.relationship), choice.phone].filter(Boolean).join(' · ');
     return '<button type="button" class="signout-picker-btn" onclick="chooseSignoutOptionByIndex(' + idx + ')">' +
-      '<div class="signout-picker-name">' + esc(choice.name) + '</div>' +
+      '<div class="signout-picker-name">' + esc(dciDisplayPickupName(choice.name)) + '</div>' +
       (meta ? '<div class="signout-picker-meta">' + esc(meta) + '</div>' : '') +
     '</button>';
   }).join('');
