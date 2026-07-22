@@ -828,7 +828,9 @@ function comparePeopleForCheckin(a, b, now) {
   const bStatus = personStatus(b, now);
   const statusDiff = (order[aStatus] ?? 99) - (order[bStatus] ?? 99);
   if (statusDiff !== 0) return statusDiff;
-  return String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { sensitivity: 'base' });
+  const aName = String(a?.displayName || a?.name || '');
+  const bName = String(b?.displayName || b?.name || '');
+  return aName.localeCompare(bName, undefined, { sensitivity: 'base' });
 }
 
 function pillHtml(status) {
@@ -1127,6 +1129,21 @@ async function loadAll() {
   function fullNameFromRecord(row = {}) {
     return [row.first_name, row.last_name].filter(Boolean).join(' ') || row.name || 'Performer';
   }
+  function performerCardNameFromRecord(row = {}) {
+    const ca = row.custom_answers || {};
+    const preferred = String(
+      row.preferred_name ||
+      ca['Preferred Name'] ||
+      ca['Preferred name'] ||
+      ''
+    ).trim();
+    const first = String(
+      row.first_name ||
+      String(row.name || '').trim().split(/\s+/).filter(Boolean)[0] ||
+      ''
+    ).trim();
+    return preferred || first || 'Performer';
+  }
   function personKey(name, email) {
     return String(name || '').trim().toLowerCase() + '|' + String(email || '').trim().toLowerCase();
   }
@@ -1247,8 +1264,9 @@ async function loadAll() {
     if (!isRegisteredPerformer(a.custom_answers || {})) return;
     const id = String(a.id);
     const name = fullNameFromRecord(a);
+    const displayName = performerCardNameFromRecord(a);
     const email = a.email || '';
-    peopleById[id] = { name, email, phone: a.phone || '', headshot_url: a.headshot_url || '', date_conflicts: a.date_conflicts || null, custom_answers: a.custom_answers || {} };
+    peopleById[id] = { name, displayName, email, phone: a.phone || '', headshot_url: a.headshot_url || '', date_conflicts: a.date_conflicts || null, custom_answers: a.custom_answers || {} };
     normalizedPeopleKeyToId.set(personKey(name, email), id);
   });
   (booksRes.data || []).forEach(b => {
@@ -1256,8 +1274,9 @@ async function loadAll() {
     const id = String(b.id);
     if (peopleById[id]) return;
     const name = fullNameFromRecord(b);
+    const displayName = performerCardNameFromRecord(b);
     const email = b.email || '';
-    peopleById[id] = { name, email, phone: b.phone || '', headshot_url: b.headshot_url || '', guardian_name: b.guardian_name || '', guardian_email: b.guardian_email || '', contact_name: b.contact_name || '', custom_answers: b.custom_answers || {} };
+    peopleById[id] = { name, displayName, email, phone: b.phone || '', headshot_url: b.headshot_url || '', guardian_name: b.guardian_name || '', guardian_email: b.guardian_email || '', contact_name: b.contact_name || '', custom_answers: b.custom_answers || {} };
     const key = personKey(name, email);
     if (!normalizedPeopleKeyToId.has(key)) normalizedPeopleKeyToId.set(key, id);
   });
@@ -1276,11 +1295,12 @@ async function loadAll() {
     const assignmentId = String(row.id || '').trim();
     if (!assignmentId) return;
     const name = fullNameFromRecord(row);
+    const displayName = performerCardNameFromRecord(row);
     const email = row.email || '';
     const resolvedId = normalizedPeopleKeyToId.get(personKey(name, email)) || assignmentId;
     assignmentIdToResolvedPersonId.set(assignmentId, resolvedId);
     if (!peopleById[resolvedId]) {
-      peopleById[resolvedId] = { name, email, phone: row.phone || '', headshot_url: row.headshot_url || '', date_conflicts: row.date_conflicts || null, guardian_name: row.guardian_name || '', guardian_email: row.guardian_email || '', contact_name: row.contact_name || '', custom_answers: row.custom_answers || {} };
+      peopleById[resolvedId] = { name, displayName, email, phone: row.phone || '', headshot_url: row.headshot_url || '', date_conflicts: row.date_conflicts || null, guardian_name: row.guardian_name || '', guardian_email: row.guardian_email || '', contact_name: row.contact_name || '', custom_answers: row.custom_answers || {} };
     }
   });
 
@@ -1305,6 +1325,7 @@ async function loadAll() {
     return {
       id: personId,
       name: person.name || 'Performer',
+      displayName: person.displayName || String(person.name || '').trim().split(/\s+/)[0] || 'Performer',
       role: roleNames.join(', '),
       refId: String(personId),
       expectedStart: _eventStart,
@@ -1392,7 +1413,11 @@ function renderContent() {
 
 function filterList(list, now) {
   return list.filter(p => {
-    if (_search && !p.name.toLowerCase().includes(_search.toLowerCase()) && !p.role.toLowerCase().includes(_search.toLowerCase())) return false;
+    const search = _search.toLowerCase();
+    const fullName = String(p.name || '').toLowerCase();
+    const displayName = String(p.displayName || '').toLowerCase();
+    const role = String(p.role || '').toLowerCase();
+    if (_search && !fullName.includes(search) && !displayName.includes(search) && !role.includes(search)) return false;
     if (_statusFilter && personStatus(p, now) !== _statusFilter) return false;
     return true;
   }).sort((a, b) => comparePeopleForCheckin(a, b, now));
@@ -1423,9 +1448,10 @@ function castCards(people, now) {
     const leftAt = p.signedOutAt ? fmtStamp(p.signedOutAt) : '—';
     const leftWith = p.leftWithName ? 'Left with ' + p.leftWithName + (p.leftWithRelationship ? ' (' + p.leftWithRelationship + ')' : '') : '';
     const roleLabel = p.role || 'Ensemble';
+    const cardName = p.displayName || p.name;
     return '<div class="dci-cast-card-wrap is-' + esc(s) + '" data-type="cast" data-ref="' + esc(p.refId) + '">' +
-      '<button type="button" class="dci-cast-card-button" onclick="pressCastCard(\'' + esc(p.refId) + '\')" aria-label="' + esc(castCardActionLabel(s) + ' for ' + p.name) + '">' +
-      renderInTheShowCardFrontTemplate({ name: p.name, role: roleLabel, headshot_url: p.headshotUrl }) +
+      '<button type="button" class="dci-cast-card-button" onclick="pressCastCard(\'' + esc(p.refId) + '\')" aria-label="' + esc(castCardActionLabel(s) + ' for ' + cardName) + '">' +
+      renderInTheShowCardFrontTemplate({ name: cardName, role: roleLabel, headshot_url: p.headshotUrl }) +
       '</button>' +
       (timeStr ? '<div class="dci-cast-card-time">' + esc(timeStr) + '</div>' : '') +
       offFlag +
