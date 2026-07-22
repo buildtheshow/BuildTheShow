@@ -53,9 +53,6 @@
     .dci-stat.s-out .dci-stat-num { color: #572e88; }
 
     /* ── Alert strip ── */
-    .dci-alert-strip { background: rgba(239,171,69,0.07); border: 1.5px solid rgba(239,171,69,0.28); border-radius: 8px; padding: 0.55rem 0.9rem; display: flex; gap: 0; flex-wrap: wrap; align-items: stretch; margin-bottom: 1rem; }
-    .dci-alert-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.74rem; font-weight: 700; color: #5c4200; padding: 0.15rem 1rem 0.15rem 0; margin-right: 1rem; border-right: 1px solid rgba(239,171,69,0.25); }
-    .dci-alert-item:last-child { border-right: none; padding-right: 0; margin-right: 0; }
     .dci-alert-icon { width: 16px; height: 16px; flex-shrink: 0; }
 
     /* ── Tab bar ── */
@@ -307,9 +304,6 @@
       <div class="dci-stat s-away"><div class="dci-stat-num" id="stat-away">0</div><div class="dci-stat-lbl">Away today</div></div>
       <div class="dci-stat s-out"><div class="dci-stat-num" id="stat-out">0</div><div class="dci-stat-lbl">Signed out</div></div>
     </div>
-
-    <!-- Alert strip -->
-    <div class="dci-alert-strip" id="dci-alert-strip" style="display:none;"></div>
 
     <!-- Tab bar -->
     <div class="dci-tab-bar">
@@ -1096,7 +1090,6 @@ function renderDateDisplay() {
 function render() {
   renderDateDisplay();
   renderStats();
-  renderAlerts();
   renderContent();
 }
 
@@ -1116,33 +1109,6 @@ function renderStats() {
   document.getElementById('stat-not').textContent = notArr;
   document.getElementById('stat-away').textContent = away;
   document.getElementById('stat-out').textContent = out;
-}
-
-function renderAlerts() {
-  const strip = document.getElementById('dci-alert-strip');
-  const now = new Date();
-  const alerts = [];
-
-  const late = [..._volunteers, ..._cast].filter(p => personStatus(p, now) === 'not-arrived');
-  if (late.length) {
-    alerts.push('<div class="dci-alert-item"><img src="/ASSETS/Images/Icons/Alert.svg" class="dci-alert-icon" alt="" />' +
-      esc(late.length) + ' ' + (late.length === 1 ? 'person has' : 'people have') + ' not yet arrived</div>');
-  }
-
-  const overdue = [..._volunteers, ..._cast].filter(p => {
-    if (!p.checkedIn || p.signedOutAt) return false;
-    const endStr = p.shiftEnd || p.expectedEnd;
-    if (!endStr) return false;
-    const dt = new Date(_date + 'T' + String(endStr).slice(0, 5) + ':00');
-    return !isNaN(dt.getTime()) && now > dt;
-  });
-  if (overdue.length) {
-    alerts.push('<div class="dci-alert-item"><img src="/ASSETS/Images/Icons/Information.svg" class="dci-alert-icon" alt="" />' +
-      esc(overdue.length) + ' ' + (overdue.length === 1 ? 'person is' : 'people are') + ' still signed in past their scheduled end time</div>');
-  }
-
-  strip.style.display = alerts.length ? 'flex' : 'none';
-  strip.innerHTML = alerts.join('');
 }
 
 function renderContent() {
@@ -1358,7 +1324,7 @@ function doSignIn(type, refId) {
   const now = new Date().toISOString();
   person.checkedIn = true; person.checkedInAt = now; person.signedOutAt = null; person.awayToday = false;
   persist(type, refId, person);
-  renderStats(); renderAlerts(); renderContent();
+  renderStats(); renderContent();
 }
 
 function doSignOut(type, refId) {
@@ -1366,7 +1332,7 @@ function doSignOut(type, refId) {
   if (!person || !person.checkedIn) return;
   person.signedOutAt = new Date().toISOString();
   persist(type, refId, person);
-  renderStats(); renderAlerts(); renderContent();
+  renderStats(); renderContent();
 }
 
 function markAway(type, refId, isAway) {
@@ -1375,7 +1341,7 @@ function markAway(type, refId, isAway) {
   person.awayToday = isAway;
   if (isAway) { person.checkedIn = false; person.checkedInAt = null; person.signedOutAt = null; }
   persist(type, refId, person);
-  renderStats(); renderAlerts(); renderContent();
+  renderStats(); renderContent();
 }
 
 function signEveryoneOut() {
@@ -1387,7 +1353,7 @@ function signEveryoneOut() {
       persist(_cast.includes(p) ? 'cast' : 'volunteer', p.refId, p);
     }
   });
-  renderStats(); renderAlerts(); renderContent();
+  renderStats(); renderContent();
 }
 
 function resetEveryoneCheckin() {
@@ -1400,7 +1366,7 @@ function resetEveryoneCheckin() {
     p.awayToday = false;
     persist(_cast.includes(p) ? 'cast' : 'volunteer', p.refId, p);
   });
-  renderStats(); renderAlerts(); renderContent();
+  renderStats(); renderContent();
 }
 
 function getPerson(type, refId) {
@@ -1453,7 +1419,7 @@ async function saveAddSomeone() {
   if (type === 'cast') _cast.push(person); else _volunteers.push(person);
   closeAddSomeone();
   await persist(type, refId, person);
-  renderStats(); renderAlerts(); renderContent();
+  renderStats(); renderContent();
 }
 </script>
 
