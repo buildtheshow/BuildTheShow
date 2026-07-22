@@ -58,6 +58,7 @@
     .zeus-deadline-stack { display: flex; flex-direction: column; gap: 1px; pointer-events: none; margin-top: 1px; }
     .zeus-deadline-bar { height: 18px; display: flex; align-items: center; justify-content: center; padding: 0 6px; font-size: 9px; font-weight: 800; letter-spacing: 0.03em; color: #fff; overflow: hidden; white-space: nowrap; cursor: pointer; pointer-events: auto; box-sizing: border-box; }
     .zeus-deadline-bar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fc-daygrid-day.zeus-drop-hover { background: rgba(87,46,136,0.12); }
     .fc .fc-now-indicator-line { border-color: #e53935; }
     .fc .fc-scrollgrid { border-color: #e8e4f0; }
     .fc td, .fc th { border-color: #e8e4f0 !important; }
@@ -651,17 +652,50 @@
               bar.innerHTML = `<span>${safeTxt(info.event.title || 'Deadline')}</span>`;
               bar.addEventListener('click', e => {
                 e.preventDefault(); e.stopPropagation();
+                if (bar._justDragged) { bar._justDragged = false; return; }
                 openEventModal({ fcEvent: info.event });
               });
               if (canEditProductionCalendar()) {
-                bar.draggable = true;
                 bar.style.cursor = 'grab';
-                bar.addEventListener('dragstart', e => {
-                  window._draggingDeadlineEvent = info.event;
-                  e.dataTransfer.effectAllowed = 'move';
-                  try { e.dataTransfer.setData('text/plain', String(info.event.id)); } catch {}
+                bar.addEventListener('mousedown', e => {
+                  if (e.button !== 0) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const startX = e.clientX, startY = e.clientY;
+                  let moved = false, ghost = null;
+                  const onMove = ev => {
+                    if (!moved && Math.hypot(ev.clientX - startX, ev.clientY - startY) > 6) {
+                      moved = true;
+                      bar.style.opacity = '0.35';
+                      ghost = bar.cloneNode(true);
+                      ghost.style.cssText = `position:fixed;left:0;top:0;width:${bar.offsetWidth}px;pointer-events:none;z-index:9999;opacity:0.92;box-shadow:0 6px 16px rgba(0,0,0,0.28);background:${bar.style.background};`;
+                      document.body.appendChild(ghost);
+                    }
+                    if (moved && ghost) {
+                      ghost.style.transform = `translate(${ev.clientX + 10}px, ${ev.clientY + 10}px)`;
+                      document.querySelectorAll('.fc-daygrid-day.zeus-drop-hover').forEach(c => c.classList.remove('zeus-drop-hover'));
+                      const cellUnder = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.fc-daygrid-day');
+                      if (cellUnder) cellUnder.classList.add('zeus-drop-hover');
+                    }
+                  };
+                  const onUp = ev => {
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                    bar.style.opacity = '';
+                    if (ghost) ghost.remove();
+                    document.querySelectorAll('.fc-daygrid-day.zeus-drop-hover').forEach(c => c.classList.remove('zeus-drop-hover'));
+                    if (moved) {
+                      bar._justDragged = true;
+                      const cellUnder = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.fc-daygrid-day');
+                      if (cellUnder && cellUnder.dataset.date) {
+                        const newDate = new Date(cellUnder.dataset.date + 'T00:00:00');
+                        showMoveDupModal(info.event, { start: newDate, end: newDate });
+                      }
+                    }
+                  };
+                  document.addEventListener('mousemove', onMove);
+                  document.addEventListener('mouseup', onUp);
                 });
-                bar.addEventListener('dragend', () => { window._draggingDeadlineEvent = null; });
               }
               stack.appendChild(bar);
             }
@@ -717,25 +751,6 @@
       if (legend && !legend.dataset.tapBound) {
         legend.dataset.tapBound = '1';
         legend.addEventListener('click', handleCalendarLegendTap);
-      }
-      const calEl = document.getElementById('fc-calendar');
-      if (calEl && !calEl.dataset.deadlineDropBound) {
-        calEl.dataset.deadlineDropBound = '1';
-        calEl.addEventListener('dragover', e => {
-          if (!window._draggingDeadlineEvent) return;
-          if (!e.target.closest('.fc-daygrid-day')) return;
-          e.preventDefault();
-        });
-        calEl.addEventListener('drop', e => {
-          const draggingEvent = window._draggingDeadlineEvent;
-          window._draggingDeadlineEvent = null;
-          if (!draggingEvent) return;
-          const cell = e.target.closest('.fc-daygrid-day');
-          if (!cell || !cell.dataset.date) return;
-          e.preventDefault();
-          const newDate = new Date(cell.dataset.date + 'T00:00:00');
-          showMoveDupModal(draggingEvent, { start: newDate, end: newDate });
-        });
       }
     }
 
