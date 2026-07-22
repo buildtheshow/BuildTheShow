@@ -349,6 +349,8 @@
     .dci-cast-pickup-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 0.26rem 0.56rem; background: rgba(118,158,123,0.18); color: #355e3c; font-size: 0.62rem; font-weight: 900; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; max-width: 100%; font-family: var(--bts-font); }
     .dci-cast-pickup-grid { display: grid; gap: 0.5rem; }
     .dci-cast-pickup-card { border-radius: 12px; border: 1px solid rgba(87,46,136,0.08); background: #fcfbfe; padding: 0.62rem 0.68rem; display: grid; gap: 0.14rem; font-family: var(--bts-font); }
+    button.dci-cast-pickup-card { width: 100%; text-align: left; cursor: pointer; transition: border-color 0.12s ease, background 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease; }
+    button.dci-cast-pickup-card:hover { background: rgba(87,46,136,0.04); border-color: rgba(87,46,136,0.2); transform: translateY(-1px); box-shadow: 0 10px 22px rgba(87,46,136,0.08); }
     .dci-cast-pickup-name { font-size: 0.76rem; font-weight: 900; color: #1a1530; line-height: 1.2; font-family: var(--bts-font); }
     .dci-cast-pickup-meta { font-size: 0.68rem; color: rgba(87,46,136,0.7); line-height: 1.35; font-family: var(--bts-font); }
     .dci-cast-pickup-note { border-radius: 12px; background: rgba(87,46,136,0.05); padding: 0.62rem 0.68rem; font-size: 0.7rem; font-weight: 600; line-height: 1.45; color: #5f4f79; font-family: var(--bts-font); }
@@ -1008,8 +1010,11 @@ function dciDisplayPickupNote(value) {
   return String(value || '').trim().replace(/\s+/g, ' ');
 }
 
-function castPickupPreviewHtml(pickup) {
+function castPickupPreviewHtml(pickup, opts = {}) {
   const info = pickup || { solo: false, pickups: [], contacts: [], notes: '' };
+  const isDirectSignout = !!opts.directSignout;
+  const type = String(opts.type || 'cast');
+  const refId = String(opts.refId || '');
   const approved = dedupePickupPeople(info.pickups || []).filter(person => String(person?.name || '').trim());
   const contacts = dedupePickupPeople(info.contacts || [])
     .filter(person => String(person?.name || '').trim())
@@ -1018,21 +1023,29 @@ function castPickupPreviewHtml(pickup) {
 
   approved.forEach(person => {
     const meta = [dciDisplayRelationship(person.relationship), person.phone].filter(Boolean).join(' · ');
+    const openTag = isDirectSignout
+      ? '<button type="button" class="dci-cast-pickup-card" onclick="signOutWithListedPickup(\'' + esc(type) + '\',\'' + esc(refId) + '\',\'' + esc(String(person.name || '')) + '\',\'' + esc(String(person.relationship || '')) + '\')">'
+      : '<div class="dci-cast-pickup-card">';
+    const closeTag = isDirectSignout ? '</button>' : '</div>';
     cards.push(
-      '<div class="dci-cast-pickup-card">' +
+      openTag +
         '<div class="dci-cast-pickup-name">' + esc(dciDisplayPickupName(person.name)) + '</div>' +
         (meta ? '<div class="dci-cast-pickup-meta">' + esc(meta) + '</div>' : '') +
-      '</div>'
+      closeTag
     );
   });
 
   contacts.forEach(person => {
     const meta = [dciDisplayRelationship(person.relationship), person.phone].filter(Boolean).join(' · ');
+    const openTag = isDirectSignout
+      ? '<button type="button" class="dci-cast-pickup-card" onclick="signOutWithListedPickup(\'' + esc(type) + '\',\'' + esc(refId) + '\',\'' + esc(String(person.name || '')) + '\',\'' + esc(String(person.relationship || '')) + '\')">'
+      : '<div class="dci-cast-pickup-card">';
+    const closeTag = isDirectSignout ? '</button>' : '</div>';
     cards.push(
-      '<div class="dci-cast-pickup-card">' +
+      openTag +
         '<div class="dci-cast-pickup-name">' + esc(dciDisplayPickupName(person.name)) + '</div>' +
         (meta ? '<div class="dci-cast-pickup-meta">' + esc(meta) + '</div>' : '') +
-      '</div>'
+      closeTag
     );
   });
 
@@ -1500,7 +1513,7 @@ function castCards(people, now) {
     return '<div class="dci-cast-card-wrap is-' + esc(s) + '" data-type="cast" data-ref="' + esc(p.refId) + '">' +
       (timeStr ? '<div class="dci-cast-card-time">' + esc(timeStr) + '</div>' : '') +
       '<div class="dci-cast-side">' +
-        '<div class="dci-cast-pickup">' + castPickupPreviewHtml(pickup) + '</div>' +
+        '<div class="dci-cast-pickup">' + castPickupPreviewHtml(pickup, { directSignout: s === 'here', type: 'cast', refId: p.refId }) + '</div>' +
         '<div class="dci-cast-card-times">' +
           '<div class="dci-cast-time-box"><div class="dci-cast-time-label">Arrived</div><div class="dci-cast-time-value' + (p.checkedInAt ? '' : ' empty') + '">' + esc(arrivedAt) + '</div></div>' +
           '<div class="dci-cast-time-box"><div class="dci-cast-time-label">Left</div><div class="dci-cast-time-value' + (p.signedOutAt ? '' : ' empty') + '">' + esc(leftAt) + '</div></div>' +
@@ -1612,6 +1625,15 @@ function chooseSelfSignout() {
   const person = getPerson(pending.type, pending.refId);
   closeSignoutPicker();
   doSignOut(pending.type, pending.refId, { name: person?.name || 'Self', relationship: 'Self sign-out' });
+}
+
+function signOutWithListedPickup(type, refId, name, relationship) {
+  const person = getPerson(type, refId);
+  if (!person || personStatus(person, new Date()) !== 'here') return;
+  doSignOut(type, refId, {
+    name: String(name || '').trim(),
+    relationship: String(relationship || '').trim(),
+  });
 }
 
 function showOtherSignoutOptions() {
