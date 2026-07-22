@@ -252,8 +252,8 @@
     .pickup-edit-box { max-width: 720px; width: min(92vw, 720px); }
     .pickup-edit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; }
     .pickup-edit-group { border: 1px solid rgba(87,46,136,0.1); border-radius: 14px; padding: 0.95rem; background: #fcfbfe; }
-    .pickup-edit-group.is-hidden { display: none; }
     .pickup-edit-group-title { font-size: 0.74rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(87,46,136,0.52); margin-bottom: 0.75rem; }
+    .pickup-edit-people { display: grid; gap: 0.8rem; }
     .pickup-edit-add { margin-top: 0.15rem; border: none; background: none; padding: 0; color: #572e88; font-family: var(--bts-font); font-size: 0.8rem; font-weight: 900; cursor: pointer; justify-self: start; }
     .pickup-edit-add:hover { color: #4a2575; }
     .pickup-edit-check { display: flex; align-items: center; gap: 0.55rem; margin-top: 0.3rem; }
@@ -268,7 +268,6 @@
       .dci-tbl th.hm, .dci-tbl td.hm { display: none; }
       .dci-pname, .dci-prole { max-width: 120px; }
       .dci-stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; }
-      .pickup-edit-grid { grid-template-columns: 1fr; }
     }
 
     .dci-print-root { display: none; }
@@ -679,39 +678,8 @@
 <div class="modal-overlay" id="modal-pickup-edit">
   <div class="modal-box pickup-edit-box">
     <div class="modal-title" id="pickup-edit-title">Edit pickup / drop off</div>
-    <div class="pickup-edit-grid">
-      <div class="pickup-edit-group">
-        <div class="pickup-edit-group-title">Approved Pickup 1</div>
-        <div class="modal-field">
-          <label class="modal-lbl" for="pickup-1-name">Full name</label>
-          <input type="text" id="pickup-1-name" class="modal-inp" placeholder="Name" />
-        </div>
-        <div class="modal-field">
-          <label class="modal-lbl" for="pickup-1-relationship">Relationship</label>
-          <input type="text" id="pickup-1-relationship" class="modal-inp" placeholder="e.g. Mother, Aunt, Grandpa" />
-        </div>
-        <div class="modal-field" style="margin-bottom:0;">
-          <label class="modal-lbl" for="pickup-1-phone">Phone number</label>
-          <input type="text" id="pickup-1-phone" class="modal-inp" placeholder="Phone number" />
-        </div>
-      </div>
-      <div class="pickup-edit-group is-hidden" id="pickup-edit-group-2">
-        <div class="pickup-edit-group-title">Approved Pickup 2</div>
-        <div class="modal-field">
-          <label class="modal-lbl" for="pickup-2-name">Full name</label>
-          <input type="text" id="pickup-2-name" class="modal-inp" placeholder="Name" />
-        </div>
-        <div class="modal-field">
-          <label class="modal-lbl" for="pickup-2-relationship">Relationship</label>
-          <input type="text" id="pickup-2-relationship" class="modal-inp" placeholder="e.g. Father, Family Friend" />
-        </div>
-        <div class="modal-field" style="margin-bottom:0;">
-          <label class="modal-lbl" for="pickup-2-phone">Phone number</label>
-          <input type="text" id="pickup-2-phone" class="modal-inp" placeholder="Phone number" />
-        </div>
-      </div>
-    </div>
-    <button type="button" class="pickup-edit-add" id="pickup-edit-add-btn" onclick="showSecondPickupEditor()">+ Add Approved Pickup</button>
+    <div class="pickup-edit-people" id="pickup-edit-people"></div>
+    <button type="button" class="pickup-edit-add" id="pickup-edit-add-btn" onclick="addPickupEditorRow()">+ Add Approved Pickup</button>
     <div class="modal-field" style="margin-top:0.95rem;">
       <label class="modal-lbl" for="pickup-notes">Pickup / drop off notes</label>
       <textarea id="pickup-notes" class="modal-inp" rows="4" placeholder="Anything the team should remember for pickup or dismissal."></textarea>
@@ -1305,7 +1273,16 @@ function buildDciPickupInfo(person) {
   const soloRaw = ca['Performer can leave on their own'];
   const solo = soloRaw === true || soloRaw === 'true' || soloRaw === 'Yes';
   const pickups = [];
-  [1, 2].forEach(n => {
+  const pickupIndexes = Array.from(new Set(
+    Object.keys(ca)
+      .map(key => {
+        const match = String(key || '').match(/^Authori[sz]ed pickup (\d+) (?:full name|relationship to performer|phone number)$/i);
+        return match ? Number(match[1]) : null;
+      })
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b)
+  ));
+  (pickupIndexes.length ? pickupIndexes : [1, 2]).forEach(n => {
     const name = dciAnswerVal(ca, ['Authorised pickup ' + n + ' full name', 'Authorized pickup ' + n + ' full name']);
     if (!name) return;
     pickups.push({
@@ -1539,7 +1516,16 @@ async function loadAll() {
     const soloRaw = ca['Performer can leave on their own'];
     const solo = soloRaw === true || soloRaw === 'true' || soloRaw === 'Yes';
     const pickups = [];
-    [1, 2].forEach(n => {
+    const pickupIndexes = Array.from(new Set(
+      Object.keys(ca)
+        .map(key => {
+          const match = String(key || '').match(/^Authori[sz]ed pickup (\d+) (?:full name|relationship to performer|phone number)$/i);
+          return match ? Number(match[1]) : null;
+        })
+        .filter(Number.isFinite)
+        .sort((a, b) => a - b)
+    ));
+    (pickupIndexes.length ? pickupIndexes : [1, 2]).forEach(n => {
       const name = answerVal(ca, ['Authorised pickup ' + n + ' full name', 'Authorized pickup ' + n + ' full name']);
       if (!name) return;
       pickups.push({
@@ -2330,16 +2316,43 @@ function setPickupSoloAnswer(ca, allowed) {
   ca[key] = allowed ? 'Yes' : 'No';
 }
 
-function setSecondPickupEditorVisible(visible) {
-  const group = document.getElementById('pickup-edit-group-2');
-  const btn = document.getElementById('pickup-edit-add-btn');
-  if (group) group.classList.toggle('is-hidden', !visible);
-  if (btn) btn.style.display = visible ? 'none' : '';
+function pickupEditorGroupHtml(index, person = {}) {
+  return '<div class="pickup-edit-group" data-pickup-index="' + esc(String(index)) + '">' +
+    '<div class="pickup-edit-group-title">Approved Pickup ' + esc(String(index)) + '</div>' +
+    '<div class="pickup-edit-grid">' +
+      '<div class="modal-field">' +
+        '<label class="modal-lbl">Full name</label>' +
+        '<input type="text" class="modal-inp" data-pickup-field="name" placeholder="Name" value="' + esc(person.name || '') + '" />' +
+      '</div>' +
+      '<div class="modal-field">' +
+        '<label class="modal-lbl">Relationship</label>' +
+        '<input type="text" class="modal-inp" data-pickup-field="relationship" placeholder="e.g. Mother, Aunt, Grandpa" value="' + esc(person.relationship || '') + '" />' +
+      '</div>' +
+      '<div class="modal-field" style="margin-bottom:0;">' +
+        '<label class="modal-lbl">Phone number</label>' +
+        '<input type="text" class="modal-inp" data-pickup-field="phone" placeholder="Phone number" value="' + esc(person.phone || '') + '" />' +
+      '</div>' +
+    '</div>' +
+  '</div>';
 }
 
-function showSecondPickupEditor() {
-  setSecondPickupEditorVisible(true);
-  const target = document.getElementById('pickup-2-name');
+function pickupEditorRows() {
+  return Array.from(document.querySelectorAll('#pickup-edit-people .pickup-edit-group'));
+}
+
+function renderPickupEditorRows(people) {
+  const host = document.getElementById('pickup-edit-people');
+  if (!host) return;
+  const list = Array.isArray(people) && people.length ? people : [{}];
+  host.innerHTML = list.map((person, idx) => pickupEditorGroupHtml(idx + 1, person)).join('');
+}
+
+function addPickupEditorRow(person = {}) {
+  const host = document.getElementById('pickup-edit-people');
+  if (!host) return;
+  const nextIndex = pickupEditorRows().length + 1;
+  host.insertAdjacentHTML('beforeend', pickupEditorGroupHtml(nextIndex, person));
+  const target = host.querySelector('.pickup-edit-group:last-child [data-pickup-field="name"]');
   if (target) target.focus();
 }
 
@@ -2351,27 +2364,19 @@ function openPickupEditor(refId) {
     ...(person.pickup?.pickups || []),
     ...(person.pickup?.contacts || []),
   ])
-    .filter(p => String(p?.name || '').trim())
-    .slice(0, 2);
-  const first = existingPeople[0] || {};
-  const second = existingPeople[1] || {};
+    .filter(p => String(p?.name || '').trim());
   document.getElementById('pickup-edit-title').textContent = 'Edit pickup / drop off for ' + (person.displayName || person.name || 'performer');
-  document.getElementById('pickup-1-name').value = first.name || '';
-  document.getElementById('pickup-1-relationship').value = first.relationship || '';
-  document.getElementById('pickup-1-phone').value = first.phone || '';
-  document.getElementById('pickup-2-name').value = second.name || '';
-  document.getElementById('pickup-2-relationship').value = second.relationship || '';
-  document.getElementById('pickup-2-phone').value = second.phone || '';
-  setSecondPickupEditorVisible(!!(second.name || second.relationship || second.phone));
+  renderPickupEditorRows(existingPeople);
   document.getElementById('pickup-notes').value = person.pickup?.notes || '';
   document.getElementById('pickup-solo').checked = !!person.pickup?.solo;
   document.getElementById('modal-pickup-edit').classList.add('visible');
-  document.getElementById('pickup-1-name').focus();
+  const firstName = document.querySelector('#pickup-edit-people [data-pickup-field="name"]');
+  if (firstName) firstName.focus();
 }
 
 function closePickupEditor() {
   _editingPickupRefId = null;
-  setSecondPickupEditorVisible(false);
+  renderPickupEditorRows([{}]);
   document.getElementById('modal-pickup-edit').classList.remove('visible');
 }
 
@@ -2396,21 +2401,25 @@ async function savePickupEditor() {
   if (!person || !person.sourceTable || !person.sourceId) return;
 
   const nextAnswers = { ...(person.custom_answers || {}) };
-  const pickup1Name = document.getElementById('pickup-1-name').value;
-  const pickup1Relationship = document.getElementById('pickup-1-relationship').value;
-  const pickup1Phone = document.getElementById('pickup-1-phone').value;
-  const pickup2Name = document.getElementById('pickup-2-name').value;
-  const pickup2Relationship = document.getElementById('pickup-2-relationship').value;
-  const pickup2Phone = document.getElementById('pickup-2-phone').value;
+  const pickups = pickupEditorRows().map(row => ({
+    name: String(row.querySelector('[data-pickup-field="name"]')?.value || '').trim(),
+    relationship: String(row.querySelector('[data-pickup-field="relationship"]')?.value || '').trim(),
+    phone: String(row.querySelector('[data-pickup-field="phone"]')?.value || '').trim(),
+  })).filter(entry => entry.name || entry.relationship || entry.phone);
   const notes = document.getElementById('pickup-notes').value;
   const canSolo = document.getElementById('pickup-solo').checked;
 
-  setPickupAnswer(nextAnswers, ['Authorised pickup 1 full name', 'Authorized pickup 1 full name'], pickup1Name);
-  setPickupAnswer(nextAnswers, ['Authorised pickup 1 relationship to performer', 'Authorized pickup 1 relationship to performer'], pickup1Relationship);
-  setPickupAnswer(nextAnswers, ['Authorised pickup 1 phone number', 'Authorized pickup 1 phone number'], pickup1Phone);
-  setPickupAnswer(nextAnswers, ['Authorised pickup 2 full name', 'Authorized pickup 2 full name'], pickup2Name);
-  setPickupAnswer(nextAnswers, ['Authorised pickup 2 relationship to performer', 'Authorized pickup 2 relationship to performer'], pickup2Relationship);
-  setPickupAnswer(nextAnswers, ['Authorised pickup 2 phone number', 'Authorized pickup 2 phone number'], pickup2Phone);
+  Object.keys(nextAnswers).forEach(key => {
+    if (/^Authori[sz]ed pickup \d+ (full name|relationship to performer|phone number)$/i.test(String(key || ''))) {
+      delete nextAnswers[key];
+    }
+  });
+  pickups.forEach((entry, idx) => {
+    const n = idx + 1;
+    setPickupAnswer(nextAnswers, ['Authorised pickup ' + n + ' full name', 'Authorized pickup ' + n + ' full name'], entry.name);
+    setPickupAnswer(nextAnswers, ['Authorised pickup ' + n + ' relationship to performer', 'Authorized pickup ' + n + ' relationship to performer'], entry.relationship);
+    setPickupAnswer(nextAnswers, ['Authorised pickup ' + n + ' phone number', 'Authorized pickup ' + n + ' phone number'], entry.phone);
+  });
   setPickupAnswer(nextAnswers, ['Additional pickup notes'], notes);
   setPickupSoloAnswer(nextAnswers, canSolo);
 
