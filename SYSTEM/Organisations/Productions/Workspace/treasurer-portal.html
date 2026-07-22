@@ -446,6 +446,7 @@
         _prodId = preview.prodId;
         _previewPerson = preview.person || null;
         _volEmail = String(_previewPerson?.email || '').trim().toLowerCase();
+        _volRole = _previewPerson?.roleLabel || '';
         try { sessionStorage.removeItem(key); } catch (_) {}
         try { localStorage.removeItem(key); } catch (_) {}
         try { sessionStorage.removeItem(legacyKey); } catch (_) {}
@@ -473,9 +474,29 @@
     }
   }
 
-  // This portal now serves any volunteer_signups person (not just treasurers), so
-  // access is driven entirely by explicit portal_permissions rows saved from the
-  // Manage Access modal — no hardcoded role defaults here. No saved row = no access.
+  // Role-based fallback defaults — only used when a person has NO saved
+  // portal_permissions rows at all (Manage Access has never been opened/saved
+  // for them). The moment Katie saves Manage Access for someone, that explicit
+  // row set becomes the whole truth and this table is ignored for them.
+  // Mirrors ROLE_DEFAULT_ACCESS in portals.html.
+  const ROLE_DEFAULT_ACCESS = {
+    volunteer: { 'volunteers:calendar': 'view', 'volunteers:requests': 'view' },
+    dept_lead: { 'volunteers': 'edit', 'departments': 'view', 'financials:budgeting': 'view' },
+    treasurer: {
+      'financials': 'view', 'financials:dashboard': 'view', 'financials:budgeting': 'edit',
+      'financials:receipts': 'view', 'financials:reports': 'view',
+      'cast': 'none', 'cast:registration': 'view',
+      'cast:registration:dashboard': 'view', 'cast:registration:form': 'none',
+      'cast:registration:status': 'view', 'cast:registration:settings': 'none',
+    },
+  };
+
+  function volunteerRoleKey(roleName) {
+    const clean = String(roleName || '').trim();
+    if (clean === 'Treasurer') return 'treasurer';
+    if (/^lead\s/i.test(clean)) return 'dept_lead';
+    return 'volunteer';
+  }
 
   // Full sidebar definition: mirrors SIDEBAR_TREE from portals.html + main sidebar
   // Each section: { key, label, icon, items: [{ key, navKey, label, page } | { label, children: [...] }] }
@@ -662,6 +683,17 @@
     for (let i = parts.length - 1; i > 0; i--) {
       const parent = parts.slice(0, i).join(':');
       if (perms && perms[parent] !== undefined) return perms[parent];
+    }
+    // No saved permission rows at all for this person -> fall back to their role's
+    // default template. If they have ANY saved rows, that set is authoritative and
+    // we don't fall back for individual missing keys within it.
+    if (!perms) {
+      const defs = ROLE_DEFAULT_ACCESS[volunteerRoleKey(_volRole)] || {};
+      if (defs[key] !== undefined) return defs[key];
+      for (let i = parts.length - 1; i > 0; i--) {
+        const parent = parts.slice(0, i).join(':');
+        if (defs[parent] !== undefined) return defs[parent];
+      }
     }
     return 'none';
   }
