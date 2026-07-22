@@ -65,6 +65,33 @@
       .fd-stats { grid-template-columns: 1fr 1fr; }
     }
     @media (max-width: 520px) { .fd-stats { grid-template-columns: 1fr; } }
+
+    /* Budget by category table */
+    .fd-tbl-ledger { background: #fff; border: 1px solid #e7e2f2; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 26px rgba(87,46,136,0.06); margin-bottom: 1.5rem; }
+    .fd-tbl-col-head, .fd-tbl-cat-row { display: grid; grid-template-columns: 30px minmax(200px,1fr) 110px 96px 96px 96px 104px 130px; align-items: center; }
+    .fd-tbl-col-head { background: #fff; border-bottom: 1px solid #e8e3f4; padding: 0.18rem 0; }
+    .fd-tbl-th { font-size: 0.68rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; color: #70638d; padding: 0.55rem 0.7rem; }
+    .fd-tbl-th:first-child { padding-left: 1rem; }
+    .fd-tbl-th--r { text-align: right; }
+    .fd-tbl-cat-row { min-height: 44px; border-bottom: 1px solid #f1edf8; }
+    .fd-tbl-cat-row:last-child { border-bottom: none; }
+    .fd-tbl-cat-icon { width: 10px; height: 10px; border-radius: 50%; margin-left: 1rem; }
+    .fd-tbl-cat-name { font-size: 0.84rem; font-weight: 900; color: #241b42; padding: 0 0.7rem; }
+    .fd-tbl-cell { padding: 0 0.7rem; text-align: right; font-size: 0.82rem; font-weight: 800; color: #2d2450; font-variant-numeric: tabular-nums; }
+    .fd-tbl-cell--muted { color: #9f93b9; }
+    .fd-tbl-progress { display: flex; align-items: center; gap: 0.55rem; padding: 0 0.7rem 0 0.2rem; }
+    .fd-tbl-progress-track { flex: 1; height: 7px; border-radius: 999px; background: rgba(87,46,136,0.09); overflow: hidden; }
+    .fd-tbl-progress-fill { height: 100%; border-radius: 999px; min-width: 0; }
+    .fd-tbl-progress-pct { width: 34px; text-align: right; font-size: 0.76rem; font-weight: 900; color: #4a3d6b; }
+    @media (max-width: 900px) {
+      .fd-tbl-col-head { display: none; }
+      .fd-tbl-cat-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.9rem; padding: 0.65rem 0.9rem; }
+      .fd-tbl-cat-icon { margin-left: 0; }
+      .fd-tbl-cat-name { flex: 1 1 100%; padding: 0; }
+      .fd-tbl-cell { text-align: left; padding: 0; }
+      .fd-tbl-cell::before { content: attr(data-label) ": "; color: #9f93b9; font-weight: 700; }
+      .fd-tbl-progress { flex: 1 1 100%; padding: 0.2rem 0 0; }
+    }
   </style>
 </head>
 <body>
@@ -136,6 +163,15 @@
 
       </div>
 
+      <!-- Budget by Category -->
+      <div class="fd-card" style="margin-bottom:1.5rem;">
+        <div class="fd-card-title">Budget by Category</div>
+        <div id="fd-cat-table"></div>
+        <div class="fd-act-footer" style="display:flex;">
+          <button class="fd-act-link" onclick="FD.goTo('budgeting')">Manage full budget &#8594;</button>
+        </div>
+      </div>
+
       <!-- Recent Activity -->
       <div class="fd-card">
         <div class="fd-card-title">Recent Activity</div>
@@ -189,7 +225,60 @@
         if (budgetIcon && currency === 'GBP') budgetIcon.src = '/ASSETS/Images/Icons/Budgeting-total-spent-gbp.svg';
       } catch(_) {}
       this.renderStats();
+      this.renderCategoryTable();
       this.renderActivity();
+    },
+
+    renderCategoryTable() {
+      const host = document.getElementById('fd-cat-table');
+      if (!host) return;
+      const expCats = this.cats.filter(c => c.type === 'expense');
+      if (!expCats.length) {
+        host.innerHTML = '<div style="color:#b0a8c8;font-size:0.84rem;padding:0.5rem 0;">No budget categories set up yet.</div>';
+        return;
+      }
+
+      let html = '<div class="fd-tbl-ledger">';
+      html += '<div class="fd-tbl-col-head">' +
+        '<div></div>' +
+        '<div class="fd-tbl-th">Category</div>' +
+        '<div class="fd-tbl-th fd-tbl-th--r">Budget</div>' +
+        '<div class="fd-tbl-th fd-tbl-th--r">Spent</div>' +
+        '<div class="fd-tbl-th fd-tbl-th--r">Pending</div>' +
+        '<div class="fd-tbl-th fd-tbl-th--r">Total</div>' +
+        '<div class="fd-tbl-th fd-tbl-th--r">Remaining</div>' +
+        '<div class="fd-tbl-th">Progress</div>' +
+      '</div>';
+
+      const dash = '<span class="fd-tbl-cell--muted">–</span>';
+      expCats.forEach(c => {
+        const color = c.color || '#572e88';
+        const items = this.items.filter(i => i.category_id === c.id);
+        const itemBudget = items.reduce((s, i) => s + (i.budgeted_cents || 0), 0);
+        const catBudget = itemBudget || c.planned_cents || 0;
+        const catSpent = items.reduce((s, i) => s + (i.paid_cents || 0), 0);
+        const catPending = items.reduce((s, i) => s + Math.max(0, (i.committed_cents || 0) - (i.paid_cents || 0)), 0);
+        const catActual = catSpent + catPending;
+        const catTotal = catActual || catBudget;
+        const catRemaining = catBudget - catActual;
+        const pct = catBudget > 0 ? Math.max(0, Math.min(100, Math.round(catActual / catBudget * 100))) : 0;
+
+        html += '<div class="fd-tbl-cat-row">' +
+          '<div class="fd-tbl-cat-icon" style="background:' + color + ';"></div>' +
+          '<div class="fd-tbl-cat-name">' + this.esc(c.name) + '</div>' +
+          '<div class="fd-tbl-cell" data-label="Budget">' + (catBudget ? this.fmt$(catBudget) : dash) + '</div>' +
+          '<div class="fd-tbl-cell" data-label="Spent">' + (catSpent ? this.fmt$(catSpent) : dash) + '</div>' +
+          '<div class="fd-tbl-cell" data-label="Pending">' + (catPending ? this.fmt$(catPending) : dash) + '</div>' +
+          '<div class="fd-tbl-cell" data-label="Total">' + (catTotal ? this.fmt$(catTotal) : dash) + '</div>' +
+          '<div class="fd-tbl-cell" data-label="Remaining" style="color:' + (catRemaining < 0 ? '#d1523d' : '#13811f') + ';">' + (catRemaining ? this.fmt$(catRemaining) : dash) + '</div>' +
+          '<div class="fd-tbl-progress">' +
+            '<div class="fd-tbl-progress-track"><div class="fd-tbl-progress-fill" style="width:' + pct + '%;background:' + color + ';"></div></div>' +
+            '<div class="fd-tbl-progress-pct">' + pct + '%</div>' +
+          '</div>' +
+        '</div>';
+      });
+      html += '</div>';
+      host.innerHTML = html;
     },
 
     renderStats() {
