@@ -108,6 +108,7 @@
     .dci-hrs.done { font-size: 0.78rem; font-weight: 800; color: #2d6e35; }
     .dci-hrs.inprog { font-size: 0.78rem; font-weight: 800; color: #572e88; font-style: italic; }
     .dci-hrs.none { font-size: 0.78rem; color: rgba(26,21,48,0.22); }
+    .dci-cast-left-note { text-align: center; font-size: 0.68rem; font-weight: 800; color: rgba(87,46,136,0.72); line-height: 1.25; margin-top: -0.05rem; }
 
     /* row action buttons */
     .dci-row-acts { display: flex; align-items: center; gap: 0.3rem; }
@@ -158,6 +159,12 @@
     .modal-footer { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.1rem; }
     .modal-cancel { padding: 0.42rem 0.95rem; border-radius: 7px; border: 1.5px solid rgba(87,46,136,0.18); background: #fff; color: rgba(26,21,48,0.55); font-size: 0.78rem; font-weight: 800; cursor: pointer; font-family: var(--bts-font); }
     .modal-save { padding: 0.42rem 1.1rem; border-radius: 7px; border: none; background: #572e88; color: #fff; font-size: 0.78rem; font-weight: 800; cursor: pointer; font-family: var(--bts-font); }
+    .signout-picker-list { display: grid; gap: 0.6rem; margin-top: 1rem; }
+    .signout-picker-btn { width: 100%; text-align: left; padding: 0.8rem 0.9rem; border-radius: 12px; border: 1.5px solid rgba(87,46,136,0.12); background: #fcfbfe; color: #1a1530; font-family: var(--bts-font); cursor: pointer; display: grid; gap: 0.15rem; }
+    .signout-picker-btn:hover { background: rgba(87,46,136,0.04); border-color: rgba(87,46,136,0.26); }
+    .signout-picker-name { font-size: 0.88rem; font-weight: 900; line-height: 1.15; }
+    .signout-picker-meta { font-size: 0.72rem; color: rgba(87,46,136,0.68); line-height: 1.3; }
+    .signout-picker-empty { font-size: 0.78rem; color: rgba(26,21,48,0.45); line-height: 1.45; margin-top: 0.8rem; }
 
     /* ── Responsive ── */
     @media (max-width: 720px) {
@@ -378,6 +385,22 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-signout-picker">
+  <div class="modal-box">
+    <div class="modal-title" id="signout-picker-title">Sign out with…</div>
+    <div class="signout-picker-empty" id="signout-picker-copy">Choose who this performer left with.</div>
+    <div class="signout-picker-list" id="signout-picker-list"></div>
+    <div class="modal-field" style="margin-top:1rem;">
+      <label class="modal-lbl" for="signout-other-name">Other person</label>
+      <input type="text" id="signout-other-name" class="modal-inp" placeholder="Type a name if they are not listed" />
+    </div>
+    <div class="modal-footer">
+      <button class="modal-cancel" onclick="closeSignoutPicker()">Cancel</button>
+      <button class="modal-save" onclick="submitOtherSignoutChoice()">Sign out</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/SHARED/Navigation/production-sidebar-nav.js?v=79-20260721-proposals"></script>
 <script src="/ASSETS/scripts/casting-card.js?v=20260720"></script>
@@ -525,6 +548,9 @@ let _search = '', _activeTab = 'everyone', _statusFilter = '';
 let _pendingKioskPerson = null;
 let _eventStart = null;
 let _hasCalledCastColumn = false;
+let _pendingSignoutPerson = null;
+let _pendingSignoutChoices = [];
+let _hasLeftWithColumns = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
   _sb = supabase.createClient(SUPA_URL, SUPA_KEY);
@@ -578,6 +604,36 @@ function fmtHours(inIso, outIso) {
   if (diff <= 0) return '';
   const h = Math.floor(diff), m = Math.round((diff - h) * 60);
   return h > 0 ? h + 'h' + (m ? ' ' + m + 'm' : '') : m + 'm';
+}
+
+function signoutMemoryKey(type, refId) {
+  return ['bts-daily-checkin-left-with', _prodId, _date, type, refId].join('::');
+}
+
+function loadStoredLeftWith(type, refId) {
+  try {
+    const raw = localStorage.getItem(signoutMemoryKey(type, refId));
+    if (!raw) return { name: '', relationship: '' };
+    const parsed = JSON.parse(raw);
+    return {
+      name: String(parsed?.name || '').trim(),
+      relationship: String(parsed?.relationship || '').trim(),
+    };
+  } catch {
+    return { name: '', relationship: '' };
+  }
+}
+
+function storeLeftWith(type, refId, detail) {
+  try {
+    const name = String(detail?.name || '').trim();
+    const relationship = String(detail?.relationship || '').trim();
+    if (!name) {
+      localStorage.removeItem(signoutMemoryKey(type, refId));
+      return;
+    }
+    localStorage.setItem(signoutMemoryKey(type, refId), JSON.stringify({ name, relationship }));
+  } catch {}
 }
 
 function initials(name) {
@@ -716,6 +772,13 @@ function dedupePickupPeople(people) {
   return merged.filter(person => String(person?.name || '').trim());
 }
 
+function signoutChoicesForPerson(person) {
+  const pickup = person?.pickup || { solo: false, pickups: [], contacts: [] };
+  const combined = dedupePickupPeople([...(pickup.pickups || []), ...(pickup.contacts || [])]).filter(p => String(p?.name || '').trim());
+  if (pickup.solo) combined.unshift({ name: person.name, relationship: 'Self sign-out', phone: '', email: '' });
+  return dedupePickupPeople(combined);
+}
+
 function castPickupPreviewHtml(pickup) {
   const info = pickup || { solo: false, pickups: [], contacts: [], notes: '' };
   const approved = dedupePickupPeople(info.pickups || []).filter(person => String(person?.name || '').trim());
@@ -799,6 +862,8 @@ function isRegisteredPerformer(customAnswers) {
 // ── Data loading ──────────────────────────────────────────────────────────────
 
 async function loadAll() {
+  const leftWithProbe = await _sb.from('daily_checkins').select('left_with_name,left_with_relationship').limit(1);
+  _hasLeftWithColumns = !leftWithProbe.error;
   const calledCastProbe = await _sb.from('production_events').select('called_cast').eq('production_id', _prodId).limit(1);
   _hasCalledCastColumn = !calledCastProbe.error;
   const eventSelect = _hasCalledCastColumn
@@ -853,6 +918,8 @@ async function loadAll() {
       checkedInAt: c.checked_in_at || null,
       signedOutAt: c.signed_out_at || null,
       awayToday:   !!c.away_today,
+      leftWithName: c.left_with_name || '',
+      leftWithRelationship: c.left_with_relationship || '',
     };
   });
 
@@ -863,11 +930,14 @@ async function loadAll() {
   });
   _volunteers = volRows.map(s => {
     const ci = ciMap['volunteer::' + s.id] || {};
+    const storedLeftWith = loadStoredLeftWith('volunteer', String(s.id));
     return {
       id: s.id, name: s.name || 'Volunteer', role: s.role_name || '',
       refId: String(s.id), shiftStart: s.shift_start_time || null, shiftEnd: s.shift_end_time || null,
       checkedIn: !!ci.checkedIn, checkedInAt: ci.checkedInAt || null,
       signedOutAt: ci.signedOutAt || null, awayToday: !!ci.awayToday,
+      leftWithName: ci.leftWithName || storedLeftWith.name || '',
+      leftWithRelationship: ci.leftWithRelationship || storedLeftWith.relationship || '',
     };
   });
   _volunteers.sort((a, b) => a.name.localeCompare(b.name));
@@ -1052,6 +1122,7 @@ async function loadAll() {
     }).filter(Boolean))];
     const characterIds = [...new Set(assignments.map(a => a.character_id).filter(Boolean).map(String))];
     const ci = ciMap['cast::' + personId] || {};
+    const storedLeftWith = loadStoredLeftWith('cast', String(personId));
     return {
       id: personId,
       name: person.name || 'Performer',
@@ -1063,6 +1134,8 @@ async function loadAll() {
       checkedInAt: ci.checkedInAt || null,
       signedOutAt: ci.signedOutAt || null,
       awayToday: !!ci.awayToday,
+      leftWithName: ci.leftWithName || storedLeftWith.name || '',
+      leftWithRelationship: ci.leftWithRelationship || storedLeftWith.relationship || '',
       characterIds,
       headshotUrl: person.headshot_url || '',
       pickup: dciPickupInfo(person),
@@ -1169,6 +1242,7 @@ function castCards(people, now) {
     const offFlag = p.offToday ? '<div class="dci-cast-flags"><div class="dci-cast-flag dci-cast-flag--off">' + esc(p.offTodayLabel || 'Requested off today') + '</div></div>' : '';
     const arrivedAt = p.checkedInAt ? fmtStamp(p.checkedInAt) : '—';
     const leftAt = p.signedOutAt ? fmtStamp(p.signedOutAt) : '—';
+    const leftWith = p.leftWithName ? 'Left with ' + p.leftWithName + (p.leftWithRelationship ? ' (' + p.leftWithRelationship + ')' : '') : '';
     const roleLabel = p.role || 'Ensemble';
     return '<div class="dci-cast-card-wrap is-' + esc(s) + '" data-type="cast" data-ref="' + esc(p.refId) + '">' +
       '<button type="button" class="dci-cast-card-button" onclick="pressCastCard(\'' + esc(p.refId) + '\')" aria-label="' + esc(castCardActionLabel(s) + ' for ' + p.name) + '">' +
@@ -1181,6 +1255,7 @@ function castCards(people, now) {
         '<div class="dci-cast-time-box"><div class="dci-cast-time-label">Arrived</div><div class="dci-cast-time-value' + (p.checkedInAt ? '' : ' empty') + '">' + esc(arrivedAt) + '</div></div>' +
         '<div class="dci-cast-time-box"><div class="dci-cast-time-label">Left</div><div class="dci-cast-time-value' + (p.signedOutAt ? '' : ' empty') + '">' + esc(leftAt) + '</div></div>' +
       '</div>' +
+      (leftWith ? '<div class="dci-cast-left-note">' + esc(leftWith) + '</div>' : '') +
       '<div class="dci-cast-press-hint ' + esc(s) + '">' + esc(castCardActionLabel(s)) + '</div>' +
     '</div>';
   }).join('');
@@ -1222,7 +1297,7 @@ function pressCastCard(refId) {
   if (!person) return;
   const status = personStatus(person, new Date());
   if (status === 'here') {
-    doSignOut('cast', refId);
+    openSignoutPicker('cast', refId);
     return;
   }
   if (status === 'away') {
@@ -1233,6 +1308,53 @@ function pressCastCard(refId) {
     return;
   }
   tapSignIn('cast', refId);
+}
+
+function openSignoutPicker(type, refId) {
+  const person = getPerson(type, refId);
+  if (!person || personStatus(person, new Date()) !== 'here') return;
+  _pendingSignoutPerson = { type, refId };
+  document.getElementById('signout-picker-title').textContent = 'Sign out ' + person.name;
+  document.getElementById('signout-picker-copy').textContent = 'Choose who ' + person.name + ' left with.';
+  document.getElementById('signout-other-name').value = '';
+  const list = document.getElementById('signout-picker-list');
+  const choices = type === 'cast' ? signoutChoicesForPerson(person) : [];
+  _pendingSignoutChoices = choices;
+  list.innerHTML = choices.map((choice, idx) => {
+    const meta = [choice.relationship, choice.phone].filter(Boolean).join(' · ');
+    return '<button type="button" class="signout-picker-btn" onclick="chooseSignoutOptionByIndex(' + idx + ')">' +
+      '<div class="signout-picker-name">' + esc(choice.name) + '</div>' +
+      (meta ? '<div class="signout-picker-meta">' + esc(meta) + '</div>' : '') +
+    '</button>';
+  }).join('');
+  document.getElementById('modal-signout-picker').classList.add('visible');
+}
+
+function closeSignoutPicker() {
+  document.getElementById('modal-signout-picker').classList.remove('visible');
+  _pendingSignoutPerson = null;
+  _pendingSignoutChoices = [];
+}
+
+function chooseSignoutOptionByIndex(index) {
+  if (!_pendingSignoutPerson) return;
+  const choice = _pendingSignoutChoices[index];
+  if (!choice) return;
+  const pending = _pendingSignoutPerson;
+  closeSignoutPicker();
+  doSignOut(pending.type, pending.refId, { name: choice.name, relationship: choice.relationship || '' });
+}
+
+function submitOtherSignoutChoice() {
+  if (!_pendingSignoutPerson) return;
+  const name = document.getElementById('signout-other-name').value.trim();
+  if (!name) {
+    document.getElementById('signout-other-name').focus();
+    return;
+  }
+  const pending = _pendingSignoutPerson;
+  closeSignoutPicker();
+  doSignOut(pending.type, pending.refId, { name, relationship: 'Other' });
 }
 
 // ── Interactions ──────────────────────────────────────────────────────────────
@@ -1332,14 +1454,20 @@ function doSignIn(type, refId) {
   if (!person) return;
   const now = new Date().toISOString();
   person.checkedIn = true; person.checkedInAt = now; person.signedOutAt = null; person.awayToday = false;
+  person.leftWithName = '';
+  person.leftWithRelationship = '';
+  storeLeftWith(type, refId, { name: '', relationship: '' });
   persist(type, refId, person);
   renderStats(); renderContent();
 }
 
-function doSignOut(type, refId) {
+function doSignOut(type, refId, leftWith = null) {
   const person = getPerson(type, refId);
   if (!person || !person.checkedIn) return;
   person.signedOutAt = new Date().toISOString();
+  person.leftWithName = String(leftWith?.name || '').trim();
+  person.leftWithRelationship = String(leftWith?.relationship || '').trim();
+  storeLeftWith(type, refId, { name: person.leftWithName, relationship: person.leftWithRelationship });
   persist(type, refId, person);
   renderStats(); renderContent();
 }
@@ -1348,7 +1476,11 @@ function markAway(type, refId, isAway) {
   const person = getPerson(type, refId);
   if (!person) return;
   person.awayToday = isAway;
-  if (isAway) { person.checkedIn = false; person.checkedInAt = null; person.signedOutAt = null; }
+  if (isAway) {
+    person.checkedIn = false; person.checkedInAt = null; person.signedOutAt = null;
+    person.leftWithName = ''; person.leftWithRelationship = '';
+    storeLeftWith(type, refId, { name: '', relationship: '' });
+  }
   persist(type, refId, person);
   renderStats(); renderContent();
 }
@@ -1359,6 +1491,9 @@ function signEveryoneOut() {
   [..._volunteers, ..._cast].forEach(p => {
     if (p.checkedIn && !p.signedOutAt) {
       p.signedOutAt = now;
+      p.leftWithName = '';
+      p.leftWithRelationship = '';
+      storeLeftWith(_cast.includes(p) ? 'cast' : 'volunteer', p.refId, { name: '', relationship: '' });
       persist(_cast.includes(p) ? 'cast' : 'volunteer', p.refId, p);
     }
   });
@@ -1373,6 +1508,9 @@ function resetEveryoneCheckin() {
     p.checkedInAt = null;
     p.signedOutAt = null;
     p.awayToday = false;
+    p.leftWithName = '';
+    p.leftWithRelationship = '';
+    storeLeftWith(_cast.includes(p) ? 'cast' : 'volunteer', p.refId, { name: '', relationship: '' });
     persist(_cast.includes(p) ? 'cast' : 'volunteer', p.refId, p);
   });
   renderStats(); renderContent();
@@ -1384,12 +1522,17 @@ function getPerson(type, refId) {
 
 async function persist(type, refId, person) {
   try {
-    await _sb.from('daily_checkins').upsert({
+    const payload = {
       production_id: _prodId, check_in_date: _date, person_type: type, ref_id: refId,
       person_name: person.name, role_name: person.role || null,
       checked_in: !!person.checkedIn, checked_in_at: person.checkedInAt || null,
       signed_out_at: person.signedOutAt || null, away_today: !!person.awayToday,
-    }, { onConflict: 'production_id,check_in_date,person_type,ref_id' });
+    };
+    if (_hasLeftWithColumns) {
+      payload.left_with_name = person.leftWithName || null;
+      payload.left_with_relationship = person.leftWithRelationship || null;
+    }
+    await _sb.from('daily_checkins').upsert(payload, { onConflict: 'production_id,check_in_date,person_type,ref_id' });
   } catch (e) { console.warn('[BTS] checkin persist failed:', e && e.message); }
 }
 
