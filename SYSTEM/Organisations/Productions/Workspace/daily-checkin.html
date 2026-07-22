@@ -257,6 +257,7 @@
     .pickup-edit-check input { width: 16px; height: 16px; accent-color: #572e88; }
     .pickup-edit-check span { font-size: 0.8rem; font-weight: 800; color: #1a1530; }
     .pickup-edit-help { font-size: 0.72rem; line-height: 1.45; color: rgba(26,21,48,0.45); margin-top: 0.15rem; }
+    .day-note-box { max-width: 540px; width: min(92vw, 540px); }
 
     /* ── Responsive ── */
     @media (max-width: 720px) {
@@ -355,6 +356,7 @@
     .dci-cast-pickup { padding: 0.2rem 0; display: grid; gap: 0.7rem; min-height: 100%; }
     .dci-cast-pickup-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
     .dci-cast-pickup-head-main { display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .dci-cast-pickup-actions { display: inline-flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
     .dci-cast-pickup-title { font-size: 0.58rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(87,46,136,0.46); }
     .dci-cast-pickup-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 0.26rem 0.56rem; background: rgba(118,158,123,0.18); color: #355e3c; font-size: 0.62rem; font-weight: 900; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; max-width: 100%; }
     .dci-cast-pickup-edit { border: none; background: none; padding: 0; color: #572e88; font-family: var(--bts-font); font-size: 0.66rem; font-weight: 900; line-height: 1; cursor: pointer; }
@@ -367,6 +369,9 @@
     .dci-cast-pickup-meta { font-size: 0.68rem; color: rgba(87,46,136,0.7); line-height: 1.35; }
     .dci-cast-pickup-note { border-radius: 12px; background: rgba(87,46,136,0.05); padding: 0.62rem 0.68rem; font-size: 0.7rem; font-weight: 600; line-height: 1.45; color: #5f4f79; }
     .dci-cast-pickup-empty { font-size: 0.72rem; line-height: 1.45; color: rgba(26,21,48,0.45); }
+    .dci-cast-day-note { border-radius: 12px; border: 1px solid rgba(87,46,136,0.09); background: rgba(87,46,136,0.03); padding: 0.62rem 0.68rem; display: grid; gap: 0.2rem; }
+    .dci-cast-day-note-label { font-size: 0.58rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(87,46,136,0.46); }
+    .dci-cast-day-note-copy { font-size: 0.7rem; font-weight: 700; line-height: 1.45; color: #5f4f79; }
     .dci-cast-left-note { text-align: left; font-size: 0.68rem; font-weight: 800; color: rgba(87,46,136,0.72); line-height: 1.35; margin-top: -0.05rem; padding: 0 0.15rem; }
     .dci-cast-press-hint { text-align: center; font-size: 0.68rem; font-weight: 800; color: rgba(87,46,136,0.56); font-family: var(--bts-font); }
     .dci-cast-press-hint.here { color: #2d6e35; }
@@ -651,6 +656,20 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-day-note">
+  <div class="modal-box day-note-box">
+    <div class="modal-title" id="day-note-title">Edit day note</div>
+    <div class="modal-field">
+      <label class="modal-lbl" for="day-note-text">Note for today</label>
+      <textarea id="day-note-text" class="modal-inp" rows="5" placeholder="Example: Early pickup at 1pm today, or going home with Grandma after rehearsal."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-cancel" onclick="closeDayNoteEditor()">Cancel</button>
+      <button class="modal-save" onclick="saveDayNoteEditor()">Save note</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/SHARED/Navigation/production-sidebar-nav.js?v=79-20260721-proposals"></script>
 <script src="/ASSETS/scripts/casting-card.js?v=20260720"></script>
@@ -801,7 +820,9 @@ let _hasCalledCastColumn = false;
 let _pendingSignoutPerson = null;
 let _pendingSignoutChoices = [];
 let _hasLeftWithColumns = false;
+let _dailyNoteColumn = '';
 let _editingPickupRefId = null;
+let _editingDayNoteRefId = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   _sb = supabase.createClient(SUPA_URL, SUPA_KEY);
@@ -884,6 +905,29 @@ function storeLeftWith(type, refId, detail) {
       return;
     }
     localStorage.setItem(signoutMemoryKey(type, refId), JSON.stringify({ name, relationship }));
+  } catch {}
+}
+
+function dayNoteMemoryKey(type, refId) {
+  return ['bts-daily-checkin-day-note', _prodId, _date, type, refId].join('::');
+}
+
+function loadStoredDayNote(type, refId) {
+  try {
+    return String(localStorage.getItem(dayNoteMemoryKey(type, refId)) || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+function storeDayNote(type, refId, note) {
+  try {
+    const next = String(note || '').trim();
+    if (!next) {
+      localStorage.removeItem(dayNoteMemoryKey(type, refId));
+      return;
+    }
+    localStorage.setItem(dayNoteMemoryKey(type, refId), next);
   } catch {}
 }
 
@@ -1080,6 +1124,7 @@ function castPickupPreviewHtml(pickup, opts = {}) {
   const type = String(opts.type || 'cast');
   const refId = String(opts.refId || '');
   const canEdit = !!opts.canEdit;
+  const canEditDayNote = !!opts.canEditDayNote;
   const approved = dedupePickupPeople(info.pickups || []).filter(person => String(person?.name || '').trim());
   const contacts = dedupePickupPeople(info.contacts || [])
     .filter(person => String(person?.name || '').trim())
@@ -1119,7 +1164,12 @@ function castPickupPreviewHtml(pickup, opts = {}) {
         '<div class="dci-cast-pickup-title">Pickup / Drop Off</div>' +
         (info.solo ? '<div class="dci-cast-pickup-badge">Self sign-out approved</div>' : '') +
       '</div>' +
-      (canEdit ? '<button type="button" class="dci-cast-pickup-edit" onclick="openPickupEditor(\'' + esc(refId) + '\')">Edit</button>' : '') +
+      ((canEdit || canEditDayNote)
+        ? '<div class="dci-cast-pickup-actions">' +
+            (canEditDayNote ? '<button type="button" class="dci-cast-pickup-edit" onclick="openDayNoteEditor(\'' + esc(refId) + '\')">Edit day note</button>' : '') +
+            (canEdit ? '<button type="button" class="dci-cast-pickup-edit" onclick="openPickupEditor(\'' + esc(refId) + '\')">Edit</button>' : '') +
+          '</div>'
+        : '') +
     '</div>' +
     (cards.length
       ? '<div class="dci-cast-pickup-grid">' + cards.join('') + '</div>'
@@ -1286,6 +1336,12 @@ function buildDciPickupInfo(person) {
 async function loadAll() {
   const leftWithProbe = await _sb.from('daily_checkins').select('left_with_name,left_with_relationship').limit(1);
   _hasLeftWithColumns = !leftWithProbe.error;
+  const dayNoteProbe = await _sb.from('daily_checkins').select('notes').limit(1);
+  if (!dayNoteProbe.error) _dailyNoteColumn = 'notes';
+  else {
+    const altDayNoteProbe = await _sb.from('daily_checkins').select('daily_note').limit(1);
+    _dailyNoteColumn = altDayNoteProbe.error ? '' : 'daily_note';
+  }
   const calledCastProbe = await _sb.from('production_events').select('called_cast').eq('production_id', _prodId).limit(1);
   _hasCalledCastColumn = !calledCastProbe.error;
   const eventSelect = _hasCalledCastColumn
@@ -1342,6 +1398,7 @@ async function loadAll() {
       awayToday:   !!c.away_today,
       leftWithName: c.left_with_name || '',
       leftWithRelationship: c.left_with_relationship || '',
+      dayNote: _dailyNoteColumn ? String(c[_dailyNoteColumn] || '').trim() : '',
     };
   });
 
@@ -1353,6 +1410,7 @@ async function loadAll() {
   _volunteers = volRows.map(s => {
     const ci = ciMap['volunteer::' + s.id] || {};
     const storedLeftWith = loadStoredLeftWith('volunteer', String(s.id));
+    const storedDayNote = loadStoredDayNote('volunteer', String(s.id));
     return {
       id: s.id, name: s.name || 'Volunteer', role: s.role_name || '',
       refId: String(s.id), shiftStart: s.shift_start_time || null, shiftEnd: s.shift_end_time || null,
@@ -1360,6 +1418,7 @@ async function loadAll() {
       signedOutAt: ci.signedOutAt || null, awayToday: !!ci.awayToday,
       leftWithName: ci.leftWithName || storedLeftWith.name || '',
       leftWithRelationship: ci.leftWithRelationship || storedLeftWith.relationship || '',
+      dayNote: ci.dayNote || storedDayNote || '',
     };
   });
   _volunteers.sort((a, b) => a.name.localeCompare(b.name));
@@ -1563,6 +1622,7 @@ async function loadAll() {
     const characterIds = [...new Set(assignments.map(a => a.character_id).filter(Boolean).map(String))];
     const ci = ciMap['cast::' + personId] || {};
     const storedLeftWith = loadStoredLeftWith('cast', String(personId));
+    const storedDayNote = loadStoredDayNote('cast', String(personId));
     return {
       id: personId,
       name: person.name || 'Performer',
@@ -1577,6 +1637,7 @@ async function loadAll() {
       awayToday: !!ci.awayToday,
       leftWithName: ci.leftWithName || storedLeftWith.name || '',
       leftWithRelationship: ci.leftWithRelationship || storedLeftWith.relationship || '',
+      dayNote: ci.dayNote || storedDayNote || '',
       characterIds,
       headshotUrl: person.headshot_url || '',
       custom_answers: person.custom_answers || {},
@@ -1695,12 +1756,14 @@ function castCards(people, now) {
     const arrivedAt = p.checkedInAt ? fmtStamp(p.checkedInAt) : '—';
     const leftAt = p.signedOutAt ? fmtStamp(p.signedOutAt) : '—';
     const leftWith = p.leftWithName ? 'Left with ' + dciDisplayPickupName(p.leftWithName) + (p.leftWithRelationship ? ' (' + dciDisplayRelationship(p.leftWithRelationship) + ')' : '') : '';
+    const dayNote = String(p.dayNote || '').trim();
     const roleLabel = p.role || 'Ensemble';
     const cardName = p.displayName || p.name;
     return '<div class="dci-cast-card-wrap is-' + esc(s) + '" data-type="cast" data-ref="' + esc(p.refId) + '">' +
       (timeStr ? '<div class="dci-cast-card-time">' + esc(timeStr) + '</div>' : '') +
       '<div class="dci-cast-side">' +
-        '<div class="dci-cast-pickup">' + castPickupPreviewHtml(pickup, { directSignout: s === 'here', type: 'cast', refId: p.refId, canEdit: true }) + '</div>' +
+        '<div class="dci-cast-pickup">' + castPickupPreviewHtml(pickup, { directSignout: s === 'here', type: 'cast', refId: p.refId, canEdit: true, canEditDayNote: true }) + '</div>' +
+        (dayNote ? '<div class="dci-cast-day-note"><div class="dci-cast-day-note-label">Today</div><div class="dci-cast-day-note-copy">' + esc(dayNote) + '</div></div>' : '') +
         '<div class="dci-cast-card-times">' +
           '<div class="dci-cast-time-box"><div class="dci-cast-time-label">Arrived</div><div class="dci-cast-time-value' + (p.checkedInAt ? '' : ' empty') + '">' + esc(arrivedAt) + '</div></div>' +
           '<div class="dci-cast-time-box"><div class="dci-cast-time-label">Left</div><div class="dci-cast-time-value' + (p.signedOutAt ? '' : ' empty') + '">' + esc(leftAt) + '</div></div>' +
@@ -2059,6 +2122,21 @@ function closePickupEditor() {
   document.getElementById('modal-pickup-edit').classList.remove('visible');
 }
 
+function openDayNoteEditor(refId) {
+  const person = getPerson('cast', refId);
+  if (!person) return;
+  _editingDayNoteRefId = refId;
+  document.getElementById('day-note-title').textContent = 'Edit note for ' + (person.displayName || person.name || 'performer');
+  document.getElementById('day-note-text').value = person.dayNote || '';
+  document.getElementById('modal-day-note').classList.add('visible');
+  document.getElementById('day-note-text').focus();
+}
+
+function closeDayNoteEditor() {
+  _editingDayNoteRefId = null;
+  document.getElementById('modal-day-note').classList.remove('visible');
+}
+
 async function savePickupEditor() {
   if (!_editingPickupRefId) return;
   const person = getPerson('cast', _editingPickupRefId);
@@ -2100,6 +2178,17 @@ async function savePickupEditor() {
   renderContent();
 }
 
+async function saveDayNoteEditor() {
+  if (!_editingDayNoteRefId) return;
+  const person = getPerson('cast', _editingDayNoteRefId);
+  if (!person) return;
+  person.dayNote = String(document.getElementById('day-note-text').value || '').trim();
+  await persist('cast', person.refId, person);
+  storeDayNote('cast', person.refId, person.dayNote);
+  closeDayNoteEditor();
+  renderContent();
+}
+
 async function persist(type, refId, person) {
   try {
     const payload = {
@@ -2112,6 +2201,7 @@ async function persist(type, refId, person) {
       payload.left_with_name = person.leftWithName || null;
       payload.left_with_relationship = person.leftWithRelationship || null;
     }
+    if (_dailyNoteColumn) payload[_dailyNoteColumn] = person.dayNote || null;
     await _sb.from('daily_checkins').upsert(payload, { onConflict: 'production_id,check_in_date,person_type,ref_id' });
   } catch (e) { console.warn('[BTS] checkin persist failed:', e && e.message); }
 }
