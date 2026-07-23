@@ -2515,6 +2515,10 @@
       }
 
       const missingCount = perf.filter(p => !SIZE_FIELDS.some(f => costumeAnswerValue(p.answers, f.keys))).length;
+      const hasAnyNote = perf.some(p => NOTE_FIELDS.some(f => costumeAnswerValue(p.answers, f.keys)));
+      const TH = 'text-align:left;padding:0.65rem 1rem;font-size:0.65rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#b0a8c8;white-space:nowrap;background:#f8f7fc;border-bottom:1.5px solid #edeaf6';
+      const TD = 'padding:0.8rem 1rem;border-bottom:1px solid #edeaf6;vertical-align:middle;font-size:0.84rem;color:#2a2040';
+      const TD_NOTE = 'padding:0.8rem 1rem;border-bottom:1px solid #edeaf6;vertical-align:middle;font-size:0.78rem;color:#5a4f7a;max-width:220px;word-break:break-word';
       const sortSelectHTML = `
         <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;font-weight:700;color:#7a7291">
           <span>Sort by</span>
@@ -2524,11 +2528,44 @@
           </select>
         </label>`;
 
+      const rows = perf.map((p) => {
+        const displayName = performerCardDisplayName(p) || p.name || 'Performer';
+        const sizeCells = SIZE_FIELDS.map(f => {
+          const v = costumeAnswerValue(p.answers, f.keys);
+          return `<td style="${TD}">${v ? esc(v) : '<span style="color:#d8d3e8">—</span>'}</td>`;
+        }).join('');
+        const noteCells = hasAnyNote ? NOTE_FIELDS.map(f => {
+          const v = costumeAnswerValue(p.answers, f.keys);
+          return `<td style="${TD_NOTE}">${v ? esc(v) : '<span style="color:#d8d3e8">—</span>'}</td>`;
+        }).join('') : '';
+        const photo = p.headshot_url
+          ? `<img src="${esc(p.headshot_url)}" alt="${esc(displayName)}" style="width:72px;height:88px;border-radius:12px;object-fit:cover;object-position:top;display:block;flex-shrink:0;border:1.5px solid #edeaf6" onerror="this.outerHTML='<div style=&quot;width:72px;height:88px;border-radius:12px;background:${esc(avatarColor(p.name))};display:flex;align-items:center;justify-content:center;font-size:1rem;font-weight:900;color:#fff;flex-shrink:0;border:1.5px solid #edeaf6&quot;>${esc(initials(displayName))}</div>'" />`
+          : `<div style="width:72px;height:88px;border-radius:12px;background:${esc(avatarColor(p.name))};display:flex;align-items:center;justify-content:center;font-size:1rem;font-weight:900;color:#fff;flex-shrink:0;border:1.5px solid #edeaf6">${esc(initials(displayName))}</div>`;
+        const measurementsCount = performerSummaryMeasurementItems(p).length;
+        return `<tr onmouseover="this.style.background='#faf9fd'" onmouseout="this.style.background=''" >
+          <td style="${TD};min-width:260px">
+            <div style="display:flex;align-items:stretch;gap:0.9rem">
+              ${photo}
+              <div style="display:flex;flex-direction:column;justify-content:center;min-width:0">
+                <div style="font-size:1rem;font-weight:900;line-height:1.08;color:#1a1530">${esc(displayName)}</div>
+                <div style="font-size:0.8rem;color:#7a7291;margin-top:0.18rem">${esc(p.role || 'No role set')}</div>
+                ${p.pronouns ? `<div style="font-size:0.72rem;font-weight:700;color:#9a90b0;margin-top:0.22rem">${esc(p.pronouns)}</div>` : ''}
+                <div style="display:flex;align-items:center;gap:0.65rem;flex-wrap:wrap;margin-top:0.55rem">
+                  <button onclick="showTab('performers');document.querySelectorAll('.cp-person-card').forEach(c=>{if(c.dataset.id==='${p.id}')c.click()})" style="border:none;background:none;padding:0;color:#572e88;cursor:pointer;font-size:0.76rem;font-weight:800">View person</button>
+                  <button onclick="openModal('measurements','${esc(p.id)}')" style="border:none;background:none;padding:0;color:#572e88;cursor:pointer;font-size:0.76rem;font-weight:800">${measurementsCount ? 'Edit measurements' : 'Add measurements'}</button>
+                </div>
+              </div>
+            </div>
+          </td>
+          ${sizeCells}${noteCells}
+        </tr>`;
+      }).join('');
+
       el.innerHTML = `
         <div style="margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem">
           <div>
             <div style="font-size:1rem;font-weight:800;color:#1a1530">Performer Summary</div>
-            <div style="font-size:0.78rem;color:rgba(26,21,48,0.45);margin-top:0.15rem">Performer cards with pronouns, role, measurements, and costume notes.</div>
+            <div style="font-size:0.78rem;color:rgba(26,21,48,0.45);margin-top:0.15rem">Performer summary with pronouns, measurements, and costume notes.</div>
           </div>
           <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
             ${missingCount ? `<div style="display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:#dd8233;font-weight:700;background:rgba(221,130,51,0.1);border-radius:8px;padding:0.3rem 0.75rem"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="flex-shrink:0"><circle cx="8" cy="8" r="7.25" stroke="#dd8233" stroke-width="1.5"/><rect x="7.25" y="6.5" width="1.5" height="5" rx="0.75" fill="#dd8233"/><rect x="7.25" y="4" width="1.5" height="1.5" rx="0.75" fill="#dd8233"/></svg>${missingCount} performer${missingCount===1?'':'s'} missing size info</div>` : ''}
@@ -2536,8 +2573,21 @@
             ${viewToggleHTML}
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;align-items:start">
-          ${perf.map(performerSummaryCardHtml).join('')}
+        <div style="background:#fff;border:1.5px solid #edeaf6;border-radius:14px;overflow:hidden">
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:0.84rem">
+              <thead>
+                <tr>
+                  <th style="${TH}">Performer</th>
+                  ${SIZE_FIELDS.map(f => `<th style="${TH}">${esc(f.label)}</th>`).join('')}
+                  ${hasAnyNote ? NOTE_FIELDS.map(f => `<th style="${TH}">${esc(f.label)}</th>`).join('') : ''}
+                </tr>
+              </thead>
+              <tbody>
+                ${rows}
+              </tbody>
+            </table>
+          </div>
         </div>`;
     }
 
