@@ -723,14 +723,21 @@
         styleEl.textContent = await prefixedCostumeCss(styleText);
         document.head.appendChild(styleEl);
       }
+      var targetCostumeTab = activeCostumeTabKey();
+      var clonedContent = content.cloneNode(true);
+      // Pre-select the target tab's panel before this is ever painted, so the
+      // default "groups" panel never flashes on screen while init() is loading.
+      ['groups', 'performers', 'assignments', 'tracks', 'performer-summary'].forEach(function (t) {
+        var panel = clonedContent.querySelector('#cp-' + t);
+        if (panel) panel.classList.toggle('active', t === targetCostumeTab);
+      });
       mount.innerHTML = '';
       var scope = document.createElement('div');
       scope.className = 'dept-costume-inline';
       // Omit the costume nav — department section tabs take its place
-      scope.appendChild(content.cloneNode(true));
+      scope.appendChild(clonedContent);
       scope.appendChild(overlay.cloneNode(true));
       mount.appendChild(scope);
-      var targetCostumeTab = activeCostumeTabKey();
       if (!window.BTSCostumePlannerInlineLoaded) {
         var scripts = Array.from(doc.querySelectorAll('script')).map(function (script) { return script.textContent || ''; }).filter(Boolean);
         var plannerScript = scripts[scripts.length - 1] || '';
