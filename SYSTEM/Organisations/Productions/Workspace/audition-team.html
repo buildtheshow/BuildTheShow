@@ -42472,7 +42472,7 @@ See you soon!
       <div class="rpt-household-modal-actions">
         <button class="rpt-modal-cancel-btn" onclick="document.getElementById('rsc-volunteer-modal')?.remove()">Cancel</button>
         <button class="rpt-modal-save-btn" style="background:#476aaa;" onclick="rscSendVolunteerPortalInfo('${esc(assignId)}', this)">Send Portal Info</button>
-        <button class="rpt-modal-save-btn" onclick="rscSaveVolunteer('${esc(assignId)}', this)">Save Connections</button>
+        <button class="rpt-modal-save-btn" onclick="rscSaveVolunteer('${esc(assignId)}', this)">Save Connection</button>
       </div>
     </div>`;
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
@@ -42627,7 +42627,8 @@ See you soon!
     const selectedIds = selectedGroups.flatMap(group => group.ids || []).filter(Boolean);
     const selectedNames = [...new Set(selectedGroups.map(group => group.name).filter(Boolean))];
     const selectedRoles = [...new Set(selectedGroups.map(group => group.roles).filter(Boolean))];
-    const original = btn?.textContent || 'Save Connection';
+    const original = btn?.dataset.originalLabel || btn?.textContent || 'Save Connection';
+    if (btn && !btn.dataset.originalLabel) btn.dataset.originalLabel = original;
     if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
     try {
       const { data, error } = await sb.from('casting_assignments').update({
@@ -42639,7 +42640,6 @@ See you soon!
       }).in('id', targetIds)
         .select('id,volunteer_discount_approved,volunteer_hours_completed,volunteer_role_notes,volunteer_signup_ids,volunteer_signup_name');
       if (error) throw error;
-      document.getElementById('rsc-volunteer-modal')?.remove();
       const rowsById = new Map((data || []).map(row => [String(row.id), row]));
       targetIds.forEach(targetId => {
         const row = rowsById.get(String(targetId));
@@ -42652,11 +42652,23 @@ See you soon!
           item.assignment.volunteer_signup_name = row?.volunteer_signup_name ?? (selectedNames.length ? selectedNames.join(', ') : null);
         }
       });
+      if (d?.volunteer) {
+        d.volunteer.linkedIds = selectedIds.slice();
+        d.volunteer.linkedName = selectedNames.length ? selectedNames.join(', ') : '';
+        d.volunteer.approved = earned;
+        d.volunteer.hoursCompleted = selectedGroups.length ? String(totalHours) : '';
+        d.volunteer.roleNotes = selectedRoles.length ? selectedRoles.join(', ') : '';
+      }
       [...new Set(targetIds)].forEach(targetId => rptRerenderRow(targetId));
       rptRerenderSummary();
       const savedLabel = scope.type === 'household' ? `${scope.householdName} household` : (scope.memberNames[0] || 'cast member');
       showToast(selectedGroups.length ? `Volunteer connections saved for ${savedLabel}.` : `Volunteer connection removed for ${savedLabel}.`);
       window.AutoSave?.showSaved?.();
+      rscApplyVolunteerSelection();
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Save Another Connection';
+      }
     } catch (err) {
       console.error('[BTS] rscSaveVolunteer failed', err);
       showToast('Could not save volunteer connection.', true);
