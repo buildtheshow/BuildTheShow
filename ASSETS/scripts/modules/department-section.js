@@ -5,6 +5,11 @@
   const SUPABASE_URL = window.SUPABASE_URL || 'https://tkmaiktxpwqfbgeojbnf.supabase.co';
   const KEY = window.SUPABASE_ANON_KEY || '';
 
+  // Cache the fetched receipt-form markup/styles/script for the lifetime of this page load
+  // so switching to the Receipts tab more than once doesn't re-download and re-parse the
+  // whole embedded HTML file every time -- only the budget data itself needs to be fresh.
+  var _receiptFormMarkupCache = null;
+
   const state = {
     prodId: '',
     group: null,
@@ -1030,23 +1035,29 @@
     var mount = document.getElementById('dept-receipt-form-native');
     if (!mount) return;
     try {
-      var response = await fetch('/SYSTEM/Organisations/Productions/Workspace/department-receipt-form.html?_t=' + Date.now(), { cache: 'no-store' });
-      if (!response.ok) throw new Error('Could not load receipts form');
-      var html = await response.text();
-      var doc = new DOMParser().parseFromString(html, 'text/html');
-      var styleText = Array.from(doc.querySelectorAll('style')).map(function (s) { return s.textContent || ''; }).join('\n');
-      var body = doc.querySelector('.department-receipts-content');
-      if (!body) throw new Error('Receipt form markup was incomplete');
+      if (!_receiptFormMarkupCache) {
+        var response = await fetch('/SYSTEM/Organisations/Productions/Workspace/department-receipt-form.html?_t=' + Date.now(), { cache: 'no-store' });
+        if (!response.ok) throw new Error('Could not load receipts form');
+        var html = await response.text();
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var styleText = Array.from(doc.querySelectorAll('style')).map(function (s) { return s.textContent || ''; }).join('\n');
+        var body = doc.querySelector('.department-receipts-content');
+        if (!body) throw new Error('Receipt form markup was incomplete');
+        var scripts = Array.from(doc.querySelectorAll('script')).map(function (s) { return s.textContent || ''; }).filter(Boolean);
+        var rcptScript = scripts[scripts.length - 1] || '';
+        rcptScript = rcptScript.replace('window.addEventListener(\'DOMContentLoaded\', init);', 'window._rcptFormInit = init; init();');
+        _receiptFormMarkupCache = { styleText: styleText, bodyHtml: body.innerHTML, rcptScript: rcptScript };
+      }
       var styleId = 'dept-receipt-form-style';
       if (!document.getElementById(styleId)) {
         var styleEl = document.createElement('style');
         styleEl.id = styleId;
-        styleEl.textContent = styleText;
+        styleEl.textContent = _receiptFormMarkupCache.styleText;
         document.head.appendChild(styleEl);
       }
       mount.innerHTML = '';
       var scope = document.createElement('div');
-      scope.innerHTML = body.innerHTML;
+      scope.innerHTML = _receiptFormMarkupCache.bodyHtml;
       mount.appendChild(scope);
 
       // Keep embedded receipts scoped to the active section, not the full department group.
@@ -1112,12 +1123,9 @@
         budgetOptions: budgetOptions,
       };
 
-      var scripts = Array.from(doc.querySelectorAll('script')).map(function (s) { return s.textContent || ''; }).filter(Boolean);
-      var rcptScript = scripts[scripts.length - 1] || '';
-      rcptScript = rcptScript.replace('window.addEventListener(\'DOMContentLoaded\', init);', 'window._rcptFormInit = init; init();');
       if (!window._rcptFormInit) {
         var scriptEl = document.createElement('script');
-        scriptEl.textContent = rcptScript;
+        scriptEl.textContent = _receiptFormMarkupCache.rcptScript;
         document.body.appendChild(scriptEl);
       } else {
         // Script already in DOM — just re-run init with the fresh embed data
