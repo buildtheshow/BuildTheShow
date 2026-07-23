@@ -722,12 +722,15 @@
       var content = doc.querySelector('.costume-content');
       var overlay = doc.getElementById('c-overlay');
       if (!nav || !content || !overlay) throw new Error('Costume planner markup was incomplete');
-      if (!document.getElementById('dept-costume-inline-style')) {
-        var styleEl = document.createElement('style');
+      var styleEl = document.getElementById('dept-costume-inline-style');
+      if (!styleEl) {
+        styleEl = document.createElement('style');
         styleEl.id = 'dept-costume-inline-style';
-        styleEl.textContent = await prefixedCostumeCss(styleText);
         document.head.appendChild(styleEl);
       }
+      // Always refresh the CSS text (not just on first mount) so a deploy that
+      // changes departments-costume.html's styles is reflected without a hard reload.
+      styleEl.textContent = await prefixedCostumeCss(styleText);
       var targetCostumeTab = activeCostumeTabKey();
       var clonedContent = content.cloneNode(true);
       // Pre-select the target tab's panel before this is ever painted, so the
