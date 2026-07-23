@@ -2181,9 +2181,14 @@
     }
 
     function normalizeCostumeTaskItem(item = {}, index = 0) {
+      const legacyTitle = String(item.title || item.name || '').trim();
+      const character = String(item.character || '').trim();
+      const costume = String(item.costume || '').trim();
       return {
         id: String(item.id || uid(`task-${index}`)),
-        title: String(item.title || item.name || '').trim(),
+        title: legacyTitle,
+        character: character || (!costume ? legacyTitle : ''),
+        costume: costume || (character ? legacyTitle : ''),
         notes: String(item.notes || '').trim(),
         sourced: item.sourced === true,
         ready: item.ready === true,
@@ -2194,20 +2199,22 @@
       const assignedGroups = performerAssignedGroups(p);
       if (assignedGroups.length) {
         return assignedGroups.map(function (group, index) {
-          return normalizeCostumeTaskItem({
-            id: `seed-${group.id}`,
-            title: group.name,
-            notes: '',
-            sourced: false,
-            ready: false,
-          }, index);
+        return normalizeCostumeTaskItem({
+          id: `seed-${group.id}`,
+          character: group.name,
+          costume: '',
+          notes: '',
+          sourced: false,
+          ready: false,
+        }, index);
         });
       }
       const roles = String(p?.role || '').split(',').map(function (item) { return item.trim(); }).filter(Boolean);
       return roles.map(function (role, index) {
         return normalizeCostumeTaskItem({
           id: `seed-role-${index}`,
-          title: role,
+          character: role,
+          costume: '',
           notes: '',
           sourced: false,
           ready: false,
@@ -2217,13 +2224,13 @@
 
     function performerTaskItems(p) {
       const stored = costumeTaskStore()[String(p.id)];
-      if (Array.isArray(stored)) return stored.map(normalizeCostumeTaskItem).filter(function (item) { return item.title || item.notes; });
+      if (Array.isArray(stored)) return stored.map(normalizeCostumeTaskItem).filter(function (item) { return item.title || item.character || item.costume || item.notes; });
       return performerSeedTaskItems(p);
     }
 
     async function savePerformerTaskItems(performerId, items) {
       const cleaned = (items || []).map(normalizeCostumeTaskItem).filter(function (item) {
-        return item.title || item.notes;
+        return item.title || item.character || item.costume || item.notes;
       });
       const wizardData = Object.assign({}, productionDetails?.wizard_data || {});
       const taskMap = Object.assign({}, costumeTaskStore(), { [String(performerId)]: cleaned });
@@ -2246,7 +2253,8 @@
       if (!performer) return;
       const items = performerTaskItems(performer);
       items.push(normalizeCostumeTaskItem({
-        title: '',
+        character: performer.role || '',
+        costume: '',
         notes: '',
         sourced: false,
         ready: false,
@@ -3178,40 +3186,53 @@
       el.innerHTML = performers.map(p => {
         const displayName = performerCardDisplayName(p) || p.name;
         const taskItems = performerTaskItems(p);
-        const photo = p.headshot_url
-          ? `<img src="${esc(p.headshot_url)}" alt="${esc(displayName)}" style="width:100%;aspect-ratio:4/5;object-fit:cover;object-position:top;display:block;border-radius:14px 14px 0 0" onerror="this.outerHTML='<div style=&quot;width:100%;aspect-ratio:4/5;border-radius:14px 14px 0 0;background:${esc(avatarColor(displayName))};display:flex;align-items:center;justify-content:center;font-size:1.9rem;font-weight:900;color:#fff&quot;>${esc(initials(displayName))}</div>'" />`
-          : `<div style="width:100%;aspect-ratio:4/5;border-radius:14px 14px 0 0;background:${esc(avatarColor(displayName))};display:flex;align-items:center;justify-content:center;font-size:1.9rem;font-weight:900;color:#fff">${esc(initials(displayName))}</div>`;
+        const preferredParts = String(displayName).trim().split(/\s+/).filter(Boolean);
+        const inShowCard = renderCastingCard({
+          first_name: String(p?.preferred_first_name || preferredParts[0] || '').trim(),
+          last_name: String(p?.last_name || preferredParts.slice(1).join(' ') || '').trim(),
+          pronouns: p.pronouns || '',
+          headshot_url: p.headshot_url || '',
+          character_name: p.role || '',
+        }, {
+          variant: 'inTheShow',
+          hasPadding: false,
+          hasIcons: false,
+        });
         return `<section style="background:#ffffff;border:1.5px solid #e7e1f1;border-radius:20px;padding:1.1rem;display:grid;grid-template-columns:minmax(220px,240px) minmax(0,1fr);gap:1.1rem;align-items:start;margin-bottom:1rem;box-shadow:0 8px 18px rgba(26,21,48,0.04)">
           <div>
-            <div style="overflow:hidden">
-              ${photo}
-              <div style="padding:0.9rem 1rem 1rem;text-align:center">
-                <div style="font-size:1.1rem;font-weight:900;line-height:1.05;color:#1a1530">${esc(displayName)}</div>
-                <div style="font-size:0.9rem;color:#6e6588;margin-top:0.22rem">${esc(p.role || 'No role set')}</div>
-                ${p.pronouns ? `<div style="font-size:0.76rem;font-weight:700;color:#9a90b0;margin-top:0.24rem">${esc(p.pronouns)}</div>` : ''}
-              </div>
-            </div>
+            <div style="display:block">${inShowCard}</div>
             <div style="display:flex;align-items:center;justify-content:center;gap:0.55rem;flex-wrap:wrap;margin-top:0.75rem">
               <button onclick="openPerformerDetail('${esc(p.id)}')" style="border:1.5px solid rgba(87,46,136,0.14);background:#fff;border-radius:10px;cursor:pointer;font-size:0.75rem;font-weight:800;color:#572e88;padding:0.48rem 0.82rem;">Details</button>
               <button onclick="openModal('edit-performer','${esc(p.id)}')" style="border:none;background:none;cursor:pointer;font-size:0.75rem;font-weight:800;color:rgba(26,21,48,0.5);padding:0.3rem 0.45rem;">Edit person</button>
             </div>
           </div>
-          <div style="min-width:0;background:#ffffff;border:1px solid #f0ebf7;border-radius:18px;padding:0.95rem">
+          <div style="min-width:0">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:0.85rem;flex-wrap:wrap;margin-bottom:0.85rem">
               <div>
                 <div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#b0a8c8">Costume Pieces</div>
-                <div style="font-size:0.8rem;color:#7a7291;margin-top:0.14rem">Track what this performer needs, whether it is in hand, and whether it is stage ready.</div>
+                <div style="font-size:0.8rem;color:#7a7291;margin-top:0.14rem">Track each costume piece this performer needs and what still has to happen.</div>
               </div>
               <button onclick="addPerformerTask('${esc(p.id)}')" style="border:none;background:#572e88;border-radius:10px;cursor:pointer;font-size:0.78rem;font-weight:800;color:#fff;padding:0.58rem 0.95rem;">+ Add Costume Piece</button>
             </div>
             ${taskItems.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,240px));gap:0.95rem;align-items:start">${taskItems.map(function (item, index) {
               const theme = costumeTaskCardTheme(index);
-              return `<article style="background:${theme.background};border:1.5px solid ${theme.border};border-radius:18px;padding:0.95rem;aspect-ratio:2 / 3;display:flex;flex-direction:column;box-shadow:0 10px 22px rgba(26,21,48,0.07);backdrop-filter:none;opacity:1">
+              const characterValue = item.character || (!item.costume ? item.title : '');
+              const costumeValue = item.costume || (item.character ? item.title : '');
+              return `<article style="background:${theme.background};border:1.5px solid ${theme.border};border-radius:20px;padding:0.95rem;aspect-ratio:2 / 3;display:flex;flex-direction:column;box-shadow:0 10px 22px rgba(26,21,48,0.06);opacity:1">
                 <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.65rem;margin-bottom:0.55rem">
-                  <div style="font-size:0.68rem;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;color:${theme.accent}">Costume Piece</div>
+                  <div style="font-size:0.68rem;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;color:${theme.accent}">Costume Card</div>
                   <button onclick="removePerformerTask('${esc(p.id)}','${esc(item.id)}')" style="border:none;background:none;cursor:pointer;color:rgba(26,21,48,0.42);font-size:0.72rem;font-weight:800;padding:0;white-space:nowrap">Remove</button>
                 </div>
-                <input type="text" value="${esc(item.title)}" placeholder="e.g. Park dress, rehearsal shoes, chimney jacket" onchange="updatePerformerTaskField('${esc(p.id)}','${esc(item.id)}','title',this.value)" style="width:100%;border:1.5px solid ${theme.border};border-radius:12px;padding:0.68rem 0.74rem;font-size:0.92rem;font-weight:800;color:#1a1530;background:#fff" />
+                <div style="display:flex;flex-direction:column;gap:0.68rem;margin-bottom:0.8rem">
+                  <div>
+                    <label style="display:block;font-size:0.68rem;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;color:${theme.accent};margin-bottom:0.34rem">Character</label>
+                    <input type="text" value="${esc(characterValue)}" placeholder="e.g. Mary Poppins, Park Stroller" onchange="updatePerformerTaskField('${esc(p.id)}','${esc(item.id)}','character',this.value)" style="width:100%;border:1.5px solid ${theme.border};border-radius:12px;padding:0.68rem 0.74rem;font-size:0.9rem;font-weight:800;color:#1a1530;background:#fff" />
+                  </div>
+                  <div>
+                    <label style="display:block;font-size:0.68rem;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;color:${theme.accent};margin-bottom:0.34rem">Costume</label>
+                    <input type="text" value="${esc(costumeValue)}" placeholder="e.g. Jolly Holiday Dress, Bright Blue Dress" onchange="updatePerformerTaskField('${esc(p.id)}','${esc(item.id)}','costume',this.value)" style="width:100%;border:1.5px solid ${theme.border};border-radius:12px;padding:0.68rem 0.74rem;font-size:0.9rem;font-weight:800;color:#1a1530;background:#fff" />
+                  </div>
+                </div>
                 <div style="display:flex;flex-direction:column;gap:0.55rem;margin-top:0.85rem">
                   <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;font-weight:800;color:${theme.accent};cursor:pointer;background:${theme.accentSoft};border-radius:999px;padding:0.48rem 0.68rem">
                     <input type="checkbox" ${item.sourced ? 'checked' : ''} onchange="updatePerformerTaskField('${esc(p.id)}','${esc(item.id)}','sourced',this.checked)" />
