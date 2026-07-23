@@ -612,6 +612,11 @@
     return (activeTab && activeTab.label) || 'Dashboard';
   }
 
+  function heroCopy() {
+    var activeTab = activeTabConfig();
+    return (activeTab && activeTab.copy) || state.section.description;
+  }
+
   function renderHero() {
     const hierarchy = [
       '<span class="page-hierarchy-page">Production Departments</span>',
@@ -622,7 +627,7 @@
       '<div class="aud-visual-hero-content"><div>' +
         '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span><span class="page-hierarchy">' + hierarchy + '</span></div>' +
         '<h1 class="aud-visual-title">' + esc(tabTitle()) + '</h1>' +
-        '<p class="aud-visual-copy">' + esc(state.section.description) + '</p>' +
+        '<p class="aud-visual-copy">' + esc(heroCopy()) + '</p>' +
       '</div></div>' +
       '<div class="dept-hero-deco"><img src="' + esc(state.group.icon) + '" alt="" /></div>' +
     '</div>';
