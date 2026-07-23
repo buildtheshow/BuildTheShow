@@ -1690,8 +1690,8 @@
         <div id="performers-list-view" class="cp-performer-list">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
             <div>
-              <div style="font-size:1rem;font-weight:800;color:#1a1530;">People</div>
-              <div style="font-size:0.78rem;color:rgba(26,21,48,0.45);margin-top:0.15rem;">Measurements, costume notes and group assignments.</div>
+              <div style="font-size:1rem;font-weight:800;color:#1a1530;">Tasks</div>
+              <div style="font-size:0.78rem;color:rgba(26,21,48,0.45);margin-top:0.15rem;">Each performer card, every costume piece they need, and where it stands.</div>
             </div>
             <button class="cp-add-btn" onclick="openModal('performer')">+ Add Person</button>
           </div>
@@ -2173,6 +2173,108 @@
 
       if (!html) return '<div class="perf-costume-empty">No costume registration answers saved yet.</div>';
       return `<div class="perf-costume-data">${html}</div>`;
+    }
+
+    function costumeTaskStore() {
+      const raw = productionDetails?.wizard_data?.costume_performer_tasks;
+      return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    }
+
+    function normalizeCostumeTaskItem(item = {}, index = 0) {
+      return {
+        id: String(item.id || uid(`task-${index}`)),
+        title: String(item.title || item.name || '').trim(),
+        notes: String(item.notes || '').trim(),
+        sourced: item.sourced === true,
+        ready: item.ready === true,
+      };
+    }
+
+    function performerSeedTaskItems(p) {
+      const assignedGroups = performerAssignedGroups(p);
+      if (assignedGroups.length) {
+        return assignedGroups.map(function (group, index) {
+          return normalizeCostumeTaskItem({
+            id: `seed-${group.id}`,
+            title: group.name,
+            notes: '',
+            sourced: false,
+            ready: false,
+          }, index);
+        });
+      }
+      const roles = String(p?.role || '').split(',').map(function (item) { return item.trim(); }).filter(Boolean);
+      return roles.map(function (role, index) {
+        return normalizeCostumeTaskItem({
+          id: `seed-role-${index}`,
+          title: role,
+          notes: '',
+          sourced: false,
+          ready: false,
+        }, index);
+      });
+    }
+
+    function performerTaskItems(p) {
+      const stored = costumeTaskStore()[String(p.id)];
+      if (Array.isArray(stored)) return stored.map(normalizeCostumeTaskItem).filter(function (item) { return item.title || item.notes; });
+      return performerSeedTaskItems(p);
+    }
+
+    async function savePerformerTaskItems(performerId, items) {
+      const cleaned = (items || []).map(normalizeCostumeTaskItem).filter(function (item) {
+        return item.title || item.notes;
+      });
+      const wizardData = Object.assign({}, productionDetails?.wizard_data || {});
+      const taskMap = Object.assign({}, costumeTaskStore(), { [String(performerId)]: cleaned });
+      wizardData.costume_performer_tasks = taskMap;
+      const { data, error } = await sb.from('productions')
+        .update({ wizard_data: wizardData })
+        .eq('id', prodId)
+        .select('title,director,wizard_data')
+        .single();
+      if (error) {
+        alert('Could not save costume tasks right now.');
+        return false;
+      }
+      productionDetails = data || Object.assign({}, productionDetails, { wizard_data: wizardData });
+      return true;
+    }
+
+    async function addPerformerTask(performerId) {
+      const performer = performers.find(function (item) { return String(item.id) === String(performerId); });
+      if (!performer) return;
+      const items = performerTaskItems(performer);
+      items.push(normalizeCostumeTaskItem({
+        title: '',
+        notes: '',
+        sourced: false,
+        ready: false,
+      }, items.length));
+      const saved = await savePerformerTaskItems(performerId, items);
+      if (saved) renderPerformersFull();
+    }
+
+    async function updatePerformerTaskField(performerId, taskId, field, value) {
+      const performer = performers.find(function (item) { return String(item.id) === String(performerId); });
+      if (!performer) return;
+      const items = performerTaskItems(performer).map(function (item) {
+        if (String(item.id) !== String(taskId)) return item;
+        const next = Object.assign({}, item);
+        if (field === 'sourced' || field === 'ready') next[field] = value === true;
+        else next[field] = String(value || '').trim();
+        return next;
+      });
+      const saved = await savePerformerTaskItems(performerId, items);
+      if (saved) renderPerformersFull();
+    }
+
+    async function removePerformerTask(performerId, taskId) {
+      const performer = performers.find(function (item) { return String(item.id) === String(performerId); });
+      if (!performer) return;
+      const items = performerTaskItems(performer).filter(function (item) { return String(item.id) !== String(taskId); });
+      const saved = await savePerformerTaskItems(performerId, items);
+      if (saved) renderPerformersFull();
     }
 
     function performerSummarySortValue(p) {
@@ -3062,27 +3164,61 @@
       const el = document.getElementById('performers-full-list');
       if (!performers.length) { el.innerHTML = '<div style="text-align:center;padding:3rem;color:rgba(26,21,48,0.35);font-size:0.82rem;">No people yet.</div>'; return; }
       el.innerHTML = performers.map(p => {
-        const color = avatarColor(p.name);
-        const gIds = performerGroupIds(p.id);
-        const pills = gIds.map(gid => {
-          const g = groups.find(x => x.id === gid);
-          return g ? `<span class="track-pill"><img src="/ASSETS/Images/Icons/chm-costumes.svg?v=20260605" style="width:16px;height:16px;opacity:0.6;" alt="" /> ${esc(g.name)}</span>` : '';
-        }).join('');
-        return `<div class="perf-card" onclick="openPerformerDetail('${esc(p.id)}')" style="cursor:pointer;">
-          <div class="perf-card-row">
-            <div class="cp-row-avatar" style="background:${color};width:38px;height:38px;font-size:0.82rem;">${initials(p.name)}</div>
-            <div class="perf-card-body">
-              <div class="perf-card-name">${esc(p.name)}</div>
-              <div class="perf-card-meta">
-                ${p.role ? `<span>${esc(p.role)}</span>` : '<span>No role set</span>'}
-                ${pronounHtml(p)}
+        const displayName = performerCardDisplayName(p) || p.name;
+        const taskItems = performerTaskItems(p);
+        const photo = p.headshot_url
+          ? `<img src="${esc(p.headshot_url)}" alt="${esc(displayName)}" style="width:100%;aspect-ratio:4/5;object-fit:cover;object-position:top;display:block;border-radius:14px 14px 0 0" onerror="this.outerHTML='<div style=&quot;width:100%;aspect-ratio:4/5;border-radius:14px 14px 0 0;background:${esc(avatarColor(displayName))};display:flex;align-items:center;justify-content:center;font-size:1.9rem;font-weight:900;color:#fff&quot;>${esc(initials(displayName))}</div>'" />`
+          : `<div style="width:100%;aspect-ratio:4/5;border-radius:14px 14px 0 0;background:${esc(avatarColor(displayName))};display:flex;align-items:center;justify-content:center;font-size:1.9rem;font-weight:900;color:#fff">${esc(initials(displayName))}</div>`;
+        return `<section style="background:#fff;border:1.5px solid #edeaf6;border-radius:20px;padding:1.1rem;display:grid;grid-template-columns:minmax(220px,240px) minmax(0,1fr);gap:1.1rem;align-items:start;box-shadow:0 10px 26px rgba(26,21,48,0.05);margin-bottom:1rem;">
+          <div>
+            <div style="background:#fff;border:1.5px solid #edeaf6;border-radius:16px;overflow:hidden;box-shadow:0 10px 26px rgba(26,21,48,0.08)">
+              ${photo}
+              <div style="padding:0.9rem 1rem 1rem;text-align:center">
+                <div style="font-size:1.1rem;font-weight:900;line-height:1.05;color:#1a1530">${esc(displayName)}</div>
+                <div style="font-size:0.9rem;color:#6e6588;margin-top:0.22rem">${esc(p.role || 'No role set')}</div>
+                ${p.pronouns ? `<div style="font-size:0.76rem;font-weight:700;color:#9a90b0;margin-top:0.24rem">${esc(p.pronouns)}</div>` : ''}
               </div>
             </div>
-            <button onclick="event.stopPropagation();openPerformerDetail('${esc(p.id)}')" style="border:1.5px solid rgba(87,46,136,0.14);background:#fff;border-radius:8px;cursor:pointer;font-size:0.75rem;font-weight:800;color:#572e88;padding:0.42rem 0.75rem;">View</button>
-            <button onclick="event.stopPropagation();openModal('edit-performer','${p.id}')" style="border:none;background:none;cursor:pointer;font-size:0.75rem;color:rgba(26,21,48,0.35);padding:0.25rem 0.5rem;">Edit</button>
+            <div style="display:flex;align-items:center;justify-content:center;gap:0.55rem;flex-wrap:wrap;margin-top:0.75rem">
+              <button onclick="openPerformerDetail('${esc(p.id)}')" style="border:1.5px solid rgba(87,46,136,0.14);background:#fff;border-radius:10px;cursor:pointer;font-size:0.75rem;font-weight:800;color:#572e88;padding:0.48rem 0.82rem;">Details</button>
+              <button onclick="openModal('edit-performer','${esc(p.id)}')" style="border:none;background:none;cursor:pointer;font-size:0.75rem;font-weight:800;color:rgba(26,21,48,0.5);padding:0.3rem 0.45rem;">Edit person</button>
+            </div>
           </div>
-          ${gIds.length ? `<div class="perf-card-groups">${pills}</div>` : '<div style="padding:0 1.25rem 0.75rem;font-size:0.75rem;color:rgba(26,21,48,0.35);">Not assigned to any groups yet.</div>'}
-        </div>`;
+          <div style="min-width:0">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.85rem;flex-wrap:wrap;margin-bottom:0.85rem">
+              <div>
+                <div style="font-size:0.78rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#b0a8c8">Costume Pieces</div>
+                <div style="font-size:0.8rem;color:#7a7291;margin-top:0.14rem">Track what this performer needs, whether it is in hand, and whether it is stage ready.</div>
+              </div>
+              <button onclick="addPerformerTask('${esc(p.id)}')" style="border:none;background:#572e88;border-radius:10px;cursor:pointer;font-size:0.78rem;font-weight:800;color:#fff;padding:0.58rem 0.95rem;">+ Add Costume Piece</button>
+            </div>
+            ${taskItems.length ? `<div style="display:flex;flex-direction:column;gap:0.8rem">${taskItems.map(function (item) {
+              return `<article style="background:#fcfbff;border:1px solid #edeaf6;border-radius:16px;padding:0.85rem 0.9rem">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.75rem">
+                  <div style="flex:1 1 auto;min-width:0">
+                    <label style="display:block;font-size:0.68rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#b0a8c8;margin-bottom:0.34rem">Costume Piece</label>
+                    <input type="text" value="${esc(item.title)}" placeholder="e.g. Park dress, rehearsal shoes, chimney jacket" onchange="updatePerformerTaskField('${esc(p.id)}','${esc(item.id)}','title',this.value)" style="width:100%;border:1.5px solid #e6dff3;border-radius:10px;padding:0.62rem 0.7rem;font-size:0.86rem;font-weight:700;color:#1a1530;background:#fff" />
+                  </div>
+                  <button onclick="removePerformerTask('${esc(p.id)}','${esc(item.id)}')" style="border:none;background:none;cursor:pointer;color:rgba(26,21,48,0.35);font-size:0.78rem;font-weight:800;padding:0.25rem 0.15rem;white-space:nowrap">Remove</button>
+                </div>
+                <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-top:0.72rem">
+                  <label style="display:inline-flex;align-items:center;gap:0.45rem;font-size:0.8rem;font-weight:700;color:#476a51;cursor:pointer">
+                    <input type="checkbox" ${item.sourced ? 'checked' : ''} onchange="updatePerformerTaskField('${esc(p.id)}','${esc(item.id)}','sourced',this.checked)" />
+                    In hand
+                  </label>
+                  <label style="display:inline-flex;align-items:center;gap:0.45rem;font-size:0.8rem;font-weight:700;color:#572e88;cursor:pointer">
+                    <input type="checkbox" ${item.ready ? 'checked' : ''} onchange="updatePerformerTaskField('${esc(p.id)}','${esc(item.id)}','ready',this.checked)" />
+                    Ready for stage
+                  </label>
+                </div>
+                <div style="margin-top:0.72rem">
+                  <label style="display:block;font-size:0.68rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#b0a8c8;margin-bottom:0.34rem">Notes</label>
+                  <textarea rows="2" placeholder="Add sourcing notes, fitting notes, changes still needed, or anything to remember..." onchange="updatePerformerTaskField('${esc(p.id)}','${esc(item.id)}','notes',this.value)" style="width:100%;border:1.5px solid #e6dff3;border-radius:12px;padding:0.72rem 0.78rem;font-size:0.84rem;line-height:1.5;color:#4f466a;background:#fff;resize:vertical">${esc(item.notes)}</textarea>
+                </div>
+              </article>`;
+            }).join('')}</div>` : `<div style="padding:1.2rem 1rem;border:1px dashed #d9d2eb;border-radius:16px;background:#fcfbff;font-size:0.84rem;color:#8f86aa">No costume pieces listed yet. Add the first one for this performer.</div>`}
+          </div>
+        </section>`;
       }).join('');
     }
 
