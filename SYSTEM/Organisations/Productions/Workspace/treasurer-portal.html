@@ -93,6 +93,118 @@
       const SESSION_KEY = 'bts-team-portal-v1';
       const STORAGE_KEY_PREFIX = 'bts-volunteer-portal-access:';
 
+      // ── Role/menu translation (defined first — used by functions below) ──
+
+      const ROLE_MENU_DEFAULTS = {
+        volunteer: ['shifts', 'hours'],
+        dept_lead: ['shifts', 'hours', 'departments'],
+        treasurer: ['financials', 'financials:dashboard', 'financials:budgeting', 'financials:receipts', 'financials:reports'],
+      };
+
+      // Convert portal_permissions rows (SIDEBAR_TREE keys) into real sidebar menu keys.
+      // Same map used by team-portal.html / audition-team.html, kept in sync manually.
+      const MODULE_TO_MENU_KEYS = {
+        'overview': ['overview'], 'overview:dashboard': ['overview'],
+        'plan': ['schedule'], 'plan:calendar': ['schedule'], 'plan:dashboard': ['schedule'],
+        'plan:timeline': ['schedule'], 'plan:team': ['schedule'], 'plan:script': ['schedule'],
+        'plan:files': ['schedule'], 'plan:setup': ['schedule'],
+        'cast': ['cast-dashboard', 'auditions', 'auditions:dashboard', 'auditions:schedule', 'auditions:allperformers', 'auditions:settings', 'casting', 'casting:castingboard', 'casting:castlist', 'casting:offers', 'registration', 'checkin'],
+        'cast:dashboard': ['cast-dashboard'],
+        'cast:auditions': ['auditions', 'auditions:dashboard', 'auditions:schedule', 'auditions:allperformers', 'auditions:settings'],
+        'cast:auditions:dashboard': ['auditions', 'auditions:dashboard'],
+        'cast:auditions:schedule': ['auditions', 'auditions:schedule'],
+        'cast:auditions:performers': ['auditions', 'auditions:allperformers'],
+        'cast:auditions:selftapes': ['auditions'],
+        'cast:auditions:settings': ['auditions', 'auditions:settings'],
+        'cast:casting': ['casting', 'casting:castingboard', 'casting:castlist', 'casting:offers'],
+        'cast:casting:dashboard': ['casting'],
+        'cast:casting:board': ['casting', 'casting:castingboard'],
+        'cast:casting:list': ['casting', 'casting:castlist'],
+        'cast:casting:offers': ['casting', 'casting:offers'],
+        'cast:registration': ['registration'], 'cast:registration:dashboard': ['registration'],
+        'cast:registration:form': ['registration'], 'cast:registration:status': ['registration'],
+        'cast:registration:settings': ['registration'], 'cast:checkin': ['checkin'],
+        'departments': ['departments'], 'departments:dashboard': ['departments'],
+        'departments:foh': ['departments'], 'departments:foh:ushers': ['departments'],
+        'departments:foh:concessions': ['departments'], 'departments:foh:boxoffice': ['departments'],
+        'departments:backstage': ['departments'], 'departments:backstage:crew': ['departments'],
+        'departments:backstage:changes': ['departments'], 'departments:backstage:wrangling': ['departments'],
+        'departments:backstage:rehearsal': ['departments'], 'departments:technical': ['departments'],
+        'departments:technical:lighting': ['departments'], 'departments:technical:sound': ['departments'],
+        'departments:technical:mics': ['departments'], 'departments:technical:spotlight': ['departments'],
+        'departments:design': ['departments'], 'departments:design:building': ['departments'],
+        'departments:design:painting': ['departments'], 'departments:design:dressing': ['departments'],
+        'departments:design:props': ['departments'], 'departments:costumes': ['departments'],
+        'departments:costumes:costumes': ['departments'], 'departments:costumes:laundry': ['departments'],
+        'departments:costumes:moveout': ['departments'], 'departments:hair': ['departments'],
+        'departments:hair:hair': ['departments'], 'departments:hair:makeup': ['departments'],
+        'departments:marketing': ['departments'], 'departments:marketing:branding': ['departments'],
+        'departments:marketing:programme': ['departments'], 'departments:marketing:media': ['departments'],
+        'departments:marketing:sponsors': ['departments'], 'departments:marketing:promo': ['departments'],
+        'departments:stage': ['departments'], 'departments:stage:management': ['departments'],
+        'departments:producer': ['departments'],
+        'promote': ['marketing', 'sponsors', 'programme'], 'promote:dashboard': ['marketing', 'sponsors', 'programme'],
+        'promote:marketing': ['marketing'], 'promote:marketing:dashboard': ['marketing'],
+        'promote:marketing:assets': ['marketing'], 'promote:marketing:media': ['marketing'],
+        'promote:marketing:calendar': ['marketing'], 'promote:marketing:tasks': ['marketing'],
+        'promote:sponsors': ['sponsors'], 'promote:sponsors:dashboard': ['sponsors'],
+        'promote:sponsors:ads': ['sponsors'], 'promote:sponsors:show': ['sponsors'],
+        'promote:sponsors:settings': ['sponsors'], 'promote:programme': ['programme'],
+        'ticketing': ['ticketing'], 'ticketing:dashboard': ['ticketing'], 'ticketing:events': ['ticketing'],
+        'ticketing:sales': ['ticketing'], 'ticketing:discounts': ['ticketing'],
+        'ticketing:reports': ['ticketing'], 'ticketing:settings': ['ticketing'],
+        'volunteers': ['shifts', 'hours'], 'volunteers:calendar': ['shifts', 'hours'],
+        'volunteers:plan': ['shifts', 'hours'], 'volunteers:suggestions': ['shifts', 'hours'],
+        'volunteers:roles': ['shifts', 'hours'], 'volunteers:publish': ['shifts', 'hours'],
+        'volunteers:share': ['shifts', 'hours'], 'volunteers:requests': ['shifts', 'hours'],
+        'financials': ['financials', 'financials:dashboard', 'financials:budgeting', 'financials:receipts', 'financials:reports'],
+        'financials:dashboard': ['financials', 'financials:dashboard'],
+        'financials:budgeting': ['financials:budgeting'], 'financials:receipts': ['financials:receipts'],
+        'financials:reports': ['financials:reports'],
+        'wrapup': ['wrapup'], 'wrapup:dashboard': ['wrapup'], 'wrapup:surveys': ['wrapup'], 'wrapup:archive': ['wrapup'],
+        'settings': ['settings'], 'settings:production': ['settings'], 'settings:team': ['settings'],
+        'settings:communications': ['settings'], 'settings:emails': ['settings'], 'settings:forms': ['settings'],
+        'settings:payments': ['settings'], 'settings:integrations': ['settings'],
+      };
+
+      function roleKeyFor(roleName) {
+        const clean = String(roleName || '').trim();
+        if (clean === 'Treasurer') return 'treasurer';
+        if (/^lead\s/i.test(clean)) return 'dept_lead';
+        return 'volunteer';
+      }
+
+      function permissionsToMenuKeys(permRows) {
+        const keys = [];
+        permRows.forEach(p => {
+          if (p.access_level === 'none') return;
+          const mapped = MODULE_TO_MENU_KEYS[p.module_key];
+          if (mapped) keys.push(...mapped);
+        });
+        return [...new Set(keys)];
+      }
+
+      function getFirstPage(menuKeys) {
+        const keys = new Set(menuKeys);
+        if (keys.has('overview')) return 'production-overview.html';
+        if (keys.has('shifts') || keys.has('hours')) return 'volunteer-calendar.html';
+        if (keys.has('departments')) return 'departments-dashboard.html';
+        if (keys.has('schedule')) return 'plan-calendar.html';
+        if (keys.has('cast-dashboard')) return 'cast-dashboard.html';
+        if (keys.has('auditions:dashboard') || keys.has('auditions')) return 'auditions-dashboard.html';
+        if (keys.has('casting:castingboard') || keys.has('casting')) return 'casting-board.html';
+        if (keys.has('casting:castlist')) return 'casting-castlist.html';
+        if (keys.has('checkin')) return 'cast-checkin.html';
+        if (keys.has('registration')) return 'registration-dashboard.html';
+        if (keys.has('marketing')) return 'marketing-dashboard.html';
+        if (keys.has('ticketing')) return 'ticketing-dashboard.html';
+        if (keys.has('financials') || keys.has('financials:dashboard')) return 'financials-dashboard.html';
+        if (keys.has('financials:budgeting')) return 'budgeting.html';
+        if (keys.has('wrapup')) return 'wrapup-dashboard.html';
+        if (keys.has('settings')) return 'production-settings.html';
+        return 'volunteer-calendar.html';
+      }
+
       const params  = new URLSearchParams(location.search);
       const prodId  = params.get('id') || '';
       const pvwEmail = params.get('pvw_email') || '';
@@ -103,54 +215,9 @@
 
       const sb = supabase.createClient(SB_URL, SB_ANON);
 
-      // ── Load production info ──
-      const { data: prod } = await sb
-        .from('productions')
-        .select('id, title, subtitle, season_year, poster_url')
-        .eq('id', prodId)
-        .single();
-
-      if (prod) {
-        const badge = document.getElementById('tp-show-badge');
-        const poster = document.getElementById('tp-poster');
-        badge.style.display = '';
-        document.getElementById('tp-show-name').textContent = prod.title || '';
-        const sub = [prod.subtitle, prod.season_year].filter(Boolean).join(' · ');
-        document.getElementById('tp-show-sub').textContent = sub;
-        if (prod.poster_url) { poster.src = prod.poster_url; } else { poster.style.display = 'none'; }
-        document.title = (prod.title || 'Team Portal') + ' — Build The Show';
+      function pageUrl(file) {
+        return '/SYSTEM/Organisations/Productions/Workspace/' + file + '?id=' + encodeURIComponent(prodId);
       }
-
-      // ── Preview token from Manage Access "Portal Preview" ──
-      if (pvwToken) {
-        const key = `bts_portal_preview:${pvwToken}`;
-        let preview = null;
-        try { preview = JSON.parse(sessionStorage.getItem(key) || localStorage.getItem(key) || 'null'); } catch (_) {}
-        if (preview && preview.prodId && Date.now() - Number(preview.createdAt || 0) < 10 * 60 * 1000) {
-          try { sessionStorage.removeItem(key); } catch (_) {}
-          try { localStorage.removeItem(key); } catch (_) {}
-          const email = String(preview.person?.email || '').trim().toLowerCase();
-          if (email) { await attemptLogin(email, null, null, true); return; }
-        }
-      }
-
-      // ── Auto-login via preview params ──
-      if (pvwEmail && pvwCode) {
-        await attemptLogin(pvwEmail, pvwCode, null);
-        return;
-      }
-
-      // ── Offer saved session explicitly ──
-      const saved = loadSavedSession();
-      if (saved && saved.email && saved.code) {
-        showSavedSessionChoice(saved);
-        return;
-      }
-
-      // ── Show login form ──
-      showLoginForm();
-
-      // ── Auth helpers ──
 
       function loadSavedSession() {
         try {
@@ -260,120 +327,6 @@
         location.href = pageUrl(firstPage);
       }
 
-      function roleKeyFor(roleName) {
-        const clean = String(roleName || '').trim();
-        if (clean === 'Treasurer') return 'treasurer';
-        if (/^lead\s/i.test(clean)) return 'dept_lead';
-        return 'volunteer';
-      }
-
-      const ROLE_MENU_DEFAULTS = {
-        volunteer: ['shifts', 'hours'],
-        dept_lead: ['shifts', 'hours', 'departments'],
-        treasurer: ['financials', 'financials:dashboard', 'financials:budgeting', 'financials:receipts', 'financials:reports'],
-      };
-
-      // Convert portal_permissions rows (SIDEBAR_TREE keys) into real sidebar menu keys.
-      // Same map used by team-portal.html / audition-team.html, kept in sync manually.
-      const MODULE_TO_MENU_KEYS = {
-        'overview': ['overview'], 'overview:dashboard': ['overview'],
-        'plan': ['schedule'], 'plan:calendar': ['schedule'], 'plan:dashboard': ['schedule'],
-        'plan:timeline': ['schedule'], 'plan:team': ['schedule'], 'plan:script': ['schedule'],
-        'plan:files': ['schedule'], 'plan:setup': ['schedule'],
-        'cast': ['cast-dashboard', 'auditions', 'auditions:dashboard', 'auditions:schedule', 'auditions:allperformers', 'auditions:settings', 'casting', 'casting:castingboard', 'casting:castlist', 'casting:offers', 'registration', 'checkin'],
-        'cast:dashboard': ['cast-dashboard'],
-        'cast:auditions': ['auditions', 'auditions:dashboard', 'auditions:schedule', 'auditions:allperformers', 'auditions:settings'],
-        'cast:auditions:dashboard': ['auditions', 'auditions:dashboard'],
-        'cast:auditions:schedule': ['auditions', 'auditions:schedule'],
-        'cast:auditions:performers': ['auditions', 'auditions:allperformers'],
-        'cast:auditions:selftapes': ['auditions'],
-        'cast:auditions:settings': ['auditions', 'auditions:settings'],
-        'cast:casting': ['casting', 'casting:castingboard', 'casting:castlist', 'casting:offers'],
-        'cast:casting:dashboard': ['casting'],
-        'cast:casting:board': ['casting', 'casting:castingboard'],
-        'cast:casting:list': ['casting', 'casting:castlist'],
-        'cast:casting:offers': ['casting', 'casting:offers'],
-        'cast:registration': ['registration'], 'cast:registration:dashboard': ['registration'],
-        'cast:registration:form': ['registration'], 'cast:registration:status': ['registration'],
-        'cast:registration:settings': ['registration'], 'cast:checkin': ['checkin'],
-        'departments': ['departments'], 'departments:dashboard': ['departments'],
-        'departments:foh': ['departments'], 'departments:foh:ushers': ['departments'],
-        'departments:foh:concessions': ['departments'], 'departments:foh:boxoffice': ['departments'],
-        'departments:backstage': ['departments'], 'departments:backstage:crew': ['departments'],
-        'departments:backstage:changes': ['departments'], 'departments:backstage:wrangling': ['departments'],
-        'departments:backstage:rehearsal': ['departments'], 'departments:technical': ['departments'],
-        'departments:technical:lighting': ['departments'], 'departments:technical:sound': ['departments'],
-        'departments:technical:mics': ['departments'], 'departments:technical:spotlight': ['departments'],
-        'departments:design': ['departments'], 'departments:design:building': ['departments'],
-        'departments:design:painting': ['departments'], 'departments:design:dressing': ['departments'],
-        'departments:design:props': ['departments'], 'departments:costumes': ['departments'],
-        'departments:costumes:costumes': ['departments'], 'departments:costumes:laundry': ['departments'],
-        'departments:costumes:moveout': ['departments'], 'departments:hair': ['departments'],
-        'departments:hair:hair': ['departments'], 'departments:hair:makeup': ['departments'],
-        'departments:marketing': ['departments'], 'departments:marketing:branding': ['departments'],
-        'departments:marketing:programme': ['departments'], 'departments:marketing:media': ['departments'],
-        'departments:marketing:sponsors': ['departments'], 'departments:marketing:promo': ['departments'],
-        'departments:stage': ['departments'], 'departments:stage:management': ['departments'],
-        'departments:producer': ['departments'],
-        'promote': ['marketing', 'sponsors', 'programme'], 'promote:dashboard': ['marketing', 'sponsors', 'programme'],
-        'promote:marketing': ['marketing'], 'promote:marketing:dashboard': ['marketing'],
-        'promote:marketing:assets': ['marketing'], 'promote:marketing:media': ['marketing'],
-        'promote:marketing:calendar': ['marketing'], 'promote:marketing:tasks': ['marketing'],
-        'promote:sponsors': ['sponsors'], 'promote:sponsors:dashboard': ['sponsors'],
-        'promote:sponsors:ads': ['sponsors'], 'promote:sponsors:show': ['sponsors'],
-        'promote:sponsors:settings': ['sponsors'], 'promote:programme': ['programme'],
-        'ticketing': ['ticketing'], 'ticketing:dashboard': ['ticketing'], 'ticketing:events': ['ticketing'],
-        'ticketing:sales': ['ticketing'], 'ticketing:discounts': ['ticketing'],
-        'ticketing:reports': ['ticketing'], 'ticketing:settings': ['ticketing'],
-        'volunteers': ['shifts', 'hours'], 'volunteers:calendar': ['shifts', 'hours'],
-        'volunteers:plan': ['shifts', 'hours'], 'volunteers:suggestions': ['shifts', 'hours'],
-        'volunteers:roles': ['shifts', 'hours'], 'volunteers:publish': ['shifts', 'hours'],
-        'volunteers:share': ['shifts', 'hours'], 'volunteers:requests': ['shifts', 'hours'],
-        'financials': ['financials', 'financials:dashboard', 'financials:budgeting', 'financials:receipts', 'financials:reports'],
-        'financials:dashboard': ['financials', 'financials:dashboard'],
-        'financials:budgeting': ['financials:budgeting'], 'financials:receipts': ['financials:receipts'],
-        'financials:reports': ['financials:reports'],
-        'wrapup': ['wrapup'], 'wrapup:dashboard': ['wrapup'], 'wrapup:surveys': ['wrapup'], 'wrapup:archive': ['wrapup'],
-        'settings': ['settings'], 'settings:production': ['settings'], 'settings:team': ['settings'],
-        'settings:communications': ['settings'], 'settings:emails': ['settings'], 'settings:forms': ['settings'],
-        'settings:payments': ['settings'], 'settings:integrations': ['settings'],
-      };
-
-      function permissionsToMenuKeys(permRows) {
-        const keys = [];
-        permRows.forEach(p => {
-          if (p.access_level === 'none') return;
-          const mapped = MODULE_TO_MENU_KEYS[p.module_key];
-          if (mapped) keys.push(...mapped);
-        });
-        return [...new Set(keys)];
-      }
-
-      function getFirstPage(menuKeys) {
-        const keys = new Set(menuKeys);
-        if (keys.has('overview')) return 'production-overview.html';
-        if (keys.has('shifts') || keys.has('hours')) return 'volunteer-calendar.html';
-        if (keys.has('departments')) return 'departments-dashboard.html';
-        if (keys.has('schedule')) return 'plan-calendar.html';
-        if (keys.has('cast-dashboard')) return 'cast-dashboard.html';
-        if (keys.has('auditions:dashboard') || keys.has('auditions')) return 'auditions-dashboard.html';
-        if (keys.has('casting:castingboard') || keys.has('casting')) return 'casting-board.html';
-        if (keys.has('casting:castlist')) return 'casting-castlist.html';
-        if (keys.has('checkin')) return 'cast-checkin.html';
-        if (keys.has('registration')) return 'registration-dashboard.html';
-        if (keys.has('marketing')) return 'marketing-dashboard.html';
-        if (keys.has('ticketing')) return 'ticketing-dashboard.html';
-        if (keys.has('financials') || keys.has('financials:dashboard')) return 'financials-dashboard.html';
-        if (keys.has('financials:budgeting')) return 'budgeting.html';
-        if (keys.has('wrapup')) return 'wrapup-dashboard.html';
-        if (keys.has('settings')) return 'production-settings.html';
-        return 'volunteer-calendar.html';
-      }
-
-      function pageUrl(file) {
-        return '/SYSTEM/Organisations/Productions/Workspace/' + file + '?id=' + encodeURIComponent(prodId);
-      }
-
       // ── UI helpers ──
 
       function showSavedSessionChoice(saved) {
@@ -449,6 +402,52 @@
 
       function esc(s) {
         return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+
+      // ── Boot ──
+
+      const { data: prod } = await sb
+        .from('productions')
+        .select('id, title, subtitle, season_year, poster_url')
+        .eq('id', prodId)
+        .single();
+
+      if (prod) {
+        const badge = document.getElementById('tp-show-badge');
+        const poster = document.getElementById('tp-poster');
+        badge.style.display = '';
+        document.getElementById('tp-show-name').textContent = prod.title || '';
+        const sub = [prod.subtitle, prod.season_year].filter(Boolean).join(' · ');
+        document.getElementById('tp-show-sub').textContent = sub;
+        if (prod.poster_url) { poster.src = prod.poster_url; } else { poster.style.display = 'none'; }
+        document.title = (prod.title || 'Team Portal') + ' — Build The Show';
+      }
+
+      // ── Preview token from Manage Access "Portal Preview" ──
+      if (pvwToken) {
+        const key = `bts_portal_preview:${pvwToken}`;
+        let preview = null;
+        try { preview = JSON.parse(sessionStorage.getItem(key) || localStorage.getItem(key) || 'null'); } catch (_) {}
+        if (preview && preview.prodId && Date.now() - Number(preview.createdAt || 0) < 10 * 60 * 1000) {
+          try { sessionStorage.removeItem(key); } catch (_) {}
+          try { localStorage.removeItem(key); } catch (_) {}
+          const email = String(preview.person?.email || '').trim().toLowerCase();
+          if (email) { await attemptLogin(email, null, null, true); return; }
+        }
+      }
+
+      // ── Auto-login via preview params ──
+      if (pvwEmail && pvwCode) {
+        await attemptLogin(pvwEmail, pvwCode, null);
+        return;
+      }
+
+      // ── Offer saved session explicitly ──
+      const saved = loadSavedSession();
+      if (saved && saved.email && saved.code) {
+        showSavedSessionChoice(saved);
+      } else {
+        showLoginForm();
       }
 
     })();
