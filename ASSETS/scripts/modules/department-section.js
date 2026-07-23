@@ -844,9 +844,11 @@
 
   function renderNextShiftRow(shift) {
     const day = shift.date ? new Date(shift.date + 'T12:00:00') : null;
-    const month = day ? day.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase() : 'TBC';
-    const dayNum = day ? String(day.getDate()) : '-';
-    const weekday = day ? day.toLocaleDateString('en-CA', { weekday: 'short' }).toUpperCase() : '';
+    const dateLabel = day ? day.toLocaleDateString('en-CA', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    }).toUpperCase() : 'DATE TBC';
     const time = fmtTimeRange(shift.start, shift.end) || 'Time TBC';
     const meta = [
       time,
@@ -854,8 +856,8 @@
       shift.needed ? shift.needed + ' needed' : '',
     ].filter(Boolean).join(' - ');
     return '<div class="dept-next-shift">' +
-      '<div class="dept-date-badge compact"><div>' + esc(month) + '</div><strong>' + esc(dayNum) + '</strong><span>' + esc(weekday) + '</span></div>' +
       '<div class="dept-next-shift-copy">' +
+        '<div class="dept-next-shift-date">' + esc(dateLabel) + '</div>' +
         '<div class="dept-next-shift-title">' + esc(shift.title || 'Volunteer Shift') + '</div>' +
         '<div class="dept-next-shift-meta">' + esc(meta) + '</div>' +
         (shift.eventTitle && shift.eventTitle !== shift.title ? '<div class="dept-next-shift-event">' + esc(shift.eventTitle) + '</div>' : '') +
@@ -1231,7 +1233,7 @@
     if (!currentCategoryId()) {
       await createCategory();
     }
-    openReceiptModal();
+    setRoute('receipts');
   }
 
   async function saveReceipt() {
