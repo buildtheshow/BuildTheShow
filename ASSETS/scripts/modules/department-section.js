@@ -597,11 +597,14 @@
     state.staffingPlan = (results[6] && results[6].volunteer_staffing_plan) || {};
   }
 
+  function activeTabConfig() {
+    var tabs = activeTabs();
+    return tabs.find(function (tab) { return tab.key === state.tab; }) || null;
+  }
+
   function tabTitle() {
-    if (state.tab === 'dashboard') return 'Dashboard';
-    if (state.tab === 'planning') return 'Planning';
-    if (state.tab === 'receipts') return 'Receipts';
-    return 'Dashboard';
+    var activeTab = activeTabConfig();
+    return (activeTab && activeTab.label) || 'Dashboard';
   }
 
   function renderHero() {
@@ -613,7 +616,7 @@
     return '<div class="aud-visual-hero dept-hero" style="--dept-color:' + esc(state.group.color) + ';">' +
       '<div class="aud-visual-hero-content"><div>' +
         '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span><span class="page-hierarchy">' + hierarchy + '</span></div>' +
-        '<h1 class="aud-visual-title">' + esc(state.section.label + ' ' + tabTitle()) + '</h1>' +
+        '<h1 class="aud-visual-title">' + esc(tabTitle()) + '</h1>' +
         '<p class="aud-visual-copy">' + esc(state.section.description) + '</p>' +
       '</div></div>' +
       '<div class="dept-hero-deco"><img src="' + esc(state.group.icon) + '" alt="" /></div>' +
