@@ -20134,19 +20134,25 @@ See you soon!
     const linkedVolunteer = rscVolunteerLinkedLabel(assignment);
     const volRequested = registrationAnswerTruthy(app, ['pf_volunteer_discount', 'volunteer_discount_interested', '__bts_registration_volunteer_discount_requested']);
     const volApproved = rscVolunteerDiscountEarned(assignment, settings);
+    const volRegEmail = rscRegistrationEmailForVolunteerLink(app);
+    const volSuggested = !linkedVolunteer && !volApproved && volRegEmail
+      ? rscVolunteerGroups().some(g => rscNormalizeEmail(g.email) === volRegEmail)
+      : false;
     const schRequested = registrationAnswerTruthy(app, ['pf_scholarship_request', 'scholarship_request', '__bts_registration_scholarship_requested']);
     const schStatus = String(assignment.scholarship_status || (schRequested ? 'requested' : 'none'));
     const schLabel = { none: 'No', requested: 'Requested', approved: 'Yes', declined: 'Declined' }[schStatus] || schStatus;
     const householdTitle = household ? `Household: ${household.name}` : familyRequested ? 'Household: requested' : 'Household: not connected';
     const householdSub = household ? 'Connected household discount group' : familyNames ? `Suggested: ${familyNames}` : '';
     const householdIcon = household ? '/ASSETS/Images/Icons/household-yes.svg' : '/ASSETS/Images/Icons/household-no.svg';
-    const volLabel = linkedVolunteer || volApproved ? 'Approved' : volRequested ? 'Interested' : 'Not interested';
-    const volClass = linkedVolunteer || volApproved ? 'ok' : volRequested ? 'info' : 'muted';
+    const volLabel = linkedVolunteer || volApproved ? 'Approved' : volSuggested ? 'Suggestion' : volRequested ? 'Interested' : 'Not interested';
+    const volClass = linkedVolunteer || volApproved ? 'ok' : volSuggested ? 'warn' : volRequested ? 'info' : 'muted';
     const volunteerIcon = linkedVolunteer || volApproved
       ? '/ASSETS/Images/Icons/volunteer-approved.svg'
-      : volRequested
+      : volSuggested
         ? '/ASSETS/Images/Icons/volunteer-interested.svg?v=20260617'
-        : '/ASSETS/Images/Icons/volunteer-not-interested.svg';
+        : volRequested
+          ? '/ASSETS/Images/Icons/volunteer-interested.svg?v=20260617'
+          : '/ASSETS/Images/Icons/volunteer-not-interested.svg';
     const schClass = schStatus === 'approved' ? 'ok' : schStatus === 'requested' ? 'warn' : 'muted';
     const scholarshipIcon = schStatus === 'approved'
       ? '/ASSETS/Images/Icons/scolarships-yes.svg'
