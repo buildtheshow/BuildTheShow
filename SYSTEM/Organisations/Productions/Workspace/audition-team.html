@@ -41411,6 +41411,10 @@ See you soon!
     return group?.name || assignment.volunteer_signup_name || '';
   }
 
+  function rscVolunteerLinkedCount(assignment = {}) {
+    return rscVolunteerLinkedGroups(assignment).length;
+  }
+
   function rscVolunteerDiscountEarned(assignment = {}, settings = registrationCurrentPaymentSettings()) {
     if (assignment.volunteer_discount_approved) return true;
     const groups = rscVolunteerLinkedGroups(assignment);
@@ -41711,11 +41715,14 @@ See you soon!
       const approved = rscVolunteerDiscountEarned(assignment, settings);
       const volRequested = registrationAnswerTruthy(app, ['pf_volunteer_discount', 'volunteer_discount_interested', '__bts_registration_volunteer_discount_requested']);
       const linkedVolunteer = rscVolunteerLinkedLabel(assignment);
-      const volunteerStatus = linkedVolunteer ? `Connected: ${linkedVolunteer}` : approved ? 'Approved' : volRequested ? 'Interested' : 'Available';
+      const linkedCount = rscVolunteerLinkedCount(assignment);
+      const volunteerStatus = linkedVolunteer
+        ? `${linkedCount} connected volunteer${linkedCount === 1 ? '' : 's'}`
+        : approved ? 'Approved' : volRequested ? 'Interested' : 'Available';
       volHtml = `<div class="rsc-discount">
         <div class="rsc-discount-label">Volunteer discount</div>
-        <span class="rsc-adjustment-status ${approved || linkedVolunteer ? 'ok' : volRequested ? 'warn' : 'muted'}">${esc(volunteerStatus)}</span>
-        <button class="rsc-approve-btn${linkedVolunteer ? ' approved' : ''}" onclick="rscOpenVolunteerModal('${esc(assignId)}')">${linkedVolunteer ? 'Change' : 'Link'}</button>
+        <span class="rsc-adjustment-status ${approved || linkedVolunteer ? 'ok' : volRequested ? 'warn' : 'muted'}" title="${esc(linkedVolunteer || volunteerStatus)}">${esc(volunteerStatus)}</span>
+        <button class="rsc-approve-btn${linkedVolunteer ? ' approved' : ''}" onclick="rscOpenVolunteerModal('${esc(assignId)}')">${linkedVolunteer ? 'Manage' : 'Link'}</button>
       </div>`;
     }
 
@@ -41895,9 +41902,11 @@ See you soon!
     if (settings.volunteer_discount_enabled) {
       const approved = rscVolunteerDiscountEarned(assignment, settings);
       const linkedVolunteer = rscVolunteerLinkedLabel(assignment);
+      const linkedCount = rscVolunteerLinkedCount(assignment);
+      const volunteerButton = linkedVolunteer ? `Manage (${linkedCount})` : 'Link';
       volHtml = `<div class="rpt-discount-row">
         <div class="rpt-discount-label">Volunteer discount <span style="font-weight:700;color:rgba(87,46,136,0.45);">(${registrationFormatPaymentAmount(parseFloat(settings.volunteer_discount) || 0, settings)} off)</span></div>
-        <button class="registration-action rpt-approve-btn${linkedVolunteer ? ' approved' : ''}" onclick="rscOpenVolunteerModal('${esc(assignId)}')">${linkedVolunteer ? 'Change' : 'Link'}</button>
+        <button class="registration-action rpt-approve-btn${linkedVolunteer ? ' approved' : ''}" onclick="rscOpenVolunteerModal('${esc(assignId)}')" title="${esc(linkedVolunteer || '')}">${esc(volunteerButton)}</button>
       </div>`;
     }
 
@@ -42453,12 +42462,12 @@ See you soon!
       }
       ${v.requiredHours ? `<div style="font-size:0.74rem;color:rgba(87,46,136,0.5);">Required: ${esc(v.requiredHours)} hours${discountNote}</div>` : ''}
       <div class="rsc-modal-row">
-        <div class="rsc-modal-label">Connected Volunteers</div>
-        <div style="font-size:0.72rem;color:rgba(87,46,136,0.52);line-height:1.45;margin-top:0.18rem;">Choose every volunteer that should count toward this discount.</div>
+        <div class="rsc-modal-label">Choose Connected Volunteers</div>
+        <div style="font-size:0.72rem;color:rgba(87,46,136,0.52);line-height:1.45;margin-top:0.18rem;">Choose one or more volunteers that should count toward this discount.</div>
+        <div id="rsc-vol-linked-summary" style="background:#f8f7fc;border:1px solid rgba(87,46,136,0.1);border-radius:8px;padding:0.62rem 0.72rem;margin-top:0.55rem;">${linkedSummary}</div>
         ${suggestionNote}
         ${suggestedHtml ? `<div style="font-size:0.68rem;font-weight:900;color:rgba(87,46,136,0.45);text-transform:uppercase;letter-spacing:0.08em;margin:0.6rem 0 0.35rem;">Suggested</div><div style="display:flex;flex-direction:column;gap:0.45rem;">${suggestedHtml}</div>` : ''}
         ${otherHtml ? `<div style="font-size:0.68rem;font-weight:900;color:rgba(87,46,136,0.45);text-transform:uppercase;letter-spacing:0.08em;margin:${suggestedHtml ? '0.85rem' : '0.2rem'} 0 0.35rem;">All Volunteers</div><div style="display:flex;flex-direction:column;gap:0.45rem;max-height:230px;overflow:auto;padding-right:0.2rem;">${otherHtml}</div>` : ''}
-        <div id="rsc-vol-linked-summary" style="background:#f8f7fc;border:1px solid rgba(87,46,136,0.1);border-radius:8px;padding:0.62rem 0.72rem;">${linkedSummary}</div>
       </div>
       <div class="rpt-household-modal-actions">
         <button class="rpt-modal-cancel-btn" onclick="document.getElementById('rsc-volunteer-modal')?.remove()">Cancel</button>
