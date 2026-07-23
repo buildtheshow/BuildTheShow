@@ -1096,9 +1096,11 @@
 
       window._RCPT_EMBED_DATA = {
         prodId: state.prodId,
-        deptName: state.group ? state.group.label : 'Department',
+        deptName: state.section ? state.section.label : (state.group ? state.group.label : 'Department'),
+        groupName: state.group ? state.group.label : 'Department',
         deptColor: (state.group && state.group.color || '#572e88').replace(/^#/, ''),
         catIds: catIds,
+        sectionAliases: categoryAliases(),
         editableDept: isProducer,
         deptOptions: budgetOptions.map(function (option) { return option.label; }),
         deptCatMap: deptCatMap,

@@ -932,7 +932,11 @@
     const _qp = new URLSearchParams(location.search);
     const isEmbed = _embed ? true : (_qp.get('embed') === '1');
     const deptName = _embed ? (_embed.deptName || 'Department') : (_qp.get('dept') || 'Department');
+    const groupName = _embed ? (_embed.groupName || deptName) : deptName;
     const deptColor = _embed ? (_embed.deptColor || '572e88') : ((_qp.get('color') || '572e88').replace(/^#/, ''));
+    const sectionAliases = (_embed && _embed.sectionAliases ? _embed.sectionAliases : [deptName]).map(function (value) {
+      return String(value || '').trim();
+    }).filter(Boolean);
     let _activeCatIds = _embed ? (_embed.catIds || []) : [];
     let _activeDeptName = deptName;
     let _activeCategoryId = _activeCatIds[0] || '';
@@ -1315,13 +1319,24 @@
       return nc.includes(nd) || nd.includes(nc);
     }
 
+    function sectionMatchesAlias(value) {
+      const text = normStr(value);
+      if (!text) return false;
+      return sectionAliases.some(function (alias) {
+        const normalized = normStr(alias);
+        return normalized && (text === normalized || text.includes(normalized) || normalized.includes(text));
+      });
+    }
+
     async function loadSummary() {
       try {
-        const [catsRes, rcptRes] = await Promise.all([
+        const [catsRes, itemsRes, rcptRes] = await Promise.all([
           sb.from('budget_categories').select('id,name,planned_cents').eq('production_id', prodId).eq('type', 'expense'),
-          sb.from('budget_receipts').select('id,amount_cents,description,status,category_id,created_at,department').eq('production_id', prodId)
+          sb.from('budget_items').select('id,name,category_id,qty,unit_cost_cents,budgeted_cents').eq('production_id', prodId),
+          sb.from('budget_receipts').select('id,amount_cents,description,status,category_id,created_at,department,line_items').eq('production_id', prodId)
         ]);
         const allCats = catsRes.data || [];
+        const allItems = itemsRes.data || [];
         const allReceipts = rcptRes.data || [];
 
         // Use active category IDs (updated when dept dropdown changes), fallback to name match
@@ -1329,14 +1344,33 @@
           ? allCats.filter(c => _activeCatIds.includes(c.id))
           : allCats.filter(c => catMatchesDept(c.name));
         const catIds = new Set(cats.map(c => c.id));
+        const scopedItems = allItems.filter(function (item) {
+          return catIds.has(item.category_id) && sectionMatchesAlias(item.name);
+        });
+        const scopedItemIds = new Set(scopedItems.map(function (item) { return item.id; }));
+        const hasScopedItems = !!(_embed && !_embed.editableDept && scopedItems.length);
 
         // Filter receipts: match by department field or by category belonging to this dept
         const receipts = allReceipts.filter(r =>
-          (r.department && normStr(r.department) === normStr(_activeDeptName)) ||
-          catIds.has(r.category_id)
+          hasScopedItems
+            ? (
+                (r.department && normStr(r.department) === normStr(_activeDeptName)) ||
+                ((Array.isArray(r.line_items) ? r.line_items : []).some(function (line) {
+                  return line && line.budget_item_id && scopedItemIds.has(line.budget_item_id);
+                }))
+              )
+            : (
+                (r.department && (normStr(r.department) === normStr(_activeDeptName) || normStr(r.department) === normStr(groupName))) ||
+                catIds.has(r.category_id)
+              )
         );
 
-        allocatedCents = cats.reduce((s, c) => s + (c.planned_cents || 0), 0);
+        allocatedCents = hasScopedItems
+          ? scopedItems.reduce(function (sum, item) {
+              if (item.budgeted_cents != null) return sum + (item.budgeted_cents || 0);
+              return sum + ((item.qty || 1) * (item.unit_cost_cents || 0));
+            }, 0)
+          : cats.reduce((s, c) => s + (c.planned_cents || 0), 0);
         const approvedReceipts = receipts.filter(r => r.status === 'approved' || r.status === 'paid');
         spentCents = approvedReceipts.reduce((s, r) => s + (r.amount_cents || 0), 0);
 
