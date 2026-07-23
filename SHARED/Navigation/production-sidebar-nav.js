@@ -376,10 +376,43 @@
       if (grpPlan) { grpPlan.style.display = ''; grpPlan.classList.add('open'); }
     }
 
-    // Departments
-    if (keys.has('departments')) {
+    // Departments — group shows if any dept key is granted, but each department
+    // sub-menu and its individual sections only show if specifically granted
+    // (a costume designer must not see Front of House, Technical, etc).
+    // Maps the data-dept-group slug (used in portal_permissions-derived keys) to
+    // the DOM wrap id, since those two naming schemes don't line up 1:1.
+    var DEPT_SLUG_TO_WRAP_ID = {
+      'front-of-house': 'dept-front-of-house-wrap',
+      'backstage': 'dept-backstage-wrap',
+      'technical': 'dept-technical-wrap',
+      'design-construction': 'dept-design-wrap',
+      'costumes': 'dept-costume-wrap',
+      'hair-makeup': 'dept-hair-wrap',
+      'marketing-publicity': 'dept-marketing-publicity-wrap',
+      'stage-management': 'dept-stage-management-wrap',
+    };
+    if (hasKeyOrChild('departments') || hasKeyOrChild('dept')) {
       var grpDept = document.getElementById('group-departments');
       if (grpDept) { grpDept.style.display = ''; grpDept.classList.add('open'); }
+
+      var deptDashTab = document.getElementById('dept-dashboard-tab');
+      if (deptDashTab) deptDashTab.style.display = keys.has('dept:dashboard') ? '' : 'none';
+
+      var deptProducerTab = document.getElementById('dept-producer-tab');
+      if (deptProducerTab) deptProducerTab.style.display = keys.has('dept:producer') ? '' : 'none';
+
+      Object.keys(DEPT_SLUG_TO_WRAP_ID).forEach(function (slug) {
+        var wrap = document.getElementById(DEPT_SLUG_TO_WRAP_ID[slug]);
+        if (!wrap) return;
+        var showSlug = hasKeyOrChild('dept:' + slug);
+        wrap.style.display = showSlug ? '' : 'none';
+        if (showSlug) {
+          wrap.querySelectorAll('.prod-sub-item[data-dept-group="' + slug + '"]').forEach(function (item) {
+            var section = item.getAttribute('data-dept-section');
+            item.style.display = keys.has('dept:' + slug + ':' + section) ? '' : 'none';
+          });
+        }
+      });
     }
 
     // Promote — marketing, sponsors, programme each control sub-wraps
@@ -401,16 +434,33 @@
       if (grpTicketing) { grpTicketing.style.display = ''; grpTicketing.classList.add('open'); }
     }
 
-    // Volunteers
-    if (keys.has('shifts') || keys.has('hours')) {
+    // Volunteers — group shows on any grant, but each sub-page needs its own key
+    // so a volunteer granted only Calendar+Requests can't browse Plan/Roles/etc.
+    if (keys.has('shifts') || keys.has('hours') || hasKeyOrChild('vol')) {
       var grpVolunteers = document.getElementById('group-volunteers');
       if (grpVolunteers) { grpVolunteers.style.display = ''; grpVolunteers.classList.add('open'); }
+      [
+        ['vsub-calendar', 'vol:calendar'], ['vsub-plan', 'vol:plan'],
+        ['vsub-suggestions', 'vol:suggestions'], ['vsub-roles', 'vol:roles'],
+        ['vsub-publish', 'vol:publish'], ['vsub-share', 'vol:share'],
+        ['vsub-requests', 'vol:requests'], ['vsub-settings', 'vol:settings'],
+      ].forEach(function (pair) {
+        var el = document.getElementById(pair[0]);
+        if (el) el.style.display = keys.has(pair[1]) ? '' : 'none';
+      });
     }
 
-    // Financials
+    // Financials — group shows on any grant, each page needs its own specific key.
     if (hasKeyOrChild('financials')) {
       var grpFinancials = document.getElementById('group-financials');
       if (grpFinancials) { grpFinancials.style.display = ''; grpFinancials.classList.add('open'); }
+      [
+        ['fsub-dashboard', 'financials:dashboard'], ['fsub-budgeting', 'financials:budgeting'],
+        ['fsub-receipts', 'financials:receipts'], ['fsub-reports', 'financials:reports'],
+      ].forEach(function (pair) {
+        var el = document.getElementById(pair[0]);
+        if (el) el.style.display = keys.has(pair[1]) ? '' : 'none';
+      });
     }
 
     // Wrap-up
