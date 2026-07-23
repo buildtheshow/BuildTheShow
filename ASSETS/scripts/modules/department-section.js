@@ -746,8 +746,13 @@
         window.BTSCostumePlannerInit().then(function () { if (typeof window.showTab === 'function') window.showTab(targetCostumeTab); });
       }
     } catch (error) {
-      mount.innerHTML = '<div class="dept-empty">Costume planning could not load: ' + esc(error.message) + '</div>';
+      mount.innerHTML = '<div class="dept-empty">Costume planning could not load: ' + esc(error.message) +
+        '<div style="margin-top:0.75rem;"><button type="button" class="dept-action" onclick="BTSDepartmentSection.retryCostumePlanning()">Try Again</button></div></div>';
     }
+  }
+
+  function retryCostumePlanning() {
+    mountCostumePlanningNative();
   }
 
   function renderDashboard() {
@@ -1310,5 +1315,6 @@
     goBudget,
     goCalendar,
     goFiles,
+    retryCostumePlanning,
   };
 })();
