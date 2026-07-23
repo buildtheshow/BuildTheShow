@@ -63,10 +63,7 @@
       icon: '/ASSETS/Images/Icons/Department-costume-and-makeup.svg',
       tabs: [
         { key: 'dashboard',           label: 'Dashboard' },
-        { key: 'costume-planning',    label: 'Planning',    costumeTab: 'groups' },
         { key: 'costume-people',      label: 'People',      costumeTab: 'performers' },
-        { key: 'costume-assignments', label: 'Assignments', costumeTab: 'assignments' },
-        { key: 'costume-tracks',            label: 'Tracks',            costumeTab: 'tracks' },
         { key: 'costume-performer-summary', label: 'Performer Summary', costumeTab: 'performer-summary' },
         { key: 'receipts',                  label: 'Receipts',          receiptForm: true },
       ],

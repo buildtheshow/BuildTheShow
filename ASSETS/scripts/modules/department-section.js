@@ -755,14 +755,8 @@
     return '<div class="dept-dashboard">' +
       '<div class="dept-overview-row">' +
         renderBudgetCard(allocated, spent, remaining) +
-        renderVolunteersCard(vol.assigned, vol.open, vol.needed, vol.acceptedSignups) +
         renderNextUpCard(opportunities) +
       '</div>' +
-      '<div class="dept-detail-row">' +
-        renderActivityCard(receipts, signups, opportunities) +
-        renderNotesCard() +
-      '</div>' +
-      renderQuickActions() +
     '</div>';
   }
 
@@ -1050,18 +1044,15 @@
       scope.innerHTML = body.innerHTML;
       mount.appendChild(scope);
 
-      // Build category IDs for this group using section aliases
-      var groupAliases = [];
-      if (state.group && state.group.sections) {
-        state.group.sections.forEach(function (s) {
-          [s.label].concat(s.categoryAliases || []).forEach(function (a) {
-            groupAliases.push(String(a).trim().toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' '));
-          });
+      // Keep embedded receipts scoped to the active section, not the full department group.
+      var sectionAliases = [state.section && state.section.label].concat((state.section && state.section.categoryAliases) || [])
+        .filter(Boolean)
+        .map(function (a) {
+          return String(a).trim().toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ');
         });
-      }
       var catIds = (state.categories || []).filter(function (c) {
         var n = String(c.name || '').trim().toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ');
-        return groupAliases.some(function (a) { return n === a || n.includes(a) || a.includes(n); });
+        return sectionAliases.some(function (a) { return n === a || n.includes(a) || a.includes(n); });
       }).map(function (c) { return c.id; });
 
       // Pass all data via a global — no fragile string replacements needed
