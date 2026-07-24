@@ -721,6 +721,7 @@
       var nav = doc.getElementById('costume-nav');
       var content = doc.querySelector('.costume-content');
       var overlay = doc.getElementById('c-overlay');
+      var detailOverlay = doc.getElementById('tcp-detail-overlay');
       if (!nav || !content || !overlay) throw new Error('Costume planner markup was incomplete');
       var styleEl = document.getElementById('dept-costume-inline-style');
       if (!styleEl) {
@@ -745,6 +746,7 @@
       // Omit the costume nav — department section tabs take its place
       scope.appendChild(clonedContent);
       scope.appendChild(overlay.cloneNode(true));
+      if (detailOverlay) scope.appendChild(detailOverlay.cloneNode(true));
       mount.appendChild(scope);
       if (!window.BTSCostumePlannerInlineLoaded) {
         var scripts = Array.from(doc.querySelectorAll('script')).map(function (script) { return script.textContent || ''; }).filter(Boolean);
