@@ -2246,14 +2246,14 @@
 
     function performerTaskItems(p) {
       const stored = costumeTaskStore()[String(p.id)];
-      if (Array.isArray(stored)) return stored.map(normalizeCostumeTaskItem).filter(function (item) { return item.title || item.character || item.costume || item.notes; });
+      if (Array.isArray(stored)) return stored.map(normalizeCostumeTaskItem);
       return performerSeedTaskItems(p);
     }
 
     async function savePerformerTaskItems(performerId, items) {
-      const cleaned = (items || []).map(normalizeCostumeTaskItem).filter(function (item) {
-        return item.title || item.character || item.costume || item.notes;
-      });
+      // Keep every item the user added, even if still blank — a costume piece
+      // must not silently disappear just because a field hasn't been filled in yet.
+      const cleaned = (items || []).map(normalizeCostumeTaskItem);
       const wizardData = Object.assign({}, productionDetails?.wizard_data || {});
       const taskMap = Object.assign({}, costumeTaskStore(), { [String(performerId)]: cleaned });
       wizardData.costume_performer_tasks = taskMap;
@@ -3215,18 +3215,18 @@
       });
     }
 
-    function performerCostumeStatus(p) {
+    function performerCostumeDotsHtml(p) {
       const items = performerTaskItems(p);
-      if (!items.length) return { color: '#d1523d', label: 'Not started' };
-      if (items.every(i => i.ready)) return { color: '#769e7b', label: 'All ready' };
-      if (items.some(i => i.sourced || i.ready)) return { color: '#efab45', label: 'In progress' };
-      return { color: '#d1523d', label: 'Not started' };
+      if (!items.length) return '';
+      return `<div style="position:absolute;bottom:0.25rem;left:0;right:0;display:flex;align-items:center;justify-content:center;gap:0.2rem;z-index:1;">${items.map(function (item) {
+        const color = costumeTaskCardTheme(item).background;
+        return `<span style="width:6px;height:6px;border-radius:50%;background:${color};"></span>`;
+      }).join('')}</div>`;
     }
 
     function renderPerformerRoster() {
       const cardsHtml = performers.map((p, idx) => {
         const isActive = p.id === selectedTaskPerformerId;
-        const status = performerCostumeStatus(p);
         const nameParts = (performerCardDisplayName(p) || p.name || '').trim().split(/\s+/);
         const card = renderCastingCard({
           first_name: p.preferred_first_name || nameParts[0] || '',
@@ -3244,8 +3244,8 @@
           title: performerCardDisplayName(p) || p.name || '',
         });
         return `<button onclick="selectTaskPerformer('${esc(p.id)}')" style="position:relative;border:none;background:none;padding:0;cursor:pointer;border-radius:8px;${isActive ? '' : 'opacity:0.5;'}">
-          <span title="${esc(status.label)}" style="position:absolute;top:0.3rem;right:0.3rem;width:9px;height:9px;border-radius:50%;background:${status.color};border:1.5px solid #fff;z-index:1;"></span>
           ${card}
+          ${performerCostumeDotsHtml(p)}
         </button>`;
       }).join('');
       const addCardHtml = `<button onclick="openModal('performer')" class="casting-card casting-card--sm casting-card--in-show has-padding tcp-roster-add" style="border:1.5px dashed rgba(87,46,136,0.35);background:#fbf9fe;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.3rem;box-sizing:border-box;height:86px;">
