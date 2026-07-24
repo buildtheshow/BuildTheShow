@@ -1758,6 +1758,12 @@
 
     let sb, prodId;
     let performers = [], groups = [], assignments = [];
+    let selectedTaskPerformerId = null;
+
+    function selectTaskPerformer(id) {
+      selectedTaskPerformerId = id;
+      renderPerformersFull();
+    }
     let productionDetails = {};
     let charRoleMap = {}; // normalized name → role_type string
     let modalMode = null; // 'group' | 'look' | 'performer' | 'edit-group' | 'edit-look' | 'edit-performer' | 'delete-group' | 'delete-look' | 'delete-performer'
@@ -3190,11 +3196,31 @@
       });
     }
 
-    function renderPerformersFull() {
-      const el = document.getElementById('performers-full-list');
-      if (!performers.length) { el.innerHTML = '<div style="text-align:center;padding:3rem;color:rgba(26,21,48,0.35);font-size:0.82rem;">No people yet.</div>'; return; }
-      el.innerHTML = performers.map(p => {
-        const displayName = performerCardDisplayName(p) || p.name;
+    function renderPerformerRoster() {
+      const cardsHtml = performers.map((p, idx) => {
+        const isActive = p.id === selectedTaskPerformerId;
+        const nameParts = (performerCardDisplayName(p) || p.name || '').trim().split(/\s+/);
+        const card = renderCastingCard({
+          first_name: p.preferred_first_name || nameParts[0] || '',
+          last_name: p.last_name || nameParts.slice(1).join(' '),
+          character_name: String(p.role || '').trim(),
+          headshot_url: p.headshot_url || '',
+        }, {
+          size: 'sm',
+          grid: 'sticky',
+          hasPadding: true,
+          hasIcons: false,
+          variant: 'inTheShow',
+          state: null,
+          id: 'tcp-roster-' + idx,
+          title: performerCardDisplayName(p) || p.name || '',
+        });
+        return `<button onclick="selectTaskPerformer('${esc(p.id)}')" style="border:none;background:none;padding:0;cursor:pointer;border-radius:8px;${isActive ? 'outline:2.5px solid #572e88;outline-offset:2px;' : 'opacity:0.72;'}">${card}</button>`;
+      }).join('');
+      return `<div class="casting-card-grid-sticky" style="margin-bottom:1.25rem;">${cardsHtml}</div>`;
+    }
+
+    function renderPerformerTaskSection(p) {
         const taskItems = performerTaskItems(p);
         const performerCard = renderTaskPerformerCard(p);
         return `<section class="tcp-section" style="background:#ffffff;border:1.5px solid #e7e1f1;border-radius:20px;padding:1.1rem;display:grid;grid-template-columns:minmax(240px,304px) minmax(0,1fr);gap:1.1rem;align-items:start;margin-bottom:1rem;box-shadow:0 8px 18px rgba(26,21,48,0.04)">
@@ -3244,7 +3270,16 @@
             }).join('')}</div>` : `<div style="padding:1.2rem 1rem;border:1px dashed #d9d2eb;border-radius:16px;background:#fcfbff;font-size:0.84rem;color:#8f86aa">No costume pieces listed yet. Add the first one for this performer.</div>`}
           </div>
         </section>`;
-      }).join('');
+    }
+
+    function renderPerformersFull() {
+      const el = document.getElementById('performers-full-list');
+      if (!performers.length) { el.innerHTML = '<div style="text-align:center;padding:3rem;color:rgba(26,21,48,0.35);font-size:0.82rem;">No people yet.</div>'; return; }
+      if (!selectedTaskPerformerId || !performers.some(p => p.id === selectedTaskPerformerId)) {
+        selectedTaskPerformerId = performers[0].id;
+      }
+      const selected = performers.find(p => p.id === selectedTaskPerformerId);
+      el.innerHTML = renderPerformerRoster() + renderPerformerTaskSection(selected);
     }
 
     function openPerformerDetail(id) {
