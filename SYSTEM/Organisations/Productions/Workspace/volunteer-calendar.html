@@ -346,7 +346,9 @@
       const first = dateEvents[0];
       document.getElementById('vc-modal-title').textContent = first.extendedProps.eventTitle;
       const d = new Date(first.start);
-      document.getElementById('vc-modal-sub').textContent = d.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' });
+      const dateStr = d.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' });
+      const timeStr = vcEventTimeStr(first);
+      document.getElementById('vc-modal-sub').textContent = timeStr ? dateStr + ' · ' + timeStr : dateStr;
       document.getElementById('vc-modal-roles').innerHTML = dateEvents.map(e => {
         const p = e.extendedProps;
         if (p.isDeadline) {
@@ -374,6 +376,21 @@
     }
     function closeVcModal() {
       document.getElementById('vc-modal').classList.remove('open');
+    }
+
+    // Mirrors timeFromValue/toDateTimeLocal in production-workspace.js — FullCalendar
+    // is configured with timeZone:false, so Date objects store wall-clock time in UTC parts.
+    function vcTimeFromDate(d) {
+      if (!d) return '';
+      const h = d.getUTCHours(), m = d.getUTCMinutes();
+      const ap = h >= 12 ? 'pm' : 'am';
+      return `${h % 12 || 12}:${String(m).padStart(2, '0')}${ap}`;
+    }
+    function vcEventTimeStr(event) {
+      if (event.allDay || !event.start) return '';
+      const startTime = vcTimeFromDate(event.start);
+      const endTime = vcTimeFromDate(event.end);
+      return endTime ? `${startTime} - ${endTime}` : startTime;
     }
 
     function initCalendar(fcEvents) {
@@ -408,16 +425,30 @@
             : { left: 'prev,next today', center: 'title', right: 'dayGridMonth,listMonth' });
         },
         eventContent(arg) {
+          const timeStr = vcEventTimeStr(arg.event);
           const wrap = document.createElement('div');
           wrap.style.cssText = 'width:100%;overflow:hidden;text-align:center;line-height:1.2;';
-          wrap.innerHTML = '<div class="zeus-event-label">' + esc(arg.event.title) + '</div>';
+          wrap.innerHTML = (timeStr ? '<div class="zeus-event-time">' + esc(timeStr) + '</div>' : '')
+            + '<div class="zeus-event-label">' + esc(arg.event.title) + '</div>';
           return { domNodes: [wrap] };
+        },
+        eventDidMount(info) {
+          ['.zeus-event-time', '.zeus-event-label'].forEach(sel => {
+            const node = info.el.querySelector(sel);
+            if (!node) return;
+            let size = 11;
+            node.style.fontSize = size + 'px';
+            while (node.scrollWidth > node.clientWidth + 1 && size > 7) {
+              size -= 0.5;
+              node.style.fontSize = size + 'px';
+            }
+          });
         },
         eventClick(info) {
           const dateStr = info.event.startStr.slice(0, 10);
           const dayEvents = fcCalendar.getEvents()
             .filter(e => e.startStr.slice(0, 10) === dateStr && e.extendedProps.eventTitle === info.event.extendedProps.eventTitle)
-            .map(e => ({ start: e.start, extendedProps: { ...e.extendedProps, dot: e.backgroundColor } }));
+            .map(e => ({ start: e.start, end: e.end, allDay: e.allDay, extendedProps: { ...e.extendedProps, dot: e.backgroundColor } }));
           openVcModal(dayEvents);
         },
       });
