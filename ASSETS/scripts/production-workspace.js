@@ -19454,26 +19454,32 @@ See you soon!
     }).sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  function rscVolunteerLinkedGroup(assignment = {}) {
+  function rscVolunteerLinkedGroups(assignment = {}) {
     const ids = Array.isArray(assignment.volunteer_signup_ids)
       ? assignment.volunteer_signup_ids.map(String)
       : String(assignment.volunteer_signup_id || '').trim() ? [String(assignment.volunteer_signup_id)] : [];
-    if (!ids.length) return null;
-    return rscVolunteerGroups().find(group => group.ids.some(id => ids.includes(String(id)))) || null;
+    if (!ids.length) return [];
+    return rscVolunteerGroups().filter(group => group.ids.some(id => ids.includes(String(id))));
+  }
+
+  function rscVolunteerLinkedHours(assignment = {}) {
+    return rscVolunteerLinkedGroups(assignment).reduce((sum, group) => sum + (group.hours || 0), 0);
   }
 
   function rscVolunteerLinkedLabel(assignment = {}) {
-    const group = rscVolunteerLinkedGroup(assignment);
-    return group?.name || assignment.volunteer_signup_name || '';
+    const groups = rscVolunteerLinkedGroups(assignment);
+    if (groups.length) return groups.map(group => group.name).join(', ');
+    return assignment.volunteer_signup_name || '';
   }
 
   function rscVolunteerDiscountEarned(assignment = {}, settings = registrationCurrentPaymentSettings()) {
     if (assignment.volunteer_discount_approved) return true;
-    const group = rscVolunteerLinkedGroup(assignment);
-    if (!group) return false;
+    const groups = rscVolunteerLinkedGroups(assignment);
+    if (!groups.length) return false;
+    const totalHours = rscVolunteerLinkedHours(assignment);
     const required = parseFloat(String(settings.volunteer_hours || '').replace(/[^0-9.]/g, '')) || 0;
-    if (required > 0) return group.hours >= required;
-    return group.hours > 0 || group.status === 'approved';
+    if (required > 0) return totalHours >= required;
+    return totalHours > 0 || groups.some(group => group.status === 'approved');
   }
 
   function rptGetInstallments(settings) {
@@ -21885,33 +21891,58 @@ See you soon!
     return [...new Set(emails.map(rscNormalizeEmail).filter(Boolean))];
   }
 
-  function rscApplyVolunteerSelection(key) {
-    const groups = window._rscVolunteerSelectGroups || [];
-    const group = groups.find(g => g.key === key) || null;
-    const roleEl = document.getElementById('rsc-vol-role');
-    const hoursEl = document.getElementById('rsc-vol-hours');
+  function rscSelectedVolunteerGroups() {
+    const keys = window._rscVolunteerSelectedKeys || new Set();
+    return (window._rscVolunteerSelectGroups || []).filter(group => keys.has(group.key));
+  }
+
+  function rscCombinedVolunteerSelection() {
+    const groups = rscSelectedVolunteerGroups();
+    return {
+      groups,
+      names: groups.map(g => g.name),
+      hours: groups.reduce((sum, g) => sum + (g.hours || 0), 0),
+      roles: [...new Set(groups.flatMap(g => (g.roles || '').split(',').map(r => r.trim()).filter(Boolean)))],
+      ids: groups.flatMap(g => g.ids),
+    };
+  }
+
+  function rscRenderVolunteerLinkedSummary() {
     const summaryEl = document.getElementById('rsc-vol-linked-summary');
-    if (!group) {
-      if (summaryEl) summaryEl.innerHTML = '<div style="font-size:0.74rem;color:rgba(87,46,136,0.45);">No volunteer connected yet.</div>';
-      rscUpdatePerChildPrompt(null);
+    if (!summaryEl) return;
+    const groups = rscSelectedVolunteerGroups();
+    if (!groups.length) {
+      summaryEl.innerHTML = '<div style="font-size:0.74rem;color:rgba(87,46,136,0.45);">No volunteer connected yet.</div>';
       return;
     }
-    if (roleEl) roleEl.value = group.roles || '';
-    if (hoursEl && group.hours) hoursEl.value = String(Number.isInteger(group.hours) ? group.hours : group.hours.toFixed(2).replace(/\.?0+$/, ''));
-    if (summaryEl) {
+    const rows = groups.map(group => {
       const meta = [
         group.email,
         group.code ? `Code ${group.code}` : '',
         group.status ? group.status.replace(/_/g, ' ') : '',
       ].filter(Boolean).join(' · ');
-      summaryEl.innerHTML = `<div style="font-size:0.78rem;font-weight:900;color:#1a1530;">${esc(group.name)}</div>
+      return `<div style="padding:0.4rem 0;border-bottom:1px solid rgba(87,46,136,0.08);">
+        <div style="font-size:0.78rem;font-weight:900;color:#1a1530;">${esc(group.name)}</div>
         <div style="font-size:0.72rem;color:rgba(87,46,136,0.55);line-height:1.45;">${esc(group.roles || 'Volunteer')}${group.hours ? ` · ${esc(String(group.hours))} approved hr${group.hours === 1 ? '' : 's'}` : ''}</div>
-        ${meta ? `<div style="font-size:0.68rem;color:rgba(87,46,136,0.42);margin-top:0.1rem;">${esc(meta)}</div>` : ''}`;
-    }
-    rscUpdatePerChildPrompt(group);
+        ${meta ? `<div style="font-size:0.68rem;color:rgba(87,46,136,0.42);margin-top:0.1rem;">${esc(meta)}</div>` : ''}
+      </div>`;
+    }).join('');
+    const totalHours = groups.reduce((sum, g) => sum + (g.hours || 0), 0);
+    const totalLine = groups.length > 1
+      ? `<div style="font-size:0.74rem;font-weight:900;color:#4a7a50;margin-top:0.4rem;">Combined: ${esc(String(totalHours))} hr${totalHours === 1 ? '' : 's'}</div>`
+      : '';
+    summaryEl.innerHTML = rows + totalLine;
   }
 
-  function rscUpdatePerChildPrompt(group) {
+  function rscToggleVolunteerSelection(key, checked) {
+    if (!window._rscVolunteerSelectedKeys) window._rscVolunteerSelectedKeys = new Set();
+    if (checked) window._rscVolunteerSelectedKeys.add(key);
+    else window._rscVolunteerSelectedKeys.delete(key);
+    rscRenderVolunteerLinkedSummary();
+    rscUpdatePerChildPrompt(rscCombinedVolunteerSelection());
+  }
+
+  function rscUpdatePerChildPrompt(selection) {
     const wrap = document.getElementById('rsc-vol-per-child-wrap');
     if (!wrap) return;
     const scope = window._rscVolunteerActiveScope;
@@ -21921,7 +21952,9 @@ See you soon!
     const discount = parseFloat(String(settings.volunteer_discount || '').replace(/[^0-9.]/g, '')) || 0;
     const numKids = scope.assignmentIds.length;
     const totalNeeded = required * numKids;
-    if (!group || !required || !discount || group.hours < totalNeeded) { wrap.style.display = 'none'; return; }
+    const hours = selection?.hours || 0;
+    const name = (selection?.names || []).join(', ');
+    if (!name || !required || !discount || hours < totalNeeded) { wrap.style.display = 'none'; return; }
     const symbol = { CAD: '$', USD: '$', GBP: '£' }[settings.currency] || '$';
     const existingPerChild = scope.assignmentIds.some(aid => {
       const item = _rptCastItems.find(i => String(i.assignment?.id) === String(aid));
@@ -21932,7 +21965,7 @@ See you soon!
       <label style="display:flex;align-items:flex-start;gap:0.6rem;cursor:pointer;">
         <input type="checkbox" id="rsc-vol-per-child" style="accent-color:#769e7b;width:18px;height:18px;margin-top:0.1rem;flex-shrink:0;" ${existingPerChild ? 'checked' : ''} />
         <div>
-          <div style="font-weight:900;font-size:0.82rem;color:#1a1530;">${esc(group.name)} has ${group.hours} hours, enough for ${numKids} registrations</div>
+          <div style="font-weight:900;font-size:0.82rem;color:#1a1530;">${esc(name)} has ${hours} hours, enough for ${numKids} registrations</div>
           <div style="font-size:0.74rem;color:#4a7a50;margin-top:0.15rem;">Apply ${symbol}${discount.toLocaleString()} discount to each child (${required} hours each, ${symbol}${(discount * numKids).toLocaleString()} total savings)</div>
         </div>
       </label>
@@ -21950,21 +21983,29 @@ See you soon!
     const groups = rscVolunteerGroups();
     window._rscVolunteerSelectGroups = groups;
     const linkedIds = new Set(rscVolunteerScopeLinkedIds(scope, d));
-    const selectedGroup = groups.find(group => group.ids.some(id => linkedIds.has(String(id)))) || null;
+    const linkedGroups = groups.filter(group => group.ids.some(id => linkedIds.has(String(id))));
+    window._rscVolunteerSelectedKeys = new Set(linkedGroups.map(group => group.key));
     const registrationEmails = rscVolunteerScopeRegistrationEmails(scope, d);
     const suggestedGroups = registrationEmails.length
       ? groups.filter(group => group.rows.some(row => registrationEmails.includes(rscNormalizeEmail(row.email || row.volunteer_email))))
       : [];
     const suggestedKeys = new Set(suggestedGroups.map(group => group.key));
-    const optionForGroup = group => {
+    const checkboxForGroup = group => {
       const label = `${group.name}${group.roles ? ' - ' + group.roles : ''}${group.hours ? ' (' + group.hours + ' hrs)' : ''}`;
-      return `<option value="${esc(group.key)}"${selectedGroup?.key === group.key ? ' selected' : ''}>${esc(label)}</option>`;
+      const checked = window._rscVolunteerSelectedKeys.has(group.key);
+      return `<label style="display:flex;align-items:center;gap:0.55rem;padding:0.4rem 0;cursor:pointer;font-size:0.82rem;color:#1a1530;">
+        <input type="checkbox" value="${esc(group.key)}" ${checked ? 'checked' : ''} onchange="rscToggleVolunteerSelection('${esc(group.key)}', this.checked)" style="accent-color:#572e88;width:16px;height:16px;flex-shrink:0;" />
+        ${esc(label)}
+      </label>`;
     };
     const suggestedHtml = suggestedGroups.length
-      ? `<optgroup label="Suggested from registration email">${suggestedGroups.map(optionForGroup).join('')}</optgroup>`
+      ? `<div style="font-size:0.68rem;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;color:rgba(87,46,136,0.5);margin-top:0.5rem;">Suggested from registration email</div>${suggestedGroups.map(checkboxForGroup).join('')}`
       : '';
-    const otherHtml = groups.filter(group => !suggestedKeys.has(group.key)).map(optionForGroup).join('');
-    const optionsHtml = `<option value="">Not connected</option>${suggestedHtml}${otherHtml ? `<optgroup label="All volunteers">${otherHtml}</optgroup>` : ''}`;
+    const otherGroups = groups.filter(group => !suggestedKeys.has(group.key));
+    const otherHtml = otherGroups.length
+      ? `<div style="font-size:0.68rem;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;color:rgba(87,46,136,0.5);margin-top:0.5rem;">All volunteers</div>${otherGroups.map(checkboxForGroup).join('')}`
+      : '';
+    const optionsHtml = `<div style="max-height:220px;overflow-y:auto;border:1.5px solid rgba(87,46,136,0.14);border-radius:8px;padding:0.3rem 0.6rem;">${suggestedHtml}${otherHtml}</div>`;
     const suggestionNote = suggestedGroups.length
       ? `<div style="font-size:0.68rem;color:#4a7a50;font-weight:800;margin-top:0.18rem;">Suggested because the volunteer email matches this registration.</div>`
       : registrationEmails.length
@@ -21973,10 +22014,6 @@ See you soon!
     const scopeNote = scope.type === 'household'
       ? `<div style="font-size:0.74rem;color:rgba(87,46,136,0.56);line-height:1.45;margin-top:-0.1rem;">This connection will apply to ${esc(scope.memberNames.join(', '))}.</div>`
       : '';
-    const linkedSummary = selectedGroup
-      ? `<div style="font-size:0.78rem;font-weight:900;color:#1a1530;">${esc(selectedGroup.name)}</div>
-        <div style="font-size:0.72rem;color:rgba(87,46,136,0.55);line-height:1.45;">${esc(selectedGroup.roles || 'Volunteer')}${selectedGroup.hours ? ` · ${esc(String(selectedGroup.hours))} approved hr${selectedGroup.hours === 1 ? '' : 's'}` : ''}</div>`
-      : '<div style="font-size:0.74rem;color:rgba(87,46,136,0.45);">No volunteer connected yet.</div>';
     document.getElementById('rsc-volunteer-modal')?.remove();
     const modal = document.createElement('div');
     modal.id = 'rsc-volunteer-modal';
@@ -21990,12 +22027,11 @@ See you soon!
       }
       ${v.requiredHours ? `<div style="font-size:0.74rem;color:rgba(87,46,136,0.5);">Required: ${esc(v.requiredHours)} hours${discountNote}</div>` : ''}
       <div class="rsc-modal-row">
-        <div class="rsc-modal-label">Connected Volunteer</div>
-        <select class="rpt-household-modal-input" id="rsc-vol-link" onchange="rscApplyVolunteerSelection(this.value)">
-          ${optionsHtml}
-        </select>
+        <div class="rsc-modal-label">Connected Volunteers</div>
+        <div style="font-size:0.68rem;color:rgba(87,46,136,0.45);margin-bottom:0.3rem;">Check everyone whose hours should count toward this discount.</div>
+        ${optionsHtml}
         ${suggestionNote}
-        <div id="rsc-vol-linked-summary" style="background:#f8f7fc;border:1px solid rgba(87,46,136,0.1);border-radius:8px;padding:0.62rem 0.72rem;">${linkedSummary}</div>
+        <div id="rsc-vol-linked-summary" style="background:#f8f7fc;border:1px solid rgba(87,46,136,0.1);border-radius:8px;padding:0.62rem 0.72rem;margin-top:0.5rem;"></div>
       </div>
       <div id="rsc-vol-per-child-wrap" style="display:none;"></div>
       <div class="rpt-household-modal-actions">
@@ -22006,12 +22042,8 @@ See you soon!
     </div>`;
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
     document.body.appendChild(modal);
-    rscUpdatePerChildPrompt(selectedGroup);
-  }
-
-  function rscSelectedVolunteerGroup() {
-    const selectedKey = document.getElementById('rsc-vol-link')?.value || '';
-    return (window._rscVolunteerSelectGroups || []).find(group => group.key === selectedKey) || null;
+    rscRenderVolunteerLinkedSummary();
+    rscUpdatePerChildPrompt(rscCombinedVolunteerSelection());
   }
 
   function rscVolunteerPortalInfoUrl() {
@@ -22101,33 +22133,36 @@ See you soon!
   }
 
   async function rscSendVolunteerPortalInfo(assignId, btn) {
-    const group = rscSelectedVolunteerGroup();
-    if (!group) {
-      showToast('Choose a connected volunteer first.', true);
-      return;
-    }
-    const { email, name, context } = rscVolunteerPortalEmailContext(assignId, group);
-    if (!email || !String(email).includes('@')) {
-      showToast('No volunteer email found for this connection.', true);
+    const groups = rscSelectedVolunteerGroups();
+    if (!groups.length) {
+      showToast('Choose at least one connected volunteer first.', true);
       return;
     }
     const original = btn?.textContent || 'Send Portal Info';
     if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
     try {
       await rscEnsureVolunteerPortalTemplate();
-      const { data, error } = await sb.functions.invoke('send-email', {
-        body: {
-          production_id: prodId,
-          category: 'volunteer_portal_info',
-          trigger: 'volunteer_portal_info',
-          email,
-          name,
-          ...context,
-          context,
-        },
-      });
-      if (error || data?.error) throw error || new Error(data.error);
-      showToast(`Portal info sent to ${email}`);
+      const sent = [];
+      const skipped = [];
+      for (const group of groups) {
+        const { email, name, context } = rscVolunteerPortalEmailContext(assignId, group);
+        if (!email || !String(email).includes('@')) { skipped.push(group.name); continue; }
+        const { data, error } = await sb.functions.invoke('send-email', {
+          body: {
+            production_id: prodId,
+            category: 'volunteer_portal_info',
+            trigger: 'volunteer_portal_info',
+            email,
+            name,
+            ...context,
+            context,
+          },
+        });
+        if (error || data?.error) throw error || new Error(data.error);
+        sent.push(email);
+      }
+      if (sent.length) showToast(`Portal info sent to ${sent.join(', ')}${skipped.length ? ` (no email on file for ${skipped.join(', ')})` : ''}`);
+      else showToast('No volunteer email found for this connection.', true);
       if (btn) btn.textContent = 'Sent';
       window.setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = original; } }, 1400);
     } catch (err) {
@@ -22141,21 +22176,23 @@ See you soon!
     const d = window._rscModalData?.[assignId] || {};
     const scope = rscVolunteerTargetScope(assignId, d);
     const targetIds = (scope.assignmentIds || []).map(String).filter(Boolean);
-    const selectedKey = document.getElementById('rsc-vol-link')?.value || '';
-    const selectedGroup = (window._rscVolunteerSelectGroups || []).find(group => group.key === selectedKey) || null;
+    const selection = rscCombinedVolunteerSelection();
+    const hasSelection = selection.groups.length > 0;
+    const combinedName = selection.names.join(', ');
+    const combinedRoles = selection.roles.join(', ');
     const settings = registrationCurrentPaymentSettings();
     const required = parseFloat(String(settings.volunteer_hours || '').replace(/[^0-9.]/g, '')) || 0;
-    const earned = !!selectedGroup && (required > 0 ? selectedGroup.hours >= required : (selectedGroup.hours > 0 || selectedGroup.status === 'approved'));
+    const earned = hasSelection && (required > 0 ? selection.hours >= required : (selection.hours > 0 || selection.groups.some(g => g.status === 'approved')));
     const perChild = document.getElementById('rsc-vol-per-child')?.checked || false;
     const original = btn?.textContent || 'Save Connection';
     if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
     try {
       const { data, error } = await sb.from('casting_assignments').update({
         volunteer_discount_approved: earned,
-        volunteer_hours_completed: selectedGroup?.hours || null,
-        volunteer_role_notes: selectedGroup?.roles || null,
-        volunteer_signup_ids: selectedGroup ? selectedGroup.ids : [],
-        volunteer_signup_name: selectedGroup ? selectedGroup.name : null,
+        volunteer_hours_completed: hasSelection ? selection.hours : null,
+        volunteer_role_notes: hasSelection ? combinedRoles : null,
+        volunteer_signup_ids: selection.ids,
+        volunteer_signup_name: hasSelection ? combinedName : null,
         volunteer_discount_per_child: perChild,
       }).in('id', targetIds)
         .select('id,volunteer_discount_approved,volunteer_hours_completed,volunteer_role_notes,volunteer_signup_ids,volunteer_signup_name,volunteer_discount_per_child');
@@ -22167,17 +22204,17 @@ See you soon!
         const item = _rptCastItems.find(i => String(i.assignment?.id) === String(targetId));
         if (item?.assignment) {
           item.assignment.volunteer_discount_approved = row?.volunteer_discount_approved ?? earned;
-          item.assignment.volunteer_hours_completed = row?.volunteer_hours_completed ?? selectedGroup?.hours ?? null;
-          item.assignment.volunteer_role_notes = row?.volunteer_role_notes ?? selectedGroup?.roles ?? null;
-          item.assignment.volunteer_signup_ids = Array.isArray(row?.volunteer_signup_ids) ? row.volunteer_signup_ids : (selectedGroup ? selectedGroup.ids : []);
-          item.assignment.volunteer_signup_name = row?.volunteer_signup_name ?? (selectedGroup ? selectedGroup.name : null);
+          item.assignment.volunteer_hours_completed = row?.volunteer_hours_completed ?? (hasSelection ? selection.hours : null);
+          item.assignment.volunteer_role_notes = row?.volunteer_role_notes ?? (hasSelection ? combinedRoles : null);
+          item.assignment.volunteer_signup_ids = Array.isArray(row?.volunteer_signup_ids) ? row.volunteer_signup_ids : selection.ids;
+          item.assignment.volunteer_signup_name = row?.volunteer_signup_name ?? (hasSelection ? combinedName : null);
           item.assignment.volunteer_discount_per_child = row?.volunteer_discount_per_child ?? perChild;
         }
       });
       [...new Set(targetIds)].forEach(targetId => rptRerenderRow(targetId));
       rptRerenderSummary();
       const savedLabel = scope.type === 'household' ? `${scope.householdName} household` : (scope.memberNames[0] || 'cast member');
-      showToast(selectedGroup ? `Volunteer connection saved for ${savedLabel}.` : `Volunteer connection removed for ${savedLabel}.`);
+      showToast(hasSelection ? `Volunteer connection saved for ${savedLabel}.` : `Volunteer connection removed for ${savedLabel}.`);
       window.AutoSave?.showSaved?.();
     } catch (err) {
       console.error('[BTS] rscSaveVolunteer failed', err);
