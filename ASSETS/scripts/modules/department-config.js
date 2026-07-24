@@ -63,7 +63,7 @@
       icon: '/ASSETS/Images/Icons/Department-costume-and-makeup.svg',
       tabs: [
         { key: 'dashboard',           label: 'Dashboard' },
-        { key: 'costume-people',      label: 'Tasks',       costumeTab: 'performers', copy: 'Each performer card, every costume piece they need, and where it stands.' },
+        { key: 'costume-people',      label: 'Tasks',       costumeTab: 'performers', copy: 'Track each costume piece this performer needs and what still has to happen.' },
         { key: 'costume-performer-summary', label: 'Performer Summary', costumeTab: 'performer-summary', copy: 'See pronouns, sizing, measurements, and costume notes for every performer.' },
         { key: 'receipts',                  label: 'Receipts',          receiptForm: true },
       ],
