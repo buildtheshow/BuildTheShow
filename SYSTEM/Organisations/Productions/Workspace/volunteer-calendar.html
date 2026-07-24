@@ -264,6 +264,24 @@
       }
     }
 
+    // Looks up which department a named volunteer role belongs to, by
+    // searching every PLAN_ROLE_MAP bucket for a matching role name.
+    function roleDeptByName(roleName) {
+      const target = String(roleName || '').toLowerCase();
+      for (const roles of Object.values(PLAN_ROLE_MAP)) {
+        const match = roles.find(r => r.name.toLowerCase() === target);
+        if (match) return match.dept;
+      }
+      return null;
+    }
+
+    // Departments an event type is staffed by (via PLAN_ROLE_MAP). Event
+    // types with no volunteer roles (auditions, meetings, Sponsors/Marketing
+    // deadlines) return an empty set, so they're not tied to any dept.
+    function deptsForEventType(eventType) {
+      return new Set((PLAN_ROLE_MAP[eventType] || []).map(r => r.dept));
+    }
+
     function statusColor(filled, needed) {
       if (needed === 0) return '#b0a0cc';
       if (filled >= needed) return '#769e7b';
@@ -278,6 +296,11 @@
         const type = volCalendarEventType(ev);
         const eventTitle = ev.title || type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
         if (type === 'deadline') {
+          if (scopeRole) {
+            const scopeDept = roleDeptByName(scopeRole);
+            const eventDepts = deptsForEventType(ev.event_type || '');
+            if (!scopeDept || !eventDepts.has(scopeDept)) return;
+          }
           fcEvents.push({
             id: ev.id + '::deadline',
             title: '⏰ ' + eventTitle,
