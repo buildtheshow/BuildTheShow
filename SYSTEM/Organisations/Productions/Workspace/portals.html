@@ -1424,35 +1424,20 @@
     }
 
     function portalIframeSrc(person) {
-      // Treasurer: load restricted financial portal
-      if (person.source === 'treasurer') {
+      // Treasurer, volunteer, and dept lead all log in through the same public
+      // portal URl everyone else uses. That page checks portal_permissions on
+      // login and redirects internally to the permissions-driven shell — so the
+      // link we hand out here is always the one clean URL, never a role-specific one.
+      if (person.source === 'treasurer' || person.source === 'volunteer' || person.source === 'dept_lead') {
         const email = person.data?.email || person.email;
         const passcode = personVolunteerPasscode(person);
-        if (email && passcode) {
-          const url = new URL(`${window.location.origin}/SYSTEM/Organisations/Productions/Workspace/treasurer-portal.html`);
-          if (_prodId) url.searchParams.set('id', _prodId);
-          url.searchParams.set('pvw_email', email);
-          url.searchParams.set('pvw_code', passcode);
-          return url.toString();
+        if (email && passcode && _orgSlug && _showSlug) {
+          return `${window.location.origin}/${encodeURIComponent(_orgSlug)}/${encodeURIComponent(_showSlug)}/portal?pvw_email=${encodeURIComponent(email)}&pvw_code=${encodeURIComponent(passcode)}`;
         }
-        const previewToken = createPortalPreviewToken('treasurer', person);
-        if (previewToken) {
-          return treasurerPortalPreviewUrl(previewToken);
-        }
-      }
-      // Volunteer / dept lead: load the permissions-driven team portal (same one treasurers use)
-      // so whatever modules were granted in Manage Access actually show up here, regardless of role.
-      if (person.source === 'volunteer' || person.source === 'dept_lead') {
-        const email    = person.data?.email || person.email;
-        const passcode = personVolunteerPasscode(person);
-        if (email && passcode) {
-          const url = new URL(`${window.location.origin}/SYSTEM/Organisations/Productions/Workspace/treasurer-portal.html`);
-          if (_prodId) url.searchParams.set('id', _prodId);
-          url.searchParams.set('pvw_email', email);
-          url.searchParams.set('pvw_code', passcode);
-          return url.toString();
-        }
-        const previewToken = createPortalPreviewToken(person.source, person);
+        // No real passcode yet (not invited/activated) — fall back to the
+        // permissions shell's own preview-token path, since the public portal's
+        // generic preview stub can't render a specific person without real credentials.
+        const previewToken = createPortalPreviewToken(person.source === 'treasurer' ? 'treasurer' : person.source, person);
         if (previewToken) return treasurerPortalPreviewUrl(previewToken);
       }
       if (person.source === 'dept_lead_planned') {
