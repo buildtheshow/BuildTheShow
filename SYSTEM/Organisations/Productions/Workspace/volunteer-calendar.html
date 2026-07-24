@@ -77,6 +77,7 @@
         <span class="fc-legend-item" style="--c:#769e7b">Filled</span>
         <span class="fc-legend-item" style="--c:#efab45">Partially filled</span>
         <span class="fc-legend-item" style="--c:#d1523d">Needs volunteers</span>
+        <span class="fc-legend-item" style="--c:#c976a5">Deadline</span>
         <span class="fc-legend-hint">Click a shift for details</span>
       </div>
 
@@ -275,7 +276,20 @@
       const scopeRole = portalScopeRoleName();
       _events.forEach(ev => {
         const type = volCalendarEventType(ev);
-        if (type === 'deadline') return;
+        const eventTitle = ev.title || type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        if (type === 'deadline') {
+          fcEvents.push({
+            id: ev.id + '::deadline',
+            title: '⏰ ' + eventTitle,
+            start: (ev.start_time || '').slice(0, 19),
+            end: ev.end_time ? ev.end_time.slice(0, 19) : null,
+            backgroundColor: '#c976a5',
+            borderColor: '#c976a5',
+            textColor: '#ffffff',
+            extendedProps: { eventTitle, isDeadline: true, dot: '#c976a5' },
+          });
+          return;
+        }
         let planRoles = plannedRolesForType(type);
         if (scopeRole) planRoles = planRoles.filter(pr => pr.name.toLowerCase() === scopeRole.toLowerCase());
         if (!planRoles.length) return;
@@ -287,14 +301,14 @@
           const color = statusColor(filled, pr.needed);
           fcEvents.push({
             id: ev.id + '::' + pr.name,
-            title: pr.name + ' ' + filled + '/' + pr.needed,
+            title: eventTitle + ': ' + pr.name + ' ' + filled + '/' + pr.needed,
             start: (ev.start_time || '').slice(0, 19),
             end: ev.end_time ? ev.end_time.slice(0, 19) : null,
             backgroundColor: color,
             borderColor: color,
             textColor: '#ffffff',
             extendedProps: {
-              eventTitle: ev.title || type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+              eventTitle,
               role: pr.name,
               dept: pr.dept,
               filled, needed: pr.needed, names, dot: color,
@@ -312,6 +326,12 @@
       document.getElementById('vc-modal-sub').textContent = d.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' });
       document.getElementById('vc-modal-roles').innerHTML = dateEvents.map(e => {
         const p = e.extendedProps;
+        if (p.isDeadline) {
+          return '<div class="vc-role-row">' +
+            '<span class="vc-role-dot" style="background:' + p.dot + ';"></span>' +
+            '<div class="vc-role-name">' + esc(p.eventTitle) + '</div>' +
+          '</div>';
+        }
         const namesHtml = (p.names && p.names.length)
           ? '<div class="vc-role-names">' + p.names.map(n => esc(n)).join(', ') + '</div>'
           : '<div class="vc-role-names vc-role-names-empty">No one booked in yet</div>';
