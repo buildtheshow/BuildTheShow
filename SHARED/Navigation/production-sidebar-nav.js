@@ -298,6 +298,11 @@
     try { data = JSON.parse(raw); } catch (e) { return; }
     var keys = new Set(data.menuKeys || []);
 
+    // Portal viewers aren't org staff and have no org dashboard to go back to.
+    document.querySelectorAll('#sidebar-org-back, #sidebar-mobile-org-back').forEach(function (link) {
+      link.style.display = 'none';
+    });
+
     function hasKeyOrChild(prefix) {
       if (keys.has(prefix)) return true;
       for (var k of keys) { if (k.indexOf(prefix + ':') === 0) return true; }

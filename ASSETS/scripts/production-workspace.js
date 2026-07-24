@@ -9166,12 +9166,12 @@ See you soon!
       document.head.appendChild(s);
       return;
     }
-    const isMobileCalendar = window.matchMedia('(max-width: 700px)').matches;
+    let lastIsMobileCalendar = window.matchMedia('(max-width: 700px)').matches;
     const canEditCalendar = canEditProductionCalendar();
     applyProductionCalendarAccessState();
     fcCalendar = new FullCalendar.Calendar(document.getElementById('fc-calendar'), {
-      initialView: isMobileCalendar ? 'listMonth' : 'dayGridMonth',
-      headerToolbar: isMobileCalendar
+      initialView: lastIsMobileCalendar ? 'listMonth' : 'dayGridMonth',
+      headerToolbar: lastIsMobileCalendar
         ? { left: 'prev,next', center: 'title', right: 'listMonth' }
         : { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay,listMonth' },
       editable: canEditCalendar,
@@ -9184,6 +9184,15 @@ See you soon!
       timeZone: false,
       eventDisplay: 'block',
       droppable: canEditCalendar,
+      windowResize() {
+        const nowMobile = window.matchMedia('(max-width: 700px)').matches;
+        if (nowMobile === lastIsMobileCalendar) return;
+        lastIsMobileCalendar = nowMobile;
+        fcCalendar.changeView(nowMobile ? 'listMonth' : 'dayGridMonth');
+        fcCalendar.setOption('headerToolbar', nowMobile
+          ? { left: 'prev,next', center: 'title', right: 'listMonth' }
+          : { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay,listMonth' });
+      },
       drop(info) {
         if (!canEditProductionCalendar()) { info.revert(); return; }
         const el = info.draggedEl;
