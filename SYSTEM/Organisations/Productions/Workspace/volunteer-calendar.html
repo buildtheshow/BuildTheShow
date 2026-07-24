@@ -48,6 +48,8 @@
     .vc-role-name { font-size: 0.85rem; font-weight: 800; color: #1a1530; flex: 1; }
     .vc-role-dept { font-size: 0.72rem; color: rgba(26,21,48,0.4); }
     .vc-role-count { font-size: 0.78rem; font-weight: 900; }
+    .vc-role-names { font-size: 0.76rem; color: #1a1530; margin-top: 0.2rem; line-height: 1.4; }
+    .vc-role-names-empty { color: rgba(26,21,48,0.4); font-style: italic; }
     .btn-secondary { background: #fff; color: #572e88; border: 1.5px solid rgba(87,46,136,0.3); border-radius: 8px; padding: 0.52rem 1rem; font-size: 0.85rem; font-weight: 700; cursor: pointer; font-family: var(--bts-font); display: inline-flex; align-items: center; gap: 0.4rem; text-decoration: none; transition: border-color 0.14s; margin-top: 1.1rem; width: 100%; justify-content: center; }
     .btn-secondary:hover { border-color: #572e88; }
   </style>
@@ -200,6 +202,7 @@
     let _staffingPlan = {};
     let _events = [];
     let _approvedByRoleDate = {};
+    let _namesByRoleDate = {};
     let fcCalendar = null;
 
     // Which dept_leads role(s) oversee each event type. Mirrors CREW_LEAD_BY_TYPE
@@ -278,7 +281,9 @@
         if (!planRoles.length) return;
         const dateStr = (ev.start_time || '').slice(0, 10);
         planRoles.forEach(pr => {
-          const filled = _approvedByRoleDate[`${pr.name.toLowerCase()}|${dateStr}`] || 0;
+          const roleDateKey = `${pr.name.toLowerCase()}|${dateStr}`;
+          const filled = _approvedByRoleDate[roleDateKey] || 0;
+          const names = _namesByRoleDate[roleDateKey] || [];
           const color = statusColor(filled, pr.needed);
           fcEvents.push({
             id: ev.id + '::' + pr.name,
@@ -292,7 +297,7 @@
               eventTitle: ev.title || type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
               role: pr.name,
               dept: pr.dept,
-              filled, needed: pr.needed,
+              filled, needed: pr.needed, names, dot: color,
             },
           });
         });
@@ -307,10 +312,19 @@
       document.getElementById('vc-modal-sub').textContent = d.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' });
       document.getElementById('vc-modal-roles').innerHTML = dateEvents.map(e => {
         const p = e.extendedProps;
+        const namesHtml = (p.names && p.names.length)
+          ? '<div class="vc-role-names">' + p.names.map(n => esc(n)).join(', ') + '</div>'
+          : '<div class="vc-role-names vc-role-names-empty">No one booked in yet</div>';
         return '<div class="vc-role-row">' +
           '<span class="vc-role-dot" style="background:' + p.dot + ';"></span>' +
-          '<div><div class="vc-role-name">' + esc(p.role) + '</div><div class="vc-role-dept">' + esc(p.dept) + '</div></div>' +
-          '<span class="vc-role-count" style="color:' + p.dot + ';margin-left:auto;">' + p.filled + '/' + p.needed + '</span>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="display:flex;align-items:center;gap:0.5rem;">' +
+              '<div class="vc-role-name">' + esc(p.role) + '</div>' +
+              '<span class="vc-role-count" style="color:' + p.dot + ';margin-left:auto;">' + p.filled + '/' + p.needed + '</span>' +
+            '</div>' +
+            '<div class="vc-role-dept">' + esc(p.dept) + '</div>' +
+            namesHtml +
+          '</div>' +
         '</div>';
       }).join('');
       document.getElementById('vc-modal').classList.add('open');
@@ -375,16 +389,20 @@
       _staffingPlan = prodRes.data?.volunteer_staffing_plan || {};
 
       _approvedByRoleDate = {};
+      _namesByRoleDate = {};
       (signupsRes.data || []).forEach(s => {
         if (s.status !== 'approved') return;
         const role = (s.role_name || '').toLowerCase().trim();
         if (!role) return;
+        const name = String(s.name || s.volunteer_name || s.email || 'Volunteer').trim();
         const dates = [];
         if (s.shift_date) dates.push(String(s.shift_date).slice(0, 10));
         if (Array.isArray(s.required_dates)) s.required_dates.forEach(d => { if (d) dates.push(String(d).slice(0, 10)); });
         dates.forEach(d => {
           const k = role + '|' + d;
           _approvedByRoleDate[k] = (_approvedByRoleDate[k] || 0) + 1;
+          if (!_namesByRoleDate[k]) _namesByRoleDate[k] = [];
+          _namesByRoleDate[k].push(name);
         });
       });
 
