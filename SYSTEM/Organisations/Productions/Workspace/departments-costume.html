@@ -1186,6 +1186,9 @@
       flex-shrink: 0;
       justify-content: space-between;
     }
+    .c-modal.measurements { max-width: 660px; }
+    .c-modal.measurements .c-modal-title { display: none; }
+    .c-modal.measurements .c-modal-actions { justify-content: space-between; }
     .look-footer-right {
       display: flex;
       justify-content: flex-end;
@@ -1555,6 +1558,26 @@
       transition: background 0.15s;
     }
     .c-btn-save:hover { background: #6b3aa0; }
+    .c-btn-clear {
+      padding: 0.55rem 1.1rem; border-radius: 9px;
+      border: 1.5px solid rgba(87,46,136,0.18);
+      background: transparent; font-size: 0.82rem; font-weight: 700;
+      color: #572e88; cursor: pointer;
+    }
+    .c-btn-clear:hover { border-color: #572e88; }
+
+    /* ── Measurements modal ── */
+    .meas-header { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; }
+    .meas-avatar { width: 56px; height: 56px; border-radius: 50%; background: #ece8ff; color: #572e88; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; font-weight: 900; flex-shrink: 0; }
+    .meas-heading { font-size: 1.35rem; font-weight: 900; color: #1a1530; line-height: 1.15; }
+    .meas-name { font-size: 0.95rem; font-weight: 800; color: #1a1530; margin-top: 0.2rem; }
+    .meas-character { font-size: 0.82rem; color: rgba(26,21,48,0.5); margin-top: 0.1rem; }
+    .meas-copy { font-size: 0.82rem; color: rgba(26,21,48,0.55); line-height: 1.55; margin-bottom: 1.25rem; }
+    .meas-section { margin-bottom: 1.25rem; }
+    .meas-section-title { display: flex; align-items: center; gap: 0.5rem; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #572e88; margin-bottom: 0.85rem; }
+    .meas-section-title::after { content: ''; flex: 1; height: 1px; background: rgba(87,46,136,0.14); margin-left: 0.5rem; }
+    .meas-section-icon { width: 16px; height: 16px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #572e88; }
+    .meas-fields-2col { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0.9rem 1rem; }
 
     /* ── Delete confirm ── */
     .c-btn-danger {
@@ -2803,9 +2826,10 @@
       return `<option value="">${esc(field.placeholder || 'Select an option')}</option>${customOption}${optionGroups}`;
     }
 
-    function renderMeasurementsModalFields(p) {
+    function renderMeasurementsModalFields(p, keys) {
       const answers = p.answers || {};
-      return COSTUME_MEASUREMENT_FIELDS.map(function (field) {
+      const fields = keys ? COSTUME_MEASUREMENT_FIELDS.filter(f => keys.includes(f.key)) : COSTUME_MEASUREMENT_FIELDS;
+      return fields.map(function (field) {
         const currentValue = measurementFieldValue(answers, field);
         if (field.textarea) {
           return `<div class="c-field" style="margin-bottom:0">
@@ -3618,9 +3642,12 @@
       const saveBtn = document.getElementById('c-btn-save');
       const deleteBtn = document.getElementById('c-btn-delete');
       modal.classList.toggle('wide', mode === 'look' || mode === 'edit-look');
+      modal.classList.toggle('measurements', mode === 'measurements');
       if (deleteBtn) {
         deleteBtn.style.display = 'none';
         deleteBtn.textContent = 'Delete';
+        deleteBtn.classList.remove('c-btn-clear');
+        deleteBtn.classList.add('c-btn-danger');
       }
 
       if (mode === 'vision') {
@@ -3717,21 +3744,48 @@
       } else if (mode === 'measurements') {
         const p = performers.find(x => x.id === id);
         if (!p) return;
-        title.textContent = `Measurements · ${p.name}`;
+        title.textContent = '';
         body.innerHTML = `
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1rem">
-            <div>
-              <div style="font-size:0.82rem;color:rgba(26,21,48,0.55);line-height:1.55">Add the full costume measurement breakdown here. This performer summary will pull directly from these saved answers.</div>
-              ${p.pronouns ? `<div style="font-size:0.76rem;font-weight:700;color:#9a90b0;margin-top:0.35rem">${esc(p.pronouns)}</div>` : ''}
+          <div class="meas-header">
+            <div class="meas-avatar">${esc(initials(p.name))}</div>
+            <div style="flex:1;min-width:0;">
+              <div class="meas-heading">Measurements</div>
+              <div class="meas-name">${esc(p.name)}</div>
+              ${p.role ? `<div class="meas-character">${esc(p.role)}</div>` : ''}
+              ${p.pronouns ? `<div class="meas-character">${esc(p.pronouns)}</div>` : ''}
             </div>
-            <div style="font-size:0.78rem;font-weight:700;color:#7a7291;background:#f8f7fc;border:1px solid #edeaf6;border-radius:999px;padding:0.4rem 0.8rem">${esc(p.role || 'No role set')}</div>
+            <button type="button" onclick="closeModal()" aria-label="Close" style="border:none;background:none;font-size:1.2rem;color:rgba(26,21,48,0.4);cursor:pointer;line-height:1;padding:0.2rem;">&times;</button>
           </div>
-          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0.9rem 1rem">
-            ${renderMeasurementsModalFields(p)}
+          <div class="meas-copy">Add the full costume measurement breakdown here. This performer summary will pull directly from these saved answers.</div>
+
+          <div class="meas-section">
+            <div class="meas-section-title"><span class="meas-section-icon">?</span>Sizes</div>
+            <div class="meas-fields-2col">${renderMeasurementsModalFields(p, ['cm_top_size', 'cm_bottom_size', 'cm_dress_size', 'cm_shoe_size'])}</div>
+          </div>
+
+          <div class="meas-section">
+            <div class="meas-section-title"><span class="meas-section-icon">?</span>Measurements</div>
+            <div class="meas-fields-2col">${renderMeasurementsModalFields(p, ['cm_height', 'cm_chest', 'cm_bust', 'cm_waist', 'cm_hips', 'cm_inseam', 'cm_torso', 'cm_sleeve', 'cm_glove_size', 'cm_hat_size', 'cm_neck'])}</div>
+          </div>
+
+          <div class="meas-section">
+            <div class="meas-section-title"><span class="meas-section-icon">?</span>Additional Notes</div>
+            <div class="meas-fields-2col">${renderMeasurementsModalFields(p, ['cm_costume_notes', 'cm_allergy_notes', 'cm_sensory_notes', 'cm_other_notes'])}</div>
+          </div>
+
+          <div class="meas-section" style="margin-bottom:0;">
+            <div class="meas-section-title"><span class="meas-section-icon">?</span>Fit Notes <span style="text-transform:none;letter-spacing:0;font-weight:600;color:rgba(26,21,48,0.4);">(Optional)</span></div>
+            ${renderMeasurementsModalFields(p, ['cm_notes_fit'])}
           </div>`;
         saveBtn.textContent = 'Save Measurements';
         saveBtn.style.display = '';
         document.querySelector('.c-btn-cancel').style.display = '';
+        if (deleteBtn) {
+          deleteBtn.style.display = '';
+          deleteBtn.textContent = 'Clear all measurements';
+          deleteBtn.classList.remove('c-btn-danger');
+          deleteBtn.classList.add('c-btn-clear');
+        }
 
       } else if (mode === 'delete-group') {
         const g = groups.find(x => x.id === id);
@@ -3782,6 +3836,12 @@
     function deleteModalItem() {
       if (modalMode === 'edit-look' && modalEditId && modalParentId) {
         openModal('delete-look', modalEditId, modalParentId);
+      } else if (modalMode === 'measurements') {
+        if (!confirm('Clear every measurement field for this performer? This does not save until you click Save Measurements.')) return;
+        COSTUME_MEASUREMENT_FIELDS.forEach(function (field) {
+          const el = document.getElementById(`m-${field.key}`);
+          if (el) el.value = '';
+        });
       }
     }
 
@@ -3790,7 +3850,7 @@
       document.getElementById('c-btn-save').style.background = '';
       document.getElementById('c-btn-save').style.display = '';
       document.getElementById('c-btn-delete').style.display = 'none';
-      document.getElementById('c-overlay').querySelector('.c-modal')?.classList.remove('wide');
+      document.getElementById('c-overlay').querySelector('.c-modal')?.classList.remove('wide', 'measurements');
       modalMode = null;
       modalEditId = null;
       modalParentId = null;
