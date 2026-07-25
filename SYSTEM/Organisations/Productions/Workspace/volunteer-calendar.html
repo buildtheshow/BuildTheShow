@@ -52,6 +52,21 @@
     .vc-role-names-empty { color: rgba(26,21,48,0.4); font-style: italic; }
     .btn-secondary { background: #fff; color: #572e88; border: 1.5px solid rgba(87,46,136,0.3); border-radius: 8px; padding: 0.52rem 1rem; font-size: 0.85rem; font-weight: 700; cursor: pointer; font-family: var(--bts-font); display: inline-flex; align-items: center; gap: 0.4rem; text-decoration: none; transition: border-color 0.14s; margin-top: 1.1rem; width: 100%; justify-content: center; }
     .btn-secondary:hover { border-color: #572e88; }
+
+    .vc-schedule-wrap { margin-top: 1.5rem; }
+    .vc-schedule-title { font-size: 1.15rem; font-weight: 900; color: #1a1530; margin: 0 0 0.15rem; }
+    .vc-schedule-sub { font-size: 0.82rem; color: rgba(26,21,48,0.5); margin: 0 0 1rem; }
+    .vc-schedule-list { background: #fff; border-radius: 12px; border: 1px solid rgba(87,46,136,0.1); box-shadow: 0 2px 8px rgba(87,46,136,0.05); padding: 0.4rem 1rem; }
+    .vc-schedule-row { display: flex; align-items: center; gap: 0.85rem; padding: 0.75rem 0; border-bottom: 1px solid rgba(87,46,136,0.06); }
+    .vc-schedule-row:last-child { border-bottom: none; }
+    .vc-schedule-row.vc-past { opacity: 0.45; }
+    .vc-badge { flex-shrink: 0; width: 44px; min-width: 44px; border-radius: 5px; overflow: hidden; box-shadow: 0 2px 6px rgba(87,46,136,0.15); border: 1.5px solid rgba(87,46,136,0.12); }
+    .vc-badge-month { text-align: center; font-size: 0.55rem; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: #fff; padding: 0.18rem 0; line-height: 1; }
+    .vc-badge-day { background: #fff; text-align: center; font-size: 1.05rem; font-weight: 900; color: #1a1530; padding: 0.16rem 0 0.2rem; line-height: 1; }
+    .vc-schedule-body { flex: 1; min-width: 0; }
+    .vc-schedule-title-row { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+    .vc-schedule-name { font-size: 0.85rem; font-weight: 800; color: #1a1530; }
+    .vc-schedule-meta { font-size: 0.74rem; color: rgba(26,21,48,0.5); margin-top: 0.12rem; display: flex; flex-wrap: wrap; gap: 0.5rem; }
   </style>
 </head>
 <body>
@@ -78,12 +93,19 @@
         <span class="fc-legend-item" style="--c:#efab45">Partially filled</span>
         <span class="fc-legend-item" style="--c:#d1523d">Needs volunteers</span>
         <span class="fc-legend-item" style="--c:#c976a5">Deadline</span>
+        <span class="fc-legend-item" style="--c:#476aaa">Production date</span>
         <span class="fc-legend-hint">Click a shift for details</span>
       </div>
 
       <div class="fc-wrap">
         <div id="fc-calendar"></div>
         <div class="vc-empty" id="vc-empty" style="display:none;">No volunteer roles have been planned yet. Set them up in <a href="#" onclick="navigateToVolunteers('plan');return false;" style="color:#572e88;">Plan</a>.</div>
+      </div>
+
+      <div class="vc-schedule-wrap" id="vc-schedule-wrap" style="display:none;">
+        <div class="vc-schedule-title">My Schedule Details</div>
+        <p class="vc-schedule-sub">Everything coming up, with time and location.</p>
+        <div class="vc-schedule-list" id="vc-schedule-list"></div>
       </div>
 
     </div>
@@ -289,6 +311,11 @@
       return '#d1523d';
     }
 
+    // Anchor dates every dept lead/treasurer/creative-team viewer should know about even
+    // when they're not the one staffing them (e.g. a Costume Designer isn't the staffing
+    // lead for Performance, but still needs to know when it is).
+    const PRODUCTION_MILESTONE_TYPES = new Set(['tech', 'dress', 'performance', 'strike']);
+
     function buildCalendarEvents() {
       const fcEvents = [];
       const scopeRole = portalScopeRoleName();
@@ -309,13 +336,27 @@
             backgroundColor: '#c976a5',
             borderColor: '#c976a5',
             textColor: '#ffffff',
-            extendedProps: { eventTitle, isDeadline: true, dot: '#c976a5' },
+            extendedProps: { eventTitle, isDeadline: true, dot: '#c976a5', venue: ev.venue || '' },
           });
           return;
         }
         let planRoles = plannedRolesForType(type);
         if (scopeRole) planRoles = planRoles.filter(pr => pr.name.toLowerCase() === scopeRole.toLowerCase());
-        if (!planRoles.length) return;
+        if (!planRoles.length) {
+          if (scopeRole && PRODUCTION_MILESTONE_TYPES.has(type)) {
+            fcEvents.push({
+              id: ev.id + '::milestone',
+              title: eventTitle,
+              start: (ev.start_time || '').slice(0, 19),
+              end: ev.end_time ? ev.end_time.slice(0, 19) : null,
+              backgroundColor: '#476aaa',
+              borderColor: '#476aaa',
+              textColor: '#ffffff',
+              extendedProps: { eventTitle, isMilestone: true, dot: '#476aaa', venue: ev.venue || '' },
+            });
+          }
+          return;
+        }
         const dateStr = (ev.start_time || '').slice(0, 10);
         planRoles.forEach(pr => {
           const roleDateKey = `${pr.name.toLowerCase()}|${dateStr}`;
@@ -351,10 +392,11 @@
       document.getElementById('vc-modal-sub').textContent = timeStr ? dateStr + ' · ' + timeStr : dateStr;
       document.getElementById('vc-modal-roles').innerHTML = dateEvents.map(e => {
         const p = e.extendedProps;
-        if (p.isDeadline) {
+        if (p.isDeadline || p.isMilestone) {
+          const venueHtml = p.venue ? '<div class="vc-role-dept">' + esc(p.venue) + '</div>' : '';
           return '<div class="vc-role-row">' +
             '<span class="vc-role-dot" style="background:' + p.dot + ';"></span>' +
-            '<div class="vc-role-name">' + esc(p.eventTitle) + '</div>' +
+            '<div><div class="vc-role-name">' + esc(p.eventTitle) + '</div>' + venueHtml + '</div>' +
           '</div>';
         }
         const namesHtml = (p.names && p.names.length)
@@ -391,6 +433,62 @@
       const startTime = vcTimeFromDate(event.start);
       const endTime = vcTimeFromDate(event.end);
       return endTime ? `${startTime} - ${endTime}` : startTime;
+    }
+
+    // For rows built straight from buildCalendarEvents() output — those still carry
+    // plain wall-clock ISO strings (not yet handed to FullCalendar/parsed into Dates),
+    // so read the time directly off the string instead of going through a Date object.
+    function vcTimeFromIsoStr(str) {
+      if (!str || str.length < 16) return '';
+      const h = parseInt(str.slice(11, 13), 10), m = parseInt(str.slice(14, 16), 10);
+      if (!Number.isFinite(h) || !Number.isFinite(m)) return '';
+      const ap = h >= 12 ? 'pm' : 'am';
+      return `${h % 12 || 12}:${String(m).padStart(2, '0')}${ap}`;
+    }
+    function vcTimeRangeFromIsoStrs(startStr, endStr) {
+      const s = vcTimeFromIsoStr(startStr);
+      const e = vcTimeFromIsoStr(endStr);
+      return e ? `${s} - ${e}` : s;
+    }
+    function vcScheduleBadgeHtml(dateStr, color) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr + 'T12:00:00');
+      const month = d.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase();
+      const day = d.toLocaleDateString('en-CA', { day: 'numeric' });
+      return '<div class="vc-badge"><div class="vc-badge-month" style="background:' + color + ';">' + esc(month) + '</div><div class="vc-badge-day">' + esc(day) + '</div></div>';
+    }
+
+    function renderScheduleDetailsList(fcEvents) {
+      const wrap = document.getElementById('vc-schedule-wrap');
+      const list = document.getElementById('vc-schedule-list');
+      if (!wrap || !list) return;
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const seen = new Set();
+      const rows = fcEvents.filter(e => {
+        const baseId = String(e.id).split('::')[0];
+        if (seen.has(baseId)) return false;
+        seen.add(baseId);
+        return true;
+      }).sort((a, b) => String(a.start).localeCompare(String(b.start)));
+      if (!rows.length) { wrap.style.display = 'none'; return; }
+      wrap.style.display = '';
+      list.innerHTML = rows.map(e => {
+        const dateStr = String(e.start || '').slice(0, 10);
+        const isPast = dateStr < todayStr;
+        const timeStr = vcTimeRangeFromIsoStrs(e.start, e.end);
+        const p = e.extendedProps || {};
+        const metaParts = [];
+        if (timeStr) metaParts.push(timeStr);
+        if (p.venue) metaParts.push(esc(p.venue));
+        if (!p.isDeadline && !p.isMilestone && p.role) metaParts.push(esc(p.role) + ' ' + p.filled + '/' + p.needed);
+        return '<div class="vc-schedule-row' + (isPast ? ' vc-past' : '') + '">' +
+          vcScheduleBadgeHtml(dateStr, e.backgroundColor) +
+          '<div class="vc-schedule-body">' +
+            '<div class="vc-schedule-title-row"><span class="vc-schedule-name">' + esc(p.eventTitle || '') + '</span></div>' +
+            '<div class="vc-schedule-meta">' + metaParts.map(m => '<span>' + m + '</span>').join('') + '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
     }
 
     function initCalendar(fcEvents) {
@@ -463,7 +561,7 @@
       _sb = supabase.createClient(SB_URL, SB_ANON);
 
       const [eventsRes, prodRes, signupsRes] = await Promise.all([
-        _sb.from('production_events').select('id,title,event_type,start_time,end_time,is_deadline,notes').eq('production_id', _prodId).order('start_time'),
+        _sb.from('production_events').select('id,title,event_type,start_time,end_time,is_deadline,notes,venue').eq('production_id', _prodId).order('start_time'),
         _sb.from('productions').select('volunteer_staffing_plan').eq('id', _prodId).single(),
         _sb.from('volunteer_signups').select('*').eq('production_id', _prodId),
       ]);
@@ -498,6 +596,7 @@
       }
       const fcEvents = buildCalendarEvents();
       if (!fcEvents.length) document.getElementById('vc-empty').style.display = 'block';
+      renderScheduleDetailsList(fcEvents);
       initCalendar(fcEvents);
     })();
 

@@ -477,7 +477,16 @@
     }
 
     // ── Access ────────────────────────────────────────────
-    function canEditProductionCalendar() { return true; }
+    // Anyone in a team/portal session (dept lead, treasurer, creative team) gets a
+    // read-only view of the full production calendar by default — editing stays with
+    // the producer's own admin session, which never carries this sessionStorage key.
+    function canEditProductionCalendar() {
+      try {
+        return !sessionStorage.getItem('bts-team-portal-v1');
+      } catch (_) {
+        return true;
+      }
+    }
 
     function applyProductionCalendarAccessState() {
       const canEdit = canEditProductionCalendar();
@@ -563,8 +572,8 @@
         headerToolbar: isMobile
           ? { left: 'prev,next', center: 'title', right: 'listMonth' }
           : { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay,listMonth' },
-        editable: true,
-        selectable: true,
+        editable: canEditProductionCalendar(),
+        selectable: canEditProductionCalendar(),
         selectMirror: true,
         dayMaxEvents: false,
         nowIndicator: true,
@@ -572,7 +581,7 @@
         fixedWeekCount: false,
         timeZone: false,
         eventDisplay: 'block',
-        droppable: true,
+        droppable: canEditProductionCalendar(),
         drop(info) {
           const el = info.draggedEl;
           const eventType = el.dataset.eventType || 'rehearsal';
@@ -831,7 +840,7 @@
       document.getElementById('event-error').classList.remove('visible');
       if (delBtn)   delBtn.style.display   = 'none';
       if (delBtnS1) delBtnS1.style.display = 'none';
-      if (saveBtn)  saveBtn.style.display  = '';
+      if (saveBtn)  saveBtn.style.display  = canEditProductionCalendar() ? '' : 'none';
       goToStep(1);
 
       const PUBLIC_TYPES = ['audition','dance_call','callback','other_audition','performance','dress','tech'];
@@ -843,8 +852,8 @@
         editingEventId = ev.id;
         titleEl.textContent  = isExistingDeadline ? 'Edit Deadline' : 'Edit Event';
         saveBtn.textContent  = 'Save Changes';
-        if (delBtn)   delBtn.style.display   = '';
-        if (delBtnS1) delBtnS1.style.display = '';
+        if (delBtn)   delBtn.style.display   = canEditProductionCalendar() ? '' : 'none';
+        if (delBtnS1) delBtnS1.style.display = canEditProductionCalendar() ? '' : 'none';
         if (titleLabelEl) titleLabelEl.textContent = isExistingDeadline ? 'Deadline Title' : 'Event Title';
         if (typeLabelEl)  typeLabelEl.textContent  = isExistingDeadline ? 'Deadline department / area' : 'Event Type';
         const deadlineArea = ev.extendedProps.deadline_area || (isExistingDeadline && ev.extendedProps.event_type !== 'deadline' ? ev.extendedProps.event_type : '') || 'event';
