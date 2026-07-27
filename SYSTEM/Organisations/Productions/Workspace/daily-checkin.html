@@ -316,6 +316,10 @@
     .dci-print-box-title { font-size: 0.15in; font-weight: 900; text-transform: uppercase; margin-bottom: 0.1in; }
     .dci-print-note-space { height: 0.22in; border-bottom: 1.5px solid rgba(17,17,17,0.32); }
     .dci-print-note-space + .dci-print-note-space { margin-top: 0.11in; }
+    .dci-print-existing-notes { margin-bottom: 0.1in; }
+    .dci-print-existing-note-line { font-size: 0.115in; font-weight: 600; line-height: 1.35; }
+    .dci-print-existing-note-line + .dci-print-existing-note-line { margin-top: 0.06in; }
+    .dci-print-existing-note-line strong { font-weight: 900; }
     .dci-print-reminders { margin: 0; padding-left: 0.2in; }
     .dci-print-reminders li { font-size: 0.125in; font-weight: 700; line-height: 1.4; }
     .dci-print-reminders li + li { margin-top: 0.07in; }
@@ -335,7 +339,9 @@
       .prod-main-inner > *:not(.dci-print-root) { display: none !important; }
       .dci-print-root { display: block !important; }
       .modal-overlay, .kiosk-overlay { display: none !important; }
-      .dci-print-section, .dci-print-box { break-inside: avoid; page-break-inside: avoid; }
+      .dci-print-box { break-inside: avoid; page-break-inside: avoid; }
+      .dci-print-table tr { break-inside: avoid; page-break-inside: avoid; }
+      .dci-print-table thead { display: table-header-group; }
     }
 
     /* ── Cast card grid ── */
@@ -1847,6 +1853,16 @@ function printPickupSummary(person) {
   return [...new Set(lines)].filter(Boolean);
 }
 
+function printExistingNotesHtml(castRows, volunteerRows) {
+  const entries = [...castRows, ...volunteerRows]
+    .map(p => ({ name: String(p.displayName || p.name || '').trim(), note: String(p.dayNote || '').trim() }))
+    .filter(e => e.name && e.note);
+  if (!entries.length) return '';
+  return '<div class="dci-print-existing-notes">' + entries.map(e =>
+    '<div class="dci-print-existing-note-line"><strong>' + esc(e.name) + ':</strong> ' + esc(e.note) + '</div>'
+  ).join('') + '</div>';
+}
+
 function printNotesSummary(person, status) {
   const lines = [];
   const dayNote = String(person?.dayNote || '').trim();
@@ -1928,7 +1944,7 @@ function renderPrintSheet() {
     renderPrintSection('Cast', castRows, 'cast') +
     renderPrintSection('Volunteers', volunteerRows, 'volunteer') +
     '<div class="dci-print-bottom">' +
-      '<div class="dci-print-box"><div class="dci-print-box-title">Notes</div><div class="dci-print-note-space"></div><div class="dci-print-note-space"></div><div class="dci-print-note-space"></div><div class="dci-print-note-space"></div><div class="dci-print-note-space"></div></div>' +
+      '<div class="dci-print-box"><div class="dci-print-box-title">Notes</div>' + printExistingNotesHtml(castRows, volunteerRows) + '<div class="dci-print-note-space"></div><div class="dci-print-note-space"></div><div class="dci-print-note-space"></div></div>' +
       '<div class="dci-print-box"><div class="dci-print-box-title">Important reminders</div><ul class="dci-print-reminders"><li>Please sign in when you arrive.</li><li>Please sign out before you leave.</li><li>Write down any change to who the performer is leaving with.</li><li>Use the notes column for early pickups or day-of changes.</li></ul></div>' +
       '<div class="dci-print-box"><div class="dci-print-box-title">Summary</div><ul class="dci-print-reminders"><li>Expected: ' + esc(String(castRows.length + volunteerRows.length)) + '</li><li>Cast: ' + esc(String(castRows.length)) + '</li><li>Volunteers: ' + esc(String(volunteerRows.length)) + '</li></ul></div>' +
     '</div>' +
