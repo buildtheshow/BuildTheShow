@@ -1061,7 +1061,10 @@
       : '<div class="dept-empty">No props have been added yet. Add the first one below.</div>';
     return '<section class="dept-panel">' +
       '<div class="dept-panel-head"><div><div class="dept-panel-title">Props List</div><div class="dept-panel-sub">Every prop the show needs, its status, who is sourcing it, and any notes.</div></div>' +
-      '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end;"><button type="button" class="dept-action" onclick="BTSDepartmentSection.openPropModal()">Add Prop</button></div></div>' +
+      '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end;">' +
+        '<button type="button" class="dept-action secondary" onclick="BTSDepartmentSection.openPropBulkModal()">Bulk Add</button>' +
+        '<button type="button" class="dept-action" onclick="BTSDepartmentSection.openPropModal()">Add Prop</button>' +
+      '</div></div>' +
       list +
     '</section>';
   }
@@ -1084,6 +1087,63 @@
         '</div>' +
       '</div>' +
     '</div>';
+  }
+
+  function renderPropBulkModal() {
+    return '<div class="dept-modal" id="dept-prop-bulk-modal" onclick="BTSDepartmentSection.closePropBulkModalOnBackdrop(event)">' +
+      '<div class="dept-modal-card" role="dialog" aria-modal="true" aria-labelledby="dept-prop-bulk-title">' +
+        '<div class="dept-modal-head"><div class="dept-modal-title" id="dept-prop-bulk-title">Bulk Add Props</div><button type="button" class="dept-close" onclick="BTSDepartmentSection.closePropBulkModal()" aria-label="Close">x</button></div>' +
+        '<div class="dept-modal-body">' +
+          '<div class="dept-field full"><label>One prop per line</label><textarea id="dept-prop-bulk-text" rows="10" placeholder="Umbrella&#10;Tea Set&#10;Carpet Bag&#10;Kite"></textarea></div>' +
+          '<div class="dept-panel-sub" style="margin-top:0.5rem;">Each line becomes its own prop with status "Needed" and quantity 1. Edit them individually afterward to add notes or assign a sourcer.</div>' +
+        '</div>' +
+        '<div class="dept-modal-foot"><span></span><div style="display:flex;gap:0.5rem;"><button type="button" class="dept-action secondary" onclick="BTSDepartmentSection.closePropBulkModal()">Cancel</button><button type="button" class="dept-action" onclick="BTSDepartmentSection.saveBulkProps()">Add Props</button></div></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function openPropBulkModal() {
+    const modal = document.getElementById('dept-prop-bulk-modal');
+    if (modal) modal.classList.add('open');
+  }
+
+  function closePropBulkModal() {
+    const modal = document.getElementById('dept-prop-bulk-modal');
+    if (modal) modal.classList.remove('open');
+    const text = document.getElementById('dept-prop-bulk-text');
+    if (text) text.value = '';
+  }
+
+  function closePropBulkModalOnBackdrop(event) {
+    if (event.target && event.target.id === 'dept-prop-bulk-modal') closePropBulkModal();
+  }
+
+  async function saveBulkProps() {
+    const raw = document.getElementById('dept-prop-bulk-text').value || '';
+    const names = raw.split('\n').map(function (line) { return line.trim(); }).filter(Boolean);
+    if (!names.length) { alert('Add at least one prop name, one per line.'); return; }
+    const payload = names.map(function (name) {
+      return {
+        production_id: state.prodId,
+        name,
+        quantity: 1,
+        status: 'Needed',
+        department_name: state.section.label,
+      };
+    });
+    try {
+      const response = await fetch(SUPABASE_URL + '/rest/v1/production_props', {
+        method: 'POST',
+        headers: headers(true),
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      closePropBulkModal();
+      await loadData();
+      render();
+    } catch (error) {
+      alert('Could not add props: ' + error.message);
+    }
   }
 
   function hydratePropModal() {
@@ -1175,7 +1235,7 @@
       if (tabsEl) tabsEl.outerHTML = renderTabs();
       return;
     }
-    root.innerHTML = renderHero() + renderTabs() + renderContent() + renderReceiptModal() + renderPropModal();
+    root.innerHTML = renderHero() + renderTabs() + renderContent() + renderReceiptModal() + renderPropModal() + renderPropBulkModal();
     if (isCostumeTab()) mountCostumePlanningNative();
     if (isReceiptFormTab()) mountReceiptFormNative();
   }
@@ -1465,5 +1525,9 @@
     closePropModalOnBackdrop,
     saveProp,
     deleteProp,
+    openPropBulkModal,
+    closePropBulkModal,
+    closePropBulkModalOnBackdrop,
+    saveBulkProps,
   };
 })();
