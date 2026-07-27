@@ -25,6 +25,7 @@
     editingReceiptId: '',
     props: [],
     editingPropId: '',
+    selectedPropIds: {},
   };
 
   const STAFFING_ROLE_MAP = {
@@ -1044,24 +1045,29 @@
     if (prop.quantity && prop.quantity > 1) metaParts.push('Qty ' + prop.quantity);
     metaParts.push(prop.assigned_to ? 'Sourcing: ' + prop.assigned_to : 'Nobody assigned yet');
     if (prop.notes) metaParts.push(prop.notes);
-    return '<div class="dept-list-item">' +
+    const checked = !!state.selectedPropIds[prop.id];
+    return '<div class="dept-list-item has-checkbox">' +
+      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="BTSDepartmentSection.togglePropSelected(\'' + esc(prop.id) + '\', this.checked)" aria-label="Select ' + esc(prop.name || 'prop') + '" style="width:1.1rem;height:1.1rem;" />' +
       '<div><div class="dept-list-title">' + esc(prop.name || 'Untitled prop') + '</div>' +
       '<div class="dept-list-meta">' + esc(metaParts.join(' - ')) + '</div></div>' +
       '<div style="display:flex;gap:0.4rem;align-items:center;justify-content:flex-end;flex-wrap:wrap;">' +
         '<span class="dept-status ' + esc(PROP_STATUS_CLASS[prop.status] || 'pending') + '">' + esc(prop.status || 'Needed') + '</span>' +
         '<button type="button" class="dept-action secondary" onclick="BTSDepartmentSection.openPropModal(\'' + esc(prop.id) + '\')">Edit</button>' +
+        '<button type="button" class="dept-action danger" onclick="BTSDepartmentSection.quickDeleteProp(\'' + esc(prop.id) + '\')">Remove</button>' +
       '</div>' +
     '</div>';
   }
 
   function renderPropsList() {
     const props = sectionProps();
+    const selectedCount = Object.keys(state.selectedPropIds).filter(function (id) { return state.selectedPropIds[id]; }).length;
     const list = props.length
       ? '<div class="dept-list">' + props.map(renderPropRow).join('') + '</div>'
       : '<div class="dept-empty">No props have been added yet. Add the first one below.</div>';
     return '<section class="dept-panel">' +
       '<div class="dept-panel-head"><div><div class="dept-panel-title">Props List</div><div class="dept-panel-sub">Every prop the show needs, its status, who is sourcing it, and any notes.</div></div>' +
       '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end;">' +
+        (selectedCount ? '<button type="button" class="dept-action danger" onclick="BTSDepartmentSection.deleteSelectedProps()">Remove Selected (' + selectedCount + ')</button>' : '') +
         '<button type="button" class="dept-action secondary" onclick="BTSDepartmentSection.openPropBulkModal()">Bulk Add</button>' +
         '<button type="button" class="dept-action" onclick="BTSDepartmentSection.openPropModal()">Add Prop</button>' +
       '</div></div>' +
@@ -1211,6 +1217,30 @@
       render();
     } catch (error) {
       alert('Could not remove prop: ' + error.message);
+    }
+  }
+
+  function togglePropSelected(id, checked) {
+    if (checked) state.selectedPropIds[id] = true;
+    else delete state.selectedPropIds[id];
+    render();
+  }
+
+  async function deleteSelectedProps() {
+    const ids = Object.keys(state.selectedPropIds).filter(function (id) { return state.selectedPropIds[id]; });
+    if (!ids.length) return;
+    if (!confirm('Remove ' + ids.length + ' prop' + (ids.length === 1 ? '' : 's') + ' from the list?')) return;
+    try {
+      const response = await fetch(SUPABASE_URL + '/rest/v1/production_props?id=in.(' + ids.map(encodeURIComponent).join(',') + ')', {
+        method: 'DELETE',
+        headers: headers(),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      state.selectedPropIds = {};
+      await loadData();
+      render();
+    } catch (error) {
+      alert('Could not remove props: ' + error.message);
     }
   }
 
@@ -1529,5 +1559,8 @@
     closePropBulkModal,
     closePropBulkModalOnBackdrop,
     saveBulkProps,
+    quickDeleteProp: deleteProp,
+    togglePropSelected,
+    deleteSelectedProps,
   };
 })();
