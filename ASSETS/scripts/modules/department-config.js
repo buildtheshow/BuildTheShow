@@ -53,7 +53,16 @@
         section('set-building', 'Set Building', 'Build plans, materials, tools, safety notes, and construction progress.', ['Set Building', 'Set Builder', 'Set Builders', 'Lead Builder', 'Set Designer', 'Sets & Scenery', 'Set Construction', 'Set Strike Crew']),
         section('set-painting', 'Set Painting', 'Paint elevations, colour notes, finish samples, and scenic paint calls.', ['Set Painting', 'Set Painter', 'Set Painters', 'Lead Set Painter', 'Paint']),
         section('set-dressing', 'Set Dressing', 'Furniture, practicals, dressing lists, scene changes, and storage notes.', ['Set Dressing', 'Set Dresser']),
-        section('props', 'Props', 'Prop lists, source status, hand props, consumables, and backstage placement.', ['Props', 'Props Helper', 'Lead Prop Person']),
+        Object.assign(
+          section('props', 'Props', 'Prop lists, source status, hand props, consumables, and backstage placement.', ['Props', 'Props Helper', 'Lead Prop Person']),
+          {
+            tabs: [
+              { key: 'dashboard', label: 'Dashboard' },
+              { key: 'list', label: 'List', copy: 'Every prop the show needs, who is sourcing it, and where it stands.' },
+              { key: 'receipts', label: 'Receipts', receiptForm: true },
+            ],
+          }
+        ),
       ],
     },
     {

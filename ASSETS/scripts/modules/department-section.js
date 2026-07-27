@@ -23,6 +23,8 @@
     events: [],
     staffingPlan: {},
     editingReceiptId: '',
+    props: [],
+    editingPropId: '',
   };
 
   const STAFFING_ROLE_MAP = {
@@ -186,6 +188,11 @@
   function sectionReceipts() {
     const ids = new Set(sectionCategories().map(function (cat) { return cat.id; }));
     return state.receipts.filter(function (receipt) { return ids.has(receipt.category_id); });
+  }
+
+  function sectionProps() {
+    const matches = sectionMatchesText();
+    return state.props.filter(function (prop) { return matches(prop.department_name || 'Props'); });
   }
 
   function sectionMatchesText() {
@@ -592,6 +599,7 @@
       safe(fetchTable('volunteer_signups', '&order=created_at.desc')),
       safe(fetchTable('production_events', '&select=id,title,event_type,start_time,end_time,venue,notes,is_deadline&order=start_time.asc')),
       safe(fetchProduction()),
+      safe(fetchTable('production_props', '&order=name.asc')),
     ]);
     state.categories = results[0] || [];
     state.items = results[1] || [];
@@ -600,6 +608,7 @@
     state.signups = results[4] || [];
     state.events = results[5] || [];
     state.staffingPlan = (results[6] && results[6].volunteer_staffing_plan) || {};
+    state.props = results[7] || [];
   }
 
   function activeTabConfig() {
@@ -634,7 +643,7 @@
   }
 
   function activeTabs() {
-    return (state.group && state.group.tabs) || config().tabs;
+    return (state.section && state.section.tabs) || (state.group && state.group.tabs) || config().tabs;
   }
 
   function renderTabs() {
@@ -1028,10 +1037,128 @@
     '</section>';
   }
 
+  const PROP_STATUS_CLASS = { Needed: 'pending', Sourced: 'approved', Ready: 'paid' };
+
+  function renderPropRow(prop) {
+    const metaParts = [];
+    if (prop.quantity && prop.quantity > 1) metaParts.push('Qty ' + prop.quantity);
+    metaParts.push(prop.assigned_to ? 'Sourcing: ' + prop.assigned_to : 'Nobody assigned yet');
+    if (prop.notes) metaParts.push(prop.notes);
+    return '<div class="dept-list-item">' +
+      '<div><div class="dept-list-title">' + esc(prop.name || 'Untitled prop') + '</div>' +
+      '<div class="dept-list-meta">' + esc(metaParts.join(' - ')) + '</div></div>' +
+      '<div style="display:flex;gap:0.4rem;align-items:center;justify-content:flex-end;flex-wrap:wrap;">' +
+        '<span class="dept-status ' + esc(PROP_STATUS_CLASS[prop.status] || 'pending') + '">' + esc(prop.status || 'Needed') + '</span>' +
+        '<button type="button" class="dept-action secondary" onclick="BTSDepartmentSection.openPropModal(\'' + esc(prop.id) + '\')">Edit</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderPropsList() {
+    const props = sectionProps();
+    const list = props.length
+      ? '<div class="dept-list">' + props.map(renderPropRow).join('') + '</div>'
+      : '<div class="dept-empty">No props have been added yet. Add the first one below.</div>';
+    return '<section class="dept-panel">' +
+      '<div class="dept-panel-head"><div><div class="dept-panel-title">Props List</div><div class="dept-panel-sub">Every prop the show needs, its status, who is sourcing it, and any notes.</div></div>' +
+      '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end;"><button type="button" class="dept-action" onclick="BTSDepartmentSection.openPropModal()">Add Prop</button></div></div>' +
+      list +
+    '</section>';
+  }
+
+  function renderPropModal() {
+    const prop = state.editingPropId ? state.props.find(function (item) { return item.id === state.editingPropId; }) : null;
+    return '<div class="dept-modal" id="dept-prop-modal" onclick="BTSDepartmentSection.closePropModalOnBackdrop(event)">' +
+      '<div class="dept-modal-card" role="dialog" aria-modal="true" aria-labelledby="dept-prop-title">' +
+        '<div class="dept-modal-head"><div class="dept-modal-title" id="dept-prop-title">' + (prop ? 'Edit Prop' : 'Add Prop') + '</div><button type="button" class="dept-close" onclick="BTSDepartmentSection.closePropModal()" aria-label="Close">x</button></div>' +
+        '<div class="dept-modal-body"><div class="dept-form-grid">' +
+          field('Prop Name', 'dept-prop-name', 'text', prop ? (prop.name || '') : '', 'e.g. Umbrella, Tea Set') +
+          field('Quantity', 'dept-prop-qty', 'number', prop ? String(prop.quantity || 1) : '1', '1') +
+          '<div class="dept-field"><label>Status</label><select id="dept-prop-status"><option value="Needed">Needed</option><option value="Sourced">Sourced</option><option value="Ready">Ready</option></select></div>' +
+          field('Who is sourcing it', 'dept-prop-assigned', 'text', prop ? (prop.assigned_to || '') : '', 'Name of the person responsible') +
+          '<div class="dept-field full"><label>Notes</label><textarea id="dept-prop-notes" placeholder="Where to find it, budget, condition, anything to remember">' + esc(prop ? (prop.notes || '') : '') + '</textarea></div>' +
+        '</div></div>' +
+        '<div class="dept-modal-foot">' +
+          (prop ? '<button type="button" class="dept-action danger" onclick="BTSDepartmentSection.deleteProp(\'' + esc(prop.id) + '\')">Delete</button>' : '<span></span>') +
+          '<div style="display:flex;gap:0.5rem;"><button type="button" class="dept-action secondary" onclick="BTSDepartmentSection.closePropModal()">Cancel</button><button type="button" class="dept-action" onclick="BTSDepartmentSection.saveProp()">Save Prop</button></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function hydratePropModal() {
+    const prop = state.editingPropId ? state.props.find(function (item) { return item.id === state.editingPropId; }) : null;
+    const status = document.getElementById('dept-prop-status');
+    if (status) status.value = prop ? (prop.status || 'Needed') : 'Needed';
+  }
+
+  function openPropModal(id) {
+    state.editingPropId = id || '';
+    render();
+    const modal = document.getElementById('dept-prop-modal');
+    if (modal) modal.classList.add('open');
+    hydratePropModal();
+  }
+
+  function closePropModal() {
+    state.editingPropId = '';
+    const modal = document.getElementById('dept-prop-modal');
+    if (modal) modal.classList.remove('open');
+  }
+
+  function closePropModalOnBackdrop(event) {
+    if (event.target && event.target.id === 'dept-prop-modal') closePropModal();
+  }
+
+  async function saveProp() {
+    const name = (document.getElementById('dept-prop-name').value || '').trim();
+    if (!name) { alert('Give this prop a name.'); return; }
+    const payload = {
+      production_id: state.prodId,
+      name,
+      quantity: parseInt(document.getElementById('dept-prop-qty').value, 10) || 1,
+      status: document.getElementById('dept-prop-status').value || 'Needed',
+      assigned_to: (document.getElementById('dept-prop-assigned').value || '').trim() || null,
+      notes: (document.getElementById('dept-prop-notes').value || '').trim() || null,
+      department_name: state.section.label,
+    };
+    try {
+      const id = state.editingPropId;
+      const response = await fetch(SUPABASE_URL + '/rest/v1/production_props' + (id ? '?id=eq.' + encodeURIComponent(id) : ''), {
+        method: id ? 'PATCH' : 'POST',
+        headers: headers(true),
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      state.editingPropId = '';
+      await loadData();
+      render();
+    } catch (error) {
+      alert('Could not save prop: ' + error.message);
+    }
+  }
+
+  async function deleteProp(id) {
+    if (!confirm('Remove this prop from the list?')) return;
+    try {
+      const response = await fetch(SUPABASE_URL + '/rest/v1/production_props?id=eq.' + encodeURIComponent(id), {
+        method: 'DELETE',
+        headers: headers(),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      closePropModal();
+      await loadData();
+      render();
+    } catch (error) {
+      alert('Could not remove prop: ' + error.message);
+    }
+  }
+
   function renderContent() {
     if (isCostumeTab()) return renderCostumePlanningMount();
     if (isReceiptFormTab()) return '<div class="dept-costume-planning-native" id="dept-receipt-form-native"><div class="dept-empty">Loading receipts...</div></div>';
     if (state.tab === 'planning') return renderPlanning();
+    if (state.tab === 'list') return renderPropsList();
     if (state.tab === 'receipts') return renderReceipts();
     return renderDashboard();
   }
@@ -1048,7 +1175,7 @@
       if (tabsEl) tabsEl.outerHTML = renderTabs();
       return;
     }
-    root.innerHTML = renderHero() + renderTabs() + renderContent() + renderReceiptModal();
+    root.innerHTML = renderHero() + renderTabs() + renderContent() + renderReceiptModal() + renderPropModal();
     if (isCostumeTab()) mountCostumePlanningNative();
     if (isReceiptFormTab()) mountReceiptFormNative();
   }
@@ -1333,5 +1460,10 @@
     goCalendar,
     goFiles,
     retryCostumePlanning,
+    openPropModal,
+    closePropModal,
+    closePropModalOnBackdrop,
+    saveProp,
+    deleteProp,
   };
 })();
