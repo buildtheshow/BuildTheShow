@@ -26,6 +26,9 @@
     props: [],
     editingPropId: '',
     selectedPropIds: {},
+    propImportStage: 'paste',
+    propImportRawText: '',
+    propImportItems: [],
   };
 
   const STAFFING_ROLE_MAP = {
@@ -1043,6 +1046,7 @@
   function renderPropRow(prop) {
     const metaParts = [];
     if (prop.quantity && prop.quantity > 1) metaParts.push('Qty ' + prop.quantity);
+    if (prop.script_page_refs && prop.script_page_refs.length) metaParts.push('pp. ' + prop.script_page_refs.join(', '));
     metaParts.push(prop.assigned_to ? 'Sourcing: ' + prop.assigned_to : 'Nobody assigned yet');
     if (prop.notes) metaParts.push(prop.notes);
     const checked = !!state.selectedPropIds[prop.id];
@@ -1068,6 +1072,7 @@
       '<div class="dept-panel-head"><div><div class="dept-panel-title">Props List</div><div class="dept-panel-sub">Every prop the show needs, its status, who is sourcing it, and any notes.</div></div>' +
       '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end;">' +
         (selectedCount ? '<button type="button" class="dept-action danger" onclick="BTSDepartmentSection.deleteSelectedProps()">Remove Selected (' + selectedCount + ')</button>' : '') +
+        '<button type="button" class="dept-action secondary" onclick="BTSDepartmentSection.openPropImportModal()">Import List</button>' +
         '<button type="button" class="dept-action secondary" onclick="BTSDepartmentSection.openPropBulkModal()">Bulk Add</button>' +
         '<button type="button" class="dept-action" onclick="BTSDepartmentSection.openPropModal()">Add Prop</button>' +
       '</div></div>' +
@@ -1149,6 +1154,132 @@
       render();
     } catch (error) {
       alert('Could not add props: ' + error.message);
+    }
+  }
+
+  // Parses a checklist-style props document: a bullet/checkbox marker starts a new
+  // prop (optionally with "(pp. 3, 107)" page refs right on that line), and any
+  // following non-bulleted lines are that prop's description, up to the next bullet.
+  function parsePropChecklistText(text) {
+    const bulletRe = /^(?:[☐☑✅✓✗□■●•‣▪]|[-*])\s+(.+)$/;
+    const pageRefRe = /\(\s*(?:pp?\.?|pages?|pg\.?)\s*([0-9][0-9,\s]*)\)\s*$/i;
+    const lines = String(text || '').split(/\r?\n/).map(function (line) { return line.trim(); });
+    const items = [];
+    let current = null;
+    lines.forEach(function (line) {
+      if (!line) return;
+      if (/^[A-Za-z &]+:$/.test(line)) return; // skip category headings like "Essential Props:"
+      const m = line.match(bulletRe);
+      if (m) {
+        let body = m[1].trim();
+        let pageRefs = [];
+        const refMatch = body.match(pageRefRe);
+        if (refMatch) {
+          pageRefs = refMatch[1].split(',').map(function (n) { return n.trim(); }).filter(Boolean);
+          body = body.slice(0, refMatch.index).trim();
+        }
+        current = { name: body, script_page_refs: pageRefs, notes: '' };
+        items.push(current);
+      } else if (current) {
+        current.notes = (current.notes ? current.notes + ' ' : '') + line;
+      }
+    });
+    return items.filter(function (item) { return item.name; });
+  }
+
+  function renderPropImportModal() {
+    const isPreview = state.propImportStage === 'preview';
+    const body = isPreview
+      ? ('<div class="dept-panel-sub" style="margin-bottom:0.6rem;">Found ' + state.propImportItems.length + ' prop' + (state.propImportItems.length === 1 ? '' : 's') + '. Review below, then import.</div>' +
+        '<div class="dept-list">' + state.propImportItems.map(function (item) {
+          const meta = [item.script_page_refs.length ? 'pp. ' + item.script_page_refs.join(', ') : '', item.notes].filter(Boolean).join(' - ');
+          return '<div class="dept-list-item"><div><div class="dept-list-title">' + esc(item.name) + '</div>' + (meta ? '<div class="dept-list-meta">' + esc(meta) + '</div>' : '') + '</div><span></span></div>';
+        }).join('') + '</div>')
+      : ('<div class="dept-field full"><label>Paste your props checklist</label><textarea id="dept-prop-import-text" rows="12" placeholder="Essential Props:&#10;☐ Umbrella (p. 6)&#10;   Long, plain black umbrella with a simple handle.&#10;☐ Carpet bag (pp. 13, 71)&#10;   Large bag with a decorative fabric cover.">' + esc(state.propImportRawText) + '</textarea></div>' +
+        '<div class="dept-panel-sub" style="margin-top:0.5rem;">Works with checkbox or bullet lists where each prop starts a new line, with the description (if any) on the line(s) below it. Page references like "(pp. 3, 107)" are picked up automatically.</div>');
+    const footLeft = isPreview
+      ? '<button type="button" class="dept-action secondary" onclick="BTSDepartmentSection.backPropImport()">Back</button>'
+      : '<span></span>';
+    const footRight = isPreview
+      ? '<button type="button" class="dept-action" onclick="BTSDepartmentSection.confirmPropImport()">Import ' + state.propImportItems.length + ' Prop' + (state.propImportItems.length === 1 ? '' : 's') + '</button>'
+      : '<button type="button" class="dept-action" onclick="BTSDepartmentSection.previewPropImport()">Preview</button>';
+    return '<div class="dept-modal" id="dept-prop-import-modal" onclick="BTSDepartmentSection.closePropImportModalOnBackdrop(event)">' +
+      '<div class="dept-modal-card" role="dialog" aria-modal="true" aria-labelledby="dept-prop-import-title">' +
+        '<div class="dept-modal-head"><div class="dept-modal-title" id="dept-prop-import-title">Import Props List</div><button type="button" class="dept-close" onclick="BTSDepartmentSection.closePropImportModal()" aria-label="Close">x</button></div>' +
+        '<div class="dept-modal-body">' + body + '</div>' +
+        '<div class="dept-modal-foot">' + footLeft + '<div style="display:flex;gap:0.5rem;">' +
+          (isPreview ? '' : '<button type="button" class="dept-action secondary" onclick="BTSDepartmentSection.closePropImportModal()">Cancel</button>') +
+          footRight +
+        '</div></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function openPropImportModal() {
+    state.propImportStage = 'paste';
+    state.propImportRawText = '';
+    state.propImportItems = [];
+    render();
+    const modal = document.getElementById('dept-prop-import-modal');
+    if (modal) modal.classList.add('open');
+  }
+
+  function closePropImportModal() {
+    const modal = document.getElementById('dept-prop-import-modal');
+    if (modal) modal.classList.remove('open');
+    state.propImportStage = 'paste';
+    state.propImportRawText = '';
+    state.propImportItems = [];
+  }
+
+  function closePropImportModalOnBackdrop(event) {
+    if (event.target && event.target.id === 'dept-prop-import-modal') closePropImportModal();
+  }
+
+  function previewPropImport() {
+    const raw = document.getElementById('dept-prop-import-text').value || '';
+    const items = parsePropChecklistText(raw);
+    if (!items.length) { alert('Could not find any props in that text. Make sure each prop starts its own line with a bullet or checkbox.'); return; }
+    state.propImportRawText = raw;
+    state.propImportItems = items;
+    state.propImportStage = 'preview';
+    render();
+    const modal = document.getElementById('dept-prop-import-modal');
+    if (modal) modal.classList.add('open');
+  }
+
+  function backPropImport() {
+    state.propImportStage = 'paste';
+    render();
+    const modal = document.getElementById('dept-prop-import-modal');
+    if (modal) modal.classList.add('open');
+  }
+
+  async function confirmPropImport() {
+    const payload = state.propImportItems.map(function (item) {
+      return {
+        production_id: state.prodId,
+        name: item.name,
+        quantity: 1,
+        status: 'Needed',
+        notes: item.notes || null,
+        script_page_refs: item.script_page_refs,
+        department_name: state.section.label,
+        source_type: 'prop_import',
+      };
+    });
+    try {
+      const response = await fetch(SUPABASE_URL + '/rest/v1/production_props', {
+        method: 'POST',
+        headers: headers(true),
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      closePropImportModal();
+      await loadData();
+      render();
+    } catch (error) {
+      alert('Could not import props: ' + error.message);
     }
   }
 
@@ -1265,7 +1396,7 @@
       if (tabsEl) tabsEl.outerHTML = renderTabs();
       return;
     }
-    root.innerHTML = renderHero() + renderTabs() + renderContent() + renderReceiptModal() + renderPropModal() + renderPropBulkModal();
+    root.innerHTML = renderHero() + renderTabs() + renderContent() + renderReceiptModal() + renderPropModal() + renderPropBulkModal() + renderPropImportModal();
     if (isCostumeTab()) mountCostumePlanningNative();
     if (isReceiptFormTab()) mountReceiptFormNative();
   }
@@ -1562,5 +1693,11 @@
     quickDeleteProp: deleteProp,
     togglePropSelected,
     deleteSelectedProps,
+    openPropImportModal,
+    closePropImportModal,
+    closePropImportModalOnBackdrop,
+    previewPropImport,
+    backPropImport,
+    confirmPropImport,
   };
 })();
