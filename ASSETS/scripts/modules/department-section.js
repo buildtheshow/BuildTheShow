@@ -1105,6 +1105,7 @@
     const refs = prop.script_page_refs && prop.script_page_refs.length
       ? (prop.script_page_refs.length === 1 ? 'Page ' : 'Pages ') + prop.script_page_refs.join(', ')
       : '';
+    const quantityLabel = ' (' + String(prop.quantity || 1) + ')';
     const characters = (prop.characters || []).filter(Boolean);
     const noteDraft = Object.prototype.hasOwnProperty.call(state.propNoteDrafts, prop.id)
       ? state.propNoteDrafts[prop.id]
@@ -1123,11 +1124,10 @@
     }).join('');
     return '<tr class="props-row" data-label="' + esc(prop.name || 'Untitled prop') + '">' +
       '<td class="props-col-name" data-th="Prop">' +
-        '<div class="props-col-prop-name">' + esc(prop.name || 'Untitled prop') + '</div>' +
+        '<div class="props-col-prop-name">' + esc((prop.name || 'Untitled prop') + quantityLabel) + '</div>' +
         (refs ? '<div class="props-col-prop-refs">' + esc(refs) + '</div>' : '') +
       '</td>' +
       '<td class="props-col-characters" data-th="Characters">' + charactersHtml + '</td>' +
-      '<td class="props-col-qty" data-th="Needed"><span class="props-qty-value">' + esc(String(prop.quantity || 1)) + '</span><span class="props-qty-unit">' + esc(prop.quantity_unit || 'total') + '</span></td>' +
       '<td class="props-col-status" data-th="Status">' +
         '<select class="dept-status props-status-select ' + esc(PROP_STATUS_CLASS[prop.status] || 'pending') + '" onchange="BTSDepartmentSection.updatePropStatusInline(\'' + esc(prop.id) + '\', this.value)">' + statusOptions + '</select>' +
       '</td>' +
@@ -1179,11 +1179,11 @@
     const list = props.length
       ? '<table class="props-table">' +
           '<colgroup>' +
-            '<col style="width:24%"><col style="width:13%"><col style="width:7%">' +
-            '<col style="width:10%"><col style="width:15%"><col style="width:19%"><col style="width:12%">' +
+            '<col style="width:29%"><col style="width:14%"><col style="width:11%">' +
+            '<col style="width:16%"><col style="width:20%"><col style="width:10%">' +
           '</colgroup>' +
           '<thead><tr class="props-table-head">' +
-            '<th>Prop</th><th>Characters</th><th>Needed</th><th>Status</th><th>Sourced By</th><th>Notes</th><th></th>' +
+            '<th>Prop</th><th>Characters</th><th>Status</th><th>Sourced By</th><th>Notes</th><th></th>' +
           '</tr></thead>' +
           '<tbody>' + props.map(renderPropRow).join('') + '</tbody>' +
         '</table>'
