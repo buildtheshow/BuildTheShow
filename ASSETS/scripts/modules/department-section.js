@@ -1046,8 +1046,9 @@
   function renderPropRow(prop) {
     const metaParts = [];
     if (prop.quantity && prop.quantity > 1) metaParts.push('Qty ' + prop.quantity);
+    if (prop.character) metaParts.push(prop.character);
     if (prop.script_page_refs && prop.script_page_refs.length) metaParts.push('pp. ' + prop.script_page_refs.join(', '));
-    metaParts.push(prop.assigned_to ? 'Sourcing: ' + prop.assigned_to : 'Nobody assigned yet');
+    if (prop.assigned_to) metaParts.push('Sourcing: ' + prop.assigned_to);
     if (prop.notes) metaParts.push(prop.notes);
     const checked = !!state.selectedPropIds[prop.id];
     return '<div class="dept-list-item has-checkbox">' +
@@ -1069,7 +1070,7 @@
       ? '<div class="dept-list">' + props.map(renderPropRow).join('') + '</div>'
       : '<div class="dept-empty">No props have been added yet. Add the first one below.</div>';
     return '<section class="dept-panel">' +
-      '<div class="dept-panel-head"><div><div class="dept-panel-title">Props List</div><div class="dept-panel-sub">Every prop the show needs, its status, who is sourcing it, and any notes.</div></div>' +
+      '<div class="dept-panel-head"><div><div class="dept-panel-title">Props List</div><div class="dept-panel-sub">Every prop the show needs, its character, page number, quantity, status, and notes.</div></div>' +
       '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end;">' +
         (selectedCount ? '<button type="button" class="dept-action danger" onclick="BTSDepartmentSection.deleteSelectedProps()">Remove Selected (' + selectedCount + ')</button>' : '') +
         '<button type="button" class="dept-action secondary" onclick="BTSDepartmentSection.openPropImportModal()">Import List</button>' +
@@ -1087,9 +1088,10 @@
         '<div class="dept-modal-head"><div class="dept-modal-title" id="dept-prop-title">' + (prop ? 'Edit Prop' : 'Add Prop') + '</div><button type="button" class="dept-close" onclick="BTSDepartmentSection.closePropModal()" aria-label="Close">x</button></div>' +
         '<div class="dept-modal-body"><div class="dept-form-grid">' +
           field('Prop Name', 'dept-prop-name', 'text', prop ? (prop.name || '') : '', 'e.g. Umbrella, Tea Set') +
+          field('Character', 'dept-prop-character', 'text', prop ? (prop.character || '') : '', 'Who uses it') +
+          field('Page #', 'dept-prop-page', 'text', prop && prop.script_page_refs ? prop.script_page_refs.join(', ') : '', 'e.g. 3, 107') +
           field('Quantity', 'dept-prop-qty', 'number', prop ? String(prop.quantity || 1) : '1', '1') +
           '<div class="dept-field"><label>Status</label><select id="dept-prop-status"><option value="Needed">Needed</option><option value="Sourced">Sourced</option><option value="Ready">Ready</option></select></div>' +
-          field('Who is sourcing it', 'dept-prop-assigned', 'text', prop ? (prop.assigned_to || '') : '', 'Name of the person responsible') +
           '<div class="dept-field full"><label>Notes</label><textarea id="dept-prop-notes" placeholder="Where to find it, budget, condition, anything to remember">' + esc(prop ? (prop.notes || '') : '') + '</textarea></div>' +
         '</div></div>' +
         '<div class="dept-modal-foot">' +
@@ -1390,12 +1392,15 @@
   async function saveProp() {
     const name = (document.getElementById('dept-prop-name').value || '').trim();
     if (!name) { alert('Give this prop a name.'); return; }
+    const pageRefs = (document.getElementById('dept-prop-page').value || '')
+      .split(',').map(function (n) { return n.trim(); }).filter(Boolean);
     const payload = {
       production_id: state.prodId,
       name,
+      character: (document.getElementById('dept-prop-character').value || '').trim() || null,
+      script_page_refs: pageRefs,
       quantity: parseInt(document.getElementById('dept-prop-qty').value, 10) || 1,
       status: document.getElementById('dept-prop-status').value || 'Needed',
-      assigned_to: (document.getElementById('dept-prop-assigned').value || '').trim() || null,
       notes: (document.getElementById('dept-prop-notes').value || '').trim() || null,
       department_name: state.section.label,
     };
