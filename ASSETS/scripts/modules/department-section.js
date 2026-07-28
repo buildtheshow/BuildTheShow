@@ -1095,7 +1095,6 @@
   }
 
   function renderPropRow(prop) {
-    const checked = !!state.selectedPropIds[prop.id];
     const refs = prop.script_page_refs && prop.script_page_refs.length ? 'pp. ' + prop.script_page_refs.join(', ') : '';
     const characters = (prop.characters || []).filter(Boolean);
     const charactersHtml = characters.length
@@ -1108,7 +1107,6 @@
       : '<div class="props-sourced-sub">Not assigned yet</div>';
     const notesCount = prop.notes ? 1 : 0;
     return '<tr class="props-row" data-label="' + esc(prop.name || 'Untitled prop') + '">' +
-      '<td class="props-col-check" data-th=""><input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="BTSDepartmentSection.togglePropSelected(\'' + esc(prop.id) + '\', this.checked)" aria-label="Select ' + esc(prop.name || 'prop') + '" /></td>' +
       '<td class="props-col-name" data-th="Prop">' +
         '<div class="props-col-prop-name">' + esc(prop.name || 'Untitled prop') + '</div>' +
         (refs ? '<div class="props-col-prop-refs">' + esc(refs) + '</div>' : '') +
@@ -1154,16 +1152,13 @@
   function renderPropsList() {
     const allProps = sectionProps();
     const props = filteredSectionProps();
-    const selectedCount = Object.keys(state.selectedPropIds).filter(function (id) { return state.selectedPropIds[id]; }).length;
-    const allSelected = props.length > 0 && selectedCount === props.length;
     const list = props.length
       ? '<table class="props-table">' +
           '<colgroup>' +
-            '<col style="width:3%"><col style="width:23%"><col style="width:12%"><col style="width:6%">' +
-            '<col style="width:9%"><col style="width:14%"><col style="width:5%"><col style="width:8%"><col style="width:20%">' +
+            '<col style="width:26%"><col style="width:13%"><col style="width:7%">' +
+            '<col style="width:10%"><col style="width:16%"><col style="width:6%"><col style="width:9%"><col style="width:13%">' +
           '</colgroup>' +
           '<thead><tr class="props-table-head">' +
-            '<th><input type="checkbox" ' + (allSelected ? 'checked' : '') + ' onchange="BTSDepartmentSection.toggleAllPropsSelected(this.checked)" aria-label="Select all props" /></th>' +
             '<th>Prop</th><th>Characters</th><th>Needed</th><th>Status</th><th>Sourced By</th><th>Notes</th><th>Last Updated</th><th></th>' +
           '</tr></thead>' +
           '<tbody>' + props.map(renderPropRow).join('') + '</tbody>' +
@@ -1172,7 +1167,6 @@
     return '<section class="dept-panel">' +
       '<div class="dept-panel-head"><div><div class="dept-panel-title">Props List</div><div class="dept-panel-sub">Every prop the show needs, its characters, page number, quantity, status, and who is sourcing it.</div></div>' +
       '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end;">' +
-        (selectedCount ? '<button type="button" class="dept-action danger" onclick="BTSDepartmentSection.deleteSelectedProps()">Remove Selected (' + selectedCount + ')</button>' : '') +
         '<button type="button" class="dept-action secondary" onclick="BTSDepartmentSection.openPropImportModal()">Import List</button>' +
         '<button type="button" class="dept-action secondary" onclick="BTSDepartmentSection.openPropBulkModal()">Bulk Add</button>' +
         '<button type="button" class="dept-action" onclick="BTSDepartmentSection.openPropModal()">Add Prop</button>' +
