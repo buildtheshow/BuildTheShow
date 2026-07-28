@@ -35,9 +35,12 @@
     propSortBy: 'alphabetical',
     propNoteDrafts: {},
     propNoteSaveState: {},
+    propAssignedDrafts: {},
+    propAssignedSaveState: {},
   };
 
   const propNoteSaveTimers = {};
+  const propAssignedSaveTimers = {};
 
   const STAFFING_ROLE_MAP = {
     dept_leads: [
@@ -1155,8 +1158,7 @@
       : '<span class="props-empty-cell">-</span>';
     const sourcedName = prop.assigned_to || '';
     const sourcedHtml = sourcedName
-      ? '<div class="props-sourced-by"><span class="props-avatar" style="background:' + propAvatarColor(sourcedName) + ';">' + esc(propInitials(sourcedName)) + '</span>' +
-        '<div><div class="props-sourced-name">' + esc(sourcedName) + '</div><div class="props-sourced-sub">' + esc(propSourcedSub(prop)) + '</div></div></div>'
+      ? '<div class="props-sourced-name">' + esc(sourcedName) + '</div>'
       : '<div class="props-sourced-sub">Not assigned yet</div>';
     const statusOptions = ['Needed', 'In Progress', 'Sourced'].map(function (opt) {
       return '<option value="' + opt + '"' + ((prop.status || 'Needed') === opt ? ' selected' : '') + '>' + opt.toUpperCase() + '</option>';
@@ -1698,6 +1700,69 @@
       delete propNoteSaveTimers[id];
     }
     persistInlinePropNote(id);
+  }
+
+  function updatePropAssignedState(id, status) {
+    state.propAssignedSaveState[id] = status || '';
+    const input = document.querySelector('input[data-prop-assigned-id="' + cssEscape(id) + '"]');
+    const statusEl = input && input.closest('.props-col-sourced') && input.closest('.props-col-sourced').querySelector('.props-sourced-sub');
+    if (statusEl && !state.props.find(function (item) { return item.id === id; }).assigned_to) statusEl.textContent = status || 'Not assigned yet';
+  }
+
+  function applySavedPropAssigned(id, value, updatedAt) {
+    const prop = state.props.find(function (item) { return item.id === id; });
+    if (prop) {
+      prop.assigned_to = value || null;
+      prop.updated_at = updatedAt || new Date().toISOString();
+    }
+    delete state.propAssignedDrafts[id];
+  }
+
+  async function persistInlinePropAssigned(id) {
+    const prop = state.props.find(function (item) { return item.id === id; });
+    if (!prop) return;
+    const nextValueRaw = Object.prototype.hasOwnProperty.call(state.propAssignedDrafts, id)
+      ? state.propAssignedDrafts[id]
+      : (prop.assigned_to || '');
+    const nextValue = String(nextValueRaw || '').trim();
+    const currentValue = String(prop.assigned_to || '').trim();
+    if (nextValue === currentValue) {
+      delete state.propAssignedDrafts[id];
+      return;
+    }
+    try {
+      const updatedAt = new Date().toISOString();
+      const response = await fetch(SUPABASE_URL + '/rest/v1/production_props?id=eq.' + encodeURIComponent(id), {
+        method: 'PATCH',
+        headers: headers(true),
+        body: JSON.stringify({
+          assigned_to: nextValue || null,
+          updated_at: updatedAt,
+        }),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      applySavedPropAssigned(id, nextValue, updatedAt);
+      render();
+    } catch (error) {
+      updatePropAssignedState(id, 'Could not save');
+    }
+  }
+
+  function updateInlinePropAssigned(id, value) {
+    state.propAssignedDrafts[id] = value;
+    if (propAssignedSaveTimers[id]) clearTimeout(propAssignedSaveTimers[id]);
+    propAssignedSaveTimers[id] = setTimeout(function () {
+      persistInlinePropAssigned(id);
+      delete propAssignedSaveTimers[id];
+    }, 500);
+  }
+
+  function flushInlinePropAssigned(id) {
+    if (propAssignedSaveTimers[id]) {
+      clearTimeout(propAssignedSaveTimers[id]);
+      delete propAssignedSaveTimers[id];
+    }
+    persistInlinePropAssigned(id);
   }
 
   async function updatePropStatusInline(id, value) {
