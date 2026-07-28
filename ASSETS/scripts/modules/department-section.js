@@ -1154,12 +1154,12 @@
     const assignedDraft = Object.prototype.hasOwnProperty.call(state.propAssignedDrafts, prop.id)
       ? state.propAssignedDrafts[prop.id]
       : (prop.assigned_to || '');
-    const sourcedHtml = '<input type="text" class="props-sourced-input" placeholder="Not assigned yet" value="' + esc(assignedDraft) + '" ' +
+    const sourcedHtml = '<input type="text" class="props-sourced-input" placeholder="How was this found?" value="' + esc(assignedDraft) + '" ' +
       'oninput="BTSDepartmentSection.updateInlinePropAssigned(\'' + esc(prop.id) + '\', this.value)" ' +
       'onblur="BTSDepartmentSection.flushInlinePropAssigned(\'' + esc(prop.id) + '\')" ' +
       'data-prop-assigned-id="' + esc(prop.id) + '" />';
     const statusOptions = ['Needed', 'In Progress', 'Sourced'].map(function (opt) {
-      return '<option value="' + opt + '"' + ((prop.status || 'Needed') === opt ? ' selected' : '') + '>' + opt.toUpperCase() + '</option>';
+      return '<option value="' + opt + '"' + ((prop.status || 'Needed') === opt ? ' selected' : '') + '>' + opt + '</option>';
     }).join('');
     return '<tr class="props-row" data-label="' + esc(prop.name || 'Untitled prop') + '">' +
       '<td class="props-col-name" data-th="Prop">' +
