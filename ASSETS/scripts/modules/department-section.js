@@ -1109,7 +1109,7 @@
     '</section>';
   }
 
-  const PROP_STATUS_CLASS = { Needed: 'pending', 'In Progress': 'info', Sourced: 'approved' };
+  const PROP_STATUS_CLASS = { Needed: 'props-status-needed', 'In Progress': 'props-status-progress', Sourced: 'props-status-sourced' };
   const PROP_AVATAR_COLORS = ['#572e88', '#769e7b', '#dd8233', '#d1523d', '#78bbd4', '#476aaa', '#ca7ea7'];
   const BRAND_INK = { '#000000': '#fff', '#572e88': '#fff', '#efab45': '#000', '#efefef': '#000', '#769e7b': '#fff', '#dd8233': '#fff', '#d1523d': '#fff', '#78bbd4': '#000', '#476aaa': '#fff', '#ca7ea7': '#fff' };
 
@@ -1169,7 +1169,7 @@
       '</td>' +
       '<td class="props-col-characters" data-th="Characters">' + charactersHtml + '</td>' +
       '<td class="props-col-status" data-th="Status">' +
-        '<select class="dept-status props-status-select ' + esc(PROP_STATUS_CLASS[prop.status] || 'pending') + ((prop.status || 'Needed') === 'Needed' ? ' ink-dark' : ' ink-light') + '" onchange="BTSDepartmentSection.updatePropStatusInline(\'' + esc(prop.id) + '\', this.value)">' + statusOptions + '</select>' +
+        '<select class="dept-status props-status-select ' + esc(PROP_STATUS_CLASS[prop.status] || 'props-status-needed') + '" onchange="BTSDepartmentSection.updatePropStatusInline(\'' + esc(prop.id) + '\', this.value)">' + statusOptions + '</select>' +
       '</td>' +
       '<td class="props-col-sourced" data-th="Sourced By">' + sourcedHtml + '</td>' +
       '<td class="props-col-notes" data-th="Notes">' +
@@ -1193,9 +1193,9 @@
 
   const PROP_FILTER_TABS = [
     { key: 'all', label: 'All Props', cls: 'neutral' },
-    { key: 'Needed', label: 'Needed', cls: 'pending' },
-    { key: 'In Progress', label: 'In Progress', cls: 'info' },
-    { key: 'Sourced', label: 'Sourced', cls: 'approved' },
+    { key: 'Needed', label: 'Needed', cls: 'props-status-needed' },
+    { key: 'In Progress', label: 'In Progress', cls: 'props-status-progress' },
+    { key: 'Sourced', label: 'Sourced', cls: 'props-status-sourced' },
   ];
 
   function renderPropFilterBar(allProps) {
