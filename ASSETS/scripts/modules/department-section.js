@@ -1099,7 +1099,9 @@
   }
 
   function renderPropRow(prop) {
-    const refs = prop.script_page_refs && prop.script_page_refs.length ? 'pp. ' + prop.script_page_refs.join(', ') : '';
+    const refs = prop.script_page_refs && prop.script_page_refs.length
+      ? (prop.script_page_refs.length === 1 ? 'Page ' : 'Pages ') + prop.script_page_refs.join(', ')
+      : '';
     const characters = (prop.characters || []).filter(Boolean);
     const noteDraft = Object.prototype.hasOwnProperty.call(state.propNoteDrafts, prop.id)
       ? state.propNoteDrafts[prop.id]
