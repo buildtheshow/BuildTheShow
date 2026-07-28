@@ -1159,8 +1159,8 @@
     const list = props.length
       ? '<table class="props-table">' +
           '<colgroup>' +
-            '<col style="width:28px"><col style="width:26%"><col style="width:14%"><col style="width:8%">' +
-            '<col style="width:11%"><col style="width:16%"><col style="width:6%"><col style="width:9%"><col>' +
+            '<col style="width:3%"><col style="width:23%"><col style="width:12%"><col style="width:6%">' +
+            '<col style="width:9%"><col style="width:14%"><col style="width:5%"><col style="width:8%"><col style="width:20%">' +
           '</colgroup>' +
           '<thead><tr class="props-table-head">' +
             '<th><input type="checkbox" ' + (allSelected ? 'checked' : '') + ' onchange="BTSDepartmentSection.toggleAllPropsSelected(this.checked)" aria-label="Select all props" /></th>' +
