@@ -29,6 +29,8 @@
     propImportStage: 'paste',
     propImportRawText: '',
     propImportItems: [],
+    propStatusFilter: 'all',
+    propSearchQuery: '',
   };
 
   const STAFFING_ROLE_MAP = {
@@ -197,6 +199,23 @@
   function sectionProps() {
     const matches = sectionMatchesText();
     return state.props.filter(function (prop) { return matches(prop.department_name || 'Props'); });
+  }
+
+  function filteredSectionProps() {
+    let props = sectionProps();
+    if (state.propStatusFilter && state.propStatusFilter !== 'all') {
+      props = props.filter(function (p) { return (p.status || 'Needed') === state.propStatusFilter; });
+    }
+    const q = String(state.propSearchQuery || '').trim().toLowerCase();
+    if (q) {
+      props = props.filter(function (p) {
+        return String(p.name || '').toLowerCase().indexOf(q) !== -1 ||
+          (p.characters || []).some(function (c) { return String(c || '').toLowerCase().indexOf(q) !== -1; }) ||
+          String(p.notes || '').toLowerCase().indexOf(q) !== -1 ||
+          String(p.assigned_to || '').toLowerCase().indexOf(q) !== -1;
+      });
+    }
+    return props;
   }
 
   function sectionMatchesText() {
@@ -1108,8 +1127,33 @@
     '</div>';
   }
 
+  const PROP_FILTER_TABS = [
+    { key: 'all', label: 'All Props', cls: 'neutral' },
+    { key: 'Needed', label: 'Needed', cls: 'pending' },
+    { key: 'In Progress', label: 'In Progress', cls: 'info' },
+    { key: 'Sourced', label: 'Sourced', cls: 'approved' },
+  ];
+
+  function renderPropFilterBar(allProps) {
+    const counts = { all: allProps.length, Needed: 0, 'In Progress': 0, Sourced: 0 };
+    allProps.forEach(function (p) {
+      const s = p.status || 'Needed';
+      if (counts[s] !== undefined) counts[s]++;
+    });
+    const pills = PROP_FILTER_TABS.map(function (tab) {
+      const active = (state.propStatusFilter || 'all') === tab.key;
+      return '<button type="button" class="props-filter-pill ' + tab.cls + (active ? ' active' : '') + '" onclick="BTSDepartmentSection.setPropStatusFilter(\'' + tab.key + '\')">' +
+        esc(tab.label) + ' <span class="props-filter-count">' + (counts[tab.key] || 0) + '</span></button>';
+    }).join('');
+    return '<div class="props-filter-bar">' +
+      '<div class="props-filter-pills">' + pills + '</div>' +
+      '<div class="props-search-wrap"><input type="text" id="dept-prop-search" placeholder="Search props..." value="' + esc(state.propSearchQuery || '') + '" oninput="BTSDepartmentSection.updatePropSearch(this.value)" /></div>' +
+    '</div>';
+  }
+
   function renderPropsList() {
-    const props = sectionProps();
+    const allProps = sectionProps();
+    const props = filteredSectionProps();
     const selectedCount = Object.keys(state.selectedPropIds).filter(function (id) { return state.selectedPropIds[id]; }).length;
     const allSelected = props.length > 0 && selectedCount === props.length;
     const list = props.length
@@ -1120,7 +1164,7 @@
           '</div>' +
           props.map(renderPropRow).join('') +
         '</div>'
-      : '<div class="dept-empty">No props have been added yet. Add the first one below.</div>';
+      : '<div class="dept-empty">' + (allProps.length ? 'No props match that search or filter.' : 'No props have been added yet. Add the first one below.') + '</div>';
     return '<section class="dept-panel">' +
       '<div class="dept-panel-head"><div><div class="dept-panel-title">Props List</div><div class="dept-panel-sub">Every prop the show needs, its characters, page number, quantity, status, and who is sourcing it.</div></div>' +
       '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end;">' +
@@ -1129,6 +1173,7 @@
         '<button type="button" class="dept-action secondary" onclick="BTSDepartmentSection.openPropBulkModal()">Bulk Add</button>' +
         '<button type="button" class="dept-action" onclick="BTSDepartmentSection.openPropModal()">Add Prop</button>' +
       '</div></div>' +
+      renderPropFilterBar(allProps) +
       list +
     '</section>';
   }
@@ -1503,8 +1548,28 @@
 
   function toggleAllPropsSelected(checked) {
     state.selectedPropIds = {};
-    if (checked) sectionProps().forEach(function (prop) { state.selectedPropIds[prop.id] = true; });
+    if (checked) filteredSectionProps().forEach(function (prop) { state.selectedPropIds[prop.id] = true; });
     render();
+  }
+
+  function setPropStatusFilter(status) {
+    state.propStatusFilter = status;
+    render();
+  }
+
+  function updatePropSearch(value) {
+    state.propSearchQuery = value;
+    const input = document.getElementById('dept-prop-search');
+    const selStart = input ? input.selectionStart : null;
+    const selEnd = input ? input.selectionEnd : null;
+    render();
+    const newInput = document.getElementById('dept-prop-search');
+    if (newInput) {
+      newInput.focus();
+      if (selStart !== null) {
+        try { newInput.setSelectionRange(selStart, selEnd); } catch (_) {}
+      }
+    }
   }
 
   async function deleteSelectedProps() {
@@ -1843,6 +1908,8 @@
     quickDeleteProp: deleteProp,
     togglePropSelected,
     toggleAllPropsSelected,
+    setPropStatusFilter,
+    updatePropSearch,
     deleteSelectedProps,
     openPropImportModal,
     closePropImportModal,
