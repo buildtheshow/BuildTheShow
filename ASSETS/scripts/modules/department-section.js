@@ -31,7 +31,11 @@
     propImportItems: [],
     propStatusFilter: 'all',
     propSearchQuery: '',
+    propNoteDrafts: {},
+    propNoteSaveState: {},
   };
+
+  const propNoteSaveTimers = {};
 
   const STAFFING_ROLE_MAP = {
     dept_leads: [
@@ -1097,6 +1101,10 @@
   function renderPropRow(prop) {
     const refs = prop.script_page_refs && prop.script_page_refs.length ? 'pp. ' + prop.script_page_refs.join(', ') : '';
     const characters = (prop.characters || []).filter(Boolean);
+    const noteDraft = Object.prototype.hasOwnProperty.call(state.propNoteDrafts, prop.id)
+      ? state.propNoteDrafts[prop.id]
+      : (prop.notes || '');
+    const noteState = state.propNoteSaveState[prop.id] || '';
     const charactersHtml = characters.length
       ? '<div class="props-characters">' + characters.map(function (c) { return '<span class="props-char-pill" style="background:' + propAvatarColor(c) + '22;color:' + propAvatarColor(c) + ';">' + esc(c) + '</span>'; }).join('') + '</div>'
       : '<span class="props-empty-cell">-</span>';
@@ -1116,8 +1124,12 @@
       '<td class="props-col-qty" data-th="Needed"><span class="props-qty-value">' + esc(String(prop.quantity || 1)) + '</span><span class="props-qty-unit">' + esc(prop.quantity_unit || 'total') + '</span></td>' +
       '<td class="props-col-status" data-th="Status"><span class="dept-status ' + esc(PROP_STATUS_CLASS[prop.status] || 'pending') + '">' + esc((prop.status || 'Needed').toUpperCase()) + '</span></td>' +
       '<td class="props-col-sourced" data-th="Sourced By">' + sourcedHtml + '</td>' +
-      '<td class="props-col-notes" data-th="Notes"><span class="props-notes-badge">' + notesCount + '</span></td>' +
-      '<td class="props-col-updated" data-th="Last Updated">' + esc(propRelativeTime(prop.updated_at)) + '</td>' +
+      '<td class="props-col-notes" data-th="Notes">' +
+        '<label class="props-note-editor-wrap">' +
+          '<textarea class="props-note-editor" rows="3" placeholder="Type notes here..." oninput="BTSDepartmentSection.updateInlinePropNote(\'' + esc(prop.id) + '\', this.value)" onblur="BTSDepartmentSection.flushInlinePropNote(\'' + esc(prop.id) + '\')" data-prop-note-id="' + esc(prop.id) + '">' + esc(noteDraft) + '</textarea>' +
+        '</label>' +
+        '<div class="props-note-meta"><span class="props-notes-badge">' + notesCount + '</span><span class="props-note-status">' + esc(noteState || ' ') + '</span></div>' +
+      '</td>' +
       '<td class="props-col-actions" data-th="">' +
         '<button type="button" class="dept-action secondary" onclick="BTSDepartmentSection.openPropModal(\'' + esc(prop.id) + '\')">Edit</button>' +
         '<button type="button" class="dept-action danger" onclick="BTSDepartmentSection.quickDeleteProp(\'' + esc(prop.id) + '\')">Remove</button>' +
@@ -1155,11 +1167,11 @@
     const list = props.length
       ? '<table class="props-table">' +
           '<colgroup>' +
-            '<col style="width:26%"><col style="width:13%"><col style="width:7%">' +
-            '<col style="width:10%"><col style="width:16%"><col style="width:6%"><col style="width:9%"><col style="width:13%">' +
+            '<col style="width:24%"><col style="width:13%"><col style="width:7%">' +
+            '<col style="width:10%"><col style="width:15%"><col style="width:19%"><col style="width:12%">' +
           '</colgroup>' +
           '<thead><tr class="props-table-head">' +
-            '<th>Prop</th><th>Characters</th><th>Needed</th><th>Status</th><th>Sourced By</th><th>Notes</th><th>Last Updated</th><th></th>' +
+            '<th>Prop</th><th>Characters</th><th>Needed</th><th>Status</th><th>Sourced By</th><th>Notes</th><th></th>' +
           '</tr></thead>' +
           '<tbody>' + props.map(renderPropRow).join('') + '</tbody>' +
         '</table>'
@@ -1183,8 +1195,8 @@
         '<div class="dept-modal-head"><div class="dept-modal-title" id="dept-prop-title">' + (prop ? 'Edit Prop' : 'Add Prop') + '</div><button type="button" class="dept-close" onclick="BTSDepartmentSection.closePropModal()" aria-label="Close">x</button></div>' +
         '<div class="dept-modal-body"><div class="dept-form-grid">' +
           field('Prop Name', 'dept-prop-name', 'text', prop ? (prop.name || '') : '', 'e.g. Umbrella, Tea Set') +
-          field('Characters', 'dept-prop-characters', 'text', prop && prop.characters ? prop.characters.join(', ') : '', 'e.g. Jane Banks, Michael Banks') +
           field('Page #', 'dept-prop-page', 'text', prop && prop.script_page_refs ? prop.script_page_refs.join(', ') : '', 'e.g. 3, 107') +
+          field('Characters', 'dept-prop-characters', 'text', prop && prop.characters ? prop.characters.join(', ') : '', 'e.g. Jane Banks, Michael Banks') +
           field('Quantity', 'dept-prop-qty', 'number', prop ? String(prop.quantity || 1) : '1', '1') +
           field('Unit', 'dept-prop-unit', 'text', prop ? (prop.quantity_unit || '') : '', 'e.g. total, bags, sets') +
           '<div class="dept-field"><label>Status</label><select id="dept-prop-status"><option value="Needed">Needed</option><option value="In Progress">In Progress</option><option value="Sourced">Sourced</option></select></div>' +
@@ -1520,6 +1532,88 @@
     } catch (error) {
       alert('Could not save prop: ' + error.message);
     }
+  }
+
+  function cssEscape(value) {
+    if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(String(value));
+    return String(value).replace(/["\\]/g, '\\$&');
+  }
+
+  function syncPropNoteTextarea(id) {
+    const textarea = document.querySelector('textarea[data-prop-note-id="' + cssEscape(id) + '"]');
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.max(textarea.scrollHeight, 72) + 'px';
+  }
+
+  function updatePropNoteState(id, status) {
+    state.propNoteSaveState[id] = status || '';
+    const textarea = document.querySelector('textarea[data-prop-note-id="' + cssEscape(id) + '"]');
+    const statusEl = textarea && textarea.closest('.props-col-notes') && textarea.closest('.props-col-notes').querySelector('.props-note-status');
+    if (statusEl) statusEl.textContent = status || ' ';
+  }
+
+  function applySavedPropNote(id, value, updatedAt) {
+    const prop = state.props.find(function (item) { return item.id === id; });
+    if (prop) {
+      prop.notes = value || null;
+      prop.updated_at = updatedAt || new Date().toISOString();
+    }
+    delete state.propNoteDrafts[id];
+  }
+
+  async function persistInlinePropNote(id) {
+    const prop = state.props.find(function (item) { return item.id === id; });
+    if (!prop) return;
+    const nextValueRaw = Object.prototype.hasOwnProperty.call(state.propNoteDrafts, id)
+      ? state.propNoteDrafts[id]
+      : (prop.notes || '');
+    const nextValue = String(nextValueRaw || '').trim();
+    const currentValue = String(prop.notes || '').trim();
+    if (nextValue === currentValue) {
+      updatePropNoteState(id, '');
+      delete state.propNoteDrafts[id];
+      return;
+    }
+    updatePropNoteState(id, 'Saving...');
+    try {
+      const updatedAt = new Date().toISOString();
+      const response = await fetch(SUPABASE_URL + '/rest/v1/production_props?id=eq.' + encodeURIComponent(id), {
+        method: 'PATCH',
+        headers: headers(true),
+        body: JSON.stringify({
+          notes: nextValue || null,
+          updated_at: updatedAt,
+        }),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      applySavedPropNote(id, nextValue, updatedAt);
+      updatePropNoteState(id, 'Saved');
+      setTimeout(function () {
+        if (state.propNoteSaveState[id] === 'Saved') updatePropNoteState(id, '');
+      }, 1200);
+    } catch (error) {
+      updatePropNoteState(id, 'Could not save');
+    }
+  }
+
+  function updateInlinePropNote(id, value) {
+    state.propNoteDrafts[id] = value;
+    updatePropNoteState(id, 'Saving...');
+    if (propNoteSaveTimers[id]) clearTimeout(propNoteSaveTimers[id]);
+    propNoteSaveTimers[id] = setTimeout(function () {
+      persistInlinePropNote(id);
+      delete propNoteSaveTimers[id];
+    }, 500);
+    syncPropNoteTextarea(id);
+  }
+
+  function flushInlinePropNote(id) {
+    if (propNoteSaveTimers[id]) {
+      clearTimeout(propNoteSaveTimers[id]);
+      delete propNoteSaveTimers[id];
+    }
+    persistInlinePropNote(id);
   }
 
   async function deleteProp(id) {
@@ -1908,6 +2002,8 @@
     toggleAllPropsSelected,
     setPropStatusFilter,
     updatePropSearch,
+    updateInlinePropNote,
+    flushInlinePropNote,
     deleteSelectedProps,
     openPropImportModal,
     closePropImportModal,
