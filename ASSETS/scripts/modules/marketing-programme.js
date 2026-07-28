@@ -532,13 +532,13 @@
       ? '<text x="' + (size.width / 2) + '" y="' + y + '" fill="#572e88" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="900">' + svgEsc(title.slice(0, 20)) + '</text>' +
         '<text x="' + (size.width / 2) + '" y="' + (y + 52) + '" fill="#8c80a2" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="800">' + svgEsc((lines[0] || '').slice(0, 34)) + '</text>'
       : '<rect x="56" y="70" width="' + (size.width - 112) + '" height="8" rx="4" fill="' + accent + '"/>' +
-        '<text x="70" y="130" fill="#1a1530" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="900">' + svgEsc(title.slice(0, 24)) + '</text>' +
+        '<text x="70" y="130" fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="900">' + svgEsc(title.slice(0, 24)) + '</text>' +
         lineSvg;
     var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size.width + '" height="' + size.height + '" viewBox="0 0 ' + size.width + ' ' + size.height + '">' +
       '<rect width="100%" height="100%" fill="#fffefb"/>' +
       '<rect x="26" y="26" width="' + (size.width - 52) + '" height="' + (size.height - 52) + '" fill="#fffefb" stroke="#e4ddeb" stroke-width="2"/>' +
       body +
-      '<text x="' + (size.width / 2) + '" y="' + (size.height - 38) + '" fill="#9a90b0" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="800">' + (index + 1) + '</text>' +
+      '<text x="' + (size.width / 2) + '" y="' + (size.height - 38) + '" fill="#c8bad7" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="800">' + (index + 1) + '</text>' +
     '</svg>';
     return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
   }

@@ -51,7 +51,7 @@
     { name: 'Purple', value: '#572e88' }, { name: 'Light blue', value: '#74a2b4' },
     { name: 'Blue', value: '#476aaa' }, { name: 'Green', value: '#769e7b' },
     { name: 'Orange', value: '#dd8233' }, { name: 'Red', value: '#d1523d' },
-    { name: 'Pink', value: '#ca7ea7' }, { name: 'Black', value: '#1a1530' },
+    { name: 'Pink', value: '#ca7ea7' }, { name: 'Black', value: '#000000' },
     { name: 'White', value: '#ffffff' },
   ];
 
@@ -86,7 +86,7 @@
         pastPostersBody: 'Share a visual snapshot of previous productions and the community your supporters are joining.',
         footerTitle: 'Have questions?', footerBody: 'We’re happy to help you find the right option.', footerButton: 'Contact Us',
       },
-      colors: { hero: '#572e88', stats: '#74a2b4', sponsor: '#572e88', ads: '#769e7b', info: '#ffffff', steps: '#1a1530', sponsorships: '#572e88', programmeAds: '#476aaa', pastPosters: '#ffffff', footer: '#1a1530' },
+      colors: { hero: '#572e88', stats: '#74a2b4', sponsor: '#572e88', ads: '#769e7b', info: '#ffffff', steps: '#000000', sponsorships: '#572e88', programmeAds: '#476aaa', pastPosters: '#ffffff', footer: '#000000' },
       sections: [
         { id: 'hero', visible: true }, { id: 'stats', visible: true }, { id: 'ways', visible: true },
         { id: 'info', visible: true }, { id: 'steps', visible: true }, { id: 'sponsorships', visible: true },
@@ -610,7 +610,7 @@
       var recentEl = document.getElementById('spn-recent-biz');
       if (recentEl) recentEl.innerHTML = recent.length
         ? recent.map(function (b) { return '<div style="padding:0.55rem 0;border-bottom:1px solid rgba(87,46,136,0.07)"><div class="spn-list-name">' + esc(b.name) + '</div></div>'; }).join('')
-        : '<div style="color:#9a90b0;font-size:0.85rem;padding-top:0.5rem">No businesses added yet.</div>';
+        : '<div style="color:#c8bad7;font-size:0.85rem;padding-top:0.5rem">No businesses added yet.</div>';
     });
   }
 
@@ -1364,7 +1364,7 @@
       var ext = (f.file_name || '').split('.').pop().toLowerCase();
       var isImage = imgExts.indexOf(ext) >= 0;
       var typeLabel = f.file_type || 'asset';
-      var typeBadgeColor = typeLabel === 'logo' ? '#572e88' : (typeLabel === 'artwork' ? '#476aaa' : (typeLabel === 'proof' ? '#769e7b' : '#9a90b0'));
+      var typeBadgeColor = typeLabel === 'logo' ? '#572e88' : (typeLabel === 'artwork' ? '#476aaa' : (typeLabel === 'proof' ? '#769e7b' : '#c8bad7'));
       var dateStr = f.created_at ? new Date(f.created_at).toLocaleDateString('en-CA') : '';
       var uploadedBy = f.uploaded_by === 'business' ? 'Submitted by business' : (f.uploaded_by === 'producer' ? 'Added by producer' : '');
       if (isImage) {
@@ -1393,9 +1393,9 @@
       '<div class="spn-crm-row-header" onclick="MarketingSponsorsModule.toggleCrmRow(\'' + biz.id + '\')">' +
         '<span class="spn-crm-chevron">&#9654;</span>' +
         '<div><div class="spn-crm-biz-name">' + esc(biz.name) + '</div><div class="spn-crm-biz-contact">' + contactLine + '</div></div>' +
-        '<div class="spn-crm-tags">' + (tags || '<span style="font-size:0.68rem;color:#9a90b0;">No bookings</span>') + '</div>' +
+        '<div class="spn-crm-tags">' + (tags || '<span style="font-size:0.68rem;color:#c8bad7;">No bookings</span>') + '</div>' +
         '<div class="spn-crm-amount">' + (totalCents ? '$' + (totalCents/100).toLocaleString('en-CA',{minimumFractionDigits:2}) : '--') + '</div>' +
-        '<div>' + (payClass ? '<div class="spn-crm-pay-badge ' + payClass + '">' + payLabel + '</div><div class="spn-crm-pay-fraction">' + payFraction + '</div>' : '<span style="color:#9a90b0;">--</span>') + '</div>' +
+        '<div>' + (payClass ? '<div class="spn-crm-pay-badge ' + payClass + '">' + payLabel + '</div><div class="spn-crm-pay-fraction">' + payFraction + '</div>' : '<span style="color:#c8bad7;">--</span>') + '</div>' +
         '<div class="spn-crm-art-status ' + artClass + '">' + artLabel + '</div>' +
         flagHtml +
         '<span></span>' +
@@ -1582,49 +1582,49 @@
         '<div style="background:#572e88;height:6px;border-radius:3px 3px 0 0;margin:-1rem -1.4rem 0;"></div>' +
         '<div style="padding-top:1.25rem;">' +
           '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">' +
-            '<div><div style="font-size:1.5rem;font-weight:900;color:#1a1530;letter-spacing:-0.01em;">INVOICE ' + esc(invNum) + '</div>' +
-              '<div style="font-size:0.78rem;color:#9a90b0;margin-top:4px;"><strong>Date of issue:</strong> ' + esc(new Date(today).toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' })) + '</div>' +
+            '<div><div style="font-size:1.5rem;font-weight:900;color:#000000;letter-spacing:-0.01em;">INVOICE ' + esc(invNum) + '</div>' +
+              '<div style="font-size:0.78rem;color:#c8bad7;margin-top:4px;"><strong>Date of issue:</strong> ' + esc(new Date(today).toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' })) + '</div>' +
             '</div>' +
             (logoHtml ? '<div>' + logoHtml + '</div>' : '') +
           '</div>' +
           '<div style="display:flex;gap:24px;margin-bottom:24px;">' +
             '<div style="flex:1;background:rgba(87,46,136,0.03);border-radius:8px;padding:14px 16px;">' +
-              '<div style="font-size:0.58rem;font-weight:800;color:#9a90b0;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Billed to</div>' +
-              '<div style="font-weight:800;font-size:0.88rem;color:#1a1530;">' + esc(biz.name) + '</div>' +
+              '<div style="font-size:0.58rem;font-weight:800;color:#c8bad7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Billed to</div>' +
+              '<div style="font-weight:800;font-size:0.88rem;color:#000000;">' + esc(biz.name) + '</div>' +
               (biz.contact_name ? '<div style="font-size:0.78rem;color:#4a3570;">' + esc(biz.contact_name) + '</div>' : '') +
               (biz.contact_email ? '<div style="font-size:0.78rem;color:#4a3570;">' + esc(biz.contact_email) + '</div>' : '') +
               (biz.contact_phone ? '<div style="font-size:0.78rem;color:#4a3570;">' + esc(biz.contact_phone) + '</div>' : '') +
             '</div>' +
             '<div style="flex:1;background:rgba(87,46,136,0.03);border-radius:8px;padding:14px 16px;">' +
-              '<div style="font-size:0.58rem;font-weight:800;color:#9a90b0;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">From</div>' +
-              '<div style="font-weight:800;font-size:0.88rem;color:#1a1530;">' + esc(orgName) + '</div>' +
+              '<div style="font-size:0.58rem;font-weight:800;color:#c8bad7;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">From</div>' +
+              '<div style="font-weight:800;font-size:0.88rem;color:#000000;">' + esc(orgName) + '</div>' +
               (showName ? '<div style="font-size:0.78rem;color:#4a3570;">' + esc(showName) + '</div>' : '') +
               (orgEmail ? '<div style="font-size:0.78rem;color:#4a3570;">' + esc(orgEmail) + '</div>' : '') +
             '</div>' +
           '</div>' +
           '<table style="width:100%;border-collapse:collapse;margin-bottom:20px;">' +
             '<thead><tr style="background:rgba(87,46,136,0.04);">' +
-              '<th style="text-align:left;padding:10px 12px;font-size:0.62rem;font-weight:800;color:#9a90b0;text-transform:uppercase;letter-spacing:0.06em;">Description</th>' +
-              '<th style="text-align:right;padding:10px 12px;font-size:0.62rem;font-weight:800;color:#9a90b0;text-transform:uppercase;letter-spacing:0.06em;width:80px;">Qty</th>' +
-              '<th style="text-align:right;padding:10px 12px;font-size:0.62rem;font-weight:800;color:#9a90b0;text-transform:uppercase;letter-spacing:0.06em;width:100px;">Unit Price</th>' +
-              '<th style="text-align:right;padding:10px 12px;font-size:0.62rem;font-weight:800;color:#9a90b0;text-transform:uppercase;letter-spacing:0.06em;width:100px;">Amount</th>' +
+              '<th style="text-align:left;padding:10px 12px;font-size:0.62rem;font-weight:800;color:#c8bad7;text-transform:uppercase;letter-spacing:0.06em;">Description</th>' +
+              '<th style="text-align:right;padding:10px 12px;font-size:0.62rem;font-weight:800;color:#c8bad7;text-transform:uppercase;letter-spacing:0.06em;width:80px;">Qty</th>' +
+              '<th style="text-align:right;padding:10px 12px;font-size:0.62rem;font-weight:800;color:#c8bad7;text-transform:uppercase;letter-spacing:0.06em;width:100px;">Unit Price</th>' +
+              '<th style="text-align:right;padding:10px 12px;font-size:0.62rem;font-weight:800;color:#c8bad7;text-transform:uppercase;letter-spacing:0.06em;width:100px;">Amount</th>' +
             '</tr></thead>' +
             '<tbody><tr style="border-bottom:1px solid rgba(87,46,136,0.06);">' +
-              '<td style="padding:12px;font-size:0.82rem;color:#1a1530;font-weight:700;">' + esc(itemDesc) + '</td>' +
+              '<td style="padding:12px;font-size:0.82rem;color:#000000;font-weight:700;">' + esc(itemDesc) + '</td>' +
               '<td style="padding:12px;text-align:right;font-size:0.82rem;color:#4a3570;">1</td>' +
               '<td style="padding:12px;text-align:right;font-size:0.82rem;color:#4a3570;">' + amountStr + '</td>' +
-              '<td style="padding:12px;text-align:right;font-size:0.82rem;color:#1a1530;font-weight:700;">' + amountStr + '</td>' +
+              '<td style="padding:12px;text-align:right;font-size:0.82rem;color:#000000;font-weight:700;">' + amountStr + '</td>' +
             '</tr></tbody>' +
           '</table>' +
           '<div style="display:flex;justify-content:flex-end;margin-bottom:24px;">' +
             '<div style="width:220px;">' +
               '<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:0.78rem;color:#4a3570;"><span>Subtotal</span><span>' + amountStr + '</span></div>' +
               '<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:0.78rem;color:#4a3570;"><span>Tax</span><span>$0.00</span></div>' +
-              '<div style="display:flex;justify-content:space-between;padding:10px 0 6px;font-size:1rem;font-weight:900;color:#1a1530;border-top:2px solid #572e88;margin-top:4px;"><span>TOTAL</span><span style="color:#572e88;">' + amountStr + '</span></div>' +
+              '<div style="display:flex;justify-content:space-between;padding:10px 0 6px;font-size:1rem;font-weight:900;color:#000000;border-top:2px solid #572e88;margin-top:4px;"><span>TOTAL</span><span style="color:#572e88;">' + amountStr + '</span></div>' +
             '</div>' +
           '</div>' +
           '<div style="background:rgba(87,46,136,0.03);border-radius:8px;padding:12px 16px;font-size:0.72rem;color:#4a3570;line-height:1.6;">' +
-            '<strong style="color:#1a1530;">Terms</strong> Payment is due upon receipt. Please make cheques payable to <strong>' + esc(orgName) + '</strong> or contact us for e-transfer details.' +
+            '<strong style="color:#000000;">Terms</strong> Payment is due upon receipt. Please make cheques payable to <strong>' + esc(orgName) + '</strong> or contact us for e-transfer details.' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -1683,11 +1683,11 @@
       });
     }).then(function (pdfUrl) {
       if (btn) btn.textContent = 'Sending email...';
-      var emailHtml = '<div style="font-family:sans-serif;color:#1a1530;line-height:1.6;">' +
+      var emailHtml = '<div style="font-family:sans-serif;color:#000000;line-height:1.6;">' +
         '<p>Hi ' + esc(biz.contact_name || '') + ',</p>' +
         '<p>Please find attached your invoice for <strong>' + esc(showName) + '</strong>.</p>' +
         '<p style="margin:20px 0;"><a href="' + esc(pdfUrl) + '" style="display:inline-block;padding:12px 24px;background:#572e88;color:#fff;text-decoration:none;border-radius:8px;font-weight:800;font-size:14px;">Download Invoice PDF</a></p>' +
-        '<p style="font-size:13px;color:#9a90b0;">Invoice #' + esc(invNum) + ' | ' + esc(today) + '</p>' +
+        '<p style="font-size:13px;color:#c8bad7;">Invoice #' + esc(invNum) + ' | ' + esc(today) + '</p>' +
         '<p>Thank you,<br /><strong>' + esc(org.name || '') + '</strong></p>' +
         '</div>';
       return crmSendEmail(biz.contact_email, biz.contact_name || biz.name, subject, emailHtml);
@@ -1720,15 +1720,15 @@
         '<div style="margin-bottom:12px;font-size:0.82rem;color:#4a3570;">Recording payment for <strong>' + esc(biz ? biz.name : '') + '</strong></div>' +
         '<div style="display:flex;gap:12px;margin-bottom:12px;">' +
           '<div style="flex:1;background:rgba(87,46,136,0.03);border-radius:8px;padding:10px 12px;text-align:center;">' +
-            '<div style="font-size:0.55rem;font-weight:800;color:#9a90b0;text-transform:uppercase;">Total</div>' +
-            '<div style="font-size:1rem;font-weight:900;color:#1a1530;">$' + (totalCents/100).toFixed(2) + '</div>' +
+            '<div style="font-size:0.55rem;font-weight:800;color:#c8bad7;text-transform:uppercase;">Total</div>' +
+            '<div style="font-size:1rem;font-weight:900;color:#000000;">$' + (totalCents/100).toFixed(2) + '</div>' +
           '</div>' +
           '<div style="flex:1;background:rgba(118,158,123,0.08);border-radius:8px;padding:10px 12px;text-align:center;">' +
-            '<div style="font-size:0.55rem;font-weight:800;color:#9a90b0;text-transform:uppercase;">Already Paid</div>' +
+            '<div style="font-size:0.55rem;font-weight:800;color:#c8bad7;text-transform:uppercase;">Already Paid</div>' +
             '<div style="font-size:1rem;font-weight:900;color:#769e7b;">$' + (alreadyPaid/100).toFixed(2) + '</div>' +
           '</div>' +
           '<div style="flex:1;background:rgba(209,82,61,0.06);border-radius:8px;padding:10px 12px;text-align:center;">' +
-            '<div style="font-size:0.55rem;font-weight:800;color:#9a90b0;text-transform:uppercase;">Owing</div>' +
+            '<div style="font-size:0.55rem;font-weight:800;color:#c8bad7;text-transform:uppercase;">Owing</div>' +
             '<div style="font-size:1rem;font-weight:900;color:#d1523d;">$' + (owing/100).toFixed(2) + '</div>' +
           '</div>' +
         '</div>' +
@@ -1819,7 +1819,7 @@
 
     var subject = document.getElementById('spn-crm-art-subject').value;
     var message = document.getElementById('spn-crm-art-message').value;
-    var htmlBody = '<div style="font-family:sans-serif;font-size:14px;color:#1a1530;line-height:1.6;white-space:pre-wrap;">' + esc(message) + '</div>';
+    var htmlBody = '<div style="font-family:sans-serif;font-size:14px;color:#000000;line-height:1.6;white-space:pre-wrap;">' + esc(message) + '</div>';
 
     crmSendEmail(biz.contact_email, biz.contact_name || biz.name, subject, htmlBody).then(function () {
       dbUpdate('programme_ads', adId, { artwork_status: 'missing' });
@@ -2130,7 +2130,7 @@
     preview.innerHTML = '<div style="font-size:0.62rem;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;color:rgba(87,46,136,0.45);margin-bottom:0.5rem;">Preview</div>' +
       '<ul style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:0.4rem;">' +
       lines.map(function(l) {
-        return '<li style="display:flex;align-items:flex-start;gap:0.5rem;font-size:0.82rem;font-weight:700;color:#1a1530;line-height:1.35;">' +
+        return '<li style="display:flex;align-items:flex-start;gap:0.5rem;font-size:0.82rem;font-weight:700;color:#000000;line-height:1.35;">' +
           '<span style="flex-shrink:0;width:7px;height:7px;border-radius:50%;background:#572e88;margin-top:0.35em;opacity:0.4;"></span>' +
           escHtml(l) + '</li>';
       }).join('') + '</ul>';
@@ -2300,7 +2300,7 @@
     pastPosters: { description: 'Show a strip or collage of previous production posters.', icon: 'Placeholder - Poster.svg?v=20260703a', color: '#572e88' },
     ways: { description: 'Help visitors choose sponsorship or advertising.', icon: 'Volunteers.svg', color: '#ca7ea7' },
     steps: { description: 'Explain how booking and artwork work.', icon: 'Production Checklist.svg', color: '#d1523d' },
-    footer: { description: 'Add contact details and a final call to action.', icon: 'Profiles.svg', color: '#1a1530' },
+    footer: { description: 'Add contact details and a final call to action.', icon: 'Profiles.svg', color: '#000000' },
   };
 
   var PUBLIC_SECTION_FIELDS = {
@@ -3216,7 +3216,7 @@
     }
     list.innerHTML = emails.map(function(email, i) {
       return '<div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.65rem 1rem;border:1.5px solid rgba(87,46,136,0.12);border-radius:8px;margin-bottom:0.4rem;">' +
-        '<span style="font-size:0.88rem;font-weight:700;color:#1a1530;">' + escHtml(email) + '</span>' +
+        '<span style="font-size:0.88rem;font-weight:700;color:#000000;">' + escHtml(email) + '</span>' +
         '<button type="button" style="border:none;background:none;color:#d1523d;font-size:0.78rem;font-weight:800;cursor:pointer;padding:0.2rem 0.5rem;" onclick="MarketingSponsorsModule.removeNotifyEmail(' + i + ')">Remove</button>' +
       '</div>';
     }).join('');
@@ -3479,8 +3479,8 @@
             mktTile('spn-tile-pending', 'Marketing', '--', 'Pending Approvals', '#ca7ea7') +
           '</div>' +
           '<div class="spn-overview-grid">' +
-            '<div class="spn-card"><div class="spn-card-title">Needs attention</div><div id="spn-alerts" class="spn-alert-list"><div class="spn-loading-row" style="padding:0;color:#9a90b0;font-size:0.85rem">Loading...</div></div></div>' +
-            '<div class="spn-card"><div class="spn-card-title">Recent businesses</div><div id="spn-recent-biz"><div class="spn-loading-row" style="padding:0;color:#9a90b0;font-size:0.85rem">Loading...</div></div></div>' +
+            '<div class="spn-card"><div class="spn-card-title">Needs attention</div><div id="spn-alerts" class="spn-alert-list"><div class="spn-loading-row" style="padding:0;color:#c8bad7;font-size:0.85rem">Loading...</div></div></div>' +
+            '<div class="spn-card"><div class="spn-card-title">Recent businesses</div><div id="spn-recent-biz"><div class="spn-loading-row" style="padding:0;color:#c8bad7;font-size:0.85rem">Loading...</div></div></div>' +
           '</div>' +
         '</div>' +
 

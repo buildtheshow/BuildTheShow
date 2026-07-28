@@ -39,7 +39,7 @@
         '</div>' +
         '<div class="bgt-list" id="bgt-receipts-list">' +
           '<div class="bgt-list-head bgt-receipt-cols"><span>Date</span><span>Vendor</span><span>Category</span><span>Amount</span><span>Submitted By</span><span>Status</span><span></span></div>' +
-          '<div style="padding:1.5rem;color:#9a90b0">Loading...</div>' +
+          '<div style="padding:1.5rem;color:#c8bad7">Loading...</div>' +
         '</div>' +
         '<div class="bgt-modal-overlay" id="bgt-receipt-modal">' +
           '<div class="bgt-modal">' +

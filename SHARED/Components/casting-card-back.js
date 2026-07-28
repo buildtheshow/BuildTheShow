@@ -610,14 +610,14 @@ function buildCastingCardBack(app, opts = {}) {
   let selfTapeContent = '';
   if (selfTapeSubmissions === null) {
     // Not loaded — self tape tab was never visited this session
-    selfTapeContent = `<div class="irb-tab-empty" style="font-size:0.75rem;color:#9a90b0;line-height:1.5;">
+    selfTapeContent = `<div class="irb-tab-empty" style="font-size:0.75rem;color:#c8bad7;line-height:1.5;">
       Self tape data not loaded.<br>Visit the Self Tape tab to load submissions.
     </div>`;
   } else if (selfTapeSubmissions.length === 0) {
     selfTapeContent = `<div class="irb-tab-empty">
       <div style="font-size:1.1rem;margin-bottom:0.3rem;">⏳</div>
       Not Submitted<br>
-      <span style="font-size:0.72rem;color:#9a90b0;font-weight:400;">No self tape received yet.</span>
+      <span style="font-size:0.72rem;color:#c8bad7;font-weight:400;">No self tape received yet.</span>
     </div>`;
   } else {
     selfTapeContent = selfTapeSubmissions.map(s => {

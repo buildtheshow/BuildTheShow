@@ -22,7 +22,7 @@
           '</div>' +
         '</div>' +
         '<div class="bgt-tile-grid" id="ovw-stats-grid">' +
-          '<div style="color:#9a90b0;padding:2rem;text-align:center">Loading budget health...</div>' +
+          '<div style="color:#c8bad7;padding:2rem;text-align:center">Loading budget health...</div>' +
         '</div>';
 
       this._load();

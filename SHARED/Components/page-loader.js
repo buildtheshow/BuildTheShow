@@ -41,7 +41,7 @@
     #bts-page-loader {
       position: fixed; inset: 0; z-index: 999999;
       display: flex; align-items: center; justify-content: center;
-      background: #1a1530;
+      background: #000000;
       opacity: 1;
       transition: opacity ${FADE_MS}ms ease;
       pointer-events: all;

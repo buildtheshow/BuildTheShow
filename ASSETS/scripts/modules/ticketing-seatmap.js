@@ -408,7 +408,7 @@ window.SeatMapBuilder = (function() {
   function getCSS() {
     return `
     .sm-step-num { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: #572e88; color: #fff; font-size: 0.68rem; font-weight: 900; flex-shrink: 0; }
-    .sm-step-title { font-size: 0.88rem; font-weight: 900; color: #1a1530; }
+    .sm-step-title { font-size: 0.88rem; font-weight: 900; color: #000000; }
     .sm-step-desc { font-size: 0.72rem; color: #8e82a7; margin: 0.15rem 0 0.6rem; }
     .sm-stage-btns { display: flex; gap: 0.4rem; flex-wrap: wrap; }
     .sm-stage-btn { padding: 0.45rem 0.85rem; border: 1.5px solid #e0dce8; border-radius: 8px; background: #fff; color: #3a3050; font: inherit; font-size: 0.78rem; font-weight: 800; cursor: pointer; }
@@ -423,7 +423,7 @@ window.SeatMapBuilder = (function() {
     .sm-cap-item { display: flex; flex-direction: column; gap: 0.1rem; }
     .sm-cap-label { font-size: 0.6rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; }
     .sm-edit-area { display: flex; gap: 0; }
-    .sm-toolpanel { display: flex; flex-direction: column; gap: 2px; padding: 8px 4px; background: #1a1530; border-radius: 10px 0 0 10px; flex-shrink: 0; width: 64px; }
+    .sm-toolpanel { display: flex; flex-direction: column; gap: 2px; padding: 8px 4px; background: #000000; border-radius: 10px 0 0 10px; flex-shrink: 0; width: 64px; }
     .sm-tool { width: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 6px 2px; border: none; border-radius: 6px; background: transparent; cursor: pointer; }
     .sm-tool:hover { background: rgba(255,255,255,0.1); }
     .sm-tool.sm-tool--active { background: rgba(255,255,255,0.18); }
@@ -434,7 +434,7 @@ window.SeatMapBuilder = (function() {
     .sm-toolpanel-divider { height: 1px; background: rgba(255,255,255,0.12); margin: 3px 4px; }
     .sm-preview { display: flex; flex-direction: column; }
     .sm-preview-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
-    .sm-preview-title { font-size: 0.95rem; font-weight: 900; color: #1a1530; }
+    .sm-preview-title { font-size: 0.95rem; font-weight: 900; color: #000000; }
     .sm-preview-subtitle { font-size: 0.72rem; color: #8e82a7; }
     .sm-map-wrap { flex: 1; overflow: auto; }
     .sm-stage { background: #572e88; color: #fff; text-align: center; padding: 0.4rem 1rem; border-radius: 4px 4px 8px 8px; font-size: 0.62rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; margin: 0 auto 0.75rem; }
@@ -452,7 +452,7 @@ window.SeatMapBuilder = (function() {
     .sm-legend-dot { width: 12px; height: 12px; border-radius: 50%; }
     .sm-adj { display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.65rem; border: 1.5px solid #eceaf3; border-radius: 8px; background: #faf9fd; font-size: 0.72rem; }
     .sm-adj-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-    .sm-adj-name { font-weight: 800; color: #1a1530; }
+    .sm-adj-name { font-weight: 800; color: #000000; }
     .sm-adj input { width: 44px; padding: 0.2rem 0.3rem; border: 1px solid #e0dce8; border-radius: 4px; font: inherit; font-size: 0.72rem; text-align: center; }
     .sm-adj-lbl { color: #8e82a7; font-size: 0.6rem; font-weight: 700; }
     @media (max-width: 900px) { .sm-edit-area { flex-direction: column; } .sm-toolpanel { flex-direction: row; width: 100%; border-radius: 10px 10px 0 0; } }

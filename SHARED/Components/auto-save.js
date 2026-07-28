@@ -50,7 +50,7 @@
       'position:fixed;bottom:1.5rem;right:1.5rem;z-index:99999',
       'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
       'font-size:0.87rem;font-weight:900',
-      'color:#1a1530;background:#efab45',
+      'color:#000000;background:#efab45',
       'border:1px solid #efab45;border-radius:0.5rem',
       'padding:0.7rem 1.2rem;pointer-events:none',
       'opacity:0;transform:translateY(6px)',
@@ -87,7 +87,7 @@
     } else {
       el.style.background = '#efab45';
       el.style.borderColor = '#efab45';
-      el.style.color = '#1a1530';
+      el.style.color = '#000000';
     }
     el.style.opacity = '1';
     el.style.transform = 'translateY(0)';

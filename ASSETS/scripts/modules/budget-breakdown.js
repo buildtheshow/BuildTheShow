@@ -21,7 +21,7 @@
             '</div>' +
           '</div>' +
         '</div>' +
-        '<div id="bgt-budget-content"><div style="color:#9a90b0;padding:2rem;text-align:center">Loading...</div></div>' +
+        '<div id="bgt-budget-content"><div style="color:#c8bad7;padding:2rem;text-align:center">Loading...</div></div>' +
         '<div class="bgt-modal-overlay" id="bgt-cat-modal">' +
           '<div class="bgt-modal">' +
             '<div class="bgt-modal-title" id="bgt-cat-modal-title">Add Category</div>' +
@@ -96,7 +96,7 @@
         return '<div class="bgt-list-row bgt-income-cols">' +
           '<div class="bgt-list-name">' + s.esc(c.name) + '</div>' +
           '<div style="display:flex;align-items:center;gap:0.4rem">' +
-            '<span style="font-size:0.82rem;font-weight:700;color:#9a90b0">$</span>' +
+            '<span style="font-size:0.82rem;font-weight:700;color:#c8bad7">$</span>' +
             '<input class="bgt-amount-input" type="number" min="0" step="0.01" value="' + ((c.planned_cents || 0) / 100).toFixed(2) + '" onchange="BudgetBreakdownModule.updatePlanned(\'' + c.id + '\',this.value)" />' +
           '</div>' +
           '<div class="bgt-row-actions">' +
@@ -114,7 +114,7 @@
         return '<div class="bgt-list-row bgt-expense-cols">' +
           '<div class="bgt-list-name">' + s.esc(c.name) + '</div>' +
           '<div style="display:flex;align-items:center;gap:0.4rem">' +
-            '<span style="font-size:0.82rem;font-weight:700;color:#9a90b0">$</span>' +
+            '<span style="font-size:0.82rem;font-weight:700;color:#c8bad7">$</span>' +
             '<input class="bgt-amount-input" type="number" min="0" step="0.01" value="' + (planned / 100).toFixed(2) + '" onchange="BudgetBreakdownModule.updatePlanned(\'' + c.id + '\',this.value)" />' +
           '</div>' +
           '<div class="bgt-list-sub" style="text-align:right">' + s.fmt$(actual) + '</div>' +
@@ -126,8 +126,8 @@
         '</div>';
       }
 
-      var noIncome  = '<div class="bgt-list-empty"><div style="padding:1rem;color:#9a90b0;font-size:0.85rem">No income categories yet.</div></div>';
-      var noExpense = '<div class="bgt-list-empty"><div style="padding:1rem;color:#9a90b0;font-size:0.85rem">No expense categories yet.</div></div>';
+      var noIncome  = '<div class="bgt-list-empty"><div style="padding:1rem;color:#c8bad7;font-size:0.85rem">No income categories yet.</div></div>';
+      var noExpense = '<div class="bgt-list-empty"><div style="padding:1rem;color:#c8bad7;font-size:0.85rem">No expense categories yet.</div></div>';
       var netClass  = net >= 0 ? 'bgt-net-value--good' : 'bgt-net-value--bad';
 
       el.innerHTML = '<div class="bgt-card">' +

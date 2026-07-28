@@ -275,7 +275,7 @@
       }).catch(e => {
         console.warn('[BTS] ticketing dashboard render error:', e?.message);
         const root = document.getElementById('tix-dashboard-root');
-        if (root) root.innerHTML = '<div style="text-align:center;padding:3rem 1.5rem;color:rgba(26,21,48,0.45);font-size:0.88rem;font-weight:700;">Could not load the ticketing dashboard. Try refreshing the page.</div>';
+        if (root) root.innerHTML = '<div style="text-align:center;padding:3rem 1.5rem;color:rgba(0,0,0,0.45);font-size:0.88rem;font-weight:700;">Could not load the ticketing dashboard. Try refreshing the page.</div>';
       });
     }
   }
@@ -344,8 +344,8 @@
             <img src="${esc(meta.icon)}" alt="" style="width:38px;height:38px;padding:0.45rem;border-radius:12px;background:rgba(87,46,136,0.08);flex-shrink:0;" />
             <div>
               <div style="font-size:0.7rem;font-weight:900;color:#572e88;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:0.15rem;">Build it yourself</div>
-              <div style="font-size:1rem;font-weight:900;color:#1a1530;margin-bottom:0.18rem;">${esc(meta.title)}</div>
-              <div style="font-size:0.77rem;line-height:1.45;color:rgba(26,21,48,0.56);">${esc(meta.copy)}</div>
+              <div style="font-size:1rem;font-weight:900;color:#000000;margin-bottom:0.18rem;">${esc(meta.title)}</div>
+              <div style="font-size:0.77rem;line-height:1.45;color:rgba(0,0,0,0.56);">${esc(meta.copy)}</div>
             </div>
           </div>
           <button type="button" class="btn-secondary" style="font-size:0.75rem;" onclick="openTixWizard('${esc(current)}')">Use Wizard For This Instead</button>
@@ -501,7 +501,7 @@
         <div class="aud-dashboard-cards-head">
           <div class="aud-dashboard-cards-title">Recent Activity</div>
         </div>
-        <div style="text-align:center;padding:1.25rem 0.5rem;color:rgba(26,21,48,0.4);font-size:0.78rem;">No activity yet. Updates will show here once you start setting up ticket sales.</div>
+        <div style="text-align:center;padding:1.25rem 0.5rem;color:rgba(0,0,0,0.4);font-size:0.78rem;">No activity yet. Updates will show here once you start setting up ticket sales.</div>
       </div>`;
   }
 
@@ -701,7 +701,7 @@
           }).join('')}
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <div style="font-size:0.72rem;color:rgba(26,21,48,0.5);">${doneCount}/${totalSteps} steps complete</div>
+          <div style="font-size:0.72rem;color:rgba(0,0,0,0.5);">${doneCount}/${totalSteps} steps complete</div>
           <button type="button" class="aud-dashboard-cards-link" onclick="navigateToTicketing('build')">Edit Setup</button>
         </div>
       </div>`;
@@ -716,12 +716,12 @@
             const pct = p.stats?.total ? Math.round(p.stats.sold / p.stats.total * 100) : 0;
             return `<div style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0.65rem;border:1px solid rgba(87,46,136,0.06);border-radius:8px;">
               <div style="flex:1;">
-                <div style="font-size:0.78rem;font-weight:800;color:#1a1530;">${esc(p.event.title || 'Performance')}</div>
-                <div style="font-size:0.68rem;color:rgba(26,21,48,0.45);">${fmtDate(p.event.start_time)} ${fmtTime(p.event.start_time)}</div>
+                <div style="font-size:0.78rem;font-weight:800;color:#000000;">${esc(p.event.title || 'Performance')}</div>
+                <div style="font-size:0.68rem;color:rgba(0,0,0,0.45);">${fmtDate(p.event.start_time)} ${fmtTime(p.event.start_time)}</div>
               </div>
               ${p.stats ? `<div style="text-align:right;">
                 <div style="font-size:0.78rem;font-weight:900;color:#572e88;">${p.stats.sold}/${p.stats.total}</div>
-                <div style="font-size:0.62rem;color:rgba(26,21,48,0.4);">${pct}% sold</div>
+                <div style="font-size:0.62rem;color:rgba(0,0,0,0.4);">${pct}% sold</div>
               </div>
               <div style="width:60px;height:6px;border-radius:3px;background:rgba(87,46,136,0.08);">
                 <div style="width:${pct}%;height:100%;border-radius:3px;background:${pct >= 90 ? '#769e7b' : pct >= 50 ? '#efab45' : '#572e88'};"></div>
@@ -739,16 +739,16 @@
         </div>
         <div style="display:grid;gap:0.4rem;">
           <div style="display:flex;justify-content:space-between;font-size:0.78rem;padding:0.35rem 0;border-bottom:1px solid rgba(87,46,136,0.06);">
-            <span style="font-weight:700;color:rgba(26,21,48,0.5);">Seating</span><span style="font-weight:800;color:#1a1530;">${esc(seatingLabel)}</span>
+            <span style="font-weight:700;color:rgba(0,0,0,0.5);">Seating</span><span style="font-weight:800;color:#000000;">${esc(seatingLabel)}</span>
           </div>
           <div style="display:flex;justify-content:space-between;font-size:0.78rem;padding:0.35rem 0;border-bottom:1px solid rgba(87,46,136,0.06);">
-            <span style="font-weight:700;color:rgba(26,21,48,0.5);">Ticket Types</span><span style="font-weight:800;color:#1a1530;">${ticketTypes.length}</span>
+            <span style="font-weight:700;color:rgba(0,0,0,0.5);">Ticket Types</span><span style="font-weight:800;color:#000000;">${ticketTypes.length}</span>
           </div>
           <div style="display:flex;justify-content:space-between;font-size:0.78rem;padding:0.35rem 0;border-bottom:1px solid rgba(87,46,136,0.06);">
-            <span style="font-weight:700;color:rgba(26,21,48,0.5);">Discounts</span><span style="font-weight:800;color:#1a1530;">${setup.discounts_enabled ? (setup.discounts || []).length + ' codes' : 'None'}</span>
+            <span style="font-weight:700;color:rgba(0,0,0,0.5);">Discounts</span><span style="font-weight:800;color:#000000;">${setup.discounts_enabled ? (setup.discounts || []).length + ' codes' : 'None'}</span>
           </div>
           <div style="display:flex;justify-content:space-between;font-size:0.78rem;padding:0.35rem 0;">
-            <span style="font-weight:700;color:rgba(26,21,48,0.5);">Reserved Blocks</span><span style="font-weight:800;color:#1a1530;">${setup.reserved_blocks_enabled ? (setup.reserved_blocks || []).length + ' groups' : 'None'}</span>
+            <span style="font-weight:700;color:rgba(0,0,0,0.5);">Reserved Blocks</span><span style="font-weight:800;color:#000000;">${setup.reserved_blocks_enabled ? (setup.reserved_blocks || []).length + ' groups' : 'None'}</span>
           </div>
         </div>
       </div>`;
@@ -786,15 +786,15 @@
       <div>
         <div style="display:grid;gap:0.85rem;max-width:480px;">
           <div>
-            <label style="display:block;font-size:0.74rem;font-weight:800;color:rgba(26,21,48,0.55);margin-bottom:0.3rem;">Venue name</label>
+            <label style="display:block;font-size:0.74rem;font-weight:800;color:rgba(0,0,0,0.55);margin-bottom:0.3rem;">Venue name</label>
             <input type="text" id="tix-venue-name" class="form-input" value="${esc(v.name || '')}" placeholder="e.g. Centennial Theatre" />
           </div>
           <div>
-            <label style="display:block;font-size:0.74rem;font-weight:800;color:rgba(26,21,48,0.55);margin-bottom:0.3rem;">Address</label>
+            <label style="display:block;font-size:0.74rem;font-weight:800;color:rgba(0,0,0,0.55);margin-bottom:0.3rem;">Address</label>
             <input type="text" id="tix-venue-address" class="form-input" value="${esc(v.address || '')}" placeholder="Street, city, province" />
           </div>
           <div>
-            <label style="display:block;font-size:0.74rem;font-weight:800;color:rgba(26,21,48,0.55);margin-bottom:0.3rem;">Seating capacity</label>
+            <label style="display:block;font-size:0.74rem;font-weight:800;color:rgba(0,0,0,0.55);margin-bottom:0.3rem;">Seating capacity</label>
             <input type="number" id="tix-venue-capacity" class="form-input" value="${v.capacity || ''}" placeholder="e.g. 250" min="0" />
           </div>
           <div>
@@ -842,7 +842,7 @@
       </div>` : '';
     return `
       <div>
-        <div style="font-size:0.92rem;font-weight:700;color:#1a1530;margin-bottom:1rem;">How will your audience be seated?</div>
+        <div style="font-size:0.92rem;font-weight:700;color:#000000;margin-bottom:1rem;">How will your audience be seated?</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;max-width:560px;">
           <button type="button" class="tix-card-choice ${current === 'festival' ? 'selected' : ''}" onclick="tixSetSeatingStyle('festival')">
             <div class="tix-check">&#10003;</div>
@@ -862,7 +862,7 @@
   function tixLoadSeatMapBuilder() {
     const container = document.getElementById('tix-seatmap-builder');
     if (!container) return;
-    loadScriptOnce('/ASSETS/scripts/modules/ticketing-seatmap.js?v=seatmap-20260626')
+    loadScriptOnce('/ASSETS/scripts/modules/ticketing-seatmap.js?v=brand-sweep-20260728')
       .then(() => { if (window.SeatMapBuilder) window.SeatMapBuilder.init(prodId, sb, container); })
       .catch(e => { container.innerHTML = '<div style="color:#b33a25;font-size:0.82rem;">Could not load seat map builder.</div>'; });
   }
@@ -889,8 +889,8 @@
 
     if (!perfEvents.length && !dressEvents.length) {
       return `<div style="text-align:center;padding:2.5rem 1.5rem;">
-        <div style="font-size:0.92rem;font-weight:700;color:#1a1530;margin-bottom:0.5rem;">No performance dates found</div>
-        <div style="font-size:0.78rem;color:rgba(26,21,48,0.5);margin-bottom:1rem;">Add performance dates in your production calendar first.</div>
+        <div style="font-size:0.92rem;font-weight:700;color:#000000;margin-bottom:0.5rem;">No performance dates found</div>
+        <div style="font-size:0.78rem;color:rgba(0,0,0,0.5);margin-bottom:1rem;">Add performance dates in your production calendar first.</div>
         <button type="button" class="btn-primary" style="font-size:0.82rem;" onclick="location.href='/SYSTEM/Organisations/Productions/Workspace/plan-calendar.html?id='+encodeURIComponent('${esc(prodId)}')">Open Calendar</button>
       </div>`;
     }
@@ -898,8 +898,8 @@
     const perfRows = perfEvents.map(ev => `
       <div class="tix-row">
         <div style="flex:1;">
-          <div style="font-size:0.82rem;font-weight:800;color:#1a1530;">${esc(ev.title || 'Performance')}</div>
-          <div style="font-size:0.72rem;color:rgba(26,21,48,0.5);">${fmtDate(ev.start_time)} ${fmtTime(ev.start_time)} - ${fmtTime(ev.end_time)}</div>
+          <div style="font-size:0.82rem;font-weight:800;color:#000000;">${esc(ev.title || 'Performance')}</div>
+          <div style="font-size:0.72rem;color:rgba(0,0,0,0.5);">${fmtDate(ev.start_time)} ${fmtTime(ev.start_time)} - ${fmtTime(ev.end_time)}</div>
         </div>
         <div style="font-size:0.68rem;font-weight:800;color:#769e7b;text-transform:uppercase;">Ticketed</div>
       </div>`).join('');
@@ -907,7 +907,7 @@
     const dressSection = dressEvents.length ? `
       <div style="margin-top:1.25rem;padding:1rem;border:1.5px solid rgba(87,46,136,0.12);border-radius:10px;background:rgba(87,46,136,0.02);">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
-          <div style="font-size:0.85rem;font-weight:800;color:#1a1530;">Are you offering tickets to your dress rehearsal?</div>
+          <div style="font-size:0.85rem;font-weight:800;color:#000000;">Are you offering tickets to your dress rehearsal?</div>
           <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;">
             <input type="checkbox" ${dressTicketed ? 'checked' : ''} onchange="tixToggleDressTickets(this.checked)" style="accent-color:#572e88;width:16px;height:16px;" />
             <span style="font-size:0.75rem;font-weight:700;color:#572e88;">${dressTicketed ? 'Yes' : 'No'}</span>
@@ -916,8 +916,8 @@
         ${dressTicketed ? dressEvents.map(ev => `
           <div class="tix-row" style="background:rgba(239,171,69,0.06);">
             <div style="flex:1;">
-              <div style="font-size:0.82rem;font-weight:800;color:#1a1530;">${esc(ev.title || 'Dress Rehearsal')}</div>
-              <div style="font-size:0.72rem;color:rgba(26,21,48,0.5);">${fmtDate(ev.start_time)} ${fmtTime(ev.start_time)} - ${fmtTime(ev.end_time)}</div>
+              <div style="font-size:0.82rem;font-weight:800;color:#000000;">${esc(ev.title || 'Dress Rehearsal')}</div>
+              <div style="font-size:0.72rem;color:rgba(0,0,0,0.5);">${fmtDate(ev.start_time)} ${fmtTime(ev.start_time)} - ${fmtTime(ev.end_time)}</div>
             </div>
             <div style="font-size:0.68rem;font-weight:800;color:#efab45;text-transform:uppercase;">Dress</div>
           </div>`).join('') : ''}
@@ -925,7 +925,7 @@
 
     return `
       <div style="max-width:620px;">
-        <div style="font-size:0.92rem;font-weight:700;color:#1a1530;margin-bottom:0.75rem;">${perfEvents.length} performance${perfEvents.length === 1 ? '' : 's'} from your calendar</div>
+        <div style="font-size:0.92rem;font-weight:700;color:#000000;margin-bottom:0.75rem;">${perfEvents.length} performance${perfEvents.length === 1 ? '' : 's'} from your calendar</div>
         ${perfRows}
         ${dressSection}
         <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;">
@@ -983,7 +983,7 @@
       <div class="tix-row">
         <input type="text" value="${esc(t.name || '')}" placeholder="e.g. Adult" style="flex:1;" onblur="tixSaveTicketType(${i},'name',this.value)" />
         <div style="display:flex;align-items:center;gap:0.2rem;">
-          <span style="font-size:0.82rem;font-weight:800;color:rgba(26,21,48,0.4);">$</span>
+          <span style="font-size:0.82rem;font-weight:800;color:rgba(0,0,0,0.4);">$</span>
           <input type="number" value="${(t.price_cents / 100).toFixed(2)}" placeholder="0.00" style="width:80px;text-align:right;" step="0.01" min="0" onblur="tixSaveTicketType(${i},'price',this.value)" />
         </div>
         <button type="button" class="tix-row-del" onclick="tixRemoveTicketType(${i})">&#10005;</button>
@@ -991,8 +991,8 @@
 
     return `
       <div style="max-width:560px;">
-        <div style="font-size:0.92rem;font-weight:700;color:#1a1530;margin-bottom:0.75rem;">What ticket types are you offering?</div>
-        <div style="font-size:0.75rem;color:rgba(26,21,48,0.5);margin-bottom:1rem;">Add a row for each price point. Common types: Adult, Child, Senior, Student, Front Row.</div>
+        <div style="font-size:0.92rem;font-weight:700;color:#000000;margin-bottom:0.75rem;">What ticket types are you offering?</div>
+        <div style="font-size:0.75rem;color:rgba(0,0,0,0.5);margin-bottom:1rem;">Add a row for each price point. Common types: Adult, Child, Senior, Student, Front Row.</div>
         ${rows}
         <button type="button" class="btn-secondary" style="font-size:0.78rem;margin-top:0.5rem;" onclick="tixAddTicketType()">+ Add Ticket Type</button>
       </div>`;
@@ -1029,7 +1029,7 @@
     if (!_tixSetup.comps) _tixSetup.comps = [];
 
     const gateHtml = `
-      <div style="font-size:0.92rem;font-weight:700;color:#1a1530;margin-bottom:0.75rem;">Are you offering any discounts or complimentary tickets?</div>
+      <div style="font-size:0.92rem;font-weight:700;color:#000000;margin-bottom:0.75rem;">Are you offering any discounts or complimentary tickets?</div>
       <div class="tix-gate">
         <button type="button" class="tix-gate-btn ${enabled ? 'selected' : ''}" onclick="tixSetDiscountsEnabled(true)">Yes</button>
         <button type="button" class="tix-gate-btn ${!enabled ? 'selected' : ''}" onclick="tixSetDiscountsEnabled(false)">No, skip this</button>
@@ -1056,7 +1056,7 @@
       <div class="tix-row">
         <input type="text" value="${esc(c.name || '')}" placeholder="e.g. Cast Family" style="flex:1;" onblur="tixSaveComp(${i},'name',this.value)" />
         <input type="number" value="${c.qty || ''}" placeholder="Qty" style="width:60px;text-align:right;" min="1" onblur="tixSaveComp(${i},'qty',this.value)" />
-        <span style="font-size:0.7rem;color:rgba(26,21,48,0.4);white-space:nowrap;">per show</span>
+        <span style="font-size:0.7rem;color:rgba(0,0,0,0.4);white-space:nowrap;">per show</span>
         <button type="button" class="tix-row-del" onclick="tixRemoveComp(${i})">&#10005;</button>
       </div>`).join('');
 
@@ -1116,8 +1116,8 @@
     if (!_tixSetup.reserved_blocks) _tixSetup.reserved_blocks = [];
 
     const gateHtml = `
-      <div style="font-size:0.92rem;font-weight:700;color:#1a1530;margin-bottom:0.75rem;">Are you holding tickets for any groups?</div>
-      <div style="font-size:0.75rem;color:rgba(26,21,48,0.5);margin-bottom:0.75rem;">These tickets will be set aside before public sale opens. Not for dress rehearsal guests.</div>
+      <div style="font-size:0.92rem;font-weight:700;color:#000000;margin-bottom:0.75rem;">Are you holding tickets for any groups?</div>
+      <div style="font-size:0.75rem;color:rgba(0,0,0,0.5);margin-bottom:0.75rem;">These tickets will be set aside before public sale opens. Not for dress rehearsal guests.</div>
       <div class="tix-gate">
         <button type="button" class="tix-gate-btn ${enabled ? 'selected' : ''}" onclick="tixSetBlocksEnabled(true)">Yes</button>
         <button type="button" class="tix-gate-btn ${!enabled ? 'selected' : ''}" onclick="tixSetBlocksEnabled(false)">No, skip this</button>

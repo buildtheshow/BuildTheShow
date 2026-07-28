@@ -60,7 +60,7 @@
           width: 14px; height: 14px; accent-color: #572e88; cursor: pointer; flex-shrink: 0;
         }
         .vp-tbd-row label {
-          font-size: 0.75rem; font-weight: 700; color: #9a90b0;
+          font-size: 0.75rem; font-weight: 700; color: #c8bad7;
           text-transform: uppercase; letter-spacing: 0.06em; cursor: pointer;
           user-select: none;
         }
@@ -84,7 +84,7 @@
             </select>
           </div>
           <div class="venue-picker-new-wrap" id="vp-new-${containerId}" style="display:none;">
-            <div style="font-size:0.72rem;font-weight:700;color:#9a90b0;text-transform:uppercase;letter-spacing:0.05em;margin:0.6rem 0 0.3rem;">Search for venue or address</div>
+            <div style="font-size:0.72rem;font-weight:700;color:#c8bad7;text-transform:uppercase;letter-spacing:0.05em;margin:0.6rem 0 0.3rem;">Search for venue or address</div>
             <div style="position:relative;">
               <input class="form-input" id="vp-search-${containerId}" type="text"
                      placeholder="Start typing a name or address..." autocomplete="off" />
@@ -201,7 +201,7 @@
   async function _fetchSuggestions(pickerId, query) {
     const dropdown = document.getElementById(`vp-dropdown-${pickerId}`);
     if (!dropdown) return;
-    dropdown.innerHTML = '<div style="padding:0.5rem 0.75rem;font-size:0.8rem;color:#9a90b0;">Searching...</div>';
+    dropdown.innerHTML = '<div style="padding:0.5rem 0.75rem;font-size:0.8rem;color:#c8bad7;">Searching...</div>';
     dropdown.style.display = 'block';
 
     try {
@@ -210,7 +210,7 @@
       const data = await res.json();
 
       if (!data || !data.length) {
-        dropdown.innerHTML = '<div style="padding:0.5rem 0.75rem;font-size:0.8rem;color:#9a90b0;">No results found.</div>';
+        dropdown.innerHTML = '<div style="padding:0.5rem 0.75rem;font-size:0.8rem;color:#c8bad7;">No results found.</div>';
         return;
       }
 
@@ -222,8 +222,8 @@
                      onmouseover="this.style.background='rgba(87,46,136,0.05)'"
                      onmouseout="this.style.background=''"
                      onclick="VenuePicker._selectSuggestion('${pickerId}', ${JSON.stringify({ name, address, lat: r.lat, lng: r.lon, place_id: String(r.place_id) }).replace(/"/g, '&quot;')})">
-                  <div style="font-weight:700;color:#1a1530;">${_esc(name)}</div>
-                  <div style="font-size:0.72rem;color:#9a90b0;margin-top:0.1rem;">${_esc(address)}</div>
+                  <div style="font-weight:700;color:#000000;">${_esc(name)}</div>
+                  <div style="font-size:0.72rem;color:#c8bad7;margin-top:0.1rem;">${_esc(address)}</div>
                 </div>`;
       }).join('');
     } catch {

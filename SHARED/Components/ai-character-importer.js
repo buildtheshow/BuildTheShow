@@ -102,7 +102,7 @@
         display: flex; align-items: center; justify-content: space-between;
         position: sticky; top: 0; background: #fff; z-index: 1;
       }
-      #aci-picker-header h2 { margin: 0; font-size: 1rem; font-weight: 700; color: #1a1530; }
+      #aci-picker-header h2 { margin: 0; font-size: 1rem; font-weight: 700; color: #000000; }
       #aci-picker-close {
         background: none; border: none; font-size: 1.2rem; color: #9a7aa0;
         cursor: pointer; padding: 0 0.2rem; line-height: 1;
@@ -111,7 +111,7 @@
       #aci-picker-hints {
         font-size: 0.82rem; color: #4a3a70; line-height: 1.5; margin-bottom: 1rem;
       }
-      #aci-picker-hints strong { color: #1a1530; }
+      #aci-picker-hints strong { color: #000000; }
       #aci-picker-hints ul { padding-left: 1.1rem; margin: 0.4rem 0 0; }
       #aci-picker-hints li { margin-bottom: 0.2rem; }
       #aci-picker-upload-btn {
@@ -131,7 +131,7 @@
       #aci-picker-textarea {
         width: 100%; box-sizing: border-box; padding: 0.55rem 0.75rem;
         border: 1px solid rgba(87,46,136,0.2); border-radius: 8px;
-        font-size: 0.8rem; color: #1a1530; resize: vertical; min-height: 110px;
+        font-size: 0.8rem; color: #000000; resize: vertical; min-height: 110px;
         font-family: var(--bts-font); margin-bottom: 0.75rem;
       }
       #aci-picker-textarea:focus { outline: none; border-color: #572e88; }
@@ -157,7 +157,7 @@
         padding: 1.2rem 1.4rem 1rem; border-bottom: 1px solid rgba(87,46,136,0.1);
         display: flex; align-items: center; justify-content: space-between;
       }
-      #aci-modal-header h2 { margin: 0; font-size: 1rem; font-weight: 700; color: #1a1530; }
+      #aci-modal-header h2 { margin: 0; font-size: 1rem; font-weight: 700; color: #000000; }
       #aci-modal-close {
         background: none; border: none; font-size: 1.2rem; color: #9a7aa0;
         cursor: pointer; padding: 0 0.2rem; line-height: 1;
@@ -296,7 +296,7 @@
     list.innerHTML = _pickerFiles.map((f, i) => `
       <div style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0.6rem;background:rgba(87,46,136,0.06);border-radius:6px;margin-bottom:0.3rem;font-size:0.8rem;">
         <span style="color:#572e88;">📄</span>
-        <span style="flex:1;color:#1a1530;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.name)}</span>
+        <span style="flex:1;color:#000000;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.name)}</span>
         <button type="button" data-idx="${i}" style="background:none;border:none;color:#9a7aa0;cursor:pointer;font-size:0.9rem;padding:0 0.2rem;">✕</button>
       </div>`).join('') +
       `<div style="font-size:0.72rem;color:#8a7aa0;margin-top:0.2rem;">${_pickerFiles.length} file${_pickerFiles.length !== 1 ? 's' : ''} selected</div>`;
@@ -371,7 +371,7 @@
         <td style="padding:0.5rem 0.6rem;">
           <input type="checkbox" checked id="aci-check-${i}" style="accent-color:#572e88;width:14px;height:14px;" />
         </td>
-        <td style="padding:0.5rem 0.6rem;font-weight:700;color:#1a1530;">${esc(c.name)}</td>
+        <td style="padding:0.5rem 0.6rem;font-weight:700;color:#000000;">${esc(c.name)}</td>
         <td style="padding:0.5rem 0.6rem;color:#6a5a80;">${esc(c.role_type || '-')}</td>
         <td style="padding:0.5rem 0.6rem;color:#6a5a80;">${esc(c.gender || '-')}</td>
         <td style="padding:0.5rem 0.6rem;color:#6a5a80;">${esc(c.vocal_type || '-')}</td>

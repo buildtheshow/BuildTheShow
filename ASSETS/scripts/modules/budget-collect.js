@@ -50,7 +50,7 @@
               '<div class="bgt-collect-url" id="bgt-collect-url">Generating link...</div>' +
               '<button class="bgt-btn bgt-btn--ghost" onclick="BudgetCollectModule.copyCollectLink()">Copy Link</button>' +
             '</div>' +
-            '<p style="font-size:0.78rem;color:#9a90b0;margin:0">Anyone with this link can submit a receipt. They do not need a Build The Show account.</p>' +
+            '<p style="font-size:0.78rem;color:#c8bad7;margin:0">Anyone with this link can submit a receipt. They do not need a Build The Show account.</p>' +
           '</div>' +
           '<div style="margin-top:1.5rem">' +
             '<div class="bgt-card-title">Expense categories on the form</div>' +
@@ -122,7 +122,7 @@
           ? expCats.map(function (c) {
               return '<span style="display:inline-flex;padding:0.2rem 0.55rem;border-radius:999px;background:rgba(87,46,136,0.08);color:#572e88;font-size:0.76rem;font-weight:700">' + s.esc(c.name) + '</span>';
             }).join('')
-          : '<span style="color:#9a90b0;font-size:0.84rem">No expense categories yet. Add them in the Breakdown page first.</span>';
+          : '<span style="color:#c8bad7;font-size:0.84rem">No expense categories yet. Add them in the Breakdown page first.</span>';
       }
     },
 

@@ -182,7 +182,7 @@ function teamColorPickerHtml(selectedColor, memberId = null, inputId = 'ptm-edit
       title="${takenBy ? `${group.family} is already used by ${takenBy.name || 'another team member'}` : `Choose ${group.family}`}"
       ${takenBy ? 'disabled' : ''}
       onclick="selectProductionTeamEditColor('${color}')"
-      style="--team-note-color:${color};width:2.35rem;height:2.35rem;border-radius:999px;border:2px solid ${active ? '#1a1530' : 'rgba(87,46,136,0.16)'};background:${color};box-shadow:${takenBy ? 'none' : `0 0 0.45rem ${color}55`};opacity:${takenBy ? '0.22' : '1'};filter:${takenBy ? 'grayscale(1)' : 'none'};cursor:${takenBy ? 'not-allowed' : 'pointer'};"
+      style="--team-note-color:${color};width:2.35rem;height:2.35rem;border-radius:999px;border:2px solid ${active ? '#000000' : 'rgba(87,46,136,0.16)'};background:${color};box-shadow:${takenBy ? 'none' : `0 0 0.45rem ${color}55`};opacity:${takenBy ? '0.22' : '1'};filter:${takenBy ? 'grayscale(1)' : 'none'};cursor:${takenBy ? 'not-allowed' : 'pointer'};"
     ></button>`;
   }).join('');
   return `<input id="${inputId}" type="hidden" value="${selected}" />
@@ -196,7 +196,7 @@ function selectProductionTeamEditColor(color) {
   input.value = normalized;
   document.querySelectorAll('#ptm-edit-color-picker .team-color-dot').forEach(button => {
     button.classList.toggle('active', normalizeTeamColor(button.style.getPropertyValue('--team-note-color')) === normalized);
-    button.style.borderColor = button.classList.contains('active') ? '#1a1530' : 'rgba(87,46,136,0.16)';
+    button.style.borderColor = button.classList.contains('active') ? '#000000' : 'rgba(87,46,136,0.16)';
   });
 }
 
