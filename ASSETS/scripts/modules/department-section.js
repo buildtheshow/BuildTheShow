@@ -1653,6 +1653,28 @@
     persistInlinePropNote(id);
   }
 
+  async function updatePropStatusInline(id, value) {
+    const prop = state.props.find(function (item) { return item.id === id; });
+    if (!prop) return;
+    const previousStatus = prop.status;
+    prop.status = value;
+    render();
+    try {
+      const updatedAt = new Date().toISOString();
+      const response = await fetch(SUPABASE_URL + '/rest/v1/production_props?id=eq.' + encodeURIComponent(id), {
+        method: 'PATCH',
+        headers: headers(true),
+        body: JSON.stringify({ status: value, updated_at: updatedAt }),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      prop.updated_at = updatedAt;
+    } catch (error) {
+      prop.status = previousStatus;
+      render();
+      alert('Could not update status: ' + error.message);
+    }
+  }
+
   async function deleteProp(id) {
     if (!confirm('Remove this prop from the list?')) return;
     try {
@@ -2040,6 +2062,7 @@
     toggleAllPropsSelected,
     setPropStatusFilter,
     updatePropSearch,
+    updatePropStatusInline,
     updateInlinePropNote,
     flushInlinePropNote,
     deleteSelectedProps,
