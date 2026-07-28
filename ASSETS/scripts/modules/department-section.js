@@ -1209,9 +1209,9 @@
         esc(tab.label) + ' <span class="props-filter-count">' + (counts[tab.key] || 0) + '</span></button>';
     }).join('');
     return '<div class="props-filter-bar">' +
-      '<div class="props-filter-pills">' + pills + '</div>' +
       '<div class="props-sort-wrap"><label class="props-sort-label" for="dept-prop-sort">Sort by</label><select id="dept-prop-sort" class="props-sort-select" onchange="BTSDepartmentSection.setPropSortBy(this.value)"><option value="alphabetical"' + ((state.propSortBy || 'alphabetical') === 'alphabetical' ? ' selected' : '') + '>Alphabetical</option><option value="pages"' + (state.propSortBy === 'pages' ? ' selected' : '') + '>Pages</option><option value="characters"' + (state.propSortBy === 'characters' ? ' selected' : '') + '>Characters</option><option value="status"' + (state.propSortBy === 'status' ? ' selected' : '') + '>Status</option></select></div>' +
       '<div class="props-search-wrap"><input type="text" id="dept-prop-search" placeholder="Search props..." value="' + esc(state.propSearchQuery || '') + '" oninput="BTSDepartmentSection.updatePropSearch(this.value)" /></div>' +
+      '<div class="props-filter-pills">' + pills + '</div>' +
     '</div>';
   }
 
