@@ -1111,10 +1111,12 @@
   function renderPropsList() {
     const props = sectionProps();
     const selectedCount = Object.keys(state.selectedPropIds).filter(function (id) { return state.selectedPropIds[id]; }).length;
+    const allSelected = props.length > 0 && selectedCount === props.length;
     const list = props.length
       ? '<div class="props-table">' +
           '<div class="props-table-head">' +
-            '<div></div><div>Prop</div><div>Characters</div><div>Needed</div><div>Status</div><div>Sourced By</div><div>Notes</div><div>Last Updated</div><div></div>' +
+            '<div><input type="checkbox" ' + (allSelected ? 'checked' : '') + ' onchange="BTSDepartmentSection.toggleAllPropsSelected(this.checked)" aria-label="Select all props" /></div>' +
+            '<div>Prop</div><div>Characters</div><div>Needed</div><div>Status</div><div>Sourced By</div><div>Notes</div><div>Last Updated</div><div></div>' +
           '</div>' +
           props.map(renderPropRow).join('') +
         '</div>'
@@ -1499,6 +1501,12 @@
     render();
   }
 
+  function toggleAllPropsSelected(checked) {
+    state.selectedPropIds = {};
+    if (checked) sectionProps().forEach(function (prop) { state.selectedPropIds[prop.id] = true; });
+    render();
+  }
+
   async function deleteSelectedProps() {
     const ids = Object.keys(state.selectedPropIds).filter(function (id) { return state.selectedPropIds[id]; });
     if (!ids.length) return;
@@ -1834,6 +1842,7 @@
     saveBulkProps,
     quickDeleteProp: deleteProp,
     togglePropSelected,
+    toggleAllPropsSelected,
     deleteSelectedProps,
     openPropImportModal,
     closePropImportModal,
