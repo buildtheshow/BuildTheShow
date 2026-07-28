@@ -2392,38 +2392,56 @@
 
       let error = null;
       let roleChanged = false;
+      try {
+        // Save only per-person overrides; role defaults do not need rows in portal_permissions.
+        if (personId && _prodId) {
+          const overrides = [];
+          document.querySelectorAll('[data-module-key]').forEach(row => {
+            const key = row.dataset.moduleKey;
+            const defaultAccess = row.dataset.defaultAccess || 'none';
+            const selected = row.querySelector('.pt-perm-toggle.selected');
+            const selectedLevel = selected?.dataset.level || defaultAccess;
+            if (!key || selectedLevel === defaultAccess) return;
+            overrides.push({
+              production_id: _prodId,
+              person_id: personId,
+              person_type: src,
+              module_key: key,
+              access_level: selectedLevel,
+            });
+          });
+          error = (await _sb.from('portal_permissions')
+            .delete()
+            .eq('production_id', _prodId)
+            .eq('person_id', personId)
+            .eq('person_type', src)).error;
+          if (!error && overrides.length) {
+            error = (await _sb.from('portal_permissions').insert(overrides)).error;
+          }
+        }
 
-      // Save module permissions
-      if (personId && _prodId) {
-        const upserts = [];
-        document.querySelectorAll('[data-module-key]').forEach(row => {
-          const key      = row.dataset.moduleKey;
-          const selected = row.querySelector('.pt-perm-toggle.selected');
-          if (key && selected) upserts.push({ production_id: _prodId, person_id: personId, person_type: src, module_key: key, access_level: selected.dataset.level });
-        });
-        error = (await _sb.from('portal_permissions').delete().eq('production_id', _prodId).eq('person_id', personId)).error;
-        if (!error && upserts.length) error = (await _sb.from('portal_permissions').insert(upserts)).error;
-      }
-
-      // Save role change if field is present and value differs
-      if (!error) {
-        const roleInput = document.getElementById('pt-drawer-role-input');
-        if (roleInput) {
-          const newRole     = roleInput.value.trim();
-          const currentRole = (src === 'volunteer' || src === 'dept_lead' || src === 'treasurer')
-            ? (person.data?.role_name || '') : normaliseLevel(person.data || {});
-          if (newRole && newRole !== currentRole) {
-            roleChanged = true;
-            const id = person.data?.id;
-            if (id) {
-              if (src === 'volunteer' || src === 'dept_lead' || src === 'treasurer') {
-                error = (await _sb.from('volunteer_signups').update({ role_name: newRole }).eq('id', id)).error;
-              } else {
-                error = (await _sb.from('production_team_members').update({ access_level: newRole, role: newRole }).eq('id', id)).error;
+        // Save role change if field is present and value differs
+        if (!error) {
+          const roleInput = document.getElementById('pt-drawer-role-input');
+          if (roleInput) {
+            const newRole     = roleInput.value.trim();
+            const currentRole = (src === 'volunteer' || src === 'dept_lead' || src === 'treasurer')
+              ? (person.data?.role_name || '') : normaliseLevel(person.data || {});
+            if (newRole && newRole !== currentRole) {
+              roleChanged = true;
+              const id = person.data?.id;
+              if (id) {
+                if (src === 'volunteer' || src === 'dept_lead' || src === 'treasurer') {
+                  error = (await _sb.from('volunteer_signups').update({ role_name: newRole }).eq('id', id)).error;
+                } else {
+                  error = (await _sb.from('production_team_members').update({ access_level: newRole, role: newRole }).eq('id', id)).error;
+                }
               }
             }
           }
         }
+      } catch (err) {
+        error = err;
       }
 
       if (btn) { btn.disabled = false; btn.textContent = 'Save'; }

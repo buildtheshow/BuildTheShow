@@ -1107,24 +1107,24 @@
         '<div><div class="props-sourced-name">' + esc(sourcedName) + '</div><div class="props-sourced-sub">' + esc(propSourcedSub(prop)) + '</div></div></div>'
       : '<div class="props-sourced-sub">Not assigned yet</div>';
     const notesCount = prop.notes ? 1 : 0;
-    return '<div class="props-row">' +
-      '<div class="props-col-check"><input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="BTSDepartmentSection.togglePropSelected(\'' + esc(prop.id) + '\', this.checked)" aria-label="Select ' + esc(prop.name || 'prop') + '" /></div>' +
-      '<div class="props-col-name">' +
+    return '<tr class="props-row" data-label="' + esc(prop.name || 'Untitled prop') + '">' +
+      '<td class="props-col-check" data-th=""><input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="BTSDepartmentSection.togglePropSelected(\'' + esc(prop.id) + '\', this.checked)" aria-label="Select ' + esc(prop.name || 'prop') + '" /></td>' +
+      '<td class="props-col-name" data-th="Prop">' +
         '<div class="props-col-prop-name">' + esc(prop.name || 'Untitled prop') + '</div>' +
         (refs ? '<div class="props-col-prop-refs">' + esc(refs) + '</div>' : '') +
         (prop.notes ? '<div class="props-col-prop-desc">' + esc(prop.notes) + '</div>' : '') +
-      '</div>' +
-      '<div class="props-col-characters">' + charactersHtml + '</div>' +
-      '<div class="props-col-qty"><span class="props-qty-value">' + esc(String(prop.quantity || 1)) + '</span><span class="props-qty-unit">' + esc(prop.quantity_unit || 'total') + '</span></div>' +
-      '<div class="props-col-status"><span class="dept-status ' + esc(PROP_STATUS_CLASS[prop.status] || 'pending') + '">' + esc((prop.status || 'Needed').toUpperCase()) + '</span></div>' +
-      '<div class="props-col-sourced">' + sourcedHtml + '</div>' +
-      '<div class="props-col-notes"><span class="props-notes-badge">' + notesCount + '</span></div>' +
-      '<div class="props-col-updated">' + esc(propRelativeTime(prop.updated_at)) + '</div>' +
-      '<div class="props-col-actions">' +
+      '</td>' +
+      '<td class="props-col-characters" data-th="Characters">' + charactersHtml + '</td>' +
+      '<td class="props-col-qty" data-th="Needed"><span class="props-qty-value">' + esc(String(prop.quantity || 1)) + '</span><span class="props-qty-unit">' + esc(prop.quantity_unit || 'total') + '</span></td>' +
+      '<td class="props-col-status" data-th="Status"><span class="dept-status ' + esc(PROP_STATUS_CLASS[prop.status] || 'pending') + '">' + esc((prop.status || 'Needed').toUpperCase()) + '</span></td>' +
+      '<td class="props-col-sourced" data-th="Sourced By">' + sourcedHtml + '</td>' +
+      '<td class="props-col-notes" data-th="Notes"><span class="props-notes-badge">' + notesCount + '</span></td>' +
+      '<td class="props-col-updated" data-th="Last Updated">' + esc(propRelativeTime(prop.updated_at)) + '</td>' +
+      '<td class="props-col-actions" data-th="">' +
         '<button type="button" class="dept-action secondary" onclick="BTSDepartmentSection.openPropModal(\'' + esc(prop.id) + '\')">Edit</button>' +
         '<button type="button" class="dept-action danger" onclick="BTSDepartmentSection.quickDeleteProp(\'' + esc(prop.id) + '\')">Remove</button>' +
-      '</div>' +
-    '</div>';
+      '</td>' +
+    '</tr>';
   }
 
   const PROP_FILTER_TABS = [
@@ -1157,13 +1157,17 @@
     const selectedCount = Object.keys(state.selectedPropIds).filter(function (id) { return state.selectedPropIds[id]; }).length;
     const allSelected = props.length > 0 && selectedCount === props.length;
     const list = props.length
-      ? '<div class="props-table">' +
-          '<div class="props-table-head">' +
-            '<div><input type="checkbox" ' + (allSelected ? 'checked' : '') + ' onchange="BTSDepartmentSection.toggleAllPropsSelected(this.checked)" aria-label="Select all props" /></div>' +
-            '<div>Prop</div><div>Characters</div><div>Needed</div><div>Status</div><div>Sourced By</div><div>Notes</div><div>Last Updated</div><div></div>' +
-          '</div>' +
-          props.map(renderPropRow).join('') +
-        '</div>'
+      ? '<table class="props-table">' +
+          '<colgroup>' +
+            '<col style="width:28px"><col style="width:26%"><col style="width:14%"><col style="width:8%">' +
+            '<col style="width:11%"><col style="width:16%"><col style="width:6%"><col style="width:9%"><col>' +
+          '</colgroup>' +
+          '<thead><tr class="props-table-head">' +
+            '<th><input type="checkbox" ' + (allSelected ? 'checked' : '') + ' onchange="BTSDepartmentSection.toggleAllPropsSelected(this.checked)" aria-label="Select all props" /></th>' +
+            '<th>Prop</th><th>Characters</th><th>Needed</th><th>Status</th><th>Sourced By</th><th>Notes</th><th>Last Updated</th><th></th>' +
+          '</tr></thead>' +
+          '<tbody>' + props.map(renderPropRow).join('') + '</tbody>' +
+        '</table>'
       : '<div class="dept-empty">' + (allProps.length ? 'No props match that search or filter.' : 'No props have been added yet. Add the first one below.') + '</div>';
     return '<section class="dept-panel">' +
       '<div class="dept-panel-head"><div><div class="dept-panel-title">Props List</div><div class="dept-panel-sub">Every prop the show needs, its characters, page number, quantity, status, and who is sourcing it.</div></div>' +
