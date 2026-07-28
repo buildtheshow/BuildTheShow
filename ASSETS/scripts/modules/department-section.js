@@ -21,6 +21,7 @@
     opportunities: [],
     signups: [],
     events: [],
+    characters: [],
     staffingPlan: {},
     editingReceiptId: '',
     props: [],
@@ -625,6 +626,7 @@
       safe(fetchTable('opportunities', '&select=id,production_title,volunteer_role,volunteers_needed,status,summary,description,event_date,time_commitment,created_at,updated_at&opportunity_type=in.(volunteer,creative_team)&order=created_at.desc')),
       safe(fetchTable('volunteer_signups', '&order=created_at.desc')),
       safe(fetchTable('production_events', '&select=id,title,event_type,start_time,end_time,venue,notes,is_deadline&order=start_time.asc')),
+      safe(fetchTable('production_characters', '&select=id,name,sort_order,created_at&order=sort_order.asc,created_at.asc,name.asc')),
       safe(fetchProduction()),
       safe(fetchTable('production_props', '&order=name.asc')),
     ]);
@@ -634,8 +636,9 @@
     state.opportunities = results[3] || [];
     state.signups = results[4] || [];
     state.events = results[5] || [];
-    state.staffingPlan = (results[6] && results[6].volunteer_staffing_plan) || {};
-    state.props = results[7] || [];
+    state.characters = results[6] || [];
+    state.staffingPlan = (results[7] && results[7].volunteer_staffing_plan) || {};
+    state.props = results[8] || [];
   }
 
   function activeTabConfig() {
@@ -1192,13 +1195,22 @@
 
   function renderPropModal() {
     const prop = state.editingPropId ? state.props.find(function (item) { return item.id === state.editingPropId; }) : null;
+    const selectedCharacters = prop && Array.isArray(prop.characters) ? prop.characters.filter(Boolean) : [];
+    const characterButtons = state.characters.length
+      ? state.characters.map(function (character) {
+          const name = String(character.name || '').trim();
+          if (!name) return '';
+          const selected = selectedCharacters.indexOf(name) !== -1;
+          return '<button type="button" class="dept-char-option' + (selected ? ' selected' : '') + '" data-character-name="' + esc(name) + '" aria-pressed="' + (selected ? 'true' : 'false') + '" onclick="BTSDepartmentSection.togglePropCharacter(this)">' + esc(name) + '</button>';
+        }).join('')
+      : '<div class="dept-panel-sub">No characters have been added to this production yet.</div>';
     return '<div class="dept-modal" id="dept-prop-modal" onclick="BTSDepartmentSection.closePropModalOnBackdrop(event)">' +
       '<div class="dept-modal-card" role="dialog" aria-modal="true" aria-labelledby="dept-prop-title">' +
         '<div class="dept-modal-head"><div class="dept-modal-title" id="dept-prop-title">' + (prop ? 'Edit Prop' : 'Add Prop') + '</div><button type="button" class="dept-close" onclick="BTSDepartmentSection.closePropModal()" aria-label="Close">x</button></div>' +
         '<div class="dept-modal-body"><div class="dept-form-grid">' +
           field('Prop Name', 'dept-prop-name', 'text', prop ? (prop.name || '') : '', 'e.g. Umbrella, Tea Set') +
           field('Page #', 'dept-prop-page', 'text', prop && prop.script_page_refs ? prop.script_page_refs.join(', ') : '', 'e.g. 3, 107') +
-          field('Characters', 'dept-prop-characters', 'text', prop && prop.characters ? prop.characters.join(', ') : '', 'e.g. Jane Banks, Michael Banks') +
+          '<div class="dept-field full"><label>Characters</label><input id="dept-prop-characters" type="hidden" value="' + esc(selectedCharacters.join(', ')) + '" /><div class="dept-char-picker">' + characterButtons + '</div></div>' +
           field('Quantity', 'dept-prop-qty', 'number', prop ? String(prop.quantity || 1) : '1', '1') +
           field('Unit', 'dept-prop-unit', 'text', prop ? (prop.quantity_unit || '') : '', 'e.g. total, bags, sets') +
           '<div class="dept-field"><label>Status</label><select id="dept-prop-status"><option value="Needed">Needed</option><option value="In Progress">In Progress</option><option value="Sourced">Sourced</option></select></div>' +
@@ -1498,6 +1510,22 @@
 
   function closePropModalOnBackdrop(event) {
     if (event.target && event.target.id === 'dept-prop-modal') closePropModal();
+  }
+
+  function syncPropCharacterInput() {
+    const input = document.getElementById('dept-prop-characters');
+    if (!input) return;
+    const selected = Array.prototype.slice.call(document.querySelectorAll('.dept-char-option.selected'))
+      .map(function (btn) { return btn.getAttribute('data-character-name') || ''; })
+      .filter(Boolean);
+    input.value = selected.join(', ');
+  }
+
+  function togglePropCharacter(btn) {
+    if (!btn) return;
+    btn.classList.toggle('selected');
+    btn.setAttribute('aria-pressed', btn.classList.contains('selected') ? 'true' : 'false');
+    syncPropCharacterInput();
   }
 
   async function saveProp() {
@@ -2000,6 +2028,7 @@
     closePropBulkModalOnBackdrop,
     saveBulkProps,
     quickDeleteProp: deleteProp,
+    togglePropCharacter,
     togglePropSelected,
     toggleAllPropsSelected,
     setPropStatusFilter,
