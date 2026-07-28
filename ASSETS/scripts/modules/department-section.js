@@ -1156,10 +1156,14 @@
     const charactersHtml = characters.length
       ? '<div class="props-characters">' + characters.map(function (c) { return '<span class="props-char-pill" style="background:' + propAvatarColor(c) + '22;color:' + propAvatarColor(c) + ';">' + esc(c) + '</span>'; }).join('') + '</div>'
       : '<span class="props-empty-cell">-</span>';
-    const sourcedName = prop.assigned_to || '';
-    const sourcedHtml = sourcedName
-      ? '<div class="props-sourced-name">' + esc(sourcedName) + '</div>'
-      : '<div class="props-sourced-sub">Not assigned yet</div>';
+    const assignedDraft = Object.prototype.hasOwnProperty.call(state.propAssignedDrafts, prop.id)
+      ? state.propAssignedDrafts[prop.id]
+      : (prop.assigned_to || '');
+    const sourcedHtml = '<input type="text" class="props-sourced-input" placeholder="Not assigned yet" value="' + esc(assignedDraft) + '" ' +
+      'oninput="BTSDepartmentSection.updateInlinePropAssigned(\'' + esc(prop.id) + '\', this.value)" ' +
+      'onblur="BTSDepartmentSection.flushInlinePropAssigned(\'' + esc(prop.id) + '\')" ' +
+      'data-prop-assigned-id="' + esc(prop.id) + '" />' +
+      '<div class="props-sourced-sub">' + esc(assignedDraft ? propSourcedSub(prop) : ' ') + '</div>';
     const statusOptions = ['Needed', 'In Progress', 'Sourced'].map(function (opt) {
       return '<option value="' + opt + '"' + ((prop.status || 'Needed') === opt ? ' selected' : '') + '>' + opt.toUpperCase() + '</option>';
     }).join('');
@@ -1702,13 +1706,6 @@
     persistInlinePropNote(id);
   }
 
-  function updatePropAssignedState(id, status) {
-    state.propAssignedSaveState[id] = status || '';
-    const input = document.querySelector('input[data-prop-assigned-id="' + cssEscape(id) + '"]');
-    const statusEl = input && input.closest('.props-col-sourced') && input.closest('.props-col-sourced').querySelector('.props-sourced-sub');
-    if (statusEl && !state.props.find(function (item) { return item.id === id; }).assigned_to) statusEl.textContent = status || 'Not assigned yet';
-  }
-
   function applySavedPropAssigned(id, value, updatedAt) {
     const prop = state.props.find(function (item) { return item.id === id; });
     if (prop) {
@@ -1744,7 +1741,9 @@
       applySavedPropAssigned(id, nextValue, updatedAt);
       render();
     } catch (error) {
-      updatePropAssignedState(id, 'Could not save');
+      delete state.propAssignedDrafts[id];
+      alert('Could not save who is sourcing this: ' + error.message);
+      render();
     }
   }
 
@@ -2183,6 +2182,8 @@
     updatePropStatusInline,
     updateInlinePropNote,
     flushInlinePropNote,
+    updateInlinePropAssigned,
+    flushInlinePropAssigned,
     deleteSelectedProps,
     openPropImportModal,
     closePropImportModal,
