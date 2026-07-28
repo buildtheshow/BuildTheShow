@@ -1246,6 +1246,12 @@
   function renderPropModal() {
     const prop = state.editingPropId ? state.props.find(function (item) { return item.id === state.editingPropId; }) : null;
     const selectedCharacters = prop && Array.isArray(prop.characters) ? prop.characters.filter(Boolean) : [];
+    const knownCharacterNames = state.characters
+      .map(function (character) { return String(character && character.name || '').trim(); })
+      .filter(Boolean);
+    const extraSelectedCharacters = selectedCharacters.filter(function (name) {
+      return knownCharacterNames.indexOf(name) === -1;
+    });
     const characterButtons = state.characters.length
       ? state.characters.slice().sort(function (a, b) {
           return String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' });
@@ -1256,6 +1262,11 @@
           return '<button type="button" class="dept-char-option' + (selected ? ' selected' : '') + '" data-character-name="' + esc(name) + '" aria-pressed="' + (selected ? 'true' : 'false') + '" onclick="BTSDepartmentSection.togglePropCharacter(this)">' + esc(name) + '</button>';
         }).join('')
       : '<div class="dept-panel-sub">No characters have been added to this production yet.</div>';
+    const extraCharacterButtons = extraSelectedCharacters.length
+      ? ('<div class="dept-char-extra-list">' + extraSelectedCharacters.map(function (name) {
+          return '<button type="button" class="dept-char-option dept-char-option-custom selected" data-character-name="' + esc(name) + '" aria-pressed="true" onclick="BTSDepartmentSection.togglePropCharacter(this)">' + esc(name) + '</button>';
+        }).join('') + '</div>')
+      : '';
     return '<div class="dept-modal" id="dept-prop-modal" onclick="BTSDepartmentSection.closePropModalOnBackdrop(event)">' +
       '<div class="dept-modal-card" role="dialog" aria-modal="true" aria-labelledby="dept-prop-title">' +
         '<div class="dept-modal-head"><div class="dept-modal-title" id="dept-prop-title">' + (prop ? 'Edit Prop' : 'Add Prop') + '</div><button type="button" class="dept-close" onclick="BTSDepartmentSection.closePropModal()" aria-label="Close">x</button></div>' +
@@ -1263,9 +1274,8 @@
           field('Prop Name', 'dept-prop-name', 'text', prop ? (prop.name || '') : '', 'e.g. Umbrella, Tea Set') +
           field('Page #', 'dept-prop-page', 'text', prop && prop.script_page_refs ? prop.script_page_refs.join(', ') : '', 'e.g. 3, 107') +
           '<div class="dept-field full"><label>Prop Description</label><textarea id="dept-prop-description" placeholder="What we\'re looking for - size, colour, style, how it\'s used on stage">' + esc(prop ? (prop.description || '') : '') + '</textarea></div>' +
-          '<div class="dept-field full"><label>Characters</label><input id="dept-prop-characters" type="hidden" value="' + esc(selectedCharacters.join(', ')) + '" /><div class="dept-char-picker">' + characterButtons + '</div></div>' +
+          '<div class="dept-field full"><label>Characters</label><input id="dept-prop-characters" type="hidden" value="' + esc(selectedCharacters.join(', ')) + '" /><div class="dept-char-picker">' + characterButtons + '</div>' + extraCharacterButtons + '<div class="dept-char-add"><input id="dept-prop-character-custom" type="text" placeholder="Add another character not on the list" onkeydown="BTSDepartmentSection.handlePropCharacterCustomKey(event)" /><button type="button" class="dept-action secondary" onclick="BTSDepartmentSection.addCustomPropCharacter()">Add Character</button></div></div>' +
           field('Quantity', 'dept-prop-qty', 'number', prop ? String(prop.quantity || 1) : '1', '1') +
-          field('Unit', 'dept-prop-unit', 'text', prop ? (prop.quantity_unit || '') : '', 'e.g. total, bags, sets') +
           '<div class="dept-field"><label>Status</label><select id="dept-prop-status"><option value="Needed">Needed</option><option value="In Progress">In Progress</option><option value="Sourced">Sourced</option></select></div>' +
           field('Sourced By', 'dept-prop-assigned', 'text', prop ? (prop.assigned_to || '') : '', 'Name of the person responsible') +
           '<div class="dept-field full"><label>Notes</label><textarea id="dept-prop-notes" placeholder="Anything the team needs to know - where to find it, budget, condition">' + esc(prop ? (prop.notes || '') : '') + '</textarea></div>' +
@@ -1570,7 +1580,8 @@
     if (!input) return;
     const selected = Array.prototype.slice.call(document.querySelectorAll('.dept-char-option.selected'))
       .map(function (btn) { return btn.getAttribute('data-character-name') || ''; })
-      .filter(Boolean);
+      .filter(Boolean)
+      .filter(function (name, index, arr) { return arr.indexOf(name) === index; });
     input.value = selected.join(', ');
   }
 
@@ -1579,6 +1590,49 @@
     btn.classList.toggle('selected');
     btn.setAttribute('aria-pressed', btn.classList.contains('selected') ? 'true' : 'false');
     syncPropCharacterInput();
+  }
+
+  function addCustomPropCharacter() {
+    const input = document.getElementById('dept-prop-character-custom');
+    const hidden = document.getElementById('dept-prop-characters');
+    if (!input || !hidden) return;
+    const rawName = String(input.value || '').trim();
+    if (!rawName) return;
+    const buttons = Array.prototype.slice.call(document.querySelectorAll('.dept-char-option'));
+    const normalized = rawName.toLowerCase();
+    const existing = buttons.find(function (btn) {
+      return String(btn.getAttribute('data-character-name') || '').trim().toLowerCase() === normalized;
+    });
+    if (existing) {
+      if (!existing.classList.contains('selected')) togglePropCharacter(existing);
+      input.value = '';
+      input.focus();
+      return;
+    }
+    let extraList = document.querySelector('.dept-char-extra-list');
+    if (!extraList) {
+      extraList = document.createElement('div');
+      extraList.className = 'dept-char-extra-list';
+      const addWrap = document.querySelector('.dept-char-add');
+      if (addWrap && addWrap.parentNode) addWrap.parentNode.insertBefore(extraList, addWrap);
+    }
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'dept-char-option dept-char-option-custom selected';
+    button.setAttribute('data-character-name', rawName);
+    button.setAttribute('aria-pressed', 'true');
+    button.textContent = rawName;
+    button.onclick = function () { window.BTSDepartmentSection.togglePropCharacter(button); };
+    extraList.appendChild(button);
+    input.value = '';
+    syncPropCharacterInput();
+    input.focus();
+  }
+
+  function handlePropCharacterCustomKey(event) {
+    if (!event || event.key !== 'Enter') return;
+    event.preventDefault();
+    addCustomPropCharacter();
   }
 
   async function saveProp() {
@@ -1595,7 +1649,7 @@
       characters,
       script_page_refs: pageRefs,
       quantity: parseInt(document.getElementById('dept-prop-qty').value, 10) || 1,
-      quantity_unit: (document.getElementById('dept-prop-unit').value || '').trim() || 'total',
+      quantity_unit: null,
       status: document.getElementById('dept-prop-status').value || 'Needed',
       assigned_to: (document.getElementById('dept-prop-assigned').value || '').trim() || null,
       notes: (document.getElementById('dept-prop-notes').value || '').trim() || null,
@@ -2168,6 +2222,8 @@
     saveBulkProps,
     quickDeleteProp: deleteProp,
     togglePropCharacter,
+    addCustomPropCharacter,
+    handlePropCharacterCustomKey,
     togglePropSelected,
     toggleAllPropsSelected,
     setPropStatusFilter,
