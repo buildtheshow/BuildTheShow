@@ -32,6 +32,7 @@
     propImportItems: [],
     propStatusFilter: 'all',
     propSearchQuery: '',
+    propSortBy: 'alphabetical',
     propNoteDrafts: {},
     propNoteSaveState: {},
   };
@@ -220,7 +221,45 @@
           String(p.assigned_to || '').toLowerCase().indexOf(q) !== -1;
       });
     }
-    return props;
+    return props.slice().sort(comparePropsForSort);
+  }
+
+  function propFirstPageNumber(prop) {
+    const refs = Array.isArray(prop && prop.script_page_refs) ? prop.script_page_refs : [];
+    for (let i = 0; i < refs.length; i++) {
+      const match = String(refs[i] || '').match(/\d+/);
+      if (match) return parseInt(match[0], 10);
+    }
+    return Number.POSITIVE_INFINITY;
+  }
+
+  function propCharacterSortLabel(prop) {
+    const chars = Array.isArray(prop && prop.characters) ? prop.characters.filter(Boolean).slice() : [];
+    if (!chars.length) return '~';
+    chars.sort(function (a, b) {
+      return String(a || '').localeCompare(String(b || ''), undefined, { sensitivity: 'base' });
+    });
+    return String(chars[0] || '');
+  }
+
+  function propStatusSortValue(prop) {
+    const order = { Needed: 0, 'In Progress': 1, Sourced: 2 };
+    return Object.prototype.hasOwnProperty.call(order, prop && prop.status) ? order[prop.status] : 99;
+  }
+
+  function comparePropsForSort(a, b) {
+    const sortBy = state.propSortBy || 'alphabetical';
+    if (sortBy === 'pages') {
+      const pageDiff = propFirstPageNumber(a) - propFirstPageNumber(b);
+      if (pageDiff) return pageDiff;
+    } else if (sortBy === 'characters') {
+      const charDiff = propCharacterSortLabel(a).localeCompare(propCharacterSortLabel(b), undefined, { sensitivity: 'base' });
+      if (charDiff) return charDiff;
+    } else if (sortBy === 'status') {
+      const statusDiff = propStatusSortValue(a) - propStatusSortValue(b);
+      if (statusDiff) return statusDiff;
+    }
+    return String(a && a.name || '').localeCompare(String(b && b.name || ''), undefined, { sensitivity: 'base' });
   }
 
   function sectionMatchesText() {
@@ -1134,10 +1173,12 @@
       '</td>' +
       '<td class="props-col-sourced" data-th="Sourced By">' + sourcedHtml + '</td>' +
       '<td class="props-col-notes" data-th="Notes">' +
-        '<label class="props-note-editor-wrap">' +
-          '<textarea class="props-note-editor" rows="3" placeholder="Type notes here..." oninput="BTSDepartmentSection.updateInlinePropNote(\'' + esc(prop.id) + '\', this.value)" onblur="BTSDepartmentSection.flushInlinePropNote(\'' + esc(prop.id) + '\')" data-prop-note-id="' + esc(prop.id) + '">' + esc(noteDraft) + '</textarea>' +
-        '</label>' +
-        '<div class="props-note-meta"><span class="props-note-status">' + esc(noteState || ' ') + '</span></div>' +
+        '<div class="props-notes-cell">' +
+          '<label class="props-note-editor-wrap">' +
+            '<textarea class="props-note-editor" rows="3" placeholder="Type notes here..." oninput="BTSDepartmentSection.updateInlinePropNote(\'' + esc(prop.id) + '\', this.value)" onblur="BTSDepartmentSection.flushInlinePropNote(\'' + esc(prop.id) + '\')" data-prop-note-id="' + esc(prop.id) + '">' + esc(noteDraft) + '</textarea>' +
+          '</label>' +
+          '<div class="props-note-meta"><span class="props-note-status">' + esc(noteState || ' ') + '</span></div>' +
+        '</div>' +
       '</td>' +
       '<td class="props-col-actions" data-th="">' +
         '<button type="button" class="props-icon-btn edit" onclick="BTSDepartmentSection.openPropModal(\'' + esc(prop.id) + '\')" aria-label="Edit prop">' +
@@ -1170,6 +1211,7 @@
     }).join('');
     return '<div class="props-filter-bar">' +
       '<div class="props-filter-pills">' + pills + '</div>' +
+      '<div class="props-sort-wrap"><label class="props-sort-label" for="dept-prop-sort">Sort by</label><select id="dept-prop-sort" class="props-sort-select" onchange="BTSDepartmentSection.setPropSortBy(this.value)"><option value="alphabetical"' + ((state.propSortBy || 'alphabetical') === 'alphabetical' ? ' selected' : '') + '>Alphabetical</option><option value="pages"' + (state.propSortBy === 'pages' ? ' selected' : '') + '>Pages</option><option value="characters"' + (state.propSortBy === 'characters' ? ' selected' : '') + '>Characters</option><option value="status"' + (state.propSortBy === 'status' ? ' selected' : '') + '>Status</option></select></div>' +
       '<div class="props-search-wrap"><input type="text" id="dept-prop-search" placeholder="Search props..." value="' + esc(state.propSearchQuery || '') + '" oninput="BTSDepartmentSection.updatePropSearch(this.value)" /></div>' +
     '</div>';
   }
@@ -1180,8 +1222,8 @@
     const list = props.length
       ? '<table class="props-table">' +
           '<colgroup>' +
-            '<col style="width:29%"><col style="width:14%"><col style="width:11%">' +
-            '<col style="width:16%"><col style="width:20%"><col style="width:10%">' +
+            '<col style="width:25%"><col style="width:12%"><col style="width:10%">' +
+            '<col style="width:14%"><col style="width:29%"><col style="width:10%">' +
           '</colgroup>' +
           '<thead><tr class="props-table-head">' +
             '<th>Prop</th><th>Characters</th><th>Status</th><th>Sourced By</th><th>Notes</th><th></th>' +
@@ -1728,6 +1770,11 @@
     }
   }
 
+  function setPropSortBy(value) {
+    state.propSortBy = value || 'alphabetical';
+    render();
+  }
+
   async function deleteSelectedProps() {
     const ids = Object.keys(state.selectedPropIds).filter(function (id) { return state.selectedPropIds[id]; });
     if (!ids.length) return;
@@ -2066,6 +2113,7 @@
     togglePropSelected,
     toggleAllPropsSelected,
     setPropStatusFilter,
+    setPropSortBy,
     updatePropSearch,
     updatePropStatusInline,
     updateInlinePropNote,
