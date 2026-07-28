@@ -1137,12 +1137,6 @@
     return new Date(iso).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
   }
 
-  function propSourcedSub(prop) {
-    if (prop.status === 'Sourced') return prop.updated_at ? 'Sourced on ' + new Date(prop.updated_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : 'Sourced';
-    if (prop.status === 'In Progress') return 'Sourcing';
-    return 'Not assigned yet';
-  }
-
   function renderPropRow(prop) {
     const refs = prop.script_page_refs && prop.script_page_refs.length
       ? (prop.script_page_refs.length === 1 ? 'Page ' : 'Pages ') + prop.script_page_refs.join(', ')
@@ -1162,8 +1156,7 @@
     const sourcedHtml = '<input type="text" class="props-sourced-input" placeholder="Not assigned yet" value="' + esc(assignedDraft) + '" ' +
       'oninput="BTSDepartmentSection.updateInlinePropAssigned(\'' + esc(prop.id) + '\', this.value)" ' +
       'onblur="BTSDepartmentSection.flushInlinePropAssigned(\'' + esc(prop.id) + '\')" ' +
-      'data-prop-assigned-id="' + esc(prop.id) + '" />' +
-      '<div class="props-sourced-sub">' + esc(assignedDraft ? propSourcedSub(prop) : ' ') + '</div>';
+      'data-prop-assigned-id="' + esc(prop.id) + '" />';
     const statusOptions = ['Needed', 'In Progress', 'Sourced'].map(function (opt) {
       return '<option value="' + opt + '"' + ((prop.status || 'Needed') === opt ? ' selected' : '') + '>' + opt.toUpperCase() + '</option>';
     }).join('');
