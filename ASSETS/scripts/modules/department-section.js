@@ -1041,22 +1041,67 @@
     '</section>';
   }
 
-  const PROP_STATUS_CLASS = { Needed: 'pending', Sourced: 'approved', Ready: 'paid' };
+  const PROP_STATUS_CLASS = { Needed: 'pending', 'In Progress': 'info', Sourced: 'approved' };
+  const PROP_AVATAR_COLORS = ['#572e88', '#769e7b', '#dd8233', '#d1523d', '#74a2b4', '#476aaa', '#ca7ea7'];
+
+  function propAvatarColor(name) {
+    let n = 0;
+    for (let i = 0; i < name.length; i++) n += name.charCodeAt(i);
+    return PROP_AVATAR_COLORS[n % PROP_AVATAR_COLORS.length];
+  }
+
+  function propInitials(name) {
+    const parts = String(name || '').trim().split(/\s+/);
+    if (!parts[0]) return '?';
+    return parts.length >= 2 ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase() : parts[0].slice(0, 2).toUpperCase();
+  }
+
+  function propRelativeTime(iso) {
+    if (!iso) return '';
+    const then = new Date(iso).getTime();
+    if (Number.isNaN(then)) return '';
+    const days = Math.floor((Date.now() - then) / 86400000);
+    if (days <= 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    if (days < 7) return days + ' days ago';
+    if (days < 14) return '1 week ago';
+    if (days < 30) return Math.floor(days / 7) + ' weeks ago';
+    return new Date(iso).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+  }
+
+  function propSourcedSub(prop) {
+    if (prop.status === 'Sourced') return prop.updated_at ? 'Sourced on ' + new Date(prop.updated_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : 'Sourced';
+    if (prop.status === 'In Progress') return 'Sourcing';
+    return 'Not assigned yet';
+  }
 
   function renderPropRow(prop) {
-    const metaParts = [];
-    if (prop.quantity && prop.quantity > 1) metaParts.push('Qty ' + prop.quantity);
-    if (prop.character) metaParts.push(prop.character);
-    if (prop.script_page_refs && prop.script_page_refs.length) metaParts.push('pp. ' + prop.script_page_refs.join(', '));
-    if (prop.assigned_to) metaParts.push('Sourcing: ' + prop.assigned_to);
-    if (prop.notes) metaParts.push(prop.notes);
     const checked = !!state.selectedPropIds[prop.id];
-    return '<div class="dept-list-item has-checkbox">' +
-      '<input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="BTSDepartmentSection.togglePropSelected(\'' + esc(prop.id) + '\', this.checked)" aria-label="Select ' + esc(prop.name || 'prop') + '" style="width:1.1rem;height:1.1rem;" />' +
-      '<div><div class="dept-list-title">' + esc(prop.name || 'Untitled prop') + '</div>' +
-      '<div class="dept-list-meta">' + esc(metaParts.join(' - ')) + '</div></div>' +
-      '<div style="display:flex;gap:0.4rem;align-items:center;justify-content:flex-end;flex-wrap:wrap;">' +
-        '<span class="dept-status ' + esc(PROP_STATUS_CLASS[prop.status] || 'pending') + '">' + esc(prop.status || 'Needed') + '</span>' +
+    const refs = prop.script_page_refs && prop.script_page_refs.length ? 'pp. ' + prop.script_page_refs.join(', ') : '';
+    const characters = (prop.characters || []).filter(Boolean);
+    const charactersHtml = characters.length
+      ? '<div class="props-characters">' + characters.map(function (c) { return '<span class="props-char-pill" style="background:' + propAvatarColor(c) + '22;color:' + propAvatarColor(c) + ';">' + esc(c) + '</span>'; }).join('') + '</div>'
+      : '<span class="props-empty-cell">-</span>';
+    const sourcedName = prop.assigned_to || '';
+    const sourcedHtml = sourcedName
+      ? '<div class="props-sourced-by"><span class="props-avatar" style="background:' + propAvatarColor(sourcedName) + ';">' + esc(propInitials(sourcedName)) + '</span>' +
+        '<div><div class="props-sourced-name">' + esc(sourcedName) + '</div><div class="props-sourced-sub">' + esc(propSourcedSub(prop)) + '</div></div></div>'
+      : '<div class="props-sourced-sub">Not assigned yet</div>';
+    const notesCount = prop.notes ? 1 : 0;
+    return '<div class="props-row">' +
+      '<div class="props-col-check"><input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="BTSDepartmentSection.togglePropSelected(\'' + esc(prop.id) + '\', this.checked)" aria-label="Select ' + esc(prop.name || 'prop') + '" /></div>' +
+      '<div class="props-col-name">' +
+        '<div class="props-col-prop-name">' + esc(prop.name || 'Untitled prop') + '</div>' +
+        (refs ? '<div class="props-col-prop-refs">' + esc(refs) + '</div>' : '') +
+        (prop.notes ? '<div class="props-col-prop-desc">' + esc(prop.notes) + '</div>' : '') +
+      '</div>' +
+      '<div class="props-col-characters">' + charactersHtml + '</div>' +
+      '<div class="props-col-qty"><span class="props-qty-value">' + esc(String(prop.quantity || 1)) + '</span><span class="props-qty-unit">' + esc(prop.quantity_unit || 'total') + '</span></div>' +
+      '<div class="props-col-status"><span class="dept-status ' + esc(PROP_STATUS_CLASS[prop.status] || 'pending') + '">' + esc((prop.status || 'Needed').toUpperCase()) + '</span></div>' +
+      '<div class="props-col-sourced">' + sourcedHtml + '</div>' +
+      '<div class="props-col-notes"><span class="props-notes-badge">' + notesCount + '</span></div>' +
+      '<div class="props-col-updated">' + esc(propRelativeTime(prop.updated_at)) + '</div>' +
+      '<div class="props-col-actions">' +
         '<button type="button" class="dept-action secondary" onclick="BTSDepartmentSection.openPropModal(\'' + esc(prop.id) + '\')">Edit</button>' +
         '<button type="button" class="dept-action danger" onclick="BTSDepartmentSection.quickDeleteProp(\'' + esc(prop.id) + '\')">Remove</button>' +
       '</div>' +
@@ -1067,10 +1112,15 @@
     const props = sectionProps();
     const selectedCount = Object.keys(state.selectedPropIds).filter(function (id) { return state.selectedPropIds[id]; }).length;
     const list = props.length
-      ? '<div class="dept-list">' + props.map(renderPropRow).join('') + '</div>'
+      ? '<div class="props-table">' +
+          '<div class="props-table-head">' +
+            '<div></div><div>Prop</div><div>Characters</div><div>Needed</div><div>Status</div><div>Sourced By</div><div>Notes</div><div>Last Updated</div><div></div>' +
+          '</div>' +
+          props.map(renderPropRow).join('') +
+        '</div>'
       : '<div class="dept-empty">No props have been added yet. Add the first one below.</div>';
     return '<section class="dept-panel">' +
-      '<div class="dept-panel-head"><div><div class="dept-panel-title">Props List</div><div class="dept-panel-sub">Every prop the show needs, its character, page number, quantity, status, and notes.</div></div>' +
+      '<div class="dept-panel-head"><div><div class="dept-panel-title">Props List</div><div class="dept-panel-sub">Every prop the show needs, its characters, page number, quantity, status, and who is sourcing it.</div></div>' +
       '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end;">' +
         (selectedCount ? '<button type="button" class="dept-action danger" onclick="BTSDepartmentSection.deleteSelectedProps()">Remove Selected (' + selectedCount + ')</button>' : '') +
         '<button type="button" class="dept-action secondary" onclick="BTSDepartmentSection.openPropImportModal()">Import List</button>' +
@@ -1088,10 +1138,12 @@
         '<div class="dept-modal-head"><div class="dept-modal-title" id="dept-prop-title">' + (prop ? 'Edit Prop' : 'Add Prop') + '</div><button type="button" class="dept-close" onclick="BTSDepartmentSection.closePropModal()" aria-label="Close">x</button></div>' +
         '<div class="dept-modal-body"><div class="dept-form-grid">' +
           field('Prop Name', 'dept-prop-name', 'text', prop ? (prop.name || '') : '', 'e.g. Umbrella, Tea Set') +
-          field('Character', 'dept-prop-character', 'text', prop ? (prop.character || '') : '', 'Who uses it') +
+          field('Characters', 'dept-prop-characters', 'text', prop && prop.characters ? prop.characters.join(', ') : '', 'e.g. Jane Banks, Michael Banks') +
           field('Page #', 'dept-prop-page', 'text', prop && prop.script_page_refs ? prop.script_page_refs.join(', ') : '', 'e.g. 3, 107') +
           field('Quantity', 'dept-prop-qty', 'number', prop ? String(prop.quantity || 1) : '1', '1') +
-          '<div class="dept-field"><label>Status</label><select id="dept-prop-status"><option value="Needed">Needed</option><option value="Sourced">Sourced</option><option value="Ready">Ready</option></select></div>' +
+          field('Unit', 'dept-prop-unit', 'text', prop ? (prop.quantity_unit || '') : '', 'e.g. total, bags, sets') +
+          '<div class="dept-field"><label>Status</label><select id="dept-prop-status"><option value="Needed">Needed</option><option value="In Progress">In Progress</option><option value="Sourced">Sourced</option></select></div>' +
+          field('Sourced By', 'dept-prop-assigned', 'text', prop ? (prop.assigned_to || '') : '', 'Name of the person responsible') +
           '<div class="dept-field full"><label>Notes</label><textarea id="dept-prop-notes" placeholder="Where to find it, budget, condition, anything to remember">' + esc(prop ? (prop.notes || '') : '') + '</textarea></div>' +
         '</div></div>' +
         '<div class="dept-modal-foot">' +
@@ -1394,15 +1446,20 @@
     if (!name) { alert('Give this prop a name.'); return; }
     const pageRefs = (document.getElementById('dept-prop-page').value || '')
       .split(',').map(function (n) { return n.trim(); }).filter(Boolean);
+    const characters = (document.getElementById('dept-prop-characters').value || '')
+      .split(',').map(function (n) { return n.trim(); }).filter(Boolean);
     const payload = {
       production_id: state.prodId,
       name,
-      character: (document.getElementById('dept-prop-character').value || '').trim() || null,
+      characters,
       script_page_refs: pageRefs,
       quantity: parseInt(document.getElementById('dept-prop-qty').value, 10) || 1,
+      quantity_unit: (document.getElementById('dept-prop-unit').value || '').trim() || 'total',
       status: document.getElementById('dept-prop-status').value || 'Needed',
+      assigned_to: (document.getElementById('dept-prop-assigned').value || '').trim() || null,
       notes: (document.getElementById('dept-prop-notes').value || '').trim() || null,
       department_name: state.section.label,
+      updated_at: new Date().toISOString(),
     };
     try {
       const id = state.editingPropId;
