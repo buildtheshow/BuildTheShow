@@ -1157,21 +1157,25 @@
     }
   }
 
-  // Parses a checklist-style props document: a bullet/checkbox marker starts a new
-  // prop (optionally with "(pp. 3, 107)" page refs right on that line), and any
-  // following non-bulleted lines are that prop's description, up to the next bullet.
+  // Parses a checklist-style props document. Checkbox glyphs (☐ etc.) almost never
+  // survive a copy/paste out of a PDF (they're form fields or images, not text), so
+  // a new prop is detected primarily by its own distinctive shape: a short line that
+  // is ENTIRELY "Name (pp. 3, 107)" / "Name (p. 6)" with nothing else on it. A leading
+  // bullet character is treated as a secondary signal for checklists that do keep one.
   function parsePropChecklistText(text) {
     const bulletRe = /^(?:[☐☑✅✓✗□■●•‣▪]|[-*])\s+(.+)$/;
     const pageRefRe = /\(\s*(?:pp?\.?|pages?|pg\.?)\s*([0-9][0-9,\s]*)\)\s*$/i;
+    const wholeLineNameRe = /^(.{2,120}?)\s*\(\s*(?:pp?\.?|pages?|pg\.?)\s*([0-9][0-9,\s]*)\)\s*$/i;
     const lines = String(text || '').split(/\r?\n/).map(function (line) { return line.trim(); });
     const items = [];
     let current = null;
     lines.forEach(function (line) {
       if (!line) return;
       if (/^[A-Za-z &]+:$/.test(line)) return; // skip category headings like "Essential Props:"
-      const m = line.match(bulletRe);
-      if (m) {
-        let body = m[1].trim();
+      const bulletMatch = line.match(bulletRe);
+      const wholeMatch = !bulletMatch && line.match(wholeLineNameRe);
+      if (bulletMatch || wholeMatch) {
+        let body = bulletMatch ? bulletMatch[1].trim() : line;
         let pageRefs = [];
         const refMatch = body.match(pageRefRe);
         if (refMatch) {
@@ -1187,6 +1191,78 @@
     return items.filter(function (item) { return item.name; });
   }
 
+  const PDFJS_VERSION = '3.11.174';
+  let _pdfJsLoadPromise = null;
+  function loadPdfJs() {
+    if (window.pdfjsLib) return Promise.resolve();
+    if (_pdfJsLoadPromise) return _pdfJsLoadPromise;
+    _pdfJsLoadPromise = new Promise(function (resolve, reject) {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@' + PDFJS_VERSION + '/build/pdf.min.js';
+      script.onload = function () {
+        if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@' + PDFJS_VERSION + '/build/pdf.worker.min.js';
+        }
+        resolve();
+      };
+      script.onerror = function () { reject(new Error('Could not load the PDF reader.')); };
+      document.head.appendChild(script);
+    });
+    return _pdfJsLoadPromise;
+  }
+
+  // Reconstructs reading-order lines from a PDF page's positioned text items (grouped
+  // by Y position, sorted left-to-right within each line). Assumes a single column,
+  // which fits the short properties-plot-style documents this import targets.
+  async function extractPropsPdfText(file) {
+    await loadPdfJs();
+    const buffer = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
+    const pageTexts = [];
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const content = await page.getTextContent();
+      const items = (content.items || [])
+        .filter(function (item) { return String(item.str || '').trim(); })
+        .map(function (item) {
+          return { text: String(item.str || '').trim(), x: item.transform ? item.transform[4] : 0, y: item.transform ? item.transform[5] : 0 };
+        })
+        .sort(function (a, b) { return Math.abs(b.y - a.y) > 3 ? b.y - a.y : a.x - b.x; });
+      const lines = [];
+      let lastY = null;
+      items.forEach(function (item) {
+        if (lastY === null || Math.abs(item.y - lastY) > 3) {
+          lines.push([]);
+          lastY = item.y;
+        }
+        lines[lines.length - 1].push(item.text);
+      });
+      pageTexts.push(lines.map(function (line) { return line.join(' '); }).join('\n'));
+    }
+    const text = pageTexts.join('\n\n').replace(/ /g, ' ').trim();
+    if (!text) throw new Error('No selectable text found in that PDF.');
+    return text;
+  }
+
+  async function handlePropImportFile(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const statusEl = document.getElementById('dept-prop-import-file-status');
+    if (statusEl) statusEl.textContent = 'Reading ' + file.name + '...';
+    try {
+      const isPdf = /\.pdf$/i.test(file.name) || file.type === 'application/pdf';
+      const text = isPdf ? await extractPropsPdfText(file) : await file.text();
+      const textarea = document.getElementById('dept-prop-import-text');
+      if (textarea) textarea.value = text;
+      if (statusEl) statusEl.textContent = 'Loaded ' + file.name + '. Review the text below, then hit Preview.';
+    } catch (error) {
+      if (statusEl) statusEl.textContent = '';
+      alert('Could not read that file: ' + error.message);
+    } finally {
+      input.value = '';
+    }
+  }
+
   function renderPropImportModal() {
     const isPreview = state.propImportStage === 'preview';
     const body = isPreview
@@ -1195,8 +1271,12 @@
           const meta = [item.script_page_refs.length ? 'pp. ' + item.script_page_refs.join(', ') : '', item.notes].filter(Boolean).join(' - ');
           return '<div class="dept-list-item"><div><div class="dept-list-title">' + esc(item.name) + '</div>' + (meta ? '<div class="dept-list-meta">' + esc(meta) + '</div>' : '') + '</div><span></span></div>';
         }).join('') + '</div>')
-      : ('<div class="dept-field full"><label>Paste your props checklist</label><textarea id="dept-prop-import-text" rows="12" placeholder="Essential Props:&#10;☐ Umbrella (p. 6)&#10;   Long, plain black umbrella with a simple handle.&#10;☐ Carpet bag (pp. 13, 71)&#10;   Large bag with a decorative fabric cover.">' + esc(state.propImportRawText) + '</textarea></div>' +
-        '<div class="dept-panel-sub" style="margin-top:0.5rem;">Works with checkbox or bullet lists where each prop starts a new line, with the description (if any) on the line(s) below it. Page references like "(pp. 3, 107)" are picked up automatically.</div>');
+      : ('<div class="dept-field full"><label>Upload a PDF or text file (optional)</label>' +
+          '<input type="file" accept=".pdf,.txt" onchange="BTSDepartmentSection.handlePropImportFile(this)" />' +
+          '<div id="dept-prop-import-file-status" class="dept-panel-sub" style="margin-top:0.3rem;"></div>' +
+        '</div>' +
+        '<div class="dept-field full"><label>Or paste your props checklist</label><textarea id="dept-prop-import-text" rows="12" placeholder="Essential Props:&#10;Umbrella (p. 6)&#10;Long, plain black umbrella with a simple handle.&#10;Carpet bag (pp. 13, 71)&#10;Large bag with a decorative fabric cover.">' + esc(state.propImportRawText) + '</textarea></div>' +
+        '<div class="dept-panel-sub" style="margin-top:0.5rem;">Works with checkbox or bullet lists, or plain text where each prop\'s name and page numbers are on their own line (e.g. "Umbrella (p. 6)") followed by its description. Page references like "(pp. 3, 107)" are picked up automatically.</div>');
     const footLeft = isPreview
       ? '<button type="button" class="dept-action secondary" onclick="BTSDepartmentSection.backPropImport()">Back</button>'
       : '<span></span>';
@@ -1699,5 +1779,6 @@
     previewPropImport,
     backPropImport,
     confirmPropImport,
+    handlePropImportFile,
   };
 })();
