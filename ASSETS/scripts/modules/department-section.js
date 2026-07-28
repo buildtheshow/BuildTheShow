@@ -1110,7 +1110,8 @@
   }
 
   const PROP_STATUS_CLASS = { Needed: 'pending', 'In Progress': 'info', Sourced: 'approved' };
-  const PROP_AVATAR_COLORS = ['#572e88', '#769e7b', '#dd8233', '#d1523d', '#74a2b4', '#476aaa', '#ca7ea7'];
+  const PROP_AVATAR_COLORS = ['#572e88', '#769e7b', '#dd8233', '#d1523d', '#78bbd4', '#476aaa', '#ca7ea7'];
+  const BRAND_INK = { '#000000': '#fff', '#572e88': '#fff', '#efab45': '#000', '#efefef': '#000', '#769e7b': '#fff', '#dd8233': '#fff', '#d1523d': '#fff', '#78bbd4': '#000', '#476aaa': '#fff', '#ca7ea7': '#fff' };
 
   function propAvatarColor(name) {
     let n = 0;
@@ -1148,7 +1149,7 @@
       : (prop.notes || '');
     const noteState = state.propNoteSaveState[prop.id] || '';
     const charactersHtml = characters.length
-      ? '<div class="props-characters">' + characters.map(function (c) { return '<span class="props-char-pill" style="background:' + propAvatarColor(c) + '22;color:' + propAvatarColor(c) + ';">' + esc(c) + '</span>'; }).join('') + '</div>'
+      ? '<div class="props-characters">' + characters.map(function (c) { const bg = propAvatarColor(c); return '<span class="props-char-pill" style="background:' + bg + ';color:' + (BRAND_INK[bg] || '#fff') + ';">' + esc(c) + '</span>'; }).join('') + '</div>'
       : '<span class="props-empty-cell">-</span>';
     const assignedDraft = Object.prototype.hasOwnProperty.call(state.propAssignedDrafts, prop.id)
       ? state.propAssignedDrafts[prop.id]
@@ -1168,7 +1169,7 @@
       '</td>' +
       '<td class="props-col-characters" data-th="Characters">' + charactersHtml + '</td>' +
       '<td class="props-col-status" data-th="Status">' +
-        '<select class="dept-status props-status-select ' + esc(PROP_STATUS_CLASS[prop.status] || 'pending') + '" onchange="BTSDepartmentSection.updatePropStatusInline(\'' + esc(prop.id) + '\', this.value)">' + statusOptions + '</select>' +
+        '<select class="dept-status props-status-select ' + esc(PROP_STATUS_CLASS[prop.status] || 'pending') + ((prop.status || 'Needed') === 'Needed' ? ' ink-dark' : ' ink-light') + '" onchange="BTSDepartmentSection.updatePropStatusInline(\'' + esc(prop.id) + '\', this.value)">' + statusOptions + '</select>' +
       '</td>' +
       '<td class="props-col-sourced" data-th="Sourced By">' + sourcedHtml + '</td>' +
       '<td class="props-col-notes" data-th="Notes">' +
