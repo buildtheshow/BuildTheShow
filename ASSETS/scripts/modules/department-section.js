@@ -1118,26 +1118,33 @@
       ? '<div class="props-sourced-by"><span class="props-avatar" style="background:' + propAvatarColor(sourcedName) + ';">' + esc(propInitials(sourcedName)) + '</span>' +
         '<div><div class="props-sourced-name">' + esc(sourcedName) + '</div><div class="props-sourced-sub">' + esc(propSourcedSub(prop)) + '</div></div></div>'
       : '<div class="props-sourced-sub">Not assigned yet</div>';
-    const notesCount = prop.notes ? 1 : 0;
+    const statusOptions = ['Needed', 'In Progress', 'Sourced'].map(function (opt) {
+      return '<option value="' + opt + '"' + ((prop.status || 'Needed') === opt ? ' selected' : '') + '>' + opt.toUpperCase() + '</option>';
+    }).join('');
     return '<tr class="props-row" data-label="' + esc(prop.name || 'Untitled prop') + '">' +
       '<td class="props-col-name" data-th="Prop">' +
         '<div class="props-col-prop-name">' + esc(prop.name || 'Untitled prop') + '</div>' +
         (refs ? '<div class="props-col-prop-refs">' + esc(refs) + '</div>' : '') +
-        (prop.notes ? '<div class="props-col-prop-desc">' + esc(prop.notes) + '</div>' : '') +
       '</td>' +
       '<td class="props-col-characters" data-th="Characters">' + charactersHtml + '</td>' +
       '<td class="props-col-qty" data-th="Needed"><span class="props-qty-value">' + esc(String(prop.quantity || 1)) + '</span><span class="props-qty-unit">' + esc(prop.quantity_unit || 'total') + '</span></td>' +
-      '<td class="props-col-status" data-th="Status"><span class="dept-status ' + esc(PROP_STATUS_CLASS[prop.status] || 'pending') + '">' + esc((prop.status || 'Needed').toUpperCase()) + '</span></td>' +
+      '<td class="props-col-status" data-th="Status">' +
+        '<select class="dept-status props-status-select ' + esc(PROP_STATUS_CLASS[prop.status] || 'pending') + '" onchange="BTSDepartmentSection.updatePropStatusInline(\'' + esc(prop.id) + '\', this.value)">' + statusOptions + '</select>' +
+      '</td>' +
       '<td class="props-col-sourced" data-th="Sourced By">' + sourcedHtml + '</td>' +
       '<td class="props-col-notes" data-th="Notes">' +
         '<label class="props-note-editor-wrap">' +
           '<textarea class="props-note-editor" rows="3" placeholder="Type notes here..." oninput="BTSDepartmentSection.updateInlinePropNote(\'' + esc(prop.id) + '\', this.value)" onblur="BTSDepartmentSection.flushInlinePropNote(\'' + esc(prop.id) + '\')" data-prop-note-id="' + esc(prop.id) + '">' + esc(noteDraft) + '</textarea>' +
         '</label>' +
-        '<div class="props-note-meta"><span class="props-notes-badge">' + notesCount + '</span><span class="props-note-status">' + esc(noteState || ' ') + '</span></div>' +
+        '<div class="props-note-meta"><span class="props-note-status">' + esc(noteState || ' ') + '</span></div>' +
       '</td>' +
       '<td class="props-col-actions" data-th="">' +
-        '<button type="button" class="dept-action secondary" onclick="BTSDepartmentSection.openPropModal(\'' + esc(prop.id) + '\')">Edit</button>' +
-        '<button type="button" class="dept-action danger" onclick="BTSDepartmentSection.quickDeleteProp(\'' + esc(prop.id) + '\')">Remove</button>' +
+        '<button type="button" class="props-icon-btn edit" onclick="BTSDepartmentSection.openPropModal(\'' + esc(prop.id) + '\')" aria-label="Edit prop">' +
+          '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16v4zm12.7-13.3 1.6-1.6a1 1 0 0 1 1.4 0l1.6 1.6a1 1 0 0 1 0 1.4L19.7 9.7l-3-3z"/></svg>' +
+        '</button>' +
+        '<button type="button" class="props-icon-btn remove" onclick="BTSDepartmentSection.quickDeleteProp(\'' + esc(prop.id) + '\')" aria-label="Remove prop">' +
+          '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.7 5.3 12 10.6l5.3-5.3 1.4 1.4-5.3 5.3 5.3 5.3-1.4 1.4L12 13.4l-5.3 5.3-1.4-1.4 5.3-5.3-5.3-5.3z"/></svg>' +
+        '</button>' +
       '</td>' +
     '</tr>';
   }
