@@ -1126,6 +1126,7 @@
       '<td class="props-col-name" data-th="Prop">' +
         '<div class="props-col-prop-name">' + esc((prop.name || 'Untitled prop') + quantityLabel) + '</div>' +
         (refs ? '<div class="props-col-prop-refs">' + esc(refs) + '</div>' : '') +
+        (prop.description ? '<div class="props-col-prop-desc">' + esc(prop.description) + '</div>' : '') +
       '</td>' +
       '<td class="props-col-characters" data-th="Characters">' + charactersHtml + '</td>' +
       '<td class="props-col-status" data-th="Status">' +
@@ -1204,7 +1205,9 @@
     const prop = state.editingPropId ? state.props.find(function (item) { return item.id === state.editingPropId; }) : null;
     const selectedCharacters = prop && Array.isArray(prop.characters) ? prop.characters.filter(Boolean) : [];
     const characterButtons = state.characters.length
-      ? state.characters.map(function (character) {
+      ? state.characters.slice().sort(function (a, b) {
+          return String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' });
+        }).map(function (character) {
           const name = String(character.name || '').trim();
           if (!name) return '';
           const selected = selectedCharacters.indexOf(name) !== -1;
@@ -1217,12 +1220,13 @@
         '<div class="dept-modal-body"><div class="dept-form-grid">' +
           field('Prop Name', 'dept-prop-name', 'text', prop ? (prop.name || '') : '', 'e.g. Umbrella, Tea Set') +
           field('Page #', 'dept-prop-page', 'text', prop && prop.script_page_refs ? prop.script_page_refs.join(', ') : '', 'e.g. 3, 107') +
+          '<div class="dept-field full"><label>Prop Description</label><textarea id="dept-prop-description" placeholder="What we\'re looking for - size, colour, style, how it\'s used on stage">' + esc(prop ? (prop.description || '') : '') + '</textarea></div>' +
           '<div class="dept-field full"><label>Characters</label><input id="dept-prop-characters" type="hidden" value="' + esc(selectedCharacters.join(', ')) + '" /><div class="dept-char-picker">' + characterButtons + '</div></div>' +
           field('Quantity', 'dept-prop-qty', 'number', prop ? String(prop.quantity || 1) : '1', '1') +
           field('Unit', 'dept-prop-unit', 'text', prop ? (prop.quantity_unit || '') : '', 'e.g. total, bags, sets') +
           '<div class="dept-field"><label>Status</label><select id="dept-prop-status"><option value="Needed">Needed</option><option value="In Progress">In Progress</option><option value="Sourced">Sourced</option></select></div>' +
           field('Sourced By', 'dept-prop-assigned', 'text', prop ? (prop.assigned_to || '') : '', 'Name of the person responsible') +
-          '<div class="dept-field full"><label>Notes</label><textarea id="dept-prop-notes" placeholder="Where to find it, budget, condition, anything to remember">' + esc(prop ? (prop.notes || '') : '') + '</textarea></div>' +
+          '<div class="dept-field full"><label>Notes</label><textarea id="dept-prop-notes" placeholder="Anything the team needs to know - where to find it, budget, condition">' + esc(prop ? (prop.notes || '') : '') + '</textarea></div>' +
         '</div></div>' +
         '<div class="dept-modal-foot">' +
           (prop ? '<button type="button" class="dept-action danger" onclick="BTSDepartmentSection.deleteProp(\'' + esc(prop.id) + '\')">Delete</button>' : '<span></span>') +
@@ -1314,10 +1318,10 @@
           pageRefs = refMatch[1].split(',').map(function (n) { return n.trim(); }).filter(Boolean);
           body = body.slice(0, refMatch.index).trim();
         }
-        current = { name: body, script_page_refs: pageRefs, notes: '' };
+        current = { name: body, script_page_refs: pageRefs, description: '' };
         items.push(current);
       } else if (current) {
-        current.notes = (current.notes ? current.notes + ' ' : '') + line;
+        current.description = (current.description ? current.description + ' ' : '') + line;
       }
     });
     return items.filter(function (item) { return item.name; });
@@ -1400,7 +1404,7 @@
     const body = isPreview
       ? ('<div class="dept-panel-sub" style="margin-bottom:0.6rem;">Found ' + state.propImportItems.length + ' prop' + (state.propImportItems.length === 1 ? '' : 's') + '. Review below, then import.</div>' +
         '<div class="dept-list">' + state.propImportItems.map(function (item) {
-          const meta = [item.script_page_refs.length ? 'pp. ' + item.script_page_refs.join(', ') : '', item.notes].filter(Boolean).join(' - ');
+          const meta = [item.script_page_refs.length ? 'pp. ' + item.script_page_refs.join(', ') : '', item.description].filter(Boolean).join(' - ');
           return '<div class="dept-list-item"><div><div class="dept-list-title">' + esc(item.name) + '</div>' + (meta ? '<div class="dept-list-meta">' + esc(meta) + '</div>' : '') + '</div><span></span></div>';
         }).join('') + '</div>')
       : ('<div class="dept-field full"><label>Upload a PDF or text file (optional)</label>' +
@@ -1474,7 +1478,7 @@
         name: item.name,
         quantity: 1,
         status: 'Needed',
-        notes: item.notes || null,
+        description: item.description || null,
         script_page_refs: item.script_page_refs,
         department_name: state.section.label,
         source_type: 'prop_import',
@@ -1545,6 +1549,7 @@
     const payload = {
       production_id: state.prodId,
       name,
+      description: (document.getElementById('dept-prop-description').value || '').trim() || null,
       characters,
       script_page_refs: pageRefs,
       quantity: parseInt(document.getElementById('dept-prop-qty').value, 10) || 1,
