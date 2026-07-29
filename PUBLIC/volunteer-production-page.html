@@ -4142,24 +4142,8 @@
 
       // Household payment logs: load from household_payment_logs by household_id.
       // Household payments are NOT per-performer — they belong to the household as a unit.
-      let householdPaymentRecords = [];
-      if (basePerformers.length > 1 && prod?.id) {
-        try {
-          const allHouseholds = Array.isArray(prod?.registration_households) ? prod.registration_households : [];
-          const myAssignIds = basePerformers.flatMap(p => (p.assignments || []).map(a => String(a.id))).filter(Boolean);
-          const matchedHh = allHouseholds.filter(hh => {
-            const mids = (hh.member_ids || []).map(String);
-            const mAssignIds = (hh.members || []).map(m => String(m.assignment_id || '')).filter(Boolean);
-            return myAssignIds.some(id => mids.includes(id) || mAssignIds.includes(id));
-          });
-          const hhIds = [...new Set(matchedHh.map(hh => String(hh.id)).filter(Boolean))];
-          if (hhIds.length) {
-            const { data: hhLogs } = await sb.from('household_payment_logs')
-              .select('*').in('household_id', hhIds).order('paid_at', { ascending: true });
-            householdPaymentRecords = hhLogs || [];
-          }
-        } catch (_) {}
-      }
+      const myAssignIds = basePerformers.flatMap(p => (p.assignments || []).map(a => String(a.id))).filter(Boolean);
+      const householdPaymentRecords = await loadHouseholdPaymentRecordsForAssignments(myAssignIds);
 
       return { performers: basePerformers, householdPaymentRecords };
     }
@@ -4233,6 +4217,25 @@
         };
       });
     }
+    async function loadHouseholdPaymentRecordsForAssignments(assignmentIds = []) {
+      const ids = [...new Set((assignmentIds || []).map(String))].filter(Boolean);
+      if (ids.length < 2 || !prod?.id) return [];
+      try {
+        const allHouseholds = Array.isArray(prod?.registration_households) ? prod.registration_households : [];
+        const matchedHh = allHouseholds.filter(hh => {
+          const mids = (hh.member_ids || []).map(String);
+          const mAssignIds = (hh.members || []).map(m => String(m.assignment_id || '')).filter(Boolean);
+          return ids.some(id => mids.includes(id) || mAssignIds.includes(id));
+        });
+        const hhIds = [...new Set(matchedHh.map(hh => String(hh.id)).filter(Boolean))];
+        if (!hhIds.length) return [];
+        const { data: hhLogs } = await sb.from('household_payment_logs')
+          .select('*').in('household_id', hhIds).order('paid_at', { ascending: true });
+        return hhLogs || [];
+      } catch (_) {
+        return [];
+      }
+    }
     async function resolveProductionPortal(email, code, options = {}) {
       const [volunteer, performerApps] = await Promise.all([
         resolveVolunteerPortal(email, code, options),
@@ -4243,8 +4246,21 @@
         loadVolunteerLinkedPerformers(volunteer.rows),
       ]);
       const performers = performerResult.performers ?? performerResult;
-      const householdPaymentRecords = performerResult.householdPaymentRecords ?? [];
+      let householdPaymentRecords = performerResult.householdPaymentRecords ?? [];
       volunteer.linkedPerformers = volunteerLinkedPerformers;
+      // The direct performer-code path only finds a household payment log when the
+      // CURRENT logged-in person's own code matches one of the performers on the
+      // registration. A linked parent/volunteer (viewing their kids' registration via
+      // volunteer_signup_ids, not a matching performer code) would otherwise see "no
+      // payments recorded" even though the family has paid - the log belongs to the
+      // household, not to whichever person's code was used to log in. Fall back to
+      // resolving it from every known performer (direct + linked) in that case.
+      if (!householdPaymentRecords.length) {
+        const allAssignIds = [...performers, ...volunteerLinkedPerformers]
+          .flatMap(p => (p.assignments || []).map(a => String(a.id)))
+          .filter(Boolean);
+        householdPaymentRecords = await loadHouseholdPaymentRecordsForAssignments(allAssignIds);
+      }
       return { email, code, volunteer, performers, householdPaymentRecords };
     }
 
