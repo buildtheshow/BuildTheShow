@@ -855,10 +855,10 @@
 
   function renderDashboard() {
     const receipts = sectionReceipts();
-    const approved = receipts.filter(function (receipt) { return receipt.status === 'approved' || receipt.status === 'paid'; });
+    const counted = receipts.filter(function (receipt) { return receipt.status !== 'rejected'; });
     const cats = sectionCategories();
     const allocated = cats.reduce(function (sum, cat) { return sum + (cat.planned_cents || 0); }, 0);
-    const spent = approved.reduce(function (sum, receipt) { return sum + (receipt.amount_cents || 0); }, 0);
+    const spent = counted.reduce(function (sum, receipt) { return sum + (receipt.amount_cents || 0); }, 0);
     const remaining = Math.max(0, allocated - spent);
     const opportunities = sectionOpportunities();
     const signups = sectionSignups(opportunities);
