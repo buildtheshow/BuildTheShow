@@ -180,10 +180,11 @@
     .pt-drawer-section-label { font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(87,46,136,0.5); margin-bottom: 0.65rem; }
     .pt-module-list { display: flex; flex-direction: column; gap: 0; }
     .pt-module-section { margin-bottom: 0.15rem; }
-    .pt-module-section-header { display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 0.65rem; background: #572e88; color: #fff; border-radius: 8px 8px 0 0; font-size: 0.76rem; font-weight: 800; letter-spacing: 0.03em; cursor: pointer; user-select: none; }
+    .pt-module-section-header { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.55rem 0.65rem; background: #572e88; color: #fff; border-radius: 8px 8px 0 0; font-size: 0.76rem; font-weight: 800; letter-spacing: 0.03em; }
+    .pt-module-section-click { display: flex; align-items: center; gap: 0.5rem; min-width: 0; flex: 1; cursor: pointer; user-select: none; }
     .pt-module-section-header img { width: 18px; height: 18px; object-fit: contain; filter: brightness(0) invert(1); opacity: 0.85; flex-shrink: 0; }
-    .pt-module-section-header .pt-section-chevron { margin-left: auto; font-size: 0.6rem; opacity: 0.7; transition: transform 0.15s; }
-    .pt-module-section-header.collapsed .pt-section-chevron { transform: rotate(-90deg); }
+    .pt-module-section-header .pt-section-chevron { font-size: 0.6rem; opacity: 0.7; transition: transform 0.15s; flex-shrink: 0; }
+    .pt-module-section-click.collapsed .pt-section-chevron { transform: rotate(-90deg); }
     .pt-module-section-items { display: flex; flex-direction: column; background: #f8f7fc; border-radius: 0 0 8px 8px; overflow: hidden; margin-bottom: 0.35rem; }
     .pt-module-section-items.collapsed { display: none; }
     .pt-module-row { display: flex; align-items: center; justify-content: space-between; padding: 0.42rem 0.75rem; border-bottom: 1px solid rgba(87,46,136,0.06); min-height: 36px; }
@@ -193,6 +194,12 @@
     .pt-module-row[data-depth="3"] { padding-left: 2.55rem; }
     .pt-module-sublabel { font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(87,46,136,0.4); padding: 0.45rem 0.75rem 0.2rem; }
     .pt-module-sublabel[data-depth="2"] { padding-left: 1.65rem; }
+    .pt-module-group-row .pt-module-group-click { display: flex; align-items: center; gap: 0.4rem; min-width: 0; flex: 1; cursor: pointer; user-select: none; }
+    .pt-module-group-row .pt-section-chevron { font-size: 0.6rem; opacity: 0.55; transition: transform 0.15s; flex-shrink: 0; }
+    .pt-module-group-row .pt-module-group-click.collapsed .pt-section-chevron { transform: rotate(-90deg); }
+    .pt-module-group-items { display: flex; flex-direction: column; }
+    .pt-module-group-items.collapsed { display: none; }
+    .pt-module-group-row[data-depth="1"] .pt-module-name { font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(87,46,136,0.6); }
     .pt-module-name { font-size: 0.78rem; font-weight: 700; color: #000000; }
     .pt-perm-toggle-group { display: flex; border: 1.5px solid #edeaf6; border-radius: 8px; overflow: hidden; flex-shrink: 0; }
     .pt-perm-toggle { border: none; border-right: 1px solid #edeaf6; background: #fff; color: #c8bad7; font-size: 0.69rem; font-weight: 700; padding: 0.28rem 0.6rem; cursor: pointer; font-family: inherit; white-space: nowrap; transition: background 0.1s, color 0.1s; }
@@ -2298,12 +2305,25 @@
         </div>`;
       }
 
+      function renderGroupRow(node, depth, roleKey) {
+        const defAccess = resolveDefaultAccess(node.key, roleKey);
+        const current = perms[node.key] !== undefined ? perms[node.key] : defAccess;
+        const isCustom = perms[node.key] !== undefined && perms[node.key] !== defAccess;
+        const groupId = 'pt-group-' + node.key.replace(/[^a-zA-Z0-9_-]/g, '-');
+        return `<div class="pt-module-row pt-module-group-row" data-module-key="${esc(node.key)}" data-default-access="${esc(defAccess)}" data-depth="${depth}">
+          <div class="pt-module-group-click collapsed" onclick="this.classList.toggle('collapsed');document.getElementById('${groupId}').classList.toggle('collapsed')">
+            <span class="pt-section-chevron">&#9660;</span>
+            <span class="pt-module-name">${esc(node.label)}</span>
+            <span class="pt-custom-label" style="font-size:0.64rem;font-weight:700;color:#ca7ea7;flex-shrink:0${isCustom ? '' : ';display:none'}">custom</span>
+          </div>
+          <div class="pt-perm-toggle-group">${tog('none',current)}${tog('view',current)}${tog('edit',current)}</div>
+        </div>
+        <div class="pt-module-group-items collapsed" id="${groupId}">${renderChildren(node.children, depth + 1, roleKey)}</div>`;
+      }
+
       function renderChildren(children, depth, roleKey) {
         return (children || []).map(child => {
-          if (child.children && child.children.length) {
-            return `<div class="pt-module-sublabel" data-depth="${depth}">${esc(child.label)}</div>` +
-              child.children.map(sub => renderModuleRow(sub, depth + 1, roleKey)).join('');
-          }
+          if (child.children && child.children.length) return renderGroupRow(child, depth, roleKey);
           return renderModuleRow(child, depth, roleKey);
         }).join('');
       }
@@ -2313,11 +2333,18 @@
         const iconHtml = iconSrc ? `<img src="${esc(iconSrc)}" alt="" />` : '';
         const sectionId = 'pt-section-' + section.key;
         const itemsHtml = section.children ? renderChildren(section.children, 1, roleKey) : '';
+        const defAccess = resolveDefaultAccess(section.key, roleKey);
+        const current = perms[section.key] !== undefined ? perms[section.key] : defAccess;
+        const isCustom = perms[section.key] !== undefined && perms[section.key] !== defAccess;
         return `<div class="pt-module-section">
-          <div class="pt-module-section-header collapsed" onclick="this.classList.toggle('collapsed');document.getElementById('${sectionId}').classList.toggle('collapsed')">
-            ${iconHtml}
-            ${esc(section.label)}
-            <span class="pt-section-chevron">&#9660;</span>
+          <div class="pt-module-section-header" data-module-key="${esc(section.key)}" data-default-access="${esc(defAccess)}">
+            <div class="pt-module-section-click collapsed" onclick="this.classList.toggle('collapsed');document.getElementById('${sectionId}').classList.toggle('collapsed')">
+              ${iconHtml}
+              ${esc(section.label)}
+              <span class="pt-custom-label" style="font-size:0.64rem;font-weight:700;color:#ffd9ef;flex-shrink:0${isCustom ? '' : ';display:none'}">custom</span>
+              <span class="pt-section-chevron">&#9660;</span>
+            </div>
+            <div class="pt-perm-toggle-group">${tog('none',current)}${tog('view',current)}${tog('edit',current)}</div>
           </div>
           <div class="pt-module-section-items collapsed" id="${sectionId}">${itemsHtml}</div>
         </div>`;
