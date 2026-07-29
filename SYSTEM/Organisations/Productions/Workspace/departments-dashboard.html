@@ -533,6 +533,7 @@
       Promise.all([
         sb.from('budget_categories').select('id, name, planned_cents').eq('production_id', prodId),
         sb.from('budget_items').select('category_id, paid_cents').eq('production_id', prodId),
+        sb.from('budget_receipts').select('category_id, amount_cents, status').eq('production_id', prodId),
         sb.from('opportunities').select('id, production_title, volunteer_role, summary, department, dept_category, volunteer_department, volunteers_needed, status').eq('production_id', prodId).in('opportunity_type', ['volunteer', 'creative_team']),
         sb.from('volunteer_signups').select('id, role_name, volunteer_role, production_title, department, dept_category, volunteer_department, status').eq('production_id', prodId),
         sb.from('production_team_members').select('id, role_name, role, access_level, department, is_active').eq('production_id', prodId),
@@ -540,15 +541,26 @@
       ]).then(function (results) {
         const cats = (results[0].data || []);
         const items = (results[1].data || []);
-        const opportunities = (results[2].data || []);
-        const signups = (results[3].data || []);
-        const teamMembers = (results[4].data || []).filter(function (member) { return member.is_active !== false; });
-        const staffingPlan = (results[5].data && results[5].data.volunteer_staffing_plan) || {};
+        const receipts = (results[2].data || []);
+        const opportunities = (results[3].data || []);
+        const signups = (results[4].data || []);
+        const teamMembers = (results[5].data || []).filter(function (member) { return member.is_active !== false; });
+        const staffingPlan = (results[6].data && results[6].data.volunteer_staffing_plan) || {};
 
-        // Sum paid_cents per category_id
+        // Sum paid_cents per category_id (manual Budgeting-tool tracking)
         const paidByCat = {};
         items.forEach(function (item) {
           paidByCat[item.category_id] = (paidByCat[item.category_id] || 0) + (item.paid_cents || 0);
+        });
+
+        // Sum submitted receipts per category_id - the actual "spent" money in
+        // practice, since departments log purchases via Receipts, not by hand-
+        // editing budget line items. A receipt counts the moment it's submitted,
+        // same as everywhere else - only 'rejected' is excluded.
+        const receiptsByCat = {};
+        receipts.forEach(function (receipt) {
+          if (receipt.status === 'rejected') return;
+          receiptsByCat[receipt.category_id] = (receiptsByCat[receipt.category_id] || 0) + (receipt.amount_cents || 0);
         });
 
         const rolesByGroup = collectLiveRoles({
@@ -565,13 +577,14 @@
         cats.forEach(function (cat) {
           const gk = groupKeyForBudgetCategory(cat.name, budgetLookup) || groupKeyForCategory(cat.name);
           if (!gk) return;
+          const catSpent = (paidByCat[cat.id] || 0) + (receiptsByCat[cat.id] || 0);
           if (!byGroup[gk]) byGroup[gk] = { planned: 0, spent: 0, categories: [] };
           byGroup[gk].planned += (cat.planned_cents || 0);
-          byGroup[gk].spent += (paidByCat[cat.id] || 0);
+          byGroup[gk].spent += catSpent;
           byGroup[gk].categories.push({
             name: cat.name || 'Untitled',
             planned: cat.planned_cents || 0,
-            spent: paidByCat[cat.id] || 0,
+            spent: catSpent,
           });
         });
 
