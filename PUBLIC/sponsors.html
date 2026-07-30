@@ -2152,34 +2152,13 @@
       btn.textContent = 'Sending...';
 
       try {
-        var bizId = await findOrCreateBusiness(business, contact, email, phone, website, notes);
-
-        var adId = null;
-        if (selected.kind === 'ad') {
-          adId = await insertAd(bizId, notes);
-        } else {
-          await insertPackage(bizId, notes);
-        }
+        var submission = await submitSponsorInterest(business, contact, email, phone, notes);
+        var bizId = submission && submission.business_id;
+        if (!bizId) throw new Error('Could not create your sponsor submission.');
 
         var zone = spbArtworkStatus === 'ready' ? 'artwork' : 'help';
         var uploadedUrls = await uploadSponsorFiles(bizId, spbUploadedFiles[zone] || []);
-
-        if (adId && uploadedUrls.length) {
-          await sb.from('programme_ads').update({ artwork_url: uploadedUrls[0].url, artwork_status: 'received' }).eq('id', adId);
-        }
-
-        for (var fi = 0; fi < uploadedUrls.length; fi++) {
-          var uf = uploadedUrls[fi];
-          await sb.from('sponsor_files').insert({
-            production_id: production.id,
-            business_id: bizId,
-            file_url: uf.url,
-            file_name: uf.name,
-            file_type: selected.kind === 'ad' ? 'artwork' : 'logo',
-            linked_ad_id: adId || null,
-            uploaded_by: 'business',
-          });
-        }
+        await finalizeSponsorSubmission(bizId, website, notes, uploadedUrls);
 
         var optionLabel = selected.tier || selected.size || '';
         var amountLabel = selected.amount ? '$' + Number(selected.amount).toLocaleString() : '';
@@ -2235,10 +2214,42 @@
           var res = await sb.storage.from('programme-ads').upload(path, f, { contentType: f.type, upsert: false });
           if (res.error) { console.warn('Upload failed:', res.error); continue; }
           var publicUrl = sb.storage.from('programme-ads').getPublicUrl(path);
-          if (publicUrl?.data?.publicUrl) urls.push({ name: f.name, url: publicUrl.data.publicUrl });
+          if (publicUrl?.data?.publicUrl) urls.push({ name: f.name, path: path, url: publicUrl.data.publicUrl });
         } catch (e) { console.warn('Upload error:', e); }
       }
       return urls;
+    }
+
+    async function submitSponsorInterest(business, contact, email, phone, notes) {
+      var res = await sb.rpc('submit_sponsor_interest', {
+        p_production_id: production.id,
+        p_kind: selected.kind,
+        p_business_name: business,
+        p_contact_name: contact,
+        p_contact_email: email,
+        p_contact_phone: phone || null,
+        p_option_id: selected.kind === 'ad' ? (selected.sizeId || null) : null,
+        p_option_label: selected.kind === 'sponsor' ? (selected.tier || null) : (selected.size || null),
+        p_format: selected.kind === 'ad' ? (selected.format || 'colour') : null,
+        p_amount_cents: Math.round(Number(selected.amount || 0) * 100),
+        p_notes: notes || null,
+      });
+      if (res.error) throw res.error;
+      return res.data || null;
+    }
+
+    async function finalizeSponsorSubmission(bizId, website, notes, uploadedUrls) {
+      var res = await sb.rpc('finalize_sponsor_submission', {
+        p_production_id: production.id,
+        p_business_id: bizId,
+        p_kind: selected.kind,
+        p_website: website || null,
+        p_notes: notes || null,
+        p_artwork_status: spbArtworkStatus || null,
+        p_files: uploadedUrls || [],
+      });
+      if (res.error) throw res.error;
+      return res.data || null;
     }
 
     async function sendSponsorConfirmation(contactName, contactEmail, bizName, kind, option, amount, detailHtml, uploadedUrls) {
@@ -2355,54 +2366,6 @@
           }});
         } catch (e2) { console.warn('Notification send failed for ' + emails[i] + ':', e2); }
       }
-    }
-
-    async function findOrCreateBusiness(name, contact, email, phone, website, notes) {
-      var bizId = crypto.randomUUID();
-      var fullNotes = website ? (notes ? notes + ' | Website: ' + website : 'Website: ' + website) : notes;
-      var res = await sb.from('sponsor_businesses').insert({
-        id: bizId,
-        production_id: production.id,
-        name: name,
-        contact_name: contact,
-        contact_email: email,
-        contact_phone: phone,
-        notes: fullNotes,
-      });
-      if (res.error) throw res.error;
-      return bizId;
-    }
-
-    async function insertAd(bizId, notes) {
-      var artStatus = spbArtworkStatus === 'ready' ? 'received' : (spbArtworkStatus === 'later' ? 'missing' : 'missing');
-      var res = await sb.from('programme_ads').insert({
-        production_id: production.id,
-        business_id: bizId,
-        ad_size: selected.sizeId || null,
-        ad_type: selected.format || 'colour',
-        price_cents: Math.round(Number(selected.amount) * 100),
-        payment_status: 'unpaid',
-        artwork_status: artStatus,
-        artwork_data: selected.artworkData || null,
-        notes: notes,
-      }).select('id').single();
-      if (res.error) throw res.error;
-      return res.data?.id || null;
-    }
-
-    async function insertPackage(bizId, notes) {
-      var label = selected.tier || selected.size || null;
-      var pkgNotes = notes && label ? notes + ' [' + label + ']' : label ? '[' + label + ']' : notes;
-      var res = await sb.from('sponsor_packages').insert({
-        production_id: production.id,
-        business_id: bizId,
-        tier_id: selected.tierId || null,
-        amount_cents: Math.round(Number(selected.amount) * 100),
-        payment_status: 'unpaid',
-        artwork_data: selected.artworkData || null,
-        notes: pkgNotes,
-      });
-      if (res.error) throw res.error;
     }
 
     async function load() {
