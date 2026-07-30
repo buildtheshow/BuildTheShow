@@ -504,10 +504,16 @@
     };
     window.navigateToVolunteers = function (sub) {
       var pages = {
-        shifts: 'volunteers-shifts.html',
-        hours:  'volunteers-hours.html',
+        calendar:    'volunteer-calendar.html',
+        plan:        'volunteers.html',
+        suggestions: 'volunteer-suggestions.html',
+        roles:       'volunteer-roles.html',
+        publish:     'volunteer-publish.html',
+        share:       'volunteer-share.html',
+        requests:    'volunteer-applicants.html',
+        settings:    'volunteer-settings.html',
       };
-      location.href = pageUrl(pages[sub] || 'volunteers-shifts.html');
+      location.href = pageUrl(pages[sub] || 'volunteer-calendar.html');
     };
     window.navigateToBudget = function (sub) {
       var pages = {
