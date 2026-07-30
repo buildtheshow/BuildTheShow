@@ -13958,7 +13958,7 @@ See you soon!
     const panel = document.getElementById('panel-marketing');
     if (!panel) return;
     const moduleFiles = { programmeads: 'sponsors', showsponsors: 'sponsors', sponsorssettings: 'sponsors' };
-    const moduleVersions = { programme: '?v=brand-sweep-20260728', sponsors: '?v=brand-sweep-20260728', programmeads: '?v=brand-sweep-20260728', showsponsors: '?v=brand-sweep-20260728', sponsorssettings: '?v=brand-sweep-20260728' };
+    const moduleVersions = { programme: '?v=brand-sweep-20260728', sponsors: '?v=sponsor-crm-files-20260730', programmeads: '?v=sponsor-crm-files-20260730', showsponsors: '?v=sponsor-crm-files-20260730', sponsorssettings: '?v=sponsor-crm-files-20260730' };
     const moduleVersion = moduleVersions[subSafe] || '';
     loadScriptOnce('/ASSETS/scripts/modules/marketing-' + (moduleFiles[subSafe] || subSafe) + '.js' + moduleVersion)
       .then(() => {

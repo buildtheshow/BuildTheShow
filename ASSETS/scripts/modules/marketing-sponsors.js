@@ -1123,6 +1123,181 @@
     return 'Colour';
   }
 
+  var crmZipLoader = null;
+
+  function crmSafeFilePart(value, fallback) {
+    var clean = String(value || '')
+      .replace(/[<>:"/\\|?*\x00-\x1F]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return clean || (fallback || 'File');
+  }
+
+  function crmUrlExtension(url) {
+    var path = String(url || '').split('?')[0].split('#')[0];
+    var name = path.split('/').pop() || '';
+    var ext = name.indexOf('.') >= 0 ? name.split('.').pop().toLowerCase() : '';
+    return /^[a-z0-9]{1,8}$/.test(ext) ? ext : '';
+  }
+
+  function crmFileExtension(file) {
+    var fromName = crmUrlExtension(file && file.file_name);
+    if (fromName) return fromName;
+    return crmUrlExtension(file && file.file_url) || 'png';
+  }
+
+  function crmFileBaseName(name) {
+    return String(name || '').replace(/\.[^.]+$/, '').trim();
+  }
+
+  function crmDownloadNameForFile(bizName, file, linkedAd, index) {
+    var ext = crmFileExtension(file);
+    if (linkedAd) {
+      var size = crmAdSizeLabel(linkedAd);
+      var type = crmAdTypeLabel(linkedAd, size);
+      return crmSafeFilePart(bizName, 'Business') + ' - ' +
+        crmSafeFilePart(size.label, 'Ad') + ' - ' +
+        crmSafeFilePart(type, 'Artwork') + '.' + ext;
+    }
+    var base = crmFileBaseName(file && file.file_name);
+    return crmSafeFilePart(bizName, 'Business') + ' - ' +
+      crmSafeFilePart(base || ('File ' + (index + 1)), 'File') + '.' + ext;
+  }
+
+  function crmCollectBusinessFiles(biz, bizAds, bizFiles) {
+    var files = (bizFiles || []).slice();
+    var existingUrls = {};
+    files.forEach(function (f) { existingUrls[f.file_url] = true; });
+    (bizAds || []).forEach(function (a) {
+      if (a.artwork_url && !existingUrls[a.artwork_url]) {
+        var sz = crmAdSizeLabel(a);
+        files.push({
+          file_url: a.artwork_url,
+          file_name: sz.label + ' artwork.' + crmUrlExtension(a.artwork_url),
+          file_type: 'artwork',
+          uploaded_by: 'business',
+          created_at: a.updated_at || a.created_at,
+        });
+        existingUrls[a.artwork_url] = true;
+      }
+    });
+    return files.map(function (file, index) {
+      var linkedAd = (bizAds || []).find(function (ad) { return ad.artwork_url === file.file_url; }) || null;
+      var ext = crmFileExtension(file);
+      var isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].indexOf(ext) >= 0;
+      return Object.assign({}, file, {
+        ext: ext,
+        is_image: isImage,
+        linked_ad: linkedAd,
+        download_name: crmDownloadNameForFile((biz || {}).name, file, linkedAd, index),
+      });
+    });
+  }
+
+  function crmSaveBlob(blob, filename) {
+    var objectUrl = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 500);
+  }
+
+  function crmUniqueZipName(file, usedNames) {
+    var requested = crmSafeFilePart(file.download_name || file.file_name || 'File', 'File');
+    if (!usedNames[requested]) {
+      usedNames[requested] = 1;
+      return requested;
+    }
+    var ext = '';
+    var dot = requested.lastIndexOf('.');
+    if (dot > 0) {
+      ext = requested.slice(dot);
+      requested = requested.slice(0, dot);
+    }
+    usedNames[requested + ext] += 1;
+    return requested + ' (' + usedNames[requested + ext] + ')' + ext;
+  }
+
+  function crmEnsureZipLoaded() {
+    if (window.JSZip) return Promise.resolve(window.JSZip);
+    if (crmZipLoader) return crmZipLoader;
+    crmZipLoader = new Promise(function (resolve, reject) {
+      var script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+      script.async = true;
+      script.onload = function () { resolve(window.JSZip); };
+      script.onerror = function () { reject(new Error('Could not load download helper.')); };
+      document.head.appendChild(script);
+    });
+    return crmZipLoader;
+  }
+
+  async function crmDownloadFiles(files, bundleName) {
+    var validFiles = (files || []).filter(function (file) { return file && file.file_url; });
+    if (!validFiles.length) {
+      alert('No files are available to download.');
+      return;
+    }
+    if (validFiles.length <= 1) {
+      var only = validFiles[0];
+      var response = await fetch(only.file_url);
+      if (!response.ok) throw new Error('Could not download ' + (only.file_name || 'file') + '.');
+      crmSaveBlob(await response.blob(), only.download_name || only.file_name || 'file');
+      return;
+    }
+    try {
+      await crmEnsureZipLoaded();
+    } catch (error) {
+      console.warn('[BTS CRM] JSZip unavailable, falling back to individual downloads', error);
+    }
+    if (window.JSZip) {
+      var zip = new window.JSZip();
+      var usedNames = {};
+      for (var i = 0; i < validFiles.length; i++) {
+        var item = validFiles[i];
+        var zipResponse = await fetch(item.file_url);
+        if (!zipResponse.ok) throw new Error('Could not download ' + (item.file_name || 'file') + '.');
+        zip.file(crmUniqueZipName(item, usedNames), await zipResponse.blob());
+      }
+      crmSaveBlob(await zip.generateAsync({ type: 'blob' }), crmSafeFilePart(bundleName || 'sponsor-files', 'sponsor-files') + '.zip');
+      return;
+    }
+    for (var j = 0; j < validFiles.length; j++) {
+      var fallbackFile = validFiles[j];
+      var fallbackResponse = await fetch(fallbackFile.file_url);
+      if (!fallbackResponse.ok) throw new Error('Could not download ' + (fallbackFile.file_name || 'file') + '.');
+      crmSaveBlob(await fallbackResponse.blob(), fallbackFile.download_name || fallbackFile.file_name || ('file-' + (j + 1)));
+      await new Promise(function (resolve) { setTimeout(resolve, 180); });
+    }
+  }
+
+  function crmDownloadAllFiles(bizId, buttonEl) {
+    var biz = (SpnsState.businesses || []).find(function (item) { return item.id === bizId; });
+    if (!biz) return;
+    var bizAds = (SpnsState.ads || []).filter(function (ad) { return ad.business_id === bizId; });
+    var bizFiles = (SpnsState.files || []).filter(function (file) { return file.business_id === bizId; });
+    var files = crmCollectBusinessFiles(biz, bizAds, bizFiles);
+    var button = buttonEl || null;
+    var originalLabel = button ? button.textContent : '';
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Preparing...';
+    }
+    crmDownloadFiles(files, crmSafeFilePart(biz.name, 'Business') + ' sponsor files')
+      .catch(function (error) {
+        alert('Could not download files: ' + error.message);
+      })
+      .finally(function () {
+        if (button) {
+          button.disabled = false;
+          button.textContent = originalLabel;
+        }
+      });
+  }
+
   function crmBookingStatusInfo(status) {
     if (status === 'approved') return { label: 'Accepted', cls: 'spn-crm-card-status--accepted', active: true, declined: false };
     if (status === 'declined') return { label: 'Declined', cls: 'spn-crm-card-status--declined', active: false, declined: true };
@@ -1206,9 +1381,6 @@
     var contactLine = [biz.contact_name, biz.contact_email, biz.contact_phone].filter(Boolean).join(' · ');
 
     var fmtD = function (cents) { return '$' + ((cents||0)/100).toLocaleString('en-CA', {minimumFractionDigits:2}); };
-
-    // === NEXT ACTION ===
-    var nextAction = computeNextAction(bizAds, bizPkgs);
 
     // === BOOKING CARDS ===
     var bookingsHtml = '';
@@ -1395,26 +1567,14 @@
     });
 
     // === FILES (sponsor_files + artwork_url fallback from programme_ads) ===
-    var allFiles = (bizFiles || []).slice();
-    var existingUrls = {};
-    allFiles.forEach(function (f) { existingUrls[f.file_url] = true; });
-    bizAds.forEach(function (a) {
-      if (a.artwork_url && !existingUrls[a.artwork_url]) {
-        var sz2 = crmAdSizeLabel(a);
-        allFiles.push({ file_url: a.artwork_url, file_name: sz2.label + ' artwork', file_type: 'artwork', uploaded_by: 'business', created_at: a.updated_at || a.created_at });
-        existingUrls[a.artwork_url] = true;
-      }
-    });
+    var allFiles = crmCollectBusinessFiles(biz, bizAds, bizFiles);
     var filesHtml = '';
-    var imgExts = ['jpg','jpeg','png','gif','webp','svg'];
     allFiles.forEach(function (f) {
-      var ext = (f.file_name || '').split('.').pop().toLowerCase();
-      var isImage = imgExts.indexOf(ext) >= 0;
       var typeLabel = f.file_type || 'asset';
       var typeBadgeColor = typeLabel === 'logo' ? '#572e88' : (typeLabel === 'artwork' ? '#476aaa' : (typeLabel === 'proof' ? '#769e7b' : '#c8bad7'));
       var dateStr = f.created_at ? new Date(f.created_at).toLocaleDateString('en-CA') : '';
       var uploadedBy = f.uploaded_by === 'business' ? 'Submitted by business' : (f.uploaded_by === 'producer' ? 'Added by producer' : '');
-      if (isImage) {
+      if (f.is_image) {
         filesHtml += '<div class="spn-crm-file-card">' +
           '<a href="' + esc(f.file_url) + '" target="_blank" class="spn-crm-file-thumb"><img src="' + esc(f.file_url) + '" alt="' + esc(f.file_name) + '" /></a>' +
           '<div class="spn-crm-file-info">' +
@@ -1425,7 +1585,7 @@
         '</div>';
       } else {
         filesHtml += '<div class="spn-crm-file-card spn-crm-file-card--doc">' +
-          '<a href="' + esc(f.file_url) + '" target="_blank" class="spn-crm-file-ext">' + esc(ext.toUpperCase()) + '</a>' +
+          '<a href="' + esc(f.file_url) + '" target="_blank" class="spn-crm-file-ext">' + esc(f.ext.toUpperCase()) + '</a>' +
           '<div class="spn-crm-file-info">' +
             '<span class="spn-crm-file-badge" style="background:' + typeBadgeColor + ';">' + esc(typeLabel) + '</span>' +
             '<div class="spn-crm-file-name">' + esc(f.file_name) + '</div>' +
@@ -1448,7 +1608,6 @@
         '<span></span>' +
       '</div>' +
       '<div class="spn-crm-row-detail">' +
-        (nextAction.html ? '<div class="spn-crm-next-action">' + nextAction.html + '</div>' : '') +
         '<div class="spn-crm-detail-grid">' +
           '<div class="spn-crm-detail-primary">' +
             '<div class="spn-crm-section">' +
@@ -1479,10 +1638,9 @@
         '</div>' +
         '<div class="spn-crm-detail-full">' +
           '<div class="spn-crm-section">' +
-            '<div class="spn-crm-section-head"><img src="/ASSETS/Images/Icons/Files.svg" alt="" /><span>Files</span><span class="spn-crm-file-count">' + allFiles.length + ' file' + (allFiles.length !== 1 ? 's' : '') + '</span></div>' +
+            '<div class="spn-crm-section-head"><img src="/ASSETS/Images/Icons/Files.svg" alt="" /><span>Files</span><span class="spn-crm-file-count">' + allFiles.length + ' file' + (allFiles.length !== 1 ? 's' : '') + '</span><div class="spn-crm-file-tools"><button class="spn-crm-mini-btn spn-crm-mini-btn--ghost" onclick="event.stopPropagation();MarketingSponsorsModule.crmDownloadAllFiles(\'' + biz.id + '\',this)"' + (allFiles.length ? '' : ' disabled') + '>Download All</button><button class="spn-crm-mini-btn spn-crm-mini-btn--upload" onclick="event.stopPropagation();MarketingSponsorsModule.uploadCrmFile(\'' + biz.id + '\')">Upload File</button></div></div>' +
             '<div class="spn-crm-file-grid">' +
               (filesHtml || '<div class="spn-crm-empty-section">No files uploaded yet</div>') +
-              '<button class="spn-crm-upload-btn" onclick="MarketingSponsorsModule.uploadCrmFile(\'' + biz.id + '\')"><img src="/ASSETS/Images/Icons/Upload - Document.svg?v=20260703a" alt="" /> Upload File</button>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -3838,6 +3996,7 @@
     saveCrmNotes: saveCrmNotes,
     toggleCrmDeliv: toggleCrmDeliv,
     uploadCrmFile: uploadCrmFile,
+    crmDownloadAllFiles: crmDownloadAllFiles,
     crmToggleField: crmToggleField,
     crmCloseModal: crmCloseModal,
     crmInvoicePopup: crmInvoicePopup,
