@@ -1028,11 +1028,13 @@
     var weekFromNow = new Date(today); weekFromNow.setDate(weekFromNow.getDate() + 7);
 
     ads.forEach(function (a) {
+      if (a.booking_status === 'declined') return;
       totalBooked += (a.price_cents || 0);
       if (a.payment_status === 'paid') totalReceived += (a.price_cents || 0);
       if (a.artwork_status === 'missing') artworkMissing++;
     });
     packages.forEach(function (p) {
+      if (p.booking_status === 'declined') return;
       totalBooked += (p.amount_cents || 0);
       if (p.payment_status === 'paid') totalReceived += (p.amount_cents || 0);
     });
@@ -1121,16 +1123,43 @@
     return 'Colour';
   }
 
+  function crmBookingStatusInfo(status) {
+    if (status === 'approved') return { label: 'Accepted', cls: 'spn-crm-card-status--accepted', active: true, declined: false };
+    if (status === 'declined') return { label: 'Declined', cls: 'spn-crm-card-status--declined', active: false, declined: true };
+    return { label: 'Pending', cls: 'spn-crm-card-status--pending', active: true, declined: false };
+  }
+
+  function crmBookingActions(table, booking) {
+    var statusInfo = crmBookingStatusInfo(booking.booking_status);
+    var kindLabel = table === 'programme_ads' ? 'ad placement' : 'sponsor package';
+    var actionLabel = table === 'programme_ads' ? 'Delete' : 'Remove';
+    var deleteFn = table === 'programme_ads' ? 'deleteAd' : 'deletePkg';
+    var buttons = [
+      '<button type="button" class="spn-crm-card-action spn-crm-card-action--accept" onclick="MarketingSponsorsModule.crmToggleField(\'' + table + '\',\'' + booking.id + '\',\'booking_status\',\'approved\')">Accept</button>',
+      '<button type="button" class="spn-crm-card-action spn-crm-card-action--decline" onclick="MarketingSponsorsModule.crmToggleField(\'' + table + '\',\'' + booking.id + '\',\'booking_status\',\'declined\')">Decline</button>',
+      '<button type="button" class="spn-crm-card-action spn-crm-card-action--delete" onclick="MarketingSponsorsModule.' + deleteFn + '(\'' + booking.id + '\')">' + actionLabel + '</button>'
+    ];
+    return '<div class="spn-crm-card-topline">' +
+      '<div class="spn-crm-card-type-wrap">' +
+        '<div class="spn-crm-card-type">' + (table === 'programme_ads' ? 'Ad Placement' : 'Sponsor') + '</div>' +
+        '<div class="spn-crm-card-status ' + statusInfo.cls + '">' + statusInfo.label + '</div>' +
+      '</div>' +
+      '<div class="spn-crm-card-actions" aria-label="Actions for this ' + kindLabel + '">' + buttons.join('') + '</div>' +
+    '</div>';
+  }
+
   function renderCrmBusinessRow(biz, bizAds, bizPkgs, bizDelivs, bizFiles) {
     var totalCents = 0, receivedCents = 0;
     var allArtApproved = true, anyArtMissing = false, anyArtReceived = false;
 
     bizPkgs.forEach(function (p) {
+      if (p.booking_status === 'declined') return;
       totalCents += (p.amount_cents || 0);
       if (p.payment_status === 'paid') receivedCents += (p.amount_cents || 0);
       else if (p.payment_amount_cents) receivedCents += p.payment_amount_cents;
     });
     bizAds.forEach(function (a) {
+      if (a.booking_status === 'declined') return;
       totalCents += (a.price_cents || 0);
       if (a.payment_status === 'paid') receivedCents += (a.price_cents || 0);
       else if (a.payment_amount_cents) receivedCents += a.payment_amount_cents;
@@ -1194,12 +1223,13 @@
           lines.map(function (b) { return '<li>' + esc(b.trim()) + '</li>'; }).join('') + '</ul></div>';
       }
 
+      var bookingStatus = crmBookingStatusInfo(p.booking_status);
       var isApproved = p.booking_status === 'approved';
       var invoiceSent = !!p.invoice_sent_date;
       var isPaid = p.payment_status === 'paid';
 
       bookingsHtml += '<div class="spn-crm-card">' +
-        '<div class="spn-crm-card-type">Sponsor</div>' +
+        crmBookingActions('sponsor_packages', p) +
         '<div class="spn-crm-card-head">' +
           '<div class="spn-crm-card-product">' + esc(p.tier_name || 'Sponsor Package') + '</div>' +
           '<div class="spn-crm-card-price">' + fmtD(p.amount_cents) + '</div>' +
@@ -1207,12 +1237,20 @@
         bulletsList +
         '<div class="spn-crm-card-pipeline">' +
           crmPipelineStep('Booking received', true, null) +
-          crmPipelineStep(isApproved ? 'Booking approved' : 'Approve booking', isApproved, isApproved ? null : 'MarketingSponsorsModule.crmToggleField(\'sponsor_packages\',\'' + p.id + '\',\'booking_status\',\'approved\')') +
-          crmPipelineStep(invoiceSent ? 'Invoice sent' : 'Send invoice', invoiceSent, invoiceSent ? null : 'MarketingSponsorsModule.crmInvoicePopup(\'sponsor_packages\',\'' + p.id + '\')', p.invoice_sent_date || '') +
-          (p.invoice_number ? crmPipelineInfo('Invoice #' + p.invoice_number) : '') +
-          crmPipelineStep(isPaid ? 'Payment received' : 'Record payment', isPaid, isPaid ? null : 'MarketingSponsorsModule.crmPaymentPopup(\'sponsor_packages\',\'' + p.id + '\')', p.payment_received_date || '') +
-          (p.payment_amount_cents && !isPaid ? crmPipelineInfo('Received so far: ' + fmtD(p.payment_amount_cents)) : '') +
-          (p.payment_method ? crmPipelineInfo('Method: ' + p.payment_method) : '') +
+          crmPipelineStep(
+            bookingStatus.declined ? 'Booking declined' : (isApproved ? 'Booking accepted' : 'Accept booking'),
+            isApproved || bookingStatus.declined,
+            isApproved || bookingStatus.declined ? null : 'MarketingSponsorsModule.crmToggleField(\'sponsor_packages\',\'' + p.id + '\',\'booking_status\',\'approved\')'
+          ) +
+          (bookingStatus.declined
+            ? crmPipelineInfo('This sponsor package is inactive until it is accepted again.')
+            : (
+              crmPipelineStep(invoiceSent ? 'Invoice sent' : 'Send invoice', invoiceSent, invoiceSent ? null : 'MarketingSponsorsModule.crmInvoicePopup(\'sponsor_packages\',\'' + p.id + '\')', p.invoice_sent_date || '') +
+              (p.invoice_number ? crmPipelineInfo('Invoice #' + p.invoice_number) : '') +
+              crmPipelineStep(isPaid ? 'Payment received' : 'Record payment', isPaid, isPaid ? null : 'MarketingSponsorsModule.crmPaymentPopup(\'sponsor_packages\',\'' + p.id + '\')', p.payment_received_date || '') +
+              (p.payment_amount_cents && !isPaid ? crmPipelineInfo('Received so far: ' + fmtD(p.payment_amount_cents)) : '') +
+              (p.payment_method ? crmPipelineInfo('Method: ' + p.payment_method) : '')
+            )) +
         '</div>' +
         crmBookingDetails(p) +
       '</div>';
@@ -1228,6 +1266,7 @@
       var artReceived = artSt === 'received' || artOk;
       var approvalSt = a.approval_status || 'pending';
 
+      var bookingStatus = crmBookingStatusInfo(a.booking_status);
       var isApproved = a.booking_status === 'approved';
       var invoiceSent = !!a.invoice_sent_date;
       var isPaid = a.payment_status === 'paid';
@@ -1240,7 +1279,7 @@
       }
 
       bookingsHtml += '<div class="spn-crm-card">' +
-        '<div class="spn-crm-card-type">Ad Placement</div>' +
+        crmBookingActions('programme_ads', a) +
         '<div class="spn-crm-card-head">' +
           '<div>' +
             '<div class="spn-crm-card-product">' + esc(sizeLabel) + '</div>' +
@@ -1250,14 +1289,22 @@
         '</div>' +
         '<div class="spn-crm-card-pipeline">' +
           crmPipelineStep('Booking received', true, null) +
-          crmPipelineStep(isApproved ? 'Booking approved' : 'Approve booking', isApproved, isApproved ? null : 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'booking_status\',\'approved\')') +
-          crmPipelineStep(invoiceSent ? 'Invoice sent' : 'Send invoice', invoiceSent, invoiceSent ? null : 'MarketingSponsorsModule.crmInvoicePopup(\'programme_ads\',\'' + a.id + '\')', a.invoice_sent_date || '') +
-          (a.invoice_number ? crmPipelineInfo('Invoice #' + a.invoice_number) : '') +
-          crmPipelineStep(isPaid ? 'Payment received' : 'Record payment', isPaid, isPaid ? null : 'MarketingSponsorsModule.crmPaymentPopup(\'programme_ads\',\'' + a.id + '\')', a.payment_received_date || '') +
-          (a.payment_amount_cents && !isPaid ? crmPipelineInfo('Received so far: ' + fmtD(a.payment_amount_cents)) : '') +
-          (a.payment_method ? crmPipelineInfo('Method: ' + a.payment_method) : '') +
-          crmPipelineStep(artReceived ? 'Artwork received' : 'Request artwork', artReceived, !artReceived ? 'MarketingSponsorsModule.crmArtworkRequestPopup(\'' + a.id + '\')' : null) +
-          crmPipelineStep(approvalSt === 'approved' ? 'Artwork approved' : 'Approve artwork', approvalSt === 'approved', approvalSt === 'approved' ? null : (artReceived ? 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'approval_status\',\'approved\')' : null)) +
+          crmPipelineStep(
+            bookingStatus.declined ? 'Booking declined' : (isApproved ? 'Booking accepted' : 'Accept booking'),
+            isApproved || bookingStatus.declined,
+            isApproved || bookingStatus.declined ? null : 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'booking_status\',\'approved\')'
+          ) +
+          (bookingStatus.declined
+            ? crmPipelineInfo('This ad placement is inactive until it is accepted again.')
+            : (
+              crmPipelineStep(invoiceSent ? 'Invoice sent' : 'Send invoice', invoiceSent, invoiceSent ? null : 'MarketingSponsorsModule.crmInvoicePopup(\'programme_ads\',\'' + a.id + '\')', a.invoice_sent_date || '') +
+              (a.invoice_number ? crmPipelineInfo('Invoice #' + a.invoice_number) : '') +
+              crmPipelineStep(isPaid ? 'Payment received' : 'Record payment', isPaid, isPaid ? null : 'MarketingSponsorsModule.crmPaymentPopup(\'programme_ads\',\'' + a.id + '\')', a.payment_received_date || '') +
+              (a.payment_amount_cents && !isPaid ? crmPipelineInfo('Received so far: ' + fmtD(a.payment_amount_cents)) : '') +
+              (a.payment_method ? crmPipelineInfo('Method: ' + a.payment_method) : '') +
+              crmPipelineStep(artReceived ? 'Artwork received' : 'Request artwork', artReceived, !artReceived ? 'MarketingSponsorsModule.crmArtworkRequestPopup(\'' + a.id + '\')' : null) +
+              crmPipelineStep(approvalSt === 'approved' ? 'Artwork approved' : 'Approve artwork', approvalSt === 'approved', approvalSt === 'approved' ? null : (artReceived ? 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'approval_status\',\'approved\')' : null))
+            )) +
         '</div>' +
         crmBookingDetails(a) +
         artworkPreview +
@@ -1465,12 +1512,12 @@
   }
 
   function computeNextAction(bizAds, bizPkgs) {
-    var allBookings = [].concat(bizPkgs, bizAds);
+    var allBookings = [].concat(bizPkgs, bizAds).filter(function (b) { return b.booking_status !== 'declined'; });
     for (var i = 0; i < allBookings.length; i++) {
       var b = allBookings[i];
       if (b.booking_status !== 'approved') {
         var tbl = b.price_cents !== undefined ? 'programme_ads' : 'sponsor_packages';
-        return { html: '<button class="spn-crm-action-btn spn-crm-action-btn--approve" onclick="MarketingSponsorsModule.crmToggleField(\'' + tbl + '\',\'' + b.id + '\',\'booking_status\',\'approved\')"><img src="/ASSETS/Images/Icons/Checklist.svg" alt="" /> Approve Booking</button>' };
+        return { html: '<button class="spn-crm-action-btn spn-crm-action-btn--approve" onclick="MarketingSponsorsModule.crmToggleField(\'' + tbl + '\',\'' + b.id + '\',\'booking_status\',\'approved\')"><img src="/ASSETS/Images/Icons/Checklist.svg" alt="" /> Accept Booking</button>' };
       }
     }
     for (var j = 0; j < allBookings.length; j++) {
@@ -1836,11 +1883,11 @@
     var flags = [];
     var today = new Date(); today.setHours(0,0,0,0);
     var hasUnpaid = false;
-    bizPkgs.forEach(function (p) { if (p.payment_status !== 'paid' && (p.amount_cents||0) > 0) hasUnpaid = true; });
-    bizAds.forEach(function (a) { if (a.payment_status !== 'paid' && (a.price_cents||0) > 0) hasUnpaid = true; });
+    bizPkgs.forEach(function (p) { if (p.booking_status !== 'declined' && p.payment_status !== 'paid' && (p.amount_cents||0) > 0) hasUnpaid = true; });
+    bizAds.forEach(function (a) { if (a.booking_status !== 'declined' && a.payment_status !== 'paid' && (a.price_cents||0) > 0) hasUnpaid = true; });
     if (hasUnpaid) flags.push('Payment outstanding');
     var hasMissing = false;
-    bizAds.forEach(function (a) { if (a.artwork_status === 'missing') hasMissing = true; });
+    bizAds.forEach(function (a) { if (a.booking_status !== 'declined' && a.artwork_status === 'missing') hasMissing = true; });
     if (hasMissing) flags.push('Artwork missing');
     bizDelivs.forEach(function (d) {
       if (d.status !== 'done' && d.due_date) {
