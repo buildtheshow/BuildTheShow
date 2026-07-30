@@ -1616,7 +1616,7 @@
 
     // === ASSEMBLE ===
     return '<div class="spn-crm-row" id="spn-crm-row-' + biz.id + '">' +
-      '<div class="spn-crm-row-header" onclick="MarketingSponsorsModule.toggleCrmRow(\'' + biz.id + '\')">' +
+      '<div class="spn-crm-row-header" role="button" tabindex="0" aria-expanded="false" onclick="MarketingSponsorsModule.toggleCrmRow(\'' + biz.id + '\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();MarketingSponsorsModule.toggleCrmRow(\'' + biz.id + '\');}">' +
         '<span class="spn-crm-chevron">&#9654;</span>' +
         '<div><div class="spn-crm-biz-name">' + esc(biz.name) + '</div><div class="spn-crm-biz-contact">' + contactLine + '</div></div>' +
         '<div class="spn-crm-tags">' + (tags || '<span style="font-size:0.68rem;color:#c8bad7;">No bookings</span>') + '</div>' +
@@ -2079,7 +2079,10 @@
 
   function toggleCrmRow(bizId) {
     var el = document.getElementById('spn-crm-row-' + bizId);
-    if (el) el.classList.toggle('spn-crm-row--expanded');
+    if (!el) return;
+    var expanded = el.classList.toggle('spn-crm-row--expanded');
+    var header = el.querySelector('.spn-crm-row-header');
+    if (header) header.setAttribute('aria-expanded', expanded ? 'true' : 'false');
   }
 
   function saveCrmNotes(bizId) {
