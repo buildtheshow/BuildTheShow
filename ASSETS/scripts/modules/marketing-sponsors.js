@@ -1624,7 +1624,9 @@
         '<div>' + (payClass ? '<div class="spn-crm-pay-badge ' + payClass + '">' + payLabel + '</div><div class="spn-crm-pay-fraction">' + payFraction + '</div>' : '<span style="color:#c8bad7;">--</span>') + '</div>' +
         '<div class="spn-crm-art-status ' + artClass + '">' + artLabel + '</div>' +
         flagHtml +
-        '<span></span>' +
+        (!bizAds.length && !bizPkgs.length
+          ? '<button type="button" class="spn-crm-row-delete" title="Remove business" onclick="event.stopPropagation();MarketingSponsorsModule.deleteBiz(\'' + biz.id + '\',\'' + esc(biz.name) + '\')"><svg viewBox="0 0 24 24"><path d="M6.7 5.3 12 10.6l5.3-5.3 1.4 1.4-5.3 5.3 5.3 5.3-1.4 1.4L12 13.4l-5.3 5.3-1.4-1.4 5.3-5.3-5.3-5.3z"/></svg></button>'
+          : '<span></span>') +
       '</div>' +
       '<div class="spn-crm-row-detail">' +
         '<div class="spn-crm-detail-grid">' +
