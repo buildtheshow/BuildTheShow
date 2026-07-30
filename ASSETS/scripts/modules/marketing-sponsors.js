@@ -682,6 +682,19 @@
      .catch(function (e) { alert('Could not save: ' + e.message); });
   }
 
+  function deleteEmptyBusinessIfNoBookings(bizId) {
+    if (!bizId) return Promise.resolve();
+    return Promise.all([
+      dbFetch('sponsor_packages', '&select=id&business_id=eq.' + bizId),
+      dbFetch('programme_ads', '&select=id&business_id=eq.' + bizId),
+    ]).then(function (results) {
+      var remaining = (results[0] || []).length + (results[1] || []).length;
+      if (remaining > 0) return;
+      SpnsState.loaded.businesses = false;
+      return dbDelete('sponsor_businesses', bizId);
+    }).catch(function () {});
+  }
+
   function deleteBiz(id, name) {
     if (!confirm('Delete "' + name + '"? This cannot be undone.')) return;
     dbDelete('sponsor_businesses', id)
@@ -790,8 +803,11 @@
 
   function deleteAd(id) {
     if (!confirm('Delete this ad? This cannot be undone.')) return;
+    var ad = (SpnsState.ads || []).find(function (a) { return a.id === id; });
+    var bizId = ad ? ad.business_id : null;
     dbDelete('programme_ads', id)
-      .then(function () { SpnsState.loaded.ads = false; loadAds(); if (document.getElementById('spn-crm-biz-list')) loadShowSponsorsCRM(); })
+      .then(function () { SpnsState.loaded.ads = false; return deleteEmptyBusinessIfNoBookings(bizId); })
+      .then(function () { loadAds(); if (document.getElementById('spn-crm-biz-list')) loadShowSponsorsCRM(); })
       .catch(function (e) { alert('Could not delete: ' + e.message); });
   }
 
@@ -880,8 +896,11 @@
 
   function deletePkg(id) {
     if (!confirm('Delete this sponsor package? This cannot be undone.')) return;
+    var pkg = (SpnsState.packages || []).find(function (p) { return p.id === id; });
+    var bizId = pkg ? pkg.business_id : null;
     dbDelete('sponsor_packages', id)
-      .then(function () { SpnsState.loaded.sponsors = false; loadPackages(); if (document.getElementById('spn-crm-biz-list')) loadShowSponsorsCRM(); })
+      .then(function () { SpnsState.loaded.sponsors = false; return deleteEmptyBusinessIfNoBookings(bizId); })
+      .then(function () { loadPackages(); if (document.getElementById('spn-crm-biz-list')) loadShowSponsorsCRM(); })
       .catch(function (e) { alert('Could not delete: ' + e.message); });
   }
 
