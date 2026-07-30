@@ -41,6 +41,10 @@
       gap: 1rem;
       margin-top: 1.2rem;
     }
+    .dept-dashboard-grid--portal {
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      align-items: start;
+    }
     .dept-dashboard-card {
       background: #fff;
       border: 1.5px solid rgba(87,46,136,0.1);
@@ -179,6 +183,70 @@
       font-weight: 900;
       cursor: pointer;
     }
+    .dept-portal-link-card {
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+      min-height: 100%;
+    }
+    .dept-portal-link-copy {
+      font-size: 0.84rem;
+      line-height: 1.5;
+      color: rgba(0,0,0,0.62);
+    }
+    .dept-portal-link-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-top: auto;
+    }
+    .dept-portal-action {
+      width: 100%;
+      border: none;
+      border-radius: 10px;
+      padding: 0.82rem 0.95rem;
+      background: rgba(87,46,136,0.06);
+      border: 1.5px solid rgba(87,46,136,0.1);
+      color: #1f1635;
+      text-align: left;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .dept-portal-action:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 18px rgba(0,0,0,0.05);
+    }
+    .dept-portal-action-title {
+      display: block;
+      font-size: 0.9rem;
+      font-weight: 900;
+      color: #000000;
+    }
+    .dept-portal-action-copy {
+      display: block;
+      margin-top: 0.22rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: rgba(0,0,0,0.55);
+      line-height: 1.45;
+    }
+    .dept-portal-action--accent {
+      background: linear-gradient(135deg, var(--dept-color), rgba(87,46,136,0.82));
+      border-color: transparent;
+    }
+    .dept-portal-action--accent .dept-portal-action-title,
+    .dept-portal-action--accent .dept-portal-action-copy {
+      color: #ffffff;
+    }
+    .dept-portal-empty {
+      padding: 0.9rem 1rem;
+      border-radius: 10px;
+      background: rgba(87,46,136,0.04);
+      border: 1px solid rgba(87,46,136,0.08);
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: rgba(0,0,0,0.5);
+    }
     @media (max-width: 900px) {
       .prod-main { margin-left: 0; max-width: 100vw; width: 100%; padding: 4.5rem 1rem 2rem; }
       .prod-main::before { inset: 0; }
@@ -219,6 +287,8 @@
       const cfg = window.BTSDepartmentConfig;
       const root = document.getElementById('dept-dashboard-root');
       if (!cfg || !root) return;
+      const heroTitle = document.querySelector('.aud-visual-title');
+      const heroCopy = document.querySelector('.aud-visual-copy');
 
       // Mirrors DEPT_SLUG_TO_WRAP_ID in production-sidebar-nav.js — keep in sync.
       // A dept-lead portal session only ever needs their own department's dashboard
@@ -247,8 +317,22 @@
           return null;
         }
       }
+      function portalSessionData() {
+        try {
+          const raw = sessionStorage.getItem('bts-team-portal-v1');
+          return raw ? JSON.parse(raw) : null;
+        } catch (_) {
+          return null;
+        }
+      }
       const scopedGroupKey = portalScopedGroupKey();
+      const portalSession = portalSessionData();
+      const portalKeys = new Set((portalSession && portalSession.menuKeys) || []);
+      const portalMode = !!(scopedGroupKey && portalKeys.size);
       if (scopedGroupKey) cfg.groups = cfg.groups.filter(g => g.key === scopedGroupKey);
+      if (portalMode) root.classList.add('dept-dashboard-grid--portal');
+      if (portalMode && heroTitle) heroTitle.textContent = 'Department Links';
+      if (portalMode && heroCopy) heroCopy.textContent = 'Quick links to the pages and tools this department lead can access.';
 
       function esc(value) {
         return value == null ? '' : String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -327,6 +411,32 @@
         };
         return renames[key] || raw;
       }
+
+      function portalHasKey(key) {
+        return portalKeys.has(key);
+      }
+
+      function portalHasKeyOrChild(prefix) {
+        if (portalKeys.has(prefix)) return true;
+        for (const key of portalKeys) {
+          if (String(key).indexOf(prefix + ':') === 0) return true;
+        }
+        return false;
+      }
+
+      function pageUrl(page, extras) {
+        const params = new URLSearchParams(location.search);
+        params.set('id', params.get('id') || '');
+        Object.keys(extras || {}).forEach(function (key) {
+          if (extras[key] == null || extras[key] === '') params.delete(key);
+          else params.set(key, extras[key]);
+        });
+        return page + '?' + params.toString();
+      }
+
+      window.deptPortalGoPage = function (page, extras) {
+        location.href = pageUrl(page, extras || {});
+      };
 
       function roleLookupMatch(text, lookup) {
         const key = norm(text);
@@ -478,6 +588,97 @@
         '</div>';
       }
 
+      function renderPortalAction(action, groupColor) {
+        return '<button type="button" class="dept-portal-action' + (action.accent ? ' dept-portal-action--accent' : '') + '" style="--dept-color:' + esc(groupColor) + ';" onclick="' + esc(action.onclick) + '">' +
+          '<span class="dept-portal-action-title">' + esc(action.label) + '</span>' +
+          '<span class="dept-portal-action-copy">' + esc(action.copy) + '</span>' +
+        '</button>';
+      }
+
+      function portalToolActions(group) {
+        const actions = [];
+        if (portalHasKeyOrChild('schedule')) {
+          actions.push({
+            label: 'Production Calendar',
+            copy: 'View rehearsal dates, build days, and important production deadlines.',
+            onclick: "deptPortalGoPage('plan-calendar.html')",
+            accent: true,
+          });
+        }
+        if (portalHasKey('financials:receipts')) {
+          actions.push({
+            label: 'Financial Receipts',
+            copy: 'Go straight to receipts for submitting or checking department purchases.',
+            onclick: "deptPortalGoPage('budget-receipts.html')",
+          });
+        }
+        if (portalHasKey('financials:budgeting') || portalHasKey('financials:dashboard')) {
+          actions.push({
+            label: 'Financials',
+            copy: 'Open the financial pages this portal can see.',
+            onclick: "deptPortalGoPage('financials-dashboard.html')",
+          });
+        }
+        if (group && group.key === 'marketing-publicity') {
+          if (portalHasKeyOrChild('marketing')) {
+            actions.push({
+              label: 'Marketing Dashboard',
+              copy: 'Open the marketing workspace pages this portal can access.',
+              onclick: "deptPortalGoPage('promote-dashboard.html')",
+            });
+          }
+          if (portalHasKeyOrChild('sponsors')) {
+            actions.push({
+              label: 'Sponsors',
+              copy: 'Jump into sponsor pages and sponsor-related admin.',
+              onclick: "deptPortalGoPage('promote-show-sponsors.html')",
+            });
+          }
+        }
+        return actions;
+      }
+
+      function renderPortalCards(group, roleItems) {
+        const allowedItems = roleItems.filter(function (item) {
+          return portalHasKey('dept:' + group.key + ':' + item.sectionKey);
+        });
+        const sectionActions = allowedItems.map(function (item) {
+          return {
+            label: item.label,
+            copy: 'Open the ' + item.label + ' page.',
+            onclick: "btsDeptSectionNav('" + esc(group.key) + "','" + esc(item.sectionKey) + "')",
+            accent: false,
+          };
+        });
+        const tools = portalToolActions(group);
+        const cards = [];
+        cards.push(
+          '<section class="dept-dashboard-card dept-portal-link-card" style="--dept-color:' + esc(group.color) + ';">' +
+            '<div class="dept-dashboard-head">' +
+              '<div class="dept-dashboard-icon"><img src="' + esc(group.icon) + '" alt="" /></div>' +
+              '<div><div class="dept-dashboard-title">' + esc(group.label) + '</div><div class="dept-dashboard-sub">Department pages</div></div>' +
+            '</div>' +
+            '<div class="dept-portal-link-copy">Use these links to go straight to the department pages this lead portal can access.</div>' +
+            '<div class="dept-portal-link-actions">' +
+              (sectionActions.length ? sectionActions.map(function (action) { return renderPortalAction(action, group.color); }).join('') : '<div class="dept-portal-empty">No department pages are enabled for this portal yet.</div>') +
+            '</div>' +
+          '</section>'
+        );
+        if (tools.length) {
+          cards.push(
+            '<section class="dept-dashboard-card dept-portal-link-card" style="--dept-color:' + esc(group.color) + ';">' +
+              '<div class="dept-dashboard-head">' +
+                '<div class="dept-dashboard-icon"><img src="/ASSETS/Images/Icons/Dashboard.svg" alt="" /></div>' +
+                '<div><div class="dept-dashboard-title">Other Tools</div><div class="dept-dashboard-sub">Extra pages this portal can open</div></div>' +
+              '</div>' +
+              '<div class="dept-portal-link-copy">Only pages this portal already has access to appear here.</div>' +
+              '<div class="dept-portal-link-actions">' + tools.map(function (action) { return renderPortalAction(action, group.color); }).join('') + '</div>' +
+            '</section>'
+          );
+        }
+        return cards.join('');
+      }
+
       // Render cards immediately with placeholder budget slots
       function renderCards(budgetByGroup, rolesByGroup) {
         root.innerHTML = cfg.groups.map(function (group) {
@@ -489,6 +690,10 @@
           const links = roleItems.map(function (item) {
             return '<button type="button" class="dept-dashboard-link" onclick="btsDeptSectionNav(\'' + esc(group.key) + '\',\'' + esc(item.sectionKey) + '\')">' + esc(item.label) + '</button>';
           }).join('');
+
+          if (portalMode) {
+            return renderPortalCards(group, roleItems);
+          }
 
           let budgetHtml = '';
           if (budgetByGroup) {
@@ -520,6 +725,7 @@
 
       // Render immediately with placeholders
       renderCards(null, null);
+      if (portalMode) return;
 
       // Fetch budget data from Supabase
       const prodId = new URLSearchParams(location.search).get('id');
