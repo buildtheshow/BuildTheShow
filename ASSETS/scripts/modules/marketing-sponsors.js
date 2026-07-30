@@ -1626,7 +1626,7 @@
             '</div>' +
             '<div class="spn-crm-section spn-crm-notes">' +
               '<div class="spn-crm-section-head"><img src="/ASSETS/Images/Icons/edit-pencil.svg" alt="" /><span>Notes</span></div>' +
-              '<textarea onblur="MarketingSponsorsModule.saveCrmNotes(\'' + biz.id + '\')">' + notesVal + '</textarea>' +
+              '<textarea data-last-saved="' + notesVal + '" onchange="MarketingSponsorsModule.saveCrmNotes(\'' + biz.id + '\')">' + notesVal + '</textarea>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -2065,7 +2065,13 @@
     var el = document.querySelector('#spn-crm-row-' + bizId + ' .spn-crm-notes textarea');
     if (!el) return;
     var val = el.value;
-    dbUpdate('sponsor_businesses', bizId, { notes: val }).catch(function (e) { console.error('Could not save notes', e); });
+    var lastSaved = el.dataset.lastSaved || '';
+    if (val === lastSaved) return;
+    dbUpdate('sponsor_businesses', bizId, { notes: val }).then(function () {
+      el.dataset.lastSaved = val;
+    }).catch(function (e) {
+      console.error('Could not save notes', e);
+    });
   }
 
   function toggleCrmDeliv(delivId, checked) {
