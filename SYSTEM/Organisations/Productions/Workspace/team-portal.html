@@ -339,7 +339,10 @@
         let menuKeys = buildMenuKeys(member);
         const roleLabel = getRoleLabel(normalizeRole(role));
 
-        // Check portal_permissions for per-person overrides
+        // Check portal_permissions for per-person overrides - layered on top of the
+        // role default, never a full replacement (portal_permissions only stores
+        // deltas from default, so a single override row must not wipe out every
+        // other default key the role would otherwise grant).
         const memberId = (member.email || '').trim().toLowerCase();
         if (memberId && prodId) {
           try {
@@ -348,7 +351,14 @@
               .eq('production_id', prodId)
               .eq('person_id', memberId);
             if (permRows && permRows.length) {
-              menuKeys = permissionsToMenuKeys(permRows);
+              const merged = new Set(menuKeys);
+              permRows.forEach(p => {
+                const mapped = MODULE_TO_MENU_KEYS[p.module_key];
+                if (!mapped) return;
+                if (p.access_level === 'none') mapped.forEach(k => merged.delete(k));
+                else mapped.forEach(k => merged.add(k));
+              });
+              menuKeys = [...merged];
             }
           } catch (_) {}
         }

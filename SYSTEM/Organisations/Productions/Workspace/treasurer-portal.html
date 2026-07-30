@@ -321,7 +321,11 @@
 
       async function storePortalSession(vol) {
         const memberId = (vol.email || '').trim().toLowerCase();
-        let menuKeys = [];
+        // Start from the role default, then layer per-person overrides on top -
+        // an override only ever changes the SPECIFIC module it targets, it must
+        // never wipe out every other default key just because it's the only row
+        // that got saved (portal_permissions only stores deltas from default).
+        let menuKeys = ROLE_MENU_DEFAULTS[roleKeyFor(vol.role_name)] || ROLE_MENU_DEFAULTS.volunteer;
 
         try {
           const { data: permRows } = await sb.from('portal_permissions')
@@ -329,13 +333,16 @@
             .eq('production_id', prodId)
             .eq('person_id', memberId);
           if (permRows && permRows.length) {
-            menuKeys = permissionsToMenuKeys(permRows);
-          } else {
-            menuKeys = ROLE_MENU_DEFAULTS[roleKeyFor(vol.role_name)] || ROLE_MENU_DEFAULTS.volunteer;
+            const merged = new Set(menuKeys);
+            permRows.forEach(p => {
+              const mapped = MODULE_TO_MENU_KEYS[p.module_key];
+              if (!mapped) return;
+              if (p.access_level === 'none') mapped.forEach(k => merged.delete(k));
+              else mapped.forEach(k => merged.add(k));
+            });
+            menuKeys = [...merged];
           }
-        } catch (_) {
-          menuKeys = ROLE_MENU_DEFAULTS[roleKeyFor(vol.role_name)] || ROLE_MENU_DEFAULTS.volunteer;
-        }
+        } catch (_) {}
 
         const context = {
           memberId,
