@@ -1329,6 +1329,15 @@
     return { label: 'Pending', cls: 'spn-crm-card-status--pending', active: true, declined: false };
   }
 
+  function crmArtworkIntentBadge(booking) {
+    var ad = booking.artwork_data;
+    var status = ad && typeof ad === 'object' ? ad.status : '';
+    if (status === 'ready') return '<div class="spn-crm-artwork-intent spn-crm-artwork-intent--ready">Has Artwork Now</div>';
+    if (status === 'later') return '<div class="spn-crm-artwork-intent spn-crm-artwork-intent--later">Sending Artwork Later</div>';
+    if (status === 'help') return '<div class="spn-crm-artwork-intent spn-crm-artwork-intent--help">Needs Design Help</div>';
+    return '';
+  }
+
   function crmBookingActions(table, booking) {
     var statusInfo = crmBookingStatusInfo(booking.booking_status);
     var kindLabel = table === 'programme_ads' ? 'ad placement' : 'sponsor package';
@@ -1343,6 +1352,7 @@
       '<div class="spn-crm-card-type-wrap">' +
         '<div class="spn-crm-card-type">' + (table === 'programme_ads' ? 'Ad Placement' : 'Sponsor') + '</div>' +
         '<div class="spn-crm-card-status ' + statusInfo.cls + '">' + statusInfo.label + '</div>' +
+        crmArtworkIntentBadge(booking) +
       '</div>' +
       '<div class="spn-crm-card-actions" aria-label="Actions for this ' + kindLabel + '">' + buttons.join('') + '</div>' +
     '</div>';
@@ -2080,6 +2090,11 @@
     var hasMissing = false;
     bizAds.forEach(function (a) { if (a.booking_status !== 'declined' && a.artwork_status === 'missing') hasMissing = true; });
     if (hasMissing) flags.push('Artwork missing');
+    var needsHelp = false;
+    bizAds.concat(bizPkgs).forEach(function (b) {
+      if (b.booking_status !== 'declined' && b.artwork_data && b.artwork_data.status === 'help') needsHelp = true;
+    });
+    if (needsHelp) flags.push('Needs design help');
     bizDelivs.forEach(function (d) {
       if (d.status !== 'done' && d.due_date) {
         var due = new Date(d.due_date); due.setHours(0,0,0,0);
