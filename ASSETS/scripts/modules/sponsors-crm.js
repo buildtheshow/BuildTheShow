@@ -1,4 +1,4 @@
-/* marketing-sponsors.js — Sponsors module */
+/* sponsors-crm.js — Sponsors module */
 (function () {
   'use strict';
 

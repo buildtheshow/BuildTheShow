@@ -13957,10 +13957,12 @@ See you soon!
     const subSafe = moduleNames[sub] ? sub : 'dashboard';
     const panel = document.getElementById('panel-marketing');
     if (!panel) return;
-    const moduleFiles = { programmeads: 'sponsors', showsponsors: 'sponsors', sponsorssettings: 'sponsors' };
-    const moduleVersions = { programme: '?v=brand-sweep-20260728', sponsors: '?v=sponsor-crm-empty-biz-delete-20260730', programmeads: '?v=sponsor-crm-empty-biz-delete-20260730', showsponsors: '?v=sponsor-crm-empty-biz-delete-20260730', sponsorssettings: '?v=sponsor-crm-empty-biz-delete-20260730' };
-    const moduleVersion = moduleVersions[subSafe] || '';
-    loadScriptOnce('/ASSETS/scripts/modules/marketing-' + (moduleFiles[subSafe] || subSafe) + '.js' + moduleVersion)
+    const crmSubTabs = { sponsors: 1, programmeads: 1, showsponsors: 1, sponsorssettings: 1 };
+    const moduleVersions = { programme: '?v=brand-sweep-20260728' };
+    const scriptSrc = crmSubTabs[subSafe]
+      ? '/ASSETS/scripts/modules/sponsors-crm.js?v=20260731-crm-tabbed-redesign'
+      : '/ASSETS/scripts/modules/marketing-' + subSafe + '.js' + (moduleVersions[subSafe] || '');
+    loadScriptOnce(scriptSrc)
       .then(() => {
         if (!isWorkspaceRouteCurrent(routeToken)) return;
         const mod = window[moduleNames[subSafe]];
