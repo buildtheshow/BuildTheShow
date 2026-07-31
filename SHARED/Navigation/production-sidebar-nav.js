@@ -497,7 +497,7 @@
       var pages = {
         sponsors:         'promote-sponsors.html',
         programmeads:     'promote-programme-ads.html',
-        showsponsors:     'promote-show-sponsors.html',
+        showsponsors:     'promote-sponsors-crm.html',
         sponsorssettings: 'promote-sponsors-settings.html',
       };
       location.href = pageUrl(pages[sub] || 'promote-sponsors.html');
