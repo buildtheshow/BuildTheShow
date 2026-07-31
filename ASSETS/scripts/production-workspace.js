@@ -21907,12 +21907,25 @@ See you soon!
     return (window._rscVolunteerSelectGroups || []).filter(group => keys.has(group.key));
   }
 
+  function rscEffectiveHours(group) {
+    const override = window._rscVolunteerHoursOverride?.[group.key];
+    return Number.isFinite(override) ? override : (group.hours || 0);
+  }
+
+  function rscOverrideVolunteerHours(key, value) {
+    if (!window._rscVolunteerHoursOverride) window._rscVolunteerHoursOverride = {};
+    const num = parseFloat(value);
+    window._rscVolunteerHoursOverride[key] = Number.isFinite(num) && num >= 0 ? num : 0;
+    rscRenderVolunteerLinkedSummary();
+    rscUpdatePerChildPrompt(rscCombinedVolunteerSelection());
+  }
+
   function rscCombinedVolunteerSelection() {
     const groups = rscSelectedVolunteerGroups();
     return {
       groups,
       names: groups.map(g => g.name),
-      hours: groups.reduce((sum, g) => sum + (g.hours || 0), 0),
+      hours: groups.reduce((sum, g) => sum + rscEffectiveHours(g), 0),
       roles: [...new Set(groups.flatMap(g => (g.roles || '').split(',').map(r => r.trim()).filter(Boolean)))],
       ids: groups.flatMap(g => g.ids),
     };
@@ -21932,13 +21945,14 @@ See you soon!
         group.code ? `Code ${group.code}` : '',
         group.status ? group.status.replace(/_/g, ' ') : '',
       ].filter(Boolean).join(' · ');
+      const effHours = rscEffectiveHours(group);
       return `<div style="padding:0.4rem 0;border-bottom:1px solid rgba(87,46,136,0.08);">
         <div style="font-size:0.78rem;font-weight:900;color:#000000;">${esc(group.name)}</div>
-        <div style="font-size:0.72rem;color:rgba(87,46,136,0.55);line-height:1.45;">${esc(group.roles || 'Volunteer')}${group.hours ? ` · ${esc(String(group.hours))} approved hr${group.hours === 1 ? '' : 's'}` : ''}</div>
+        <div style="font-size:0.72rem;color:rgba(87,46,136,0.55);line-height:1.45;">${esc(group.roles || 'Volunteer')}${effHours ? ` · ${esc(String(effHours))} hr${effHours === 1 ? '' : 's'}` : ''}</div>
         ${meta ? `<div style="font-size:0.68rem;color:rgba(87,46,136,0.42);margin-top:0.1rem;">${esc(meta)}</div>` : ''}
       </div>`;
     }).join('');
-    const totalHours = groups.reduce((sum, g) => sum + (g.hours || 0), 0);
+    const totalHours = groups.reduce((sum, g) => sum + rscEffectiveHours(g), 0);
     const totalLine = groups.length > 1
       ? `<div style="font-size:0.74rem;font-weight:900;color:#4a7a50;margin-top:0.4rem;">Combined: ${esc(String(totalHours))} hr${totalHours === 1 ? '' : 's'}</div>`
       : '';
@@ -21989,6 +22003,7 @@ See you soon!
     const v = d.volunteer;
     const scope = rscVolunteerTargetScope(assignId, d);
     window._rscVolunteerActiveScope = scope;
+    window._rscVolunteerHoursOverride = {};
     const symbol = { CAD: '$', USD: '$', GBP: '£' }[v.currency] || '$';
     const discountNote = v.discountAmount ? ` · ${symbol}${v.discountAmount} off` : '';
     const groups = rscVolunteerGroups();
@@ -22002,11 +22017,13 @@ See you soon!
       : [];
     const suggestedKeys = new Set(suggestedGroups.map(group => group.key));
     const checkboxForGroup = group => {
-      const label = `${group.name}${group.roles ? ' - ' + group.roles : ''}${group.hours ? ' (' + group.hours + ' hrs)' : ''}`;
+      const label = `${group.name}${group.roles ? ' - ' + group.roles : ''}`;
       const checked = window._rscVolunteerSelectedKeys.has(group.key);
       return `<label style="display:flex;align-items:center;gap:0.55rem;padding:0.4rem 0;cursor:pointer;font-size:0.82rem;color:#000000;">
         <input type="checkbox" value="${esc(group.key)}" ${checked ? 'checked' : ''} onchange="rscToggleVolunteerSelection('${esc(group.key)}', this.checked)" style="accent-color:#572e88;width:16px;height:16px;flex-shrink:0;" />
-        ${esc(label)}
+        <span style="flex:1;min-width:0;">${esc(label)}</span>
+        <input type="number" min="0" step="0.5" value="${esc(String(group.hours || 0))}" title="Total volunteer hours for ${esc(group.name)}" onclick="event.stopPropagation();" oninput="rscOverrideVolunteerHours('${esc(group.key)}', this.value)" style="width:56px;flex-shrink:0;padding:0.25rem 0.4rem;border:1.5px solid rgba(87,46,136,0.2);border-radius:6px;font:inherit;font-size:0.76rem;color:#000000;text-align:center;" />
+        <span style="flex-shrink:0;font-size:0.7rem;color:rgba(87,46,136,0.5);">hrs</span>
       </label>`;
     };
     const suggestedHtml = suggestedGroups.length
@@ -22198,6 +22215,19 @@ See you soon!
     const original = btn?.textContent || 'Save Connection';
     if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
     try {
+      const overrides = window._rscVolunteerHoursOverride || {};
+      const overriddenGroups = selection.groups.filter(g => Number.isFinite(overrides[g.key]));
+      if (overriddenGroups.length) {
+        // A group can span multiple signup rows (multiple shifts for the same person).
+        // Put the full override on the first row and zero the rest, so summing the
+        // group's rows back up next time still equals the number that was typed in.
+        await Promise.all(overriddenGroups.flatMap(g => {
+          const [firstId, ...restIds] = g.ids;
+          const writes = [sb.from('volunteer_signups').update({ approved_hours: overrides[g.key] }).eq('id', firstId)];
+          if (restIds.length) writes.push(sb.from('volunteer_signups').update({ approved_hours: 0 }).in('id', restIds));
+          return writes;
+        }));
+      }
       const { data, error } = await sb.from('casting_assignments').update({
         volunteer_discount_approved: earned,
         volunteer_hours_completed: hasSelection ? selection.hours : null,
