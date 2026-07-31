@@ -1006,7 +1006,14 @@
 
   // -- SHOW SPONSORS CRM --------------------------------------------------------
 
-  var CRM_TAG_COLORS = ['#572e88', '#476aaa', '#769e7b', '#dd8233', '#d1523d', '#ca7ea7', '#74a2b4'];
+  var CRM_TAG_COLORS = ['#572e88', '#476aaa', '#769e7b', '#dd8233', '#d1523d', '#ca7ea7', '#78bbd4'];
+  var CrmUi = { expanded: {}, tab: {} };
+  function crmColorForId(id) {
+    var s = String(id || '');
+    var h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return CRM_TAG_COLORS[h % CRM_TAG_COLORS.length];
+  }
 
   function loadShowSponsorsCRM() {
     Promise.all([
@@ -1338,16 +1345,20 @@
     return '';
   }
 
-  function crmBookingActions(table, booking) {
-    var statusInfo = crmBookingStatusInfo(booking.booking_status);
-    var kindLabel = table === 'programme_ads' ? 'ad placement' : 'sponsor package';
+  function crmActionButtonsHtml(table, booking) {
     var actionLabel = table === 'programme_ads' ? 'Delete' : 'Remove';
     var deleteFn = table === 'programme_ads' ? 'deleteAd' : 'deletePkg';
-    var buttons = [
+    return [
       '<button type="button" class="spn-crm-card-action spn-crm-card-action--accept" onclick="MarketingSponsorsModule.crmToggleField(\'' + table + '\',\'' + booking.id + '\',\'booking_status\',\'approved\')">Accept</button>',
       '<button type="button" class="spn-crm-card-action spn-crm-card-action--decline" onclick="MarketingSponsorsModule.crmToggleField(\'' + table + '\',\'' + booking.id + '\',\'booking_status\',\'declined\')">Decline</button>',
       '<button type="button" class="spn-crm-card-action spn-crm-card-action--delete" onclick="MarketingSponsorsModule.' + deleteFn + '(\'' + booking.id + '\')">' + actionLabel + '</button>'
-    ];
+    ].join('');
+  }
+
+  function crmBookingActions(table, booking) {
+    var statusInfo = crmBookingStatusInfo(booking.booking_status);
+    var kindLabel = table === 'programme_ads' ? 'ad placement' : 'sponsor package';
+    var buttons = [crmActionButtonsHtml(table, booking)];
     return '<div class="spn-crm-card-topline">' +
       '<div class="spn-crm-card-type-wrap">' +
         '<div class="spn-crm-card-type">' + (table === 'programme_ads' ? 'Ad Placement' : 'Sponsor') + '</div>' +
@@ -1419,8 +1430,10 @@
 
     // === BOOKING CARDS ===
     var bookingsHtml = '';
+    var allBookingsList = [];
 
     bizPkgs.forEach(function (p) {
+      allBookingsList.push({ table: 'sponsor_packages', row: p });
       var tierObj = (SpnsState.settings.tiers || []).find(function (t) { return t.label === p.tier_name || t.id === p.tier_id; });
       var bullets = tierObj && tierObj.bullets ? tierObj.bullets : (p.benefits || '');
       var bulletsList = '';
@@ -1430,11 +1443,6 @@
           lines.map(function (b) { return '<li>' + esc(b.trim()) + '</li>'; }).join('') + '</ul></div>';
       }
 
-      var bookingStatus = crmBookingStatusInfo(p.booking_status);
-      var isApproved = p.booking_status === 'approved';
-      var invoiceSent = !!p.invoice_sent_date;
-      var isPaid = p.payment_status === 'paid';
-
       bookingsHtml += '<div class="spn-crm-card">' +
         crmBookingActions('sponsor_packages', p) +
         '<div class="spn-crm-card-head">' +
@@ -1442,41 +1450,17 @@
           '<div class="spn-crm-card-price">' + fmtD(p.amount_cents) + '</div>' +
         '</div>' +
         bulletsList +
-        '<div class="spn-crm-card-pipeline">' +
-          crmPipelineStep('Booking received', true, null) +
-          crmPipelineStep(
-            bookingStatus.declined ? 'Booking declined' : (isApproved ? 'Booking accepted' : 'Accept booking'),
-            isApproved || bookingStatus.declined,
-            isApproved || bookingStatus.declined ? null : 'MarketingSponsorsModule.crmToggleField(\'sponsor_packages\',\'' + p.id + '\',\'booking_status\',\'approved\')'
-          ) +
-          (bookingStatus.declined
-            ? crmPipelineInfo('This sponsor package is inactive until it is accepted again.')
-            : (
-              crmPipelineStep(invoiceSent ? 'Invoice sent' : 'Send invoice', invoiceSent, invoiceSent ? null : 'MarketingSponsorsModule.crmInvoicePopup(\'sponsor_packages\',\'' + p.id + '\')', p.invoice_sent_date || '') +
-              (p.invoice_number ? crmPipelineInfo('Invoice #' + p.invoice_number) : '') +
-              crmPipelineStep(isPaid ? 'Payment received' : 'Record payment', isPaid, isPaid ? null : 'MarketingSponsorsModule.crmPaymentPopup(\'sponsor_packages\',\'' + p.id + '\')', p.payment_received_date || '') +
-              (p.payment_amount_cents && !isPaid ? crmPipelineInfo('Received so far: ' + fmtD(p.payment_amount_cents)) : '') +
-              (p.payment_method ? crmPipelineInfo('Method: ' + p.payment_method) : '')
-            )) +
-        '</div>' +
+        '<div class="spn-crm-card-pipeline">' + crmBookingPipelineHtml('sponsor_packages', p) + '</div>' +
         crmBookingDetails(p) +
       '</div>';
     });
 
     bizAds.forEach(function (a) {
+      allBookingsList.push({ table: 'programme_ads', row: a });
       var sz = crmAdSizeLabel(a);
       var sizeLabel = sz.label;
       var typeLabel = crmAdTypeLabel(a, sz);
       var dimsLabel = sz.dims;
-      var artSt = a.artwork_status || 'missing';
-      var artOk = artSt === 'approved' || artSt === 'print_ready';
-      var artReceived = artSt === 'received' || artOk;
-      var approvalSt = a.approval_status || 'pending';
-
-      var bookingStatus = crmBookingStatusInfo(a.booking_status);
-      var isApproved = a.booking_status === 'approved';
-      var invoiceSent = !!a.invoice_sent_date;
-      var isPaid = a.payment_status === 'paid';
 
       var artworkPreview = '';
       if (a.artwork_url) {
@@ -1494,30 +1478,28 @@
           '</div>' +
           '<div class="spn-crm-card-price">' + fmtD(a.price_cents) + '</div>' +
         '</div>' +
-        '<div class="spn-crm-card-pipeline">' +
-          crmPipelineStep('Booking received', true, null) +
-          crmPipelineStep(
-            bookingStatus.declined ? 'Booking declined' : (isApproved ? 'Booking accepted' : 'Accept booking'),
-            isApproved || bookingStatus.declined,
-            isApproved || bookingStatus.declined ? null : 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'booking_status\',\'approved\')'
-          ) +
-          (bookingStatus.declined
-            ? crmPipelineInfo('This ad placement is inactive until it is accepted again.')
-            : (
-              crmPipelineStep(invoiceSent ? 'Invoice sent' : 'Send invoice', invoiceSent, invoiceSent ? null : 'MarketingSponsorsModule.crmInvoicePopup(\'programme_ads\',\'' + a.id + '\')', a.invoice_sent_date || '') +
-              (a.invoice_number ? crmPipelineInfo('Invoice #' + a.invoice_number) : '') +
-              crmPipelineStep(isPaid ? 'Payment received' : 'Record payment', isPaid, isPaid ? null : 'MarketingSponsorsModule.crmPaymentPopup(\'programme_ads\',\'' + a.id + '\')', a.payment_received_date || '') +
-              (a.payment_amount_cents && !isPaid ? crmPipelineInfo('Received so far: ' + fmtD(a.payment_amount_cents)) : '') +
-              (a.payment_method ? crmPipelineInfo('Method: ' + a.payment_method) : '') +
-              crmPipelineStep(artReceived ? 'Artwork received' : 'Request artwork', artReceived, !artReceived ? 'MarketingSponsorsModule.crmArtworkRequestPopup(\'' + a.id + '\')' : null) +
-              crmPipelineStep(approvalSt === 'approved' ? 'Artwork approved' : 'Approve artwork', approvalSt === 'approved', approvalSt === 'approved' ? null : (artReceived ? 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + a.id + '\',\'approval_status\',\'approved\')' : null))
-            )) +
-        '</div>' +
+        '<div class="spn-crm-card-pipeline">' + crmBookingPipelineHtml('programme_ads', a) + '</div>' +
         crmBookingDetails(a) +
         artworkPreview +
       '</div>';
     });
     if (!bookingsHtml) bookingsHtml = '<div class="spn-crm-empty-section">No bookings yet</div>';
+
+    // Primary booking (for the Overview tab's Sponsorship + Workflow cards): first
+    // active booking, falling back to the first booking if everything is declined.
+    var primary = allBookingsList.filter(function (b) { return b.row.booking_status !== 'declined'; })[0] || allBookingsList[0] || null;
+    var primaryLabel = '', primaryDetail = '', primaryPrice = '';
+    if (primary) {
+      if (primary.table === 'sponsor_packages') {
+        primaryLabel = primary.row.tier_name || 'Sponsor Package';
+        primaryPrice = fmtD(primary.row.amount_cents);
+      } else {
+        var pSz = crmAdSizeLabel(primary.row);
+        primaryLabel = pSz.label;
+        primaryDetail = crmAdTypeLabel(primary.row, pSz) + (pSz.dims ? ' · ' + pSz.dims : '');
+        primaryPrice = fmtD(primary.row.price_cents);
+      }
+    }
 
     // === PAYMENT SUMMARY ===
     var outstandingCents = totalCents - receivedCents;
@@ -1636,9 +1618,92 @@
       }
     });
 
+    // === OVERVIEW TAB (Sponsorship / Workflow / Payment / Contact snapshot) ===
+    var moreBookingsNote = allBookingsList.length > 1
+      ? '<div class="spn-crm-overview-more">+' + (allBookingsList.length - 1) + ' more booking' + (allBookingsList.length - 1 !== 1 ? 's' : '') + ' &mdash; see the Bookings tab</div>'
+      : '';
+    var overviewHtml = !primary ? '<div class="spn-crm-empty-section">No bookings yet</div>' : (
+      '<div class="spn-crm-overview-grid">' +
+        '<div class="spn-crm-overview-card">' +
+          '<div class="spn-crm-overview-card-head">Sponsorship</div>' +
+          '<div class="spn-crm-card-status ' + crmBookingStatusInfo(primary.row.booking_status).cls + '">' + crmBookingStatusInfo(primary.row.booking_status).label + '</div>' +
+          '<div class="spn-crm-overview-product">' + esc(primaryLabel) + '</div>' +
+          (primaryDetail ? '<div class="spn-crm-overview-detail">' + esc(primaryDetail) + '</div>' : '') +
+          '<div class="spn-crm-overview-price">' + primaryPrice + '</div>' +
+          moreBookingsNote +
+        '</div>' +
+        '<div class="spn-crm-overview-card">' +
+          '<div class="spn-crm-overview-card-head">Workflow</div>' +
+          '<div class="spn-crm-card-pipeline">' + crmBookingPipelineHtml(primary.table, primary.row) + '</div>' +
+        '</div>' +
+        '<div class="spn-crm-overview-card">' +
+          '<div class="spn-crm-overview-card-head">Payment</div>' +
+          '<div class="spn-crm-pay-block">' + payHtml + '</div>' +
+        '</div>' +
+        '<div class="spn-crm-overview-card">' +
+          '<div class="spn-crm-overview-card-head">Contact</div>' +
+          (contactHtml || '<div class="spn-crm-empty-section">No contact details</div>') +
+        '</div>' +
+      '</div>'
+    );
+
+    // === FOOTER (submitted + artwork intent + primary booking actions) ===
+    var footerHtml = '';
+    if (primary) {
+      var submittedStr = primary.row.created_at ? fmtDateTime(primary.row.created_at) : '';
+      footerHtml = '<div class="spn-crm-detail-footer">' +
+        '<div class="spn-crm-detail-footer-info">' +
+          (submittedStr ? '<span><strong>Submitted:</strong> ' + esc(submittedStr) + '</span>' : '') +
+          crmArtworkIntentBadge(primary.row) +
+        '</div>' +
+        '<div class="spn-crm-card-actions">' + crmActionButtonsHtml(primary.table, primary.row) + '</div>' +
+      '</div>';
+    }
+
+    // === HEADER (mark + name + contact + status pill) ===
+    var markColor = crmColorForId(biz.id);
+    var headerHtml = '<div class="spn-crm-detail-header">' +
+      '<div class="spn-crm-biz-mark" style="background:' + markColor + '">' + esc(dashboardInitials(biz.name)) + '</div>' +
+      '<div class="spn-crm-detail-header-info">' +
+        '<div class="spn-crm-detail-header-name">' + esc(biz.name) + '</div>' +
+        '<div class="spn-crm-detail-header-contact">' + contactLine + '</div>' +
+      '</div>' +
+      '<div class="spn-crm-detail-status-pill' + (flags.length ? ' spn-crm-detail-status-pill--bad' : ' spn-crm-detail-status-pill--good') + '">' + (flags.length ? 'Needs Follow Up' : 'All Good') + '</div>' +
+    '</div>';
+
+    // === TABS ===
+    var activeTab = CrmUi.tab[biz.id] || 'overview';
+    var TAB_DEFS = [
+      { key: 'overview', label: 'Overview' },
+      { key: 'bookings', label: 'Bookings' },
+      { key: 'deliverables', label: 'Deliverables' },
+      { key: 'files', label: 'Files' },
+      { key: 'activity', label: 'Activity' },
+      { key: 'notes', label: 'Notes' }
+    ];
+    var tabsHtml = '<div class="spn-crm-tabs" role="tablist">' + TAB_DEFS.map(function (t) {
+      return '<button type="button" class="spn-crm-tab' + (activeTab === t.key ? ' spn-crm-tab--active' : '') + '" data-tab="' + t.key + '" role="tab" aria-selected="' + (activeTab === t.key ? 'true' : 'false') + '" onclick="event.stopPropagation();MarketingSponsorsModule.crmSwitchTab(\'' + biz.id + '\',\'' + t.key + '\')">' + t.label + '</button>';
+    }).join('') + '</div>';
+
+    function panel(key, innerHtml) {
+      return '<div class="spn-crm-tab-panel" data-tab-panel="' + key + '" style="display:' + (activeTab === key ? '' : 'none') + '">' + innerHtml + '</div>';
+    }
+
+    var panelsHtml =
+      panel('overview', overviewHtml) +
+      panel('bookings', '<div class="spn-crm-cards-stack">' + bookingsHtml + '</div>') +
+      panel('deliverables', '<div class="spn-crm-deliverables-grid">' + delivHtml + '</div>') +
+      panel('files',
+        '<div class="spn-crm-section-head"><span>Files</span><span class="spn-crm-file-count">' + allFiles.length + ' file' + (allFiles.length !== 1 ? 's' : '') + '</span><div class="spn-crm-file-tools"><button class="spn-crm-mini-btn spn-crm-mini-btn--ghost" onclick="event.stopPropagation();MarketingSponsorsModule.crmDownloadAllFiles(\'' + biz.id + '\',this)"' + (allFiles.length ? '' : ' disabled') + '>Download All</button><button class="spn-crm-mini-btn spn-crm-mini-btn--upload" onclick="event.stopPropagation();MarketingSponsorsModule.uploadCrmFile(\'' + biz.id + '\')">Upload File</button></div></div>' +
+        '<div class="spn-crm-file-grid">' + (filesHtml || '<div class="spn-crm-empty-section">No files uploaded yet</div>') + '</div>'
+      ) +
+      panel('activity', '<div class="spn-crm-timeline">' + timelineHtml + '</div>') +
+      panel('notes', '<div class="spn-crm-notes"><textarea data-last-saved="' + notesVal + '" onchange="MarketingSponsorsModule.saveCrmNotes(\'' + biz.id + '\')">' + notesVal + '</textarea></div>');
+
     // === ASSEMBLE ===
-    return '<div class="spn-crm-row" id="spn-crm-row-' + biz.id + '">' +
-      '<div class="spn-crm-row-header" role="button" tabindex="0" aria-expanded="false" onclick="MarketingSponsorsModule.toggleCrmRow(\'' + biz.id + '\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();MarketingSponsorsModule.toggleCrmRow(\'' + biz.id + '\');}">' +
+    var isExpanded = !!CrmUi.expanded[biz.id];
+    return '<div class="spn-crm-row' + (isExpanded ? ' spn-crm-row--expanded' : '') + '" id="spn-crm-row-' + biz.id + '">' +
+      '<div class="spn-crm-row-header" role="button" tabindex="0" aria-expanded="' + (isExpanded ? 'true' : 'false') + '" onclick="MarketingSponsorsModule.toggleCrmRow(\'' + biz.id + '\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();MarketingSponsorsModule.toggleCrmRow(\'' + biz.id + '\');}">' +
         '<span class="spn-crm-chevron">&#9654;</span>' +
         '<div><div class="spn-crm-biz-name">' + esc(biz.name) + '</div><div class="spn-crm-biz-contact">' + contactLine + '</div></div>' +
         '<div class="spn-crm-tags">' + (tags || '<span style="font-size:0.68rem;color:#c8bad7;">No bookings</span>') + '</div>' +
@@ -1651,48 +1716,10 @@
           : '<span></span>') +
       '</div>' +
       '<div class="spn-crm-row-detail">' +
-        '<div class="spn-crm-detail-grid">' +
-          '<div class="spn-crm-detail-primary">' +
-            '<div class="spn-crm-section">' +
-              '<div class="spn-crm-section-head"><img src="/ASSETS/Images/Icons/Budgeting-Sponsorship.svg" alt="" /><span>Bookings</span></div>' +
-              '<div class="spn-crm-cards-stack">' + bookingsHtml + '</div>' +
-            '</div>' +
-          '</div>' +
-          '<div class="spn-crm-detail-sidebar">' +
-            '<div class="spn-crm-section">' +
-              '<div class="spn-crm-section-head"><img src="/ASSETS/Images/Icons/organisation-members.svg" alt="" /><span>Contact</span></div>' +
-              (contactHtml || '<div class="spn-crm-empty-section">No contact details</div>') +
-            '</div>' +
-            '<div class="spn-crm-section">' +
-              '<div class="spn-crm-section-head"><img src="/ASSETS/Images/Icons/Budgeting-Fundraising.svg" alt="" /><span>Payment</span></div>' +
-              '<div class="spn-crm-pay-block">' + payHtml + '</div>' +
-            '</div>' +
-            '<div class="spn-crm-section spn-crm-notes">' +
-              '<div class="spn-crm-section-head"><img src="/ASSETS/Images/Icons/edit-pencil.svg" alt="" /><span>Notes</span></div>' +
-              '<textarea data-last-saved="' + notesVal + '" onchange="MarketingSponsorsModule.saveCrmNotes(\'' + biz.id + '\')">' + notesVal + '</textarea>' +
-            '</div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="spn-crm-detail-full">' +
-          '<div class="spn-crm-section">' +
-            '<div class="spn-crm-section-head"><img src="/ASSETS/Images/Icons/Checklist.svg" alt="" /><span>Deliverables</span></div>' +
-            '<div class="spn-crm-deliverables-grid">' + delivHtml + '</div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="spn-crm-detail-full">' +
-          '<div class="spn-crm-section">' +
-            '<div class="spn-crm-section-head"><img src="/ASSETS/Images/Icons/Files.svg" alt="" /><span>Files</span><span class="spn-crm-file-count">' + allFiles.length + ' file' + (allFiles.length !== 1 ? 's' : '') + '</span><div class="spn-crm-file-tools"><button class="spn-crm-mini-btn spn-crm-mini-btn--ghost" onclick="event.stopPropagation();MarketingSponsorsModule.crmDownloadAllFiles(\'' + biz.id + '\',this)"' + (allFiles.length ? '' : ' disabled') + '>Download All</button><button class="spn-crm-mini-btn spn-crm-mini-btn--upload" onclick="event.stopPropagation();MarketingSponsorsModule.uploadCrmFile(\'' + biz.id + '\')">Upload File</button></div></div>' +
-            '<div class="spn-crm-file-grid">' +
-              (filesHtml || '<div class="spn-crm-empty-section">No files uploaded yet</div>') +
-            '</div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="spn-crm-detail-full spn-crm-timeline-wrap">' +
-          '<div class="spn-crm-section">' +
-            '<div class="spn-crm-section-head"><img src="/ASSETS/Images/Icons/History.svg" alt="" /><span>Activity</span></div>' +
-            '<div class="spn-crm-timeline">' + timelineHtml + '</div>' +
-          '</div>' +
-        '</div>' +
+        headerHtml +
+        tabsHtml +
+        '<div class="spn-crm-tab-panels">' + panelsHtml + '</div>' +
+        footerHtml +
       '</div>' +
     '</div>';
   }
@@ -1710,6 +1737,37 @@
 
   function crmPipelineInfo(text) {
     return '<div class="spn-crm-pipe-step spn-crm-pipe-step--info"><span class="spn-crm-pipe-dot"></span><span class="spn-crm-pipe-label">' + esc(text) + '</span></div>';
+  }
+
+  function crmBookingPipelineHtml(table, b) {
+    var bookingStatus = crmBookingStatusInfo(b.booking_status);
+    var isApproved = b.booking_status === 'approved';
+    var invoiceSent = !!b.invoice_sent_date;
+    var isPaid = b.payment_status === 'paid';
+    var html = crmPipelineStep('Booking received', true, null) +
+      crmPipelineStep(
+        bookingStatus.declined ? 'Booking declined' : (isApproved ? 'Booking accepted' : 'Accept booking'),
+        isApproved || bookingStatus.declined,
+        isApproved || bookingStatus.declined ? null : 'MarketingSponsorsModule.crmToggleField(\'' + table + '\',\'' + b.id + '\',\'booking_status\',\'approved\')'
+      );
+    if (bookingStatus.declined) {
+      html += crmPipelineInfo('This ' + (table === 'programme_ads' ? 'ad placement' : 'sponsor package') + ' is inactive until it is accepted again.');
+      return html;
+    }
+    html += crmPipelineStep(invoiceSent ? 'Invoice sent' : 'Send invoice', invoiceSent, invoiceSent ? null : 'MarketingSponsorsModule.crmInvoicePopup(\'' + table + '\',\'' + b.id + '\')', b.invoice_sent_date || '');
+    if (b.invoice_number) html += crmPipelineInfo('Invoice #' + b.invoice_number);
+    html += crmPipelineStep(isPaid ? 'Payment received' : 'Record payment', isPaid, isPaid ? null : 'MarketingSponsorsModule.crmPaymentPopup(\'' + table + '\',\'' + b.id + '\')', b.payment_received_date || '');
+    if (b.payment_amount_cents && !isPaid) html += crmPipelineInfo('Received so far: ' + fmtDollars(b.payment_amount_cents));
+    if (b.payment_method) html += crmPipelineInfo('Method: ' + b.payment_method);
+    if (table === 'programme_ads') {
+      var artSt = b.artwork_status || 'missing';
+      var artOk = artSt === 'approved' || artSt === 'print_ready';
+      var artReceived = artSt === 'received' || artOk;
+      var approvalSt = b.approval_status || 'pending';
+      html += crmPipelineStep(artReceived ? 'Artwork received' : 'Request artwork', artReceived, !artReceived ? 'MarketingSponsorsModule.crmArtworkRequestPopup(\'' + b.id + '\')' : null);
+      html += crmPipelineStep(approvalSt === 'approved' ? 'Artwork approved' : 'Approve artwork', approvalSt === 'approved', approvalSt === 'approved' ? null : (artReceived ? 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + b.id + '\',\'approval_status\',\'approved\')' : null));
+    }
+    return html;
   }
 
   function computeNextAction(bizAds, bizPkgs) {
@@ -2108,8 +2166,21 @@
     var el = document.getElementById('spn-crm-row-' + bizId);
     if (!el) return;
     var expanded = el.classList.toggle('spn-crm-row--expanded');
+    CrmUi.expanded[bizId] = expanded;
     var header = el.querySelector('.spn-crm-row-header');
     if (header) header.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  }
+
+  function crmSwitchTab(bizId, tab) {
+    CrmUi.tab[bizId] = tab;
+    var row = document.getElementById('spn-crm-row-' + bizId);
+    if (!row) return;
+    row.querySelectorAll('.spn-crm-tab').forEach(function (btn) {
+      btn.classList.toggle('spn-crm-tab--active', btn.dataset.tab === tab);
+    });
+    row.querySelectorAll('.spn-crm-tab-panel').forEach(function (panel) {
+      panel.style.display = panel.dataset.tabPanel === tab ? '' : 'none';
+    });
   }
 
   function saveCrmNotes(bizId) {
@@ -4050,6 +4121,7 @@
     scalePreviewFrame: scalePreviewFrame,
     refreshPublicPreview: schedulePublicPagePreview,
     toggleCrmRow: toggleCrmRow,
+    crmSwitchTab: crmSwitchTab,
     saveCrmNotes: saveCrmNotes,
     toggleCrmDeliv: toggleCrmDeliv,
     uploadCrmFile: uploadCrmFile,
