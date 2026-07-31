@@ -2247,6 +2247,12 @@
       return msg.indexOf('Could not find the function') !== -1;
     }
 
+    function isSponsorFilesProductionIdError(err) {
+      if (!err) return false;
+      var msg = (err.message || '') + ' ' + (err.details || '');
+      return msg.indexOf('sponsor_files') !== -1 && msg.indexOf('production_id') !== -1;
+    }
+
     async function finalizeSponsorSubmission(bizId, website, notes, uploadedUrls) {
       var payload = {
         p_production_id: production.id,
@@ -2266,6 +2272,16 @@
         var fallbackPayload = Object.assign({}, payload);
         delete fallbackPayload.p_artwork_data;
         res = await sb.rpc('finalize_sponsor_submission', fallbackPayload);
+      }
+      if (res.error && isSponsorFilesProductionIdError(res.error)) {
+        // The DB function's sponsor_files insert is missing a required column (pending
+        // migration) and aborts the whole call. Retry without files so the rest of the
+        // submission (business info, notes, artwork brief) still goes through -- the
+        // uploaded file itself is already sitting safely in storage from uploadSponsorFiles,
+        // it just won't be linked in the CRM until the migration is applied.
+        console.warn('finalize_sponsor_submission: retrying without p_files (sponsor_files.production_id migration pending)', res.error);
+        var noFilesPayload = Object.assign({}, payload, { p_files: [] });
+        res = await sb.rpc('finalize_sponsor_submission', noFilesPayload);
       }
       if (res.error) throw res.error;
       return res.data || null;
