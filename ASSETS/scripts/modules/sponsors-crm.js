@@ -1008,12 +1008,6 @@
 
   var CRM_TAG_COLORS = ['#572e88', '#476aaa', '#769e7b', '#dd8233', '#d1523d', '#ca7ea7', '#78bbd4'];
   var CrmUi = { expanded: {}, tab: {} };
-  function crmColorForId(id) {
-    var s = String(id || '');
-    var h = 0;
-    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-    return CRM_TAG_COLORS[h % CRM_TAG_COLORS.length];
-  }
 
   function loadShowSponsorsCRM() {
     Promise.all([
@@ -1660,18 +1654,10 @@
       '</div>';
     }
 
-    // === HEADER (mark + name + contact + status pill) ===
-    var markColor = crmColorForId(biz.id);
-    var headerHtml = '<div class="spn-crm-detail-header">' +
-      '<div class="spn-crm-biz-mark" style="background:' + markColor + '">' + esc(dashboardInitials(biz.name)) + '</div>' +
-      '<div class="spn-crm-detail-header-info">' +
-        '<div class="spn-crm-detail-header-name">' + esc(biz.name) + '</div>' +
-        '<div class="spn-crm-detail-header-contact">' + contactLine + '</div>' +
-      '</div>' +
-      '<div class="spn-crm-detail-status-pill' + (flags.length ? ' spn-crm-detail-status-pill--bad' : ' spn-crm-detail-status-pill--good') + '">' + (flags.length ? 'Needs Follow Up' : 'All Good') + '</div>' +
-    '</div>';
-
     // === TABS ===
+    // No separate identity header here -- the row header directly above (business
+    // name, contact, status) already shows all of that. Repeating it below just
+    // duplicated the same information twice in a row.
     var activeTab = CrmUi.tab[biz.id] || 'overview';
     var TAB_DEFS = [
       { key: 'overview', label: 'Overview' },
@@ -1716,7 +1702,6 @@
           : '<span></span>') +
       '</div>' +
       '<div class="spn-crm-row-detail">' +
-        headerHtml +
         tabsHtml +
         '<div class="spn-crm-tab-panels">' + panelsHtml + '</div>' +
         footerHtml +
