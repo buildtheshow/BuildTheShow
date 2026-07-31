@@ -205,6 +205,12 @@
 
   function fmtDollars(cents) { return '$' + (cents / 100).toFixed(2).replace(/\.00$/, ''); }
   function fmtDate(d) { if (!d) return ''; var parts = d.split('-'); return parts[1] + '/' + parts[2] + '/' + parts[0].slice(2); }
+  function fmtDateTime(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-CA') + ' · ' + d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' });
+  }
   function bizName(id) { var b = SpnsState.businesses.find(function (x) { return x.id === id; }); return b ? b.name : ''; }
   function esc(s) { return s ? String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : ''; }
 
@@ -1128,7 +1134,7 @@
       if (ad.extra_notes) html += '<div class="spn-crm-detail-row"><span class="spn-crm-detail-label">Design notes</span><span>' + esc(ad.extra_notes) + '</span></div>';
     }
     if (booking.notes) html += '<div class="spn-crm-detail-row"><span class="spn-crm-detail-label">Notes</span><span>' + esc(booking.notes) + '</span></div>';
-    if (booking.created_at) html += '<div class="spn-crm-detail-row"><span class="spn-crm-detail-label">Submitted</span><span>' + new Date(booking.created_at).toLocaleDateString('en-CA') + '</span></div>';
+    if (booking.created_at) html += '<div class="spn-crm-detail-row"><span class="spn-crm-detail-label">Submitted</span><span>' + esc(fmtDateTime(booking.created_at)) + '</span></div>';
     return html ? '<div class="spn-crm-card-details-block">' + html + '</div>' : '';
   }
 
@@ -1560,24 +1566,30 @@
 
     // === TIMELINE ===
     var events = [];
-    events.push({ label: 'Added', date: biz.created_at });
+    events.push({ label: 'Added', date: biz.created_at, precise: true });
     bizPkgs.forEach(function (p) {
-      events.push({ label: (p.tier_name || 'Sponsor') + ' booked', date: p.created_at });
-      if (p.invoice_sent_date) events.push({ label: 'Invoice sent', date: p.invoice_sent_date });
-      if (p.payment_status === 'paid') events.push({ label: 'Payment received', date: p.payment_received_date || p.updated_at || p.created_at });
+      events.push({ label: (p.tier_name || 'Sponsor') + ' booked', date: p.created_at, precise: true });
+      if (p.invoice_sent_date) events.push({ label: 'Invoice sent', date: p.invoice_sent_date, precise: false });
+      if (p.payment_status === 'paid') {
+        if (p.payment_received_date) events.push({ label: 'Payment received', date: p.payment_received_date, precise: false });
+        else events.push({ label: 'Payment received', date: p.updated_at || p.created_at, precise: true });
+      }
     });
     bizAds.forEach(function (a) {
       var adName = crmAdSizeLabel(a).label;
-      events.push({ label: adName + ' ad booked', date: a.created_at });
-      if (a.invoice_sent_date) events.push({ label: 'Invoice sent', date: a.invoice_sent_date });
-      if (a.payment_status === 'paid') events.push({ label: 'Payment received', date: a.payment_received_date || a.updated_at || a.created_at });
-      if (a.artwork_status === 'received' || a.artwork_status === 'approved') events.push({ label: 'Artwork received', date: a.updated_at || a.created_at });
-      if (a.artwork_status === 'approved') events.push({ label: 'Artwork approved', date: a.updated_at || a.created_at });
+      events.push({ label: adName + ' ad booked', date: a.created_at, precise: true });
+      if (a.invoice_sent_date) events.push({ label: 'Invoice sent', date: a.invoice_sent_date, precise: false });
+      if (a.payment_status === 'paid') {
+        if (a.payment_received_date) events.push({ label: 'Payment received', date: a.payment_received_date, precise: false });
+        else events.push({ label: 'Payment received', date: a.updated_at || a.created_at, precise: true });
+      }
+      if (a.artwork_status === 'received' || a.artwork_status === 'approved') events.push({ label: 'Artwork received', date: a.updated_at || a.created_at, precise: true });
+      if (a.artwork_status === 'approved') events.push({ label: 'Artwork approved', date: a.updated_at || a.created_at, precise: true });
     });
     events.sort(function (a, b) { return new Date(a.date) - new Date(b.date); });
     var timelineHtml = '';
     events.forEach(function (ev, idx) {
-      var d = ev.date ? new Date(ev.date).toLocaleDateString('en-CA') : '';
+      var d = ev.precise ? fmtDateTime(ev.date) : (ev.date ? new Date(ev.date).toLocaleDateString('en-CA') : '');
       var isLast = idx === events.length - 1;
       timelineHtml += '<div class="spn-crm-tl-step' + (isLast ? ' spn-crm-tl-step--last' : '') + '">' +
         '<div class="spn-crm-tl-dot"></div>' +
