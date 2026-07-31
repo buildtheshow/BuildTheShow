@@ -2240,8 +2240,15 @@
       return res.data || null;
     }
 
+    function isMissingRpcFunctionError(err) {
+      if (!err) return false;
+      if (err.code === 'PGRST202') return true;
+      var msg = (err.message || '') + ' ' + (err.hint || '');
+      return msg.indexOf('Could not find the function') !== -1;
+    }
+
     async function finalizeSponsorSubmission(bizId, website, notes, uploadedUrls) {
-      var res = await sb.rpc('finalize_sponsor_submission', {
+      var payload = {
         p_production_id: production.id,
         p_business_id: bizId,
         p_kind: selected.kind,
@@ -2250,7 +2257,16 @@
         p_artwork_status: spbArtworkStatus || null,
         p_files: uploadedUrls || [],
         p_artwork_data: selected.artworkData || {},
-      });
+      };
+      var res = await sb.rpc('finalize_sponsor_submission', payload);
+      if (res.error && isMissingRpcFunctionError(res.error)) {
+        // Database hasn't been migrated to accept p_artwork_data yet -- fall back to the
+        // older signature so the submission still goes through instead of hard-failing.
+        console.warn('finalize_sponsor_submission: retrying without p_artwork_data (DB migration pending)', res.error);
+        var fallbackPayload = Object.assign({}, payload);
+        delete fallbackPayload.p_artwork_data;
+        res = await sb.rpc('finalize_sponsor_submission', fallbackPayload);
+      }
       if (res.error) throw res.error;
       return res.data || null;
     }
