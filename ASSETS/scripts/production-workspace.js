@@ -13960,7 +13960,7 @@ See you soon!
     const crmSubTabs = { sponsors: 1, programmeads: 1, showsponsors: 1, sponsorssettings: 1 };
     const moduleVersions = { programme: '?v=brand-sweep-20260728' };
     const scriptSrc = crmSubTabs[subSafe]
-      ? '/ASSETS/scripts/modules/sponsors-crm.js?v=20260731-export-pdf'
+      ? '/ASSETS/scripts/modules/sponsors-crm.js?v=20260731-export-full-detail'
       : '/ASSETS/scripts/modules/marketing-' + subSafe + '.js' + (moduleVersions[subSafe] || '');
     loadScriptOnce(scriptSrc)
       .then(() => {

@@ -1279,13 +1279,51 @@
       if (status === 'received') return 'Received';
       return 'Not Received';
     };
+    var bookingStatusLabelFor = function (status) {
+      if (status === 'approved') return 'Accepted';
+      if (status === 'declined') return 'Declined';
+      return 'Pending';
+    };
+    var artworkIntentLabelFor = function (booking) {
+      var ad = booking.artwork_data;
+      var status = ad && typeof ad === 'object' ? ad.status : '';
+      if (status === 'ready') return 'Has artwork now';
+      if (status === 'later') return 'Sending artwork later';
+      if (status === 'help') return 'Needs design help';
+      return '';
+    };
+    var dateOnly = function (iso) { return iso ? new Date(iso).toLocaleDateString('en-CA') : ''; };
+    var row = function (label, value) {
+      return value ? '<div style="display:flex;gap:0.4rem;font-size:0.72rem;color:#333;line-height:1.5;"><span style="font-weight:800;color:#572e88;min-width:100px;flex-shrink:0;">' + esc(label) + '</span><span>' + esc(value) + '</span></div>' : '';
+    };
 
     var prod = SpnsState.prodMeta || {};
-    var businesses = SpnsState.businesses || [];
-    var adsMap = {}, pkgsMap = {}, delivMap = {};
+    var org = SpnsState.orgData || {};
+    var businesses = (SpnsState.businesses || []).slice();
+    var adsMap = {}, pkgsMap = {}, delivMap = {}, filesMap = {};
     (SpnsState.ads || []).forEach(function (a) { var k = a.business_id || '__none'; (adsMap[k] = adsMap[k] || []).push(a); });
     (SpnsState.packages || []).forEach(function (p) { var k = p.business_id || '__none'; (pkgsMap[k] = pkgsMap[k] || []).push(p); });
     (SpnsState.deliverables || []).forEach(function (d) { var k = d.business_id || '__none'; (delivMap[k] = delivMap[k] || []).push(d); });
+    (SpnsState.files || []).forEach(function (f) { var k = f.business_id || '__none'; (filesMap[k] = filesMap[k] || []).push(f); });
+
+    // Compute each business's outstanding balance up front so unpaid businesses --
+    // the ones a producer actually needs to chase -- sort to the top of the report.
+    var outstandingFor = {};
+    businesses.forEach(function (biz) {
+      var t = 0, r = 0;
+      (pkgsMap[biz.id] || []).forEach(function (p) {
+        if (p.booking_status === 'declined') return;
+        t += (p.amount_cents || 0);
+        if (p.payment_status === 'paid' || p.payment_status === 'trade') r += (p.amount_cents || 0);
+      });
+      (adsMap[biz.id] || []).forEach(function (a) {
+        if (a.booking_status === 'declined') return;
+        t += (a.price_cents || 0);
+        if (a.payment_status === 'paid' || a.payment_status === 'trade') r += (a.price_cents || 0);
+      });
+      outstandingFor[biz.id] = t - r;
+    });
+    businesses.sort(function (x, y) { return (outstandingFor[y.id] || 0) - (outstandingFor[x.id] || 0); });
 
     var today = new Date().toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
     var grandTotal = 0, grandReceived = 0;
@@ -1294,47 +1332,96 @@
       var ads = adsMap[biz.id] || [];
       var pkgs = pkgsMap[biz.id] || [];
       var delivs = delivMap[biz.id] || [];
+      var files = filesMap[biz.id] || [];
       var bookingsHtml = '';
       var bizTotal = 0, bizReceived = 0;
 
       pkgs.forEach(function (p) {
-        if (p.booking_status === 'declined') return;
-        bizTotal += (p.amount_cents || 0);
-        if (p.payment_status === 'paid' || p.payment_status === 'trade') bizReceived += (p.amount_cents || 0);
-        bookingsHtml += '<tr><td style="padding:0.2rem 0.4rem 0.2rem 0;">' + esc(p.tier_name || 'Sponsor Package') + '</td><td>Sponsorship</td><td>' + fmtDollars(p.amount_cents || 0) + '</td><td>' + payLabelFor(p.payment_status) + '</td><td>--</td></tr>';
+        bizTotal += p.booking_status === 'declined' ? 0 : (p.amount_cents || 0);
+        if (p.booking_status !== 'declined' && (p.payment_status === 'paid' || p.payment_status === 'trade')) bizReceived += (p.amount_cents || 0);
+        bookingsHtml += '<div style="margin-top:0.5rem;padding:0.5rem 0.6rem;background:#f7f5fb;border-radius:6px;">' +
+          '<div style="display:flex;justify-content:space-between;font-size:0.82rem;font-weight:900;color:#000000;"><span>' + esc(p.tier_name || 'Sponsor Package') + '</span><span>' + fmtDollars(p.amount_cents || 0) + '</span></div>' +
+          row('Status', bookingStatusLabelFor(p.booking_status)) +
+          row('Payment', payLabelFor(p.payment_status)) +
+          row('Payment method', p.payment_method) +
+          row('Payment received', dateOnly(p.payment_received_date)) +
+          row('Invoice #', p.invoice_number) +
+          row('Invoice sent', dateOnly(p.invoice_sent_date)) +
+          row('Benefits', p.benefits) +
+          row('Booking notes', p.notes) +
+          row('Submitted', dateOnly(p.created_at)) +
+        '</div>';
       });
       ads.forEach(function (a) {
-        if (a.booking_status === 'declined') return;
-        bizTotal += (a.price_cents || 0);
-        if (a.payment_status === 'paid' || a.payment_status === 'trade') bizReceived += (a.price_cents || 0);
+        bizTotal += a.booking_status === 'declined' ? 0 : (a.price_cents || 0);
+        if (a.booking_status !== 'declined' && (a.payment_status === 'paid' || a.payment_status === 'trade')) bizReceived += (a.price_cents || 0);
         var sz = crmAdSizeLabel(a);
         var typeLabel = crmAdTypeLabel(a, sz);
-        bookingsHtml += '<tr><td style="padding:0.2rem 0.4rem 0.2rem 0;">' + esc(sz.label) + ' (' + esc(typeLabel) + (sz.dims ? ' · ' + esc(sz.dims) : '') + ')</td><td>Programme Ad</td><td>' + fmtDollars(a.price_cents || 0) + '</td><td>' + payLabelFor(a.payment_status) + '</td><td>' + artLabelFor(a.artwork_status) + '</td></tr>';
+        var ad = a.artwork_data && typeof a.artwork_data === 'object' ? a.artwork_data : {};
+        var include = ad.include && ad.include.length ? ad.include.map(function (v) { return v.charAt(0).toUpperCase() + v.slice(1); }).join(', ') : '';
+        bookingsHtml += '<div style="margin-top:0.5rem;padding:0.5rem 0.6rem;background:#f7f5fb;border-radius:6px;">' +
+          '<div style="display:flex;justify-content:space-between;font-size:0.82rem;font-weight:900;color:#000000;"><span>' + esc(sz.label) + ' — ' + esc(typeLabel) + (sz.dims ? ' (' + esc(sz.dims) + ')' : '') + '</span><span>' + fmtDollars(a.price_cents || 0) + '</span></div>' +
+          row('Status', bookingStatusLabelFor(a.booking_status)) +
+          row('Payment', payLabelFor(a.payment_status)) +
+          row('Payment method', a.payment_method) +
+          row('Payment received', dateOnly(a.payment_received_date)) +
+          row('Invoice #', a.invoice_number) +
+          row('Invoice sent', dateOnly(a.invoice_sent_date)) +
+          row('Artwork status', artLabelFor(a.artwork_status)) +
+          row('Approval status', a.approval_status === 'approved' ? 'Approved' : (a.approval_status === 'changes_needed' ? 'Changes needed' : 'Pending review')) +
+          row('Artwork plan', artworkIntentLabelFor(a)) +
+          row('Advertising', ad.ad_type) +
+          row('About', ad.about) +
+          row('Include', include) +
+          row('Design notes', ad.extra_notes) +
+          row('Booking notes', a.notes) +
+          row('Submitted', dateOnly(a.created_at)) +
+        '</div>';
       });
-      if (!bookingsHtml) bookingsHtml = '<tr><td colspan="5" style="color:#888;padding:0.2rem 0;">No bookings</td></tr>';
+      if (!bookingsHtml) bookingsHtml = '<div style="font-size:0.76rem;color:#888;margin-top:0.4rem;">No bookings</div>';
 
       grandTotal += bizTotal; grandReceived += bizReceived;
       var outstanding = bizTotal - bizReceived;
       var contactLine = [biz.contact_name, biz.contact_email, biz.contact_phone, biz.website].filter(Boolean).join('  ·  ');
+      var instagram = biz.social_links && biz.social_links.instagram ? biz.social_links.instagram : '';
 
       var delivHtml = delivs.length
-        ? '<ul style="margin:0.25rem 0 0;padding-left:1.1rem;">' + delivs.map(function (d) { return '<li>' + (d.status === 'done' ? '✓ ' : '□ ') + esc(d.title) + '</li>'; }).join('') + '</ul>'
+        ? '<div style="margin-top:0.35rem;font-size:0.74rem;color:#444;"><strong>Deliverables:</strong><ul style="margin:0.25rem 0 0;padding-left:1.1rem;">' + delivs.map(function (d) {
+            return '<li>' + (d.status === 'done' ? '✓ ' : '□ ') + esc(d.title) + (d.due_date ? ' — due ' + dateOnly(d.due_date) : '') + (d.assigned_to ? ' (' + esc(d.assigned_to) + ')' : '') + '</li>';
+          }).join('') + '</ul></div>'
+        : '';
+
+      var filesHtml = files.length
+        ? '<div style="margin-top:0.35rem;font-size:0.74rem;color:#444;"><strong>Files:</strong><ul style="margin:0.25rem 0 0;padding-left:1.1rem;">' + files.map(function (f) {
+            return '<li>' + esc(f.file_name || 'File') + (f.file_type ? ' (' + esc(f.file_type) + ')' : '') + (f.created_at ? ' — ' + dateOnly(f.created_at) : '') + '</li>';
+          }).join('') + '</ul></div>'
         : '';
 
       return '<div style="page-break-inside:avoid;margin-bottom:1.3rem;padding-bottom:1.1rem;border-bottom:1px solid #d8d0e6;">' +
-        '<div style="font-size:1.05rem;font-weight:900;color:#000000;">' + esc(biz.name) + '</div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;">' +
+          '<div style="font-size:1.05rem;font-weight:900;color:#000000;">' + esc(biz.name) + '</div>' +
+          (outstanding > 0 ? '<div style="font-size:0.7rem;font-weight:900;color:#ffffff;background:#d1523d;padding:0.15rem 0.55rem;border-radius:999px;">' + fmtDollars(outstanding) + ' outstanding</div>' : '') +
+        '</div>' +
         (contactLine ? '<div style="font-size:0.76rem;color:#572e88;margin-top:0.15rem;">' + esc(contactLine) + '</div>' : '') +
-        '<table style="width:100%;border-collapse:collapse;margin-top:0.55rem;font-size:0.76rem;">' +
-          '<thead><tr style="text-align:left;color:#572e88;border-bottom:1px solid #d8d0e6;"><th style="padding:0.2rem 0.4rem 0.2rem 0;">Booking</th><th>Type</th><th>Price</th><th>Payment</th><th>Artwork</th></tr></thead>' +
-          '<tbody>' + bookingsHtml + '</tbody>' +
-        '</table>' +
-        '<div style="margin-top:0.4rem;font-size:0.76rem;color:#000000;"><strong>Total:</strong> ' + fmtDollars(bizTotal) + '&nbsp;&nbsp;<strong>Received:</strong> ' + fmtDollars(bizReceived) + '&nbsp;&nbsp;<strong>Outstanding:</strong> ' + fmtDollars(outstanding) + '</div>' +
+        (instagram ? '<div style="font-size:0.72rem;color:#572e88;margin-top:0.1rem;">Instagram: ' + esc(instagram) + '</div>' : '') +
+        row('Added', dateOnly(biz.created_at)) +
         (biz.notes ? '<div style="margin-top:0.3rem;font-size:0.74rem;color:#444;"><strong>Notes:</strong> ' + esc(biz.notes) + '</div>' : '') +
-        (delivHtml ? '<div style="margin-top:0.3rem;font-size:0.74rem;color:#444;"><strong>Deliverables:</strong>' + delivHtml + '</div>' : '') +
+        bookingsHtml +
+        '<div style="margin-top:0.45rem;font-size:0.78rem;color:#000000;"><strong>Business total:</strong> ' + fmtDollars(bizTotal) + '&nbsp;&nbsp;<strong>Received:</strong> ' + fmtDollars(bizReceived) + '&nbsp;&nbsp;<strong>Outstanding:</strong> ' + fmtDollars(outstanding) + '</div>' +
+        filesHtml +
+        delivHtml +
       '</div>';
     }).join('');
 
+    var logoUrl = org.logo_black_url || org.logo_url || '';
+    var letterheadHtml =
+      '<div style="display:flex;align-items:center;gap:0.7rem;margin-bottom:0.6rem;">' +
+        (logoUrl ? '<img src="' + esc(logoUrl) + '" style="height:36px;max-width:120px;object-fit:contain;" crossorigin="anonymous" />' : '') +
+        '<div style="font-size:0.8rem;font-weight:800;color:#000000;">' + esc(org.name || '') + '</div>' +
+      '</div>';
+
     var reportHtml =
+      letterheadHtml +
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem;border-bottom:2px solid #572e88;padding-bottom:0.8rem;">' +
         '<div><div style="font-size:1.35rem;font-weight:900;color:#572e88;">Show Sponsors Report</div><div style="font-size:0.82rem;color:#444;margin-top:0.15rem;">' + esc(prod.title || '') + '</div></div>' +
         '<div style="text-align:right;font-size:0.72rem;color:#666;">Generated ' + esc(today) + '</div>' +
