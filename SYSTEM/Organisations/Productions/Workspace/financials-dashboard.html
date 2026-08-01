@@ -316,10 +316,14 @@
     },
     _catItems(catId) { return this.items.filter(i => i.category_id === catId); },
     // Paid receipts logged straight to a category with no specific budget item picked
-    // never show up in that item's paid_cents, so count them separately here.
+    // never show up in that item's paid_cents, so count them separately here. Also
+    // catches receipts whose line item points at a budget_item_id that's since been
+    // deleted/renamed - otherwise that money vanishes: not synced (item's gone) and
+    // not counted here either.
     _catUnlinkedReceiptSpent(catId) {
+      const itemExists = id => this.items.some(i => String(i.id) === String(id));
       return (this.receipts || []).filter(r => String(r.category_id || '') === String(catId) && r.status === 'paid'
-        && !(Array.isArray(r.line_items) && r.line_items.some(l => l && l.budget_item_id)))
+        && !(Array.isArray(r.line_items) && r.line_items.some(l => l && l.budget_item_id && itemExists(l.budget_item_id))))
         .reduce((s, r) => s + (r.amount_cents || 0), 0);
     },
     toggleSection(label) {
