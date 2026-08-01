@@ -2350,13 +2350,15 @@ const BP = {
   // ── Data (Supabase) ───────────────────────────────────────────────────
   async load() {
     try {
-      const [cr,ir] = await Promise.all([
+      const [cr,ir,rr] = await Promise.all([
         fetch(this.URL+'/rest/v1/budget_categories?production_id=eq.'+this.prodId+'&order=sort_order.asc,created_at.asc',{headers:this._h()}),
         fetch(this.URL+'/rest/v1/budget_items?production_id=eq.'     +this.prodId+'&order=sort_order.asc,created_at.asc',{headers:this._h()}),
+        fetch(this.URL+'/rest/v1/budget_receipts?production_id=eq.'  +this.prodId+'&select=id,category_id,amount_cents,status,line_items',{headers:this._h()}),
       ]);
       this.cats  = cr.ok ? await cr.json() : [];
       this.items = ir.ok ? await ir.json() : [];
-    } catch(_) { this.cats=[]; this.items=[]; }
+      this.receipts = rr.ok ? await rr.json() : [];
+    } catch(_) { this.cats=[]; this.items=[]; this.receipts=[]; }
     this._fixCatColors(); // silently patch any off-brand colours in DB
     // Auto-expand categories that have items; collapse empty ones
     this.cats.forEach(c => {
@@ -2538,7 +2540,7 @@ const BP = {
       const icon = this._catEmoji(c.name);
       const itemBudget = items.reduce((s,i)=>s+(i.budgeted_cents||0),0);
       const catBudget = itemBudget || c.planned_cents || 0;
-      const catSpent = items.reduce((s,i)=>s+(i.paid_cents||0),0);
+      const catSpent = items.reduce((s,i)=>s+(i.paid_cents||0),0) + this._catUnlinkedReceiptSpent(c.id);
       const catPending = items.reduce((s,i)=>s+Math.max(0, (i.committed_cents||0) - (i.paid_cents||0)),0);
       const catActual = catSpent + catPending;
       const catTotal = catActual || catBudget;
@@ -2614,7 +2616,7 @@ const BP = {
         const itemSum = its.reduce((s,i) => s+(i.budgeted_cents||0), 0);
         return sum + (itemSum || c.planned_cents || 0);
       }, 0);
-      const secSpent = g.cats.reduce((sum, c) => sum + this._catItems(c.id).reduce((s,i)=>s+(i.paid_cents||0), 0), 0);
+      const secSpent = g.cats.reduce((sum, c) => sum + this._catItems(c.id).reduce((s,i)=>s+(i.paid_cents||0), 0) + this._catUnlinkedReceiptSpent(c.id), 0);
       const secPending = g.cats.reduce((sum, c) => sum + this._catItems(c.id).reduce((s,i)=>s+Math.max(0, (i.committed_cents||0) - (i.paid_cents||0)), 0), 0);
       const secActual = secSpent + secPending;
       const secTotal = secActual || secBudget;
@@ -4127,10 +4129,18 @@ const BP = {
 
   // ── Helpers ───────────────────────────────────────────────────────────
   _catItems(catId){return this.items.filter(i=>i.category_id===catId);},
+  // Paid receipts logged straight to a category with no specific budget item picked
+  // (the default when adding a receipt) never show up in that item's paid_cents, so
+  // count them separately here to avoid under-reporting "Spent".
+  _catUnlinkedReceiptSpent(catId){
+    return (this.receipts||[]).filter(r => String(r.category_id||'')===String(catId) && r.status==='paid'
+      && !(Array.isArray(r.line_items) && r.line_items.some(l=>l&&l.budget_item_id)))
+      .reduce((s,r)=>s+(r.amount_cents||0),0);
+  },
   _catTotals(catId){
     const items=this._catItems(catId);
     const committed=items.reduce((a,i)=>a+(i.committed_cents||0),0);
-    const paid=items.reduce((a,i)=>a+(i.paid_cents||0),0);
+    const paid=items.reduce((a,i)=>a+(i.paid_cents||0),0) + this._catUnlinkedReceiptSpent(catId);
     const cat=this.cats.find(c=>c.id===catId);
     return{committed,paid,remaining:(cat?(cat.planned_cents||0):0)-committed};
   },

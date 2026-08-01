@@ -234,13 +234,65 @@
         this.items    = iRes.ok ? await iRes.json() : [];
         this.receipts = rRes.ok ? await rRes.json() : [];
         const prods   = pRes.ok ? await pRes.json() : [];
-        const currency = prods[0]?.registration_settings?.payment_settings?.currency || 'CAD';
+        this._regSettings = prods[0]?.registration_settings || {};
+        const currency = this._regSettings?.payment_settings?.currency || 'CAD';
         const budgetIcon = document.getElementById('fd-budget-icon');
         if (budgetIcon && currency === 'GBP') budgetIcon.src = '/ASSETS/Images/Icons/Budgeting-total-spent-gbp.svg';
       } catch(_) {}
+      await this.loadRegistrationIncome();
       this.renderStats();
       this.renderCategoryTable();
       this.renderActivity();
+    },
+
+    // Cast registration fee payments live on audition_applications/audition_bookings
+    // (custom_answers), completely separate from the budget_* tables, so they have to
+    // be pulled in and totalled the same way the Registration Dashboard does.
+    async loadRegistrationIncome() {
+      this._registrationIncomeCents = 0;
+      try {
+        const aRes = await fetch(this.URL + '/rest/v1/casting_assignments?production_id=eq.' + this.prodId + '&state=eq.offer_accepted&select=applicant_id', { headers: this._h() });
+        const assignments = aRes.ok ? await aRes.json() : [];
+        const ids = [...new Set(assignments.map(a => a.applicant_id).filter(Boolean))];
+        if (!ids.length) return;
+        const idList = ids.join(',');
+        const [appsRes, bookingsRes] = await Promise.all([
+          fetch(this.URL + '/rest/v1/audition_applications?id=in.(' + idList + ')&select=id,custom_answers', { headers: this._h() }),
+          fetch(this.URL + '/rest/v1/audition_bookings?id=in.(' + idList + ')&select=id,custom_answers', { headers: this._h() }),
+        ]);
+        const apps = appsRes.ok ? await appsRes.json() : [];
+        const bookings = bookingsRes.ok ? await bookingsRes.json() : [];
+        const foundIds = new Set(apps.map(a => String(a.id)));
+        const people = apps.concat(bookings.filter(b => !foundIds.has(String(b.id))));
+
+        const clean = v => parseFloat(String(v || '').replace(/[^0-9.]/g, '')) || 0;
+        const settings = Object.assign({ mode: 'none', fee: '', split_installments: [] }, this._regSettings?.payment_settings || {});
+        const due = settings.mode === 'split'
+          ? ((settings.split_installments || []).reduce((sum, inst) => sum + clean(inst.amount), 0) || clean(settings.fee))
+          : clean(settings.fee);
+
+        const customAnswers = app => {
+          if (!app?.custom_answers) return {};
+          if (typeof app.custom_answers === 'string') { try { return JSON.parse(app.custom_answers) || {}; } catch (_) { return {}; } }
+          return app.custom_answers || {};
+        };
+        const truthyKeys = new Set(['yes', 'true', 'complete', 'completed', 'signed', 'paid', 'received', 'done']);
+        const isPaid = app => {
+          const ca = customAnswers(app);
+          return ['__bts_registration_payment_received', '__bts_registration_paid', 'registration_payment_received', 'registration_paid', 'payment_received', 'payment_paid', 'payment_status']
+            .some(key => { const v = ca[key]; if (v === true) return true; if (typeof v === 'number') return v > 0; return truthyKeys.has(String(v || '').trim().toLowerCase()); });
+        };
+        const paidAmountFor = app => {
+          const ca = customAnswers(app);
+          for (const key of ['__bts_registration_amount_paid', 'registration_amount_paid', 'amount_paid', 'payment_amount']) {
+            const v = ca[key];
+            if (v !== undefined && v !== null && String(v).trim()) return clean(v);
+          }
+          return 0;
+        };
+
+        this._registrationIncomeCents = people.reduce((sum, app) => sum + Math.round((isPaid(app) ? due : paidAmountFor(app)) * 100), 0);
+      } catch (_) { this._registrationIncomeCents = 0; }
     },
 
     BW_SECTION_CATS: [
@@ -263,6 +315,13 @@
       return 'Other';
     },
     _catItems(catId) { return this.items.filter(i => i.category_id === catId); },
+    // Paid receipts logged straight to a category with no specific budget item picked
+    // never show up in that item's paid_cents, so count them separately here.
+    _catUnlinkedReceiptSpent(catId) {
+      return (this.receipts || []).filter(r => String(r.category_id || '') === String(catId) && r.status === 'paid'
+        && !(Array.isArray(r.line_items) && r.line_items.some(l => l && l.budget_item_id)))
+        .reduce((s, r) => s + (r.amount_cents || 0), 0);
+    },
     toggleSection(label) {
       this._secCollapsed[label] = this._secCollapsed[label] === false ? true : false;
       this.renderCategoryTable();
@@ -324,7 +383,7 @@
           const itemSum = its.reduce((s, i) => s + (i.budgeted_cents || 0), 0);
           return sum + (itemSum || c.planned_cents || 0);
         }, 0);
-        const secSpent = g.cats.reduce((sum, c) => sum + this._catItems(c.id).reduce((s, i) => s + (i.paid_cents || 0), 0), 0);
+        const secSpent = g.cats.reduce((sum, c) => sum + this._catItems(c.id).reduce((s, i) => s + (i.paid_cents || 0), 0) + this._catUnlinkedReceiptSpent(c.id), 0);
         const secPending = g.cats.reduce((sum, c) => sum + this._catItems(c.id).reduce((s, i) => s + Math.max(0, (i.committed_cents || 0) - (i.paid_cents || 0)), 0), 0);
         const secActual = secSpent + secPending;
         const secTotal = secActual || secBudget;
@@ -350,7 +409,7 @@
             const its = this._catItems(c.id);
             const itemBudget = its.reduce((s, i) => s + (i.budgeted_cents || 0), 0);
             const catBudget = itemBudget || c.planned_cents || 0;
-            const catSpent = its.reduce((s, i) => s + (i.paid_cents || 0), 0);
+            const catSpent = its.reduce((s, i) => s + (i.paid_cents || 0), 0) + this._catUnlinkedReceiptSpent(c.id);
             const catPending = its.reduce((s, i) => s + Math.max(0, (i.committed_cents || 0) - (i.paid_cents || 0)), 0);
             const catActual = catSpent + catPending;
             const catTotal = catActual || catBudget;
@@ -380,7 +439,7 @@
       const incCats = this.cats.filter(c => c.type === 'income');
 
       const totalBudget   = expCats.reduce((a, c) => a + (c.planned_cents || 0), 0);
-      const totalIncome   = incCats.reduce((a, c) => a + (c.planned_cents || 0), 0);
+      const totalIncome   = incCats.reduce((a, c) => a + (c.planned_cents || 0), 0) + (this._registrationIncomeCents || 0);
       const totalExpenses = this.receipts.filter(r => r.status === 'paid').reduce((a, r) => a + (r.amount_cents || 0), 0);
       const pendingCount  = this.receipts.filter(r => r.status === 'pending').length;
 

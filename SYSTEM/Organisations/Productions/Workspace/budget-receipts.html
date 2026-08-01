@@ -657,6 +657,7 @@
         this.receipts   = rRes.data || [];
         this.categories = cRes.data || [];
         this.budgetItems = iRes.data || [];
+        await this.syncBudgetItemPaidFromReceipts();
         if (prodRes.data?.organization_id) {
           const { data: members } = await this.sb.from('org_members')
             .select('id, display_name, email, phone, phone_number, title')
@@ -675,6 +676,37 @@
         this.receipts = []; this.categories = []; this.budgetItems = [];
       }
       this.render();
+    },
+
+    // Keeps budget_items.paid_cents in sync with paid receipts linked to it, so the
+    // Budgeting page's per-category "Spent" totals reflect real logged receipts instead
+    // of only whatever was typed manually into an item.
+    async syncBudgetItemPaidFromReceipts() {
+      const paidByItem = {};
+      const linkedItems = new Set();
+      for (const r of this.receipts) {
+        const lines = Array.isArray(r.line_items) ? r.line_items : [];
+        for (const line of lines) {
+          if (!line || !line.budget_item_id) continue;
+          linkedItems.add(String(line.budget_item_id));
+          if (r.status === 'paid') {
+            paidByItem[line.budget_item_id] = (paidByItem[line.budget_item_id] || 0) + (line.amount_cents || 0);
+          }
+        }
+      }
+      const updates = [];
+      linkedItems.forEach(itemId => {
+        const item = this.budgetItems.find(i => String(i.id) === itemId);
+        if (!item) return;
+        const computed = paidByItem[itemId] || 0;
+        if (computed !== (item.paid_cents || 0)) updates.push({ id: item.id, paid_cents: computed });
+      });
+      if (!updates.length) return;
+      await Promise.all(updates.map(u => this.sb.from('budget_items').update({ paid_cents: u.paid_cents }).eq('id', u.id)));
+      updates.forEach(u => {
+        const item = this.budgetItems.find(i => String(i.id) === String(u.id));
+        if (item) item.paid_cents = u.paid_cents;
+      });
     },
 
     deptName(r) {
