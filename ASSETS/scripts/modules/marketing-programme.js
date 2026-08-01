@@ -121,6 +121,8 @@
     prodId: null,
     container: null,
     viewer: null,
+    currentPage: 0,
+    pageView: 'spread',
     settings: {
       paper: 'letter-folded',
       output: 'print',
@@ -367,15 +369,25 @@
     return PAPER_OPTIONS.find(function (item) { return item.id === ProgrammeState.settings.paper; }) || PAPER_OPTIONS[0];
   }
 
+  function ensureCurrentPage(pages) {
+    var count = (pages || []).length;
+    if (!count) {
+      ProgrammeState.currentPage = 0;
+      return;
+    }
+    if (ProgrammeState.currentPage < 0) ProgrammeState.currentPage = 0;
+    if (ProgrammeState.currentPage >= count) ProgrammeState.currentPage = count - 1;
+  }
+
   function renderPaperPicker() {
     var selected = selectedPaper().id;
-    return '<div class="pgm-paper-picker" role="radiogroup" aria-label="Programme paper">' +
+    return '<div class="pgmb-paper-picker" role="radiogroup" aria-label="Programme paper">' +
       PAPER_OPTIONS.map(function (paper) {
         var isSelected = selected === paper.id;
-        return '<label class="pgm-paper-card' + (isSelected ? ' is-selected' : '') + '">' +
+        return '<label class="pgmb-paper-card' + (isSelected ? ' is-selected' : '') + '">' +
           '<input type="radio" name="pgm-paper" value="' + esc(paper.id) + '"' + (isSelected ? ' checked' : '') + ' onchange="MarketingProgrammeModule.setSetting(\'paper\', this.value)" />' +
-          '<span class="pgm-paper-visual pgm-paper-visual--' + esc(paper.id) + '"><img src="' + esc(paper.image) + '" alt="" /></span>' +
-          '<span class="pgm-paper-copy">' +
+          '<span class="pgmb-paper-visual pgmb-paper-visual--' + esc(paper.id) + '"><img src="' + esc(paper.image) + '" alt="" /></span>' +
+          '<span class="pgmb-paper-copy">' +
             '<strong>' + esc(paper.label) + '</strong>' +
             '<em>' + esc(paper.detail) + '</em>' +
             '<small>' + esc(paper.note) + '</small>' +
@@ -385,21 +397,67 @@
     '</div>';
   }
 
+  function pageTypeLabel(page) {
+    if (!page) return 'Page';
+    if (page.type === 'cover') return 'Cover';
+    if (page.type === 'note') return 'Note';
+    if (page.type === 'creative') return 'Production Team';
+    if (page.type === 'cast') return 'Cast List';
+    if (page.type === 'characters') return 'Characters';
+    if (page.type === 'bios') return 'Bios';
+    if (page.type === 'sponsors') return 'Sponsors';
+    if (page.type === 'ads') return 'Advertisements';
+    if (page.type === 'thanks') return 'Thank You';
+    if (page.type === 'upcoming') return 'Upcoming';
+    if (page.type === 'back') return 'Back Cover';
+    return page.title || 'Page';
+  }
+
+  function pageIcon(page) {
+    if (!page) return 'P';
+    var type = page.type;
+    if (type === 'cover' || type === 'back') return 'C';
+    if (type === 'note') return 'N';
+    if (type === 'cast' || type === 'characters') return 'L';
+    if (type === 'bios') return 'B';
+    if (type === 'creative') return 'T';
+    if (type === 'sponsors') return 'S';
+    if (type === 'ads') return 'A';
+    if (type === 'thanks') return 'Y';
+    if (type === 'upcoming') return 'U';
+    return 'P';
+  }
+
+  function layoutKeyForPage(page) {
+    if (!page) return '';
+    if (page.type === 'cast' || page.type === 'characters') return 'cast';
+    if (page.type === 'bios') return 'bios';
+    if (page.type === 'ads') return 'ads';
+    if (page.type === 'thanks') return 'thanks';
+    if (page.type === 'sponsors') return 'sponsors';
+    return '';
+  }
+
+  function selectedPage(pages) {
+    ensureCurrentPage(pages);
+    return pages[ProgrammeState.currentPage] || null;
+  }
+
   function renderSetupTab() {
-    return '<div class="pgm-side-scroll">' +
-      '<div class="pgm-paper-heading">Paper</div>' +
+    return '<div class="pgmb-side-scroll">' +
+      '<div class="pgmb-panel-eyebrow">Format</div>' +
       renderPaperPicker() +
-      '<div class="pgm-paper-heading">Pages</div>' +
+      '<div class="pgmb-panel-eyebrow">Page Layouts</div>' +
       renderPageLayoutsTab() +
     '</div>';
   }
 
   function renderSectionsTab() {
     var checked = new Set(ProgrammeState.settings.sections);
-    return '<div class="pgm-side-scroll">' +
-      '<div class="pgm-side-help">Choose which structured sections BTS should place into this programme.</div>' +
-      '<div class="pgm-section-picker">' + SECTION_OPTIONS.map(function (item) {
-        return '<label class="pgm-section-option"><input type="checkbox" ' + (checked.has(item[0]) ? 'checked' : '') + ' onchange="MarketingProgrammeModule.toggleSection(\'' + esc(item[0]) + '\', this.checked)" /> <span>' + esc(item[1]) + '</span></label>';
+    return '<div class="pgmb-side-scroll">' +
+      '<div class="pgmb-side-help">Choose which structured sections Build The Show should place into this programme.</div>' +
+      '<div class="pgmb-section-picker">' + SECTION_OPTIONS.map(function (item) {
+        return '<label class="pgmb-section-option"><input type="checkbox" ' + (checked.has(item[0]) ? 'checked' : '') + ' onchange="MarketingProgrammeModule.toggleSection(\'' + esc(item[0]) + '\', this.checked)" /> <span>' + esc(item[1]) + '</span></label>';
       }).join('') + '</div>' +
     '</div>';
   }
@@ -432,15 +490,15 @@
       thanks: 'Thank Yous',
       sponsors: 'Sponsors',
     };
-    return '<div class="pgm-layout-groups">' + PAGE_LAYOUT_GROUPS.map(function (group) {
+    return '<div class="pgmb-layout-groups">' + PAGE_LAYOUT_GROUPS.map(function (group) {
         var selectedOption = group.options.find(function (option) { return option.id === selected[group.key]; }) || group.options[0];
-        return '<details class="pgm-layout-group" ' + (group.key === ProgrammeState.openLayoutGroup ? 'open' : '') + '>' +
-          '<summary class="pgm-layout-group-head"><strong>' + esc(sectionLabels[group.key] || group.title) + '</strong><span>' + esc(selectedOption.label) + '</span></summary>' +
-          '<div class="pgm-layout-options">' + group.options.map(function (option) {
+        return '<details class="pgmb-layout-group" ' + (group.key === ProgrammeState.openLayoutGroup ? 'open' : '') + '>' +
+          '<summary class="pgmb-layout-group-head"><strong>' + esc(sectionLabels[group.key] || group.title) + '</strong><span>' + esc(selectedOption.label) + '</span></summary>' +
+          '<div class="pgmb-layout-options">' + group.options.map(function (option) {
             var isSelected = selected[group.key] === option.id;
-            return '<button class="pgm-layout-option' + (isSelected ? ' is-selected' : '') + '" type="button" onclick="MarketingProgrammeModule.setPageLayout(\'' + esc(group.key) + '\', \'' + esc(option.id) + '\')">' +
+            return '<button class="pgmb-layout-option' + (isSelected ? ' is-selected' : '') + '" type="button" onclick="MarketingProgrammeModule.setPageLayout(\'' + esc(group.key) + '\', \'' + esc(option.id) + '\')">' +
               renderLayoutMockup(option) +
-              '<span class="pgm-layout-option-copy"><strong>' + esc(option.label) + '</strong><em>' + esc(option.detail) + '</em></span>' +
+              '<span class="pgmb-layout-option-copy"><strong>' + esc(option.label) + '</strong><em>' + esc(option.detail) + '</em></span>' +
             '</button>';
           }).join('') + '</div>' +
         '</details>';
@@ -451,22 +509,134 @@
     var ready = buildReadiness();
     var blockers = ready.missingAds + ready.unapprovedAds + ready.missingBios + ready.missingHeadshots + ready.openDeliverables;
     var paper = selectedPaper();
-    return '<div class="pgm-status-grid">' +
+    return '<div class="pgmb-status-grid">' +
       statusTile('Page Estimate', String(pages.length), paper.pageLabel, 'info') +
-      statusTile('Print Readiness', blockers ? 'Not Ready' : 'Ready', blockers ? blockers + ' item' + (blockers === 1 ? '' : 's') + ' need attention' : 'Ready for proof review', blockers ? 'warn' : 'good') +
+      statusTile('Print Readiness', blockers ? 'Needs Review' : 'Ready', blockers ? blockers + ' item' + (blockers === 1 ? '' : 's') + ' need attention' : 'Ready for proof review', blockers ? 'warn' : 'good') +
       statusTile('Missing Ads', String(ready.missingAds), 'Artwork placeholders', statusClass(ready.missingAds)) +
       statusTile('Unapproved Art', String(ready.unapprovedAds), 'Needs artwork approval', statusClass(ready.unapprovedAds)) +
-      statusTile('Unpaid Revenue', String(ready.unpaidAds + ready.unpaidSponsors), 'Internal only, hidden from print', statusClass(ready.unpaidAds + ready.unpaidSponsors)) +
-      statusTile('Missing Bios', String(ready.missingBios), 'Cast bio placeholders', statusClass(ready.missingBios)) +
-      statusTile('Missing Headshots', String(ready.missingHeadshots), 'Bio image placeholders', statusClass(ready.missingHeadshots)) +
-      statusTile('Open Deliverables', String(ready.openDeliverables), 'Sponsor promises not done', statusClass(ready.openDeliverables)) +
     '</div>';
   }
 
-  function renderPreviewSidebar() {
-    return '<aside class="pgm-preview-sidebar">' +
-      renderSetupTab() +
+  function renderBuilderHeader(pages) {
+    var prod = ProgrammeState.data.production || {};
+    return '<div class="pgmb-header">' +
+      '<div class="pgmb-header-copy">' +
+        '<div class="pgmb-header-kicker">Programme Builder</div>' +
+        '<h1>' + esc(prod.title || prod.name || 'Programme Builder') + '</h1>' +
+        '<p>Create and customise your show programme with live page planning and spread previews.</p>' +
+      '</div>' +
+      '<div class="pgmb-header-actions">' +
+        '<button class="pgmb-btn pgmb-btn--ghost" type="button" onclick="MarketingProgrammeModule.previewAll()">Preview All Pages</button>' +
+        '<button class="pgmb-btn pgmb-btn--primary" type="button">Export PDF</button>' +
+        '<button class="pgmb-btn pgmb-btn--soft" type="button">More</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderPageList(pages) {
+    return '<aside class="pgmb-sidebar">' +
+      '<div class="pgmb-sidebar-head">' +
+        '<div><strong>Pages</strong><span>' + pages.length + ' total</span></div>' +
+        '<button class="pgmb-link-btn" type="button">Reorder</button>' +
+      '</div>' +
+      '<div class="pgmb-page-list">' + pages.map(function (page, index) {
+        var active = index === ProgrammeState.currentPage;
+        return '<button class="pgmb-page-row' + (active ? ' is-active' : '') + '" type="button" onclick="MarketingProgrammeModule.setCurrentPage(' + index + ')">' +
+          '<span class="pgmb-page-index">' + (index + 1) + '</span>' +
+          '<span class="pgmb-page-icon">' + esc(pageIcon(page)) + '</span>' +
+          '<span class="pgmb-page-copy"><strong>' + esc(page.title || pageTypeLabel(page)) + '</strong><em>' + esc(page.subtitle || pageTypeLabel(page)) + '</em></span>' +
+        '</button>';
+      }).join('') + '</div>' +
+      '<div class="pgmb-sidebar-section">' + renderSelectedPageOptions(pages) + '</div>' +
     '</aside>';
+  }
+
+  function renderOptionButtons(groupKey) {
+    var selected = ProgrammeState.settings.pageLayouts || {};
+    var group = PAGE_LAYOUT_GROUPS.find(function (item) { return item.key === groupKey; });
+    if (!group) return '';
+    return '<div class="pgmb-toggle-row">' + group.options.map(function (option) {
+      var isSelected = selected[groupKey] === option.id;
+      return '<button class="pgmb-toggle-btn' + (isSelected ? ' is-selected' : '') + '" type="button" onclick="MarketingProgrammeModule.setPageLayout(\'' + esc(groupKey) + '\', \'' + esc(option.id) + '\')">' + esc(option.label) + '</button>';
+    }).join('') + '</div>';
+  }
+
+  function renderSelectedPageOptions(pages) {
+    var page = selectedPage(pages);
+    var layoutKey = layoutKeyForPage(page);
+    return '<div class="pgmb-options-card">' +
+      '<div class="pgmb-options-eyebrow">' + esc(pageTypeLabel(page)).toUpperCase() + ' OPTIONS</div>' +
+      '<h3>' + esc(page ? page.title : 'Programme Page') + '</h3>' +
+      '<p>' + esc(page && page.subtitle ? page.subtitle : 'Adjust the structure and layout of this programme page.') + '</p>' +
+      (layoutKey ? '<div class="pgmb-option-group"><label>Layout</label>' + renderOptionButtons(layoutKey) + '</div>' : '') +
+      '<div class="pgmb-option-group"><label>Included Sections</label>' + renderSectionsTab() + '</div>' +
+      '<div class="pgmb-option-group"><label>Format</label>' + renderSetupTab() + '</div>' +
+      '</div>';
+  }
+
+  function spreadForPage(pages) {
+    ensureCurrentPage(pages);
+    if (!pages.length) return { left: -1, right: -1 };
+    if (ProgrammeState.currentPage <= 0) return { left: 0, right: -1 };
+    if (ProgrammeState.currentPage % 2 === 1) return { left: ProgrammeState.currentPage, right: Math.min(ProgrammeState.currentPage + 1, pages.length - 1) };
+    return { left: ProgrammeState.currentPage - 1, right: ProgrammeState.currentPage };
+  }
+
+  function renderSpreadStage(pages) {
+    var images = programmePageImages(pages);
+    var spread = spreadForPage(pages);
+    var showSingle = spread.right < 0 || spread.left === spread.right;
+    var counter = (ProgrammeState.currentPage + 1) + ' of ' + pages.length;
+    return '<section class="pgmb-stage-card">' +
+      '<div class="pgmb-stage-toolbar">' +
+        '<div class="pgmb-stage-controls">' +
+          '<span class="pgmb-toolbar-label">Page Size:</span>' +
+          '<span class="pgmb-toolbar-pill">' + esc(selectedPaper().label) + '</span>' +
+        '</div>' +
+        '<div class="pgmb-stage-controls">' +
+          '<span class="pgmb-toolbar-label">View:</span>' +
+          '<button class="pgmb-icon-toggle is-selected" type="button" onclick="MarketingProgrammeModule.setPageView(\'spread\')">Spread</button>' +
+        '</div>' +
+        '<div class="pgmb-stage-pagination">' +
+          '<button class="pgmb-nav-btn" type="button" onclick="MarketingProgrammeModule.stepPage(-1)">&lt;</button>' +
+          '<strong>' + counter + '</strong>' +
+          '<button class="pgmb-nav-btn" type="button" onclick="MarketingProgrammeModule.stepPage(1)">&gt;</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="pgmb-stage">' +
+        '<button class="pgmb-arrow pgmb-arrow--left" type="button" onclick="MarketingProgrammeModule.stepPage(-1)">&lt;</button>' +
+        '<div class="pgmb-spread' + (showSingle ? ' is-single' : '') + '">' +
+          (spread.left > -1 ? '<div class="pgmb-sheet"><img src="' + esc(images[spread.left]) + '" alt="' + esc((pages[spread.left] && pages[spread.left].title) || 'Programme page') + '" /></div>' : '') +
+          (showSingle ? '' : '<div class="pgmb-sheet"><img src="' + esc(images[spread.right]) + '" alt="' + esc((pages[spread.right] && pages[spread.right].title) || 'Programme page') + '" /></div>') +
+        '</div>' +
+        '<button class="pgmb-arrow pgmb-arrow--right" type="button" onclick="MarketingProgrammeModule.stepPage(1)">&gt;</button>' +
+      '</div>' +
+    '</section>';
+  }
+
+  function renderFilmstrip(pages) {
+    var images = programmePageImages(pages);
+    return '<div class="pgmb-filmstrip">' +
+      '<button class="pgmb-film-arrow" type="button" onclick="MarketingProgrammeModule.stepPage(-1)">&lt;</button>' +
+      '<div class="pgmb-film-track">' + pages.map(function (page, index) {
+        var active = index === ProgrammeState.currentPage;
+        return '<button class="pgmb-thumb' + (active ? ' is-active' : '') + '" type="button" onclick="MarketingProgrammeModule.setCurrentPage(' + index + ')">' +
+          '<span class="pgmb-thumb-frame"><img src="' + esc(images[index]) + '" alt="' + esc(page.title || 'Programme page') + '" /></span>' +
+          '<span class="pgmb-thumb-meta"><strong>' + (index + 1) + '</strong><em>' + esc(page.title || pageTypeLabel(page)) + '</em></span>' +
+        '</button>';
+      }).join('') + '</div>' +
+      '<button class="pgmb-film-arrow" type="button" onclick="MarketingProgrammeModule.stepPage(1)">&gt;</button>' +
+    '</div>';
+  }
+
+  function renderBuilderShell(pages) {
+    return '<section class="pgmb-shell">' +
+      renderPageList(pages) +
+      '<div class="pgmb-main">' +
+        renderSpreadStage(pages) +
+        renderFilmstrip(pages) +
+      '</div>' +
+    '</section>';
   }
 
   function pageBody(page) {
@@ -576,18 +746,6 @@
     return (pages || []).map(programmePageImage);
   }
 
-  function renderProgrammePreview(pages) {
-    return '<section class="pgm-panel pgm-preview-panel">' +
-      '<div class="pgm-panel-head">' +
-        '<div><div class="pgm-panel-title">Digital Programme Preview</div><p>' + esc(selectedPaper().pageLabel) + ' · real page-turn viewer</p></div>' +
-      '</div>' +
-      '<div class="pgm-preview-layout">' +
-        renderPreviewSidebar() +
-        '<div class="pgm-real-flipbook-shell"><div id="pgm-flipbook-viewer" class="pgm-real-flipbook-viewer"></div></div>' +
-      '</div>' +
-    '</section>';
-  }
-
   function renderSimpleList(items, labelFn, max, modifier) {
     var list = (items || []).slice(0, max || 12);
     if (!list.length) return '<div class="pgm-page-empty">Waiting for source data</div>';
@@ -636,58 +794,13 @@
 
   function renderPlanner() {
     var pages = buildProgrammePages();
-    var prod = ProgrammeState.data.production || {};
-    if (ProgrammeState.viewer && ProgrammeState.viewer.destroy) {
-      ProgrammeState.viewer.destroy();
-      ProgrammeState.viewer = null;
-    }
+    ensureCurrentPage(pages);
     ProgrammeState.container.innerHTML =
-      '<div class="aud-visual-hero">' +
-        '<div class="aud-visual-hero-content">' +
-          '<div>' +
-            '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span><span class="page-hierarchy"><span class="page-hierarchy-page">Promote</span><span class="page-hierarchy-sep"> - </span><span class="page-hierarchy-sub">Marketing</span></span></div>' +
-            '<h1 class="aud-visual-title">Programme</h1>' +
-            '<p class="aud-visual-copy">Auto-layout the programme plan from production data, sponsor ads, cast content, and missing-materials status.</p>' +
-          '</div>' +
-          '<div class="aud-visual-total"><div class="aud-visual-total-kicker">Estimated</div><div class="aud-visual-total-value">' + pages.length + '</div><div class="aud-visual-total-label">Pages</div></div>' +
-        '</div>' +
-      '</div>' +
-      renderProgrammePreview(pages);
-    mountProgrammeFlipbook(pages);
-  }
-
-  function mountProgrammeFlipbook(pages) {
-    var host = document.getElementById('pgm-flipbook-viewer');
-    if (!host) return;
-    host.innerHTML = '<div class="spn-loading-row">Loading flipbook viewer...</div>';
-    loadScript(FLIPBOOK_SCRIPT).then(function () {
-      if (!window.createFlipbookViewer || !document.body.contains(host)) return;
-      ProgrammeState.viewer = window.createFlipbookViewer({
-        container: host,
-        pages: programmePageImages(pages),
-        title: 'Digital Programme',
-        startPage: 0,
-        width: pagePixelSize().width,
-        height: pagePixelSize().height,
-        pageFlip: {
-          maxWidth: 520,
-          maxHeight: 690,
-          minWidth: 230,
-          minHeight: 320,
-          flippingTime: 820,
-          maxShadowOpacity: 0.36,
-          showCover: true,
-          usePortrait: true,
-          mobileScrollSupport: true,
-        },
-      });
-      ProgrammeState.viewer.ready.catch(function (error) {
-        console.error('[BTS] Programme flipbook failed.', error);
-      });
-    }).catch(function (error) {
-      console.error('[BTS] Programme flipbook script failed.', error);
-      host.innerHTML = '<div class="spn-card"><div style="color:#d1523d;font-weight:800;">Could not load flipbook viewer.</div></div>';
-    });
+      '<div class="pgmb-page">' +
+        renderBuilderHeader(pages) +
+        renderReadiness(pages) +
+        renderBuilderShell(pages) +
+      '</div>';
   }
 
   window.MarketingProgrammeModule = {
@@ -715,6 +828,22 @@
       if (key === 'bios') {
         ProgrammeState.settings.bioLayout = value === 'bios-compact' ? 'text-compact' : value === 'bios-featured' ? 'featured-bios' : 'headshot-grid';
       }
+      renderPlanner();
+    },
+    setCurrentPage: function (index) {
+      ProgrammeState.currentPage = Number(index) || 0;
+      renderPlanner();
+    },
+    stepPage: function (delta) {
+      ProgrammeState.currentPage += Number(delta) || 0;
+      renderPlanner();
+    },
+    setPageView: function (view) {
+      ProgrammeState.pageView = view || 'spread';
+      renderPlanner();
+    },
+    previewAll: function () {
+      ProgrammeState.currentPage = 0;
       renderPlanner();
     },
     toggleSection: function (key, checked) {
