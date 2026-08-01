@@ -2554,7 +2554,7 @@ const BP = {
       const itemBudget = items.reduce((s,i)=>s+(i.budgeted_cents||0),0);
       const catBudget = itemBudget || c.planned_cents || 0;
       const catSpent = items.reduce((s,i)=>s+(i.paid_cents||0),0) + this._catUnlinkedReceiptSpent(c.id);
-      const catPending = items.reduce((s,i)=>s+Math.max(0, (i.committed_cents||0) - (i.paid_cents||0)),0);
+      const catPending = items.reduce((s,i)=>s+Math.max(0, (i.committed_cents||0) - (i.paid_cents||0)),0) + this._catUnlinkedReceiptPending(c.id);
       const catActual = catSpent + catPending;
       const catTotal = catActual || catBudget;
       const catRemaining = catBudget - catActual;
@@ -2630,7 +2630,7 @@ const BP = {
         return sum + (itemSum || c.planned_cents || 0);
       }, 0);
       const secSpent = g.cats.reduce((sum, c) => sum + this._catItems(c.id).reduce((s,i)=>s+(i.paid_cents||0), 0) + this._catUnlinkedReceiptSpent(c.id), 0);
-      const secPending = g.cats.reduce((sum, c) => sum + this._catItems(c.id).reduce((s,i)=>s+Math.max(0, (i.committed_cents||0) - (i.paid_cents||0)), 0), 0);
+      const secPending = g.cats.reduce((sum, c) => sum + this._catItems(c.id).reduce((s,i)=>s+Math.max(0, (i.committed_cents||0) - (i.paid_cents||0)), 0) + this._catUnlinkedReceiptPending(c.id), 0);
       const secActual = secSpent + secPending;
       const secTotal = secActual || secBudget;
       const secRemaining = secBudget - secActual;
@@ -4150,6 +4150,15 @@ const BP = {
   _catUnlinkedReceiptSpent(catId){
     const itemExists = id => this.items.some(i=>String(i.id)===String(id));
     return (this.receipts||[]).filter(r => String(r.category_id||'')===String(catId) && r.status==='paid'
+      && !(Array.isArray(r.line_items) && r.line_items.some(l=>l&&l.budget_item_id&&itemExists(l.budget_item_id))))
+      .reduce((s,r)=>s+(r.amount_cents||0),0);
+  },
+  // Same gap, but for receipts still awaiting reimbursement - the Pending column was
+  // purely item-driven (committed - paid), so an unreimbursed receipt logged only
+  // against a category never showed up as pending anywhere.
+  _catUnlinkedReceiptPending(catId){
+    const itemExists = id => this.items.some(i=>String(i.id)===String(id));
+    return (this.receipts||[]).filter(r => String(r.category_id||'')===String(catId) && r.status==='pending'
       && !(Array.isArray(r.line_items) && r.line_items.some(l=>l&&l.budget_item_id&&itemExists(l.budget_item_id))))
       .reduce((s,r)=>s+(r.amount_cents||0),0);
   },

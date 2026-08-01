@@ -240,7 +240,7 @@
         const budgetIcon = document.getElementById('fd-budget-icon');
         if (budgetIcon && currency === 'GBP') budgetIcon.src = '/ASSETS/Images/Icons/Budgeting-total-spent-gbp.svg';
       } catch(_) {}
-      await this.loadRegistrationIncome();
+      await Promise.all([this.loadRegistrationIncome(), this.loadSponsorIncome()]);
       this.renderStats();
       this.renderCategoryTable();
       this.renderActivity();
@@ -354,6 +354,38 @@
       } catch (_) { this._registrationIncomeCents = 0; }
     },
 
+    // sponsor_packages/programme_ads RLS requires a real logged-in session token, not the
+    // bare anon key (the plain anon key gets a 42501 permission-denied) - same pattern
+    // sponsors-crm.js uses via sponsorHeaders(), replicated here since this is a separate page.
+    _sponsorAuthHeaders() {
+      let token = '';
+      try {
+        const raw = localStorage.getItem('sb-tkmaiktxpwqfbgeojbnf-auth-token');
+        const stored = raw ? JSON.parse(raw) : null;
+        token = (stored && (stored.access_token || (stored.currentSession && stored.currentSession.access_token))) || '';
+      } catch (_) { token = ''; }
+      return { apikey: this.KEY, Authorization: 'Bearer ' + (token || this.KEY) };
+    },
+
+    // Show Sponsors CRM and Programme Ads track their own received amounts (sponsor_packages,
+    // programme_ads) - 'paid' or 'trade' both count as settled money, same rule the CRM itself
+    // uses everywhere. None of that flows into budget_categories, so it never reached Total Income.
+    async loadSponsorIncome() {
+      this._sponsorIncomeCents = 0;
+      try {
+        const [pkgRes, adRes] = await Promise.all([
+          fetch(this.URL + '/rest/v1/sponsor_packages?production_id=eq.' + this.prodId + '&select=amount_cents,payment_status,booking_status', { headers: this._sponsorAuthHeaders() }),
+          fetch(this.URL + '/rest/v1/programme_ads?production_id=eq.' + this.prodId + '&select=price_cents,payment_status,booking_status', { headers: this._sponsorAuthHeaders() }),
+        ]);
+        const packages = pkgRes.ok ? await pkgRes.json() : [];
+        const ads = adRes.ok ? await adRes.json() : [];
+        const isReceived = row => row.booking_status !== 'declined' && (row.payment_status === 'paid' || row.payment_status === 'trade');
+        const pkgCents = packages.filter(isReceived).reduce((s, p) => s + (p.amount_cents || 0), 0);
+        const adCents = ads.filter(isReceived).reduce((s, a) => s + (a.price_cents || 0), 0);
+        this._sponsorIncomeCents = pkgCents + adCents;
+      } catch (_) { this._sponsorIncomeCents = 0; }
+    },
+
     BW_SECTION_CATS: [
       { label:'Rights & Venue',       color:'#476aaa', names:['Rights & Licensing','Venue Rental','Venue & Rehearsal Space','Rehearsal Space'] },
       { label:'Production Elements',  color:'#769e7b', names:['Scripts','Set Construction','Props','Costumes','Hair & Makeup'] },
@@ -382,6 +414,15 @@
     _catUnlinkedReceiptSpent(catId) {
       const itemExists = id => this.items.some(i => String(i.id) === String(id));
       return (this.receipts || []).filter(r => String(r.category_id || '') === String(catId) && r.status === 'paid'
+        && !(Array.isArray(r.line_items) && r.line_items.some(l => l && l.budget_item_id && itemExists(l.budget_item_id))))
+        .reduce((s, r) => s + (r.amount_cents || 0), 0);
+    },
+    // Same gap, but for receipts still awaiting reimbursement - the Pending column was
+    // purely item-driven (committed - paid), so an unreimbursed receipt logged only
+    // against a category never showed up as pending anywhere.
+    _catUnlinkedReceiptPending(catId) {
+      const itemExists = id => this.items.some(i => String(i.id) === String(id));
+      return (this.receipts || []).filter(r => String(r.category_id || '') === String(catId) && r.status === 'pending'
         && !(Array.isArray(r.line_items) && r.line_items.some(l => l && l.budget_item_id && itemExists(l.budget_item_id))))
         .reduce((s, r) => s + (r.amount_cents || 0), 0);
     },
@@ -447,7 +488,7 @@
           return sum + (itemSum || c.planned_cents || 0);
         }, 0);
         const secSpent = g.cats.reduce((sum, c) => sum + this._catItems(c.id).reduce((s, i) => s + (i.paid_cents || 0), 0) + this._catUnlinkedReceiptSpent(c.id), 0);
-        const secPending = g.cats.reduce((sum, c) => sum + this._catItems(c.id).reduce((s, i) => s + Math.max(0, (i.committed_cents || 0) - (i.paid_cents || 0)), 0), 0);
+        const secPending = g.cats.reduce((sum, c) => sum + this._catItems(c.id).reduce((s, i) => s + Math.max(0, (i.committed_cents || 0) - (i.paid_cents || 0)), 0) + this._catUnlinkedReceiptPending(c.id), 0);
         const secActual = secSpent + secPending;
         const secTotal = secActual || secBudget;
         const secRemaining = secBudget - secActual;
@@ -473,7 +514,7 @@
             const itemBudget = its.reduce((s, i) => s + (i.budgeted_cents || 0), 0);
             const catBudget = itemBudget || c.planned_cents || 0;
             const catSpent = its.reduce((s, i) => s + (i.paid_cents || 0), 0) + this._catUnlinkedReceiptSpent(c.id);
-            const catPending = its.reduce((s, i) => s + Math.max(0, (i.committed_cents || 0) - (i.paid_cents || 0)), 0);
+            const catPending = its.reduce((s, i) => s + Math.max(0, (i.committed_cents || 0) - (i.paid_cents || 0)), 0) + this._catUnlinkedReceiptPending(c.id);
             const catActual = catSpent + catPending;
             const catTotal = catActual || catBudget;
             const catRemaining = catBudget - catActual;
@@ -502,7 +543,7 @@
       const incCats = this.cats.filter(c => c.type === 'income');
 
       const totalBudget   = expCats.reduce((a, c) => a + (c.planned_cents || 0), 0);
-      const totalIncome   = incCats.reduce((a, c) => a + (c.planned_cents || 0), 0) + (this._registrationIncomeCents || 0);
+      const totalIncome   = incCats.reduce((a, c) => a + (c.planned_cents || 0), 0) + (this._registrationIncomeCents || 0) + (this._sponsorIncomeCents || 0);
       const totalExpenses = this.receipts.filter(r => r.status === 'paid').reduce((a, r) => a + (r.amount_cents || 0), 0);
       const pendingCount  = this.receipts.filter(r => r.status === 'pending').length;
 
