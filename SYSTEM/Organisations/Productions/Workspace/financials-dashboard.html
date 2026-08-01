@@ -330,6 +330,16 @@
         const logsByHousehold = {};
         householdLogs.forEach(l => { (logsByHousehold[l.household_id] = logsByHousehold[l.household_id] || []).push(l); });
 
+        const individualPaid = assignment => {
+          const volunteerApplies = volunteerDiscountEarned(assignment);
+          const volAdj = (settings.volunteer_discount_enabled && volunteerApplies) ? clean(settings.volunteer_discount) : 0;
+          const schAdj = assignment.scholarship_status === 'approved' ? clean(assignment.scholarship_amount) : 0;
+          const total = Math.max(0, baseTotal - volAdj - schAdj);
+          const installments = scaleInstallments(total);
+          const records = recordsByAssignment[String(assignment.id)] || [];
+          return records.filter(r => r.paid).reduce((s, r) => s + (r.amount_cents ? r.amount_cents / 100 : (installments[r.installment_index]?.amount || 0)), 0);
+        };
+
         let totalPaid = 0;
         const seenHouseholds = new Set();
         assignments.forEach(assignment => {
@@ -338,16 +348,20 @@
             if (seenHouseholds.has(household.id)) return;
             seenHouseholds.add(household.id);
             const logs = logsByHousehold[household.id] || [];
-            totalPaid += logs.reduce((s, l) => s + ((l.amount_cents || 0) / 100), 0);
+            if (logs.length) {
+              totalPaid += logs.reduce((s, l) => s + ((l.amount_cents || 0) / 100), 0);
+            } else {
+              // Nobody's used the household payment-log flow for this household yet, but
+              // members can still have real, individually-logged payments - count those
+              // rather than silently dropping money that's genuinely on record.
+              (household.member_ids || []).forEach(memberId => {
+                const memberAssignment = assignments.find(a => String(a.id) === String(memberId));
+                if (memberAssignment) totalPaid += individualPaid(memberAssignment);
+              });
+            }
             return;
           }
-          const volunteerApplies = volunteerDiscountEarned(assignment);
-          const volAdj = (settings.volunteer_discount_enabled && volunteerApplies) ? clean(settings.volunteer_discount) : 0;
-          const schAdj = assignment.scholarship_status === 'approved' ? clean(assignment.scholarship_amount) : 0;
-          const total = Math.max(0, baseTotal - volAdj - schAdj);
-          const installments = scaleInstallments(total);
-          const records = recordsByAssignment[String(assignment.id)] || [];
-          totalPaid += records.filter(r => r.paid).reduce((s, r) => s + (r.amount_cents ? r.amount_cents / 100 : (installments[r.installment_index]?.amount || 0)), 0);
+          totalPaid += individualPaid(assignment);
         });
 
         this._registrationIncomeCents = Math.round(totalPaid * 100);
