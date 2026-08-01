@@ -228,13 +228,14 @@
           fetch(this.URL + '/rest/v1/budget_categories?production_id=eq.' + this.prodId + '&order=sort_order.asc,created_at.asc', { headers: this._h() }),
           fetch(this.URL + '/rest/v1/budget_items?production_id=eq.' + this.prodId, { headers: this._h() }),
           fetch(this.URL + '/rest/v1/budget_receipts?production_id=eq.' + this.prodId + '&order=created_at.desc&limit=50', { headers: this._h() }),
-          fetch(this.URL + '/rest/v1/productions?id=eq.' + this.prodId + '&select=registration_settings', { headers: this._h() }),
+          fetch(this.URL + '/rest/v1/productions?id=eq.' + this.prodId + '&select=registration_settings,registration_households', { headers: this._h() }),
         ]);
         this.cats     = cRes.ok ? await cRes.json() : [];
         this.items    = iRes.ok ? await iRes.json() : [];
         this.receipts = rRes.ok ? await rRes.json() : [];
         const prods   = pRes.ok ? await pRes.json() : [];
         this._regSettings = prods[0]?.registration_settings || {};
+        this._regHouseholds = Array.isArray(prods[0]?.registration_households) ? prods[0].registration_households : [];
         const currency = this._regSettings?.payment_settings?.currency || 'CAD';
         const budgetIcon = document.getElementById('fd-budget-icon');
         if (budgetIcon && currency === 'GBP') budgetIcon.src = '/ASSETS/Images/Icons/Budgeting-total-spent-gbp.svg';
@@ -245,53 +246,111 @@
       this.renderActivity();
     },
 
-    // Cast registration fee payments live on audition_applications/audition_bookings
-    // (custom_answers), completely separate from the budget_* tables, so they have to
-    // be pulled in and totalled the same way the Registration Dashboard does.
+    // Cast registration fee payments are tracked per-installment in registration_payment_records
+    // (casting_assignment_id + installment_index + paid + amount_cents), with the theoretical
+    // per-person amount owed derived from payment_settings adjusted by household sibling rates,
+    // the volunteer discount, and scholarships - used ONLY as a fallback for older records saved
+    // before amount_cents was tracked. Household members instead pool their payments in a
+    // separate household_payment_logs table (one lump sum per household), bypassing individual
+    // records entirely. This mirrors the exact "Collected" logic in production-workspace.js.
     async loadRegistrationIncome() {
       this._registrationIncomeCents = 0;
       try {
-        const aRes = await fetch(this.URL + '/rest/v1/casting_assignments?production_id=eq.' + this.prodId + '&state=eq.offer_accepted&select=applicant_id', { headers: this._h() });
-        const assignments = aRes.ok ? await aRes.json() : [];
-        const ids = [...new Set(assignments.map(a => a.applicant_id).filter(Boolean))];
-        if (!ids.length) return;
-        const idList = ids.join(',');
-        const [appsRes, bookingsRes] = await Promise.all([
-          fetch(this.URL + '/rest/v1/audition_applications?id=in.(' + idList + ')&select=id,custom_answers', { headers: this._h() }),
-          fetch(this.URL + '/rest/v1/audition_bookings?id=in.(' + idList + ')&select=id,custom_answers', { headers: this._h() }),
+        const [aRes, vRes, recRes, hplRes] = await Promise.all([
+          fetch(this.URL + '/rest/v1/casting_assignments?production_id=eq.' + this.prodId + '&state=eq.offer_accepted&select=id,scholarship_status,scholarship_amount,volunteer_discount_approved,volunteer_signup_ids', { headers: this._h() }),
+          fetch(this.URL + '/rest/v1/volunteer_signups?production_id=eq.' + this.prodId, { headers: this._h() }),
+          fetch(this.URL + '/rest/v1/registration_payment_records?production_id=eq.' + this.prodId, { headers: this._h() }),
+          fetch(this.URL + '/rest/v1/household_payment_logs?production_id=eq.' + this.prodId, { headers: this._h() }),
         ]);
-        const apps = appsRes.ok ? await appsRes.json() : [];
-        const bookings = bookingsRes.ok ? await bookingsRes.json() : [];
-        const foundIds = new Set(apps.map(a => String(a.id)));
-        const people = apps.concat(bookings.filter(b => !foundIds.has(String(b.id))));
+        const assignments = aRes.ok ? await aRes.json() : [];
+        const volunteerSignups = vRes.ok ? await vRes.json() : [];
+        const paymentRecords = recRes.ok ? await recRes.json() : [];
+        const householdLogs = hplRes.ok ? await hplRes.json() : [];
+        if (!assignments.length) return;
 
+        const households = this._regHouseholds || [];
         const clean = v => parseFloat(String(v || '').replace(/[^0-9.]/g, '')) || 0;
-        const settings = Object.assign({ mode: 'none', fee: '', split_installments: [] }, this._regSettings?.payment_settings || {});
-        const due = settings.mode === 'split'
-          ? ((settings.split_installments || []).reduce((sum, inst) => sum + clean(inst.amount), 0) || clean(settings.fee))
-          : clean(settings.fee);
+        const settings = Object.assign({ mode: 'none', fee: '', split_installments: [], sibling_discount_enabled: false, volunteer_discount_enabled: false, volunteer_hours: '' }, this._regSettings?.payment_settings || {});
 
-        const customAnswers = app => {
-          if (!app?.custom_answers) return {};
-          if (typeof app.custom_answers === 'string') { try { return JSON.parse(app.custom_answers) || {}; } catch (_) { return {}; } }
-          return app.custom_answers || {};
+        const volunteerKey = row => row.portal_token || row.id || ((row.email || row.volunteer_email || '').toLowerCase() + '-' + (row.name || row.volunteer_name || ''));
+        const volunteerHours = row => {
+          const approved = parseFloat(row.approved_hours);
+          if (Number.isFinite(approved) && approved > 0) return approved;
+          const start = String(row.shift_start_time || '').slice(0, 5), end = String(row.shift_end_time || '').slice(0, 5);
+          if (!start || !end) return 0;
+          const [sh, sm] = start.split(':').map(Number), [eh, em] = end.split(':').map(Number);
+          if (![sh, sm, eh, em].every(Number.isFinite)) return 0;
+          let diff = (eh * 60 + em) - (sh * 60 + sm);
+          if (diff < 0) diff += 24 * 60;
+          return Math.max(0, diff / 60);
         };
-        const truthyKeys = new Set(['yes', 'true', 'complete', 'completed', 'signed', 'paid', 'received', 'done']);
-        const isPaid = app => {
-          const ca = customAnswers(app);
-          return ['__bts_registration_payment_received', '__bts_registration_paid', 'registration_payment_received', 'registration_paid', 'payment_received', 'payment_paid', 'payment_status']
-            .some(key => { const v = ca[key]; if (v === true) return true; if (typeof v === 'number') return v > 0; return truthyKeys.has(String(v || '').trim().toLowerCase()); });
+        const volunteerGroups = (() => {
+          const groups = new Map();
+          volunteerSignups.forEach(row => { const key = volunteerKey(row); if (!groups.has(key)) groups.set(key, []); groups.get(key).push(row); });
+          return [...groups.entries()].map(([key, rows]) => {
+            const approvedRows = rows.filter(r => r.status === 'approved' || r.status === 'checked_in' || r.status === 'completed');
+            return { key, ids: rows.map(r => r.id).filter(Boolean), hours: approvedRows.reduce((sum, r) => sum + volunteerHours(r), 0), status: approvedRows.length ? 'approved' : (rows[0]?.status || 'pending') };
+          });
+        })();
+        const volunteerLinkedGroups = assignment => {
+          const ids = Array.isArray(assignment.volunteer_signup_ids) ? assignment.volunteer_signup_ids.map(String)
+            : String(assignment.volunteer_signup_id || '').trim() ? [String(assignment.volunteer_signup_id)] : [];
+          if (!ids.length) return [];
+          return volunteerGroups.filter(group => group.ids.some(id => ids.includes(String(id))));
         };
-        const paidAmountFor = app => {
-          const ca = customAnswers(app);
-          for (const key of ['__bts_registration_amount_paid', 'registration_amount_paid', 'amount_paid', 'payment_amount']) {
-            const v = ca[key];
-            if (v !== undefined && v !== null && String(v).trim()) return clean(v);
+        const volunteerDiscountEarned = assignment => {
+          if (assignment.volunteer_discount_approved) return true;
+          const groups = volunteerLinkedGroups(assignment);
+          if (!groups.length) return false;
+          const required = clean(settings.volunteer_hours);
+          const totalHours = groups.reduce((sum, g) => sum + (Number(g.hours) || 0), 0);
+          if (required > 0) return totalHours >= required;
+          return groups.some(g => g.hours > 0 || g.status === 'approved');
+        };
+        const householdFor = assignmentId => households.find(h => (h.member_ids || []).includes(String(assignmentId))) || null;
+
+        const baseInstallments = settings.mode === 'none' ? []
+          : settings.mode === 'split'
+            ? (settings.split_installments || []).map(inst => ({ amount: clean(inst.amount) }))
+            : [{ amount: clean(settings.fee) }];
+        const baseTotal = baseInstallments.reduce((s, i) => s + i.amount, 0);
+        const scaleInstallments = total => {
+          if (!baseInstallments.length) return total > 0 ? [{ amount: total }] : [];
+          if (total <= 0) return baseInstallments.map(() => ({ amount: 0 }));
+          if (baseTotal <= 0) return [{ amount: total }];
+          const factor = total / baseTotal;
+          const scaled = baseInstallments.map(i => ({ amount: Math.round(i.amount * factor * 100) / 100 }));
+          const diff = Math.round((total - scaled.reduce((s, i) => s + i.amount, 0)) * 100) / 100;
+          if (diff !== 0 && scaled.length) scaled[scaled.length - 1].amount += diff;
+          return scaled;
+        };
+
+        const recordsByAssignment = {};
+        paymentRecords.forEach(r => { const key = String(r.casting_assignment_id); (recordsByAssignment[key] = recordsByAssignment[key] || []).push(r); });
+        const logsByHousehold = {};
+        householdLogs.forEach(l => { (logsByHousehold[l.household_id] = logsByHousehold[l.household_id] || []).push(l); });
+
+        let totalPaid = 0;
+        const seenHouseholds = new Set();
+        assignments.forEach(assignment => {
+          const household = householdFor(assignment.id);
+          if (household) {
+            if (seenHouseholds.has(household.id)) return;
+            seenHouseholds.add(household.id);
+            const logs = logsByHousehold[household.id] || [];
+            totalPaid += logs.reduce((s, l) => s + ((l.amount_cents || 0) / 100), 0);
+            return;
           }
-          return 0;
-        };
+          const volunteerApplies = volunteerDiscountEarned(assignment);
+          const volAdj = (settings.volunteer_discount_enabled && volunteerApplies) ? clean(settings.volunteer_discount) : 0;
+          const schAdj = assignment.scholarship_status === 'approved' ? clean(assignment.scholarship_amount) : 0;
+          const total = Math.max(0, baseTotal - volAdj - schAdj);
+          const installments = scaleInstallments(total);
+          const records = recordsByAssignment[String(assignment.id)] || [];
+          totalPaid += records.filter(r => r.paid).reduce((s, r) => s + (r.amount_cents ? r.amount_cents / 100 : (installments[r.installment_index]?.amount || 0)), 0);
+        });
 
-        this._registrationIncomeCents = people.reduce((sum, app) => sum + Math.round((isPaid(app) ? due : paidAmountFor(app)) * 100), 0);
+        this._registrationIncomeCents = Math.round(totalPaid * 100);
       } catch (_) { this._registrationIncomeCents = 0; }
     },
 
