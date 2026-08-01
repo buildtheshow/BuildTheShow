@@ -519,26 +519,55 @@
 
   function programmePageImage(page, index) {
     var size = pagePixelSize();
+    var W = size.width, H = size.height;
     var isCover = page && page.type === 'cover';
     var title = page && page.title ? page.title : 'Programme Page';
     var lines = pageSummaryLines(page);
-    var accent = isCover ? '#572e88' : '#efab45';
-    var y = isCover ? Math.round(size.height * 0.44) : 170;
-    var lineSvg = lines.map(function (line, lineIndex) {
-      var yy = y + 96 + (lineIndex * 34);
-      return '<text x="70" y="' + yy + '" fill="#4a3d6b" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">' + svgEsc(String(line).slice(0, 42)) + '</text>';
-    }).join('');
-    var body = isCover
-      ? '<text x="' + (size.width / 2) + '" y="' + y + '" fill="#572e88" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="900">' + svgEsc(title.slice(0, 20)) + '</text>' +
-        '<text x="' + (size.width / 2) + '" y="' + (y + 52) + '" fill="#8c80a2" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="800">' + svgEsc((lines[0] || '').slice(0, 34)) + '</text>'
-      : '<rect x="56" y="70" width="' + (size.width - 112) + '" height="8" rx="4" fill="' + accent + '"/>' +
-        '<text x="70" y="130" fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="900">' + svgEsc(title.slice(0, 24)) + '</text>' +
-        lineSvg;
-    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size.width + '" height="' + size.height + '" viewBox="0 0 ' + size.width + ' ' + size.height + '">' +
-      '<rect width="100%" height="100%" fill="#fffefb"/>' +
-      '<rect x="26" y="26" width="' + (size.width - 52) + '" height="' + (size.height - 52) + '" fill="#fffefb" stroke="#e4ddeb" stroke-width="2"/>' +
+    var font = 'Arial, Helvetica, sans-serif';
+
+    var pageNumberChip = index === 0 ? '' :
+      '<circle cx="' + (W - 46) + '" cy="' + (H - 46) + '" r="19" fill="#efab45"/>' +
+      '<text x="' + (W - 46) + '" y="' + (H - 40) + '" fill="#000000" text-anchor="middle" font-family="' + font + '" font-size="16" font-weight="800">' + (index + 1) + '</text>';
+
+    var svg;
+    if (isCover) {
+      var bandHeight = Math.round(H * 0.6);
+      var subtitle = lines[0] || 'Digital Programme';
+      svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '">' +
+        '<rect width="100%" height="100%" fill="#ffffff"/>' +
+        '<rect x="0" y="0" width="' + W + '" height="' + bandHeight + '" fill="#572e88"/>' +
+        '<text x="60" y="90" fill="#ffffff" opacity="0.82" font-family="' + font + '" font-size="16" font-weight="800" letter-spacing="2">DIGITAL PROGRAMME</text>' +
+        '<text x="60" y="172" fill="#ffffff" font-family="' + font + '" font-size="50" font-weight="900">' + svgEsc(title.slice(0, 22)) + '</text>' +
+        '<rect x="60" y="198" width="120" height="6" rx="3" fill="#efab45"/>' +
+        '<text x="60" y="' + (bandHeight - 46) + '" fill="#ffffff" font-family="' + font + '" font-size="22" font-weight="700">' + svgEsc(subtitle.slice(0, 40)) + '</text>' +
+        pageNumberChip +
+      '</svg>';
+      return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+    }
+
+    var hasContent = lines.length > 0 && lines[0] !== 'Waiting for source data';
+    var body;
+    if (hasContent) {
+      body = lines.map(function (line, lineIndex) {
+        var yy = 210 + lineIndex * 40;
+        return '<circle cx="70" cy="' + (yy - 7) + '" r="4" fill="#efab45"/>' +
+          '<text x="88" y="' + yy + '" fill="#000000" font-family="' + font + '" font-size="21" font-weight="700">' + svgEsc(String(line).slice(0, 44)) + '</text>';
+      }).join('');
+    } else {
+      var panelY = 210, panelH = 190;
+      body =
+        '<rect x="56" y="' + panelY + '" width="' + (W - 112) + '" height="' + panelH + '" rx="16" fill="#efefef"/>' +
+        '<text x="' + (W / 2) + '" y="' + (panelY + panelH / 2 - 6) + '" fill="#572e88" text-anchor="middle" font-family="' + font + '" font-size="21" font-weight="800">Waiting for source data</text>' +
+        '<text x="' + (W / 2) + '" y="' + (panelY + panelH / 2 + 24) + '" fill="#000000" text-anchor="middle" font-family="' + font + '" font-size="14" font-weight="600">This page fills in automatically once information is added.</text>';
+    }
+
+    svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '">' +
+      '<rect width="100%" height="100%" fill="#ffffff"/>' +
+      '<text x="60" y="76" fill="#572e88" font-family="' + font + '" font-size="15" font-weight="800" letter-spacing="2">PROGRAMME</text>' +
+      '<text x="60" y="128" fill="#000000" font-family="' + font + '" font-size="38" font-weight="900">' + svgEsc(title.slice(0, 26)) + '</text>' +
+      '<rect x="60" y="148" width="70" height="6" rx="3" fill="#efab45"/>' +
       body +
-      '<text x="' + (size.width / 2) + '" y="' + (size.height - 38) + '" fill="#c8bad7" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="800">' + (index + 1) + '</text>' +
+      pageNumberChip +
     '</svg>';
     return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
   }
