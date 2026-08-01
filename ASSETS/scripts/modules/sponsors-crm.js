@@ -1259,6 +1259,127 @@
     return 'Colour';
   }
 
+  function crmExportReport() {
+    var btn = document.getElementById('spn-crm-export-btn');
+    if (typeof html2pdf === 'undefined') {
+      alert('PDF library is still loading. Please try again in a moment.');
+      return;
+    }
+    if (btn) { btn.disabled = true; btn.textContent = 'Generating...'; }
+
+    var payLabelFor = function (status) {
+      if (status === 'trade') return 'In Trade';
+      if (status === 'paid') return 'Paid';
+      if (status === 'invoice_sent') return 'Invoice Sent';
+      if (status === 'overdue') return 'Overdue';
+      return 'Unpaid';
+    };
+    var artLabelFor = function (status) {
+      if (status === 'approved' || status === 'print_ready') return 'Approved';
+      if (status === 'received') return 'Received';
+      return 'Not Received';
+    };
+
+    var prod = SpnsState.prodMeta || {};
+    var businesses = SpnsState.businesses || [];
+    var adsMap = {}, pkgsMap = {}, delivMap = {};
+    (SpnsState.ads || []).forEach(function (a) { var k = a.business_id || '__none'; (adsMap[k] = adsMap[k] || []).push(a); });
+    (SpnsState.packages || []).forEach(function (p) { var k = p.business_id || '__none'; (pkgsMap[k] = pkgsMap[k] || []).push(p); });
+    (SpnsState.deliverables || []).forEach(function (d) { var k = d.business_id || '__none'; (delivMap[k] = delivMap[k] || []).push(d); });
+
+    var today = new Date().toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
+    var grandTotal = 0, grandReceived = 0;
+
+    var bodyHtml = businesses.map(function (biz) {
+      var ads = adsMap[biz.id] || [];
+      var pkgs = pkgsMap[biz.id] || [];
+      var delivs = delivMap[biz.id] || [];
+      var bookingsHtml = '';
+      var bizTotal = 0, bizReceived = 0;
+
+      pkgs.forEach(function (p) {
+        if (p.booking_status === 'declined') return;
+        bizTotal += (p.amount_cents || 0);
+        if (p.payment_status === 'paid' || p.payment_status === 'trade') bizReceived += (p.amount_cents || 0);
+        bookingsHtml += '<tr><td style="padding:0.2rem 0.4rem 0.2rem 0;">' + esc(p.tier_name || 'Sponsor Package') + '</td><td>Sponsorship</td><td>' + fmtDollars(p.amount_cents || 0) + '</td><td>' + payLabelFor(p.payment_status) + '</td><td>--</td></tr>';
+      });
+      ads.forEach(function (a) {
+        if (a.booking_status === 'declined') return;
+        bizTotal += (a.price_cents || 0);
+        if (a.payment_status === 'paid' || a.payment_status === 'trade') bizReceived += (a.price_cents || 0);
+        var sz = crmAdSizeLabel(a);
+        var typeLabel = crmAdTypeLabel(a, sz);
+        bookingsHtml += '<tr><td style="padding:0.2rem 0.4rem 0.2rem 0;">' + esc(sz.label) + ' (' + esc(typeLabel) + (sz.dims ? ' · ' + esc(sz.dims) : '') + ')</td><td>Programme Ad</td><td>' + fmtDollars(a.price_cents || 0) + '</td><td>' + payLabelFor(a.payment_status) + '</td><td>' + artLabelFor(a.artwork_status) + '</td></tr>';
+      });
+      if (!bookingsHtml) bookingsHtml = '<tr><td colspan="5" style="color:#888;padding:0.2rem 0;">No bookings</td></tr>';
+
+      grandTotal += bizTotal; grandReceived += bizReceived;
+      var outstanding = bizTotal - bizReceived;
+      var contactLine = [biz.contact_name, biz.contact_email, biz.contact_phone, biz.website].filter(Boolean).join('  ·  ');
+
+      var delivHtml = delivs.length
+        ? '<ul style="margin:0.25rem 0 0;padding-left:1.1rem;">' + delivs.map(function (d) { return '<li>' + (d.status === 'done' ? '✓ ' : '□ ') + esc(d.title) + '</li>'; }).join('') + '</ul>'
+        : '';
+
+      return '<div style="page-break-inside:avoid;margin-bottom:1.3rem;padding-bottom:1.1rem;border-bottom:1px solid #d8d0e6;">' +
+        '<div style="font-size:1.05rem;font-weight:900;color:#000000;">' + esc(biz.name) + '</div>' +
+        (contactLine ? '<div style="font-size:0.76rem;color:#572e88;margin-top:0.15rem;">' + esc(contactLine) + '</div>' : '') +
+        '<table style="width:100%;border-collapse:collapse;margin-top:0.55rem;font-size:0.76rem;">' +
+          '<thead><tr style="text-align:left;color:#572e88;border-bottom:1px solid #d8d0e6;"><th style="padding:0.2rem 0.4rem 0.2rem 0;">Booking</th><th>Type</th><th>Price</th><th>Payment</th><th>Artwork</th></tr></thead>' +
+          '<tbody>' + bookingsHtml + '</tbody>' +
+        '</table>' +
+        '<div style="margin-top:0.4rem;font-size:0.76rem;color:#000000;"><strong>Total:</strong> ' + fmtDollars(bizTotal) + '&nbsp;&nbsp;<strong>Received:</strong> ' + fmtDollars(bizReceived) + '&nbsp;&nbsp;<strong>Outstanding:</strong> ' + fmtDollars(outstanding) + '</div>' +
+        (biz.notes ? '<div style="margin-top:0.3rem;font-size:0.74rem;color:#444;"><strong>Notes:</strong> ' + esc(biz.notes) + '</div>' : '') +
+        (delivHtml ? '<div style="margin-top:0.3rem;font-size:0.74rem;color:#444;"><strong>Deliverables:</strong>' + delivHtml + '</div>' : '') +
+      '</div>';
+    }).join('');
+
+    var reportHtml =
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem;border-bottom:2px solid #572e88;padding-bottom:0.8rem;">' +
+        '<div><div style="font-size:1.35rem;font-weight:900;color:#572e88;">Show Sponsors Report</div><div style="font-size:0.82rem;color:#444;margin-top:0.15rem;">' + esc(prod.title || '') + '</div></div>' +
+        '<div style="text-align:right;font-size:0.72rem;color:#666;">Generated ' + esc(today) + '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:1.2rem;margin-bottom:1.1rem;font-size:0.8rem;">' +
+        '<div><strong>' + businesses.length + '</strong> Businesses</div>' +
+        '<div><strong>' + fmtDollars(grandTotal) + '</strong> Total Booked</div>' +
+        '<div><strong>' + fmtDollars(grandReceived) + '</strong> Total Received</div>' +
+        '<div><strong>' + fmtDollars(grandTotal - grandReceived) + '</strong> Outstanding</div>' +
+      '</div>' +
+      (bodyHtml || '<div style="color:#888;">No businesses yet.</div>');
+
+    var container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.left = '-9999px';
+    container.style.top = '0';
+    container.style.width = '750px';
+    container.style.background = '#ffffff';
+    container.style.fontFamily = 'Inter, sans-serif';
+    container.style.color = '#000000';
+    container.style.padding = '0.5rem';
+    container.innerHTML = reportHtml;
+    document.body.appendChild(container);
+
+    var safeTitle = (prod.title || 'production').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '');
+    var fileName = 'Show-Sponsors-Report-' + safeTitle + '.pdf';
+
+    function cleanup() {
+      if (container.parentNode) container.parentNode.removeChild(container);
+      if (btn) { btn.disabled = false; btn.textContent = 'Export'; }
+    }
+
+    html2pdf().set({
+      margin: [12, 14, 12, 14],
+      filename: fileName,
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+      jsPDF: { unit: 'mm', format: 'letter', orientation: 'portrait' },
+      pagebreak: { mode: ['css', 'avoid-all'] },
+    }).from(container).save().then(cleanup).catch(function (e) {
+      cleanup();
+      alert('Could not generate PDF: ' + (e && e.message || 'Unknown error'));
+    });
+  }
+
   var crmZipLoader = null;
 
   function crmSafeFilePart(value, fallback) {
@@ -3808,6 +3929,7 @@
           '<div class="spn-toolbar">' +
             '<span class="spn-toolbar-title" id="spn-crm-count">Businesses</span>' +
             '<div style="display:flex;gap:0.5rem;">' +
+              '<button class="spn-btn spn-btn--ghost" id="spn-crm-export-btn" onclick="MarketingSponsorsModule.crmExportReport()">Export</button>' +
               '<button class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.openBizModal()">+ Add Business</button>' +
             '</div>' +
           '</div>' +
@@ -4182,6 +4304,7 @@
     },
 
     switchTab:       switchTab,
+    crmExportReport: crmExportReport,
     openBizModal:    openBizModal,
     closeBizModal:   closeBizModal,
     saveBiz:         saveBiz,
