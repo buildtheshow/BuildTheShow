@@ -298,6 +298,11 @@
     try { data = JSON.parse(raw); } catch (e) { return; }
     var keys = new Set(data.menuKeys || []);
 
+    // Flags a restricted portal session for CSS - restricted sidebars use the
+    // flat, no-chevron look from the Performer portal's nav instead of the
+    // producer workspace's full accordion-group style.
+    document.body.classList.add('bts-restricted-portal');
+
     // Portal viewers aren't org staff and have no org dashboard to go back to.
     document.querySelectorAll('#sidebar-org-back, #sidebar-mobile-org-back').forEach(function (link) {
       link.style.display = 'none';
