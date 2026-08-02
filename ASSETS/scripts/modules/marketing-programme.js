@@ -152,6 +152,7 @@
       roles: [],
       applications: [],
       team: [],
+      volunteers: [],
     },
   };
 
@@ -222,6 +223,7 @@
       safeFetch(dbFetch('production_roles', 'select=*'), []),
       safeFetch(dbFetch('audition_applications', 'select=id,name,first_name,last_name,headshot_url,custom_answers,status,created_at'), []),
       safeFetch(dbFetch('production_team_members', 'select=id,name,role,department,bio,headshot_url,is_active'), []),
+      safeFetch(dbFetch('volunteer_signups', 'select=id,name,role_name,department,status,email'), []),
     ]).then(function (results) {
       ProgrammeState.data.production = results[0];
       ProgrammeState.data.businesses = results[1] || [];
@@ -232,6 +234,7 @@
       ProgrammeState.data.roles = results[6] || [];
       ProgrammeState.data.applications = results[7] || [];
       ProgrammeState.data.team = (results[8] || []).filter(function (member) { return member.is_active !== false; });
+      ProgrammeState.data.volunteers = results[9] || [];
     });
   }
 
@@ -295,6 +298,81 @@
       missingBios: cast.filter(function (app) { return !bioText(app); }).length,
       missingHeadshots: cast.filter(function (app) { return !app.headshot_url; }).length,
     };
+  }
+
+  function connectionStatus(count, emptyLabel, readyLabel) {
+    return count > 0
+      ? { tone: 'live', label: readyLabel || (count + ' connected') }
+      : { tone: 'empty', label: emptyLabel || 'Not connected yet' };
+  }
+
+  function pageConnections(page) {
+    if (!page) return [];
+    var cast = castApplications();
+    var biosReady = cast.filter(function (app) { return !!bioText(app); }).length;
+    var volunteers = ProgrammeState.data.volunteers || [];
+    var connections = [];
+    if (page.sectionKey === 'cover' || page.sectionKey === 'welcome' || page.sectionKey === 'director' || page.sectionKey === 'land' || page.sectionKey === 'back') {
+      connections.push({
+        label: 'Production',
+        detail: (ProgrammeState.data.production && (ProgrammeState.data.production.title || ProgrammeState.data.production.name)) ? 'Using title, venue, and schedule' : 'Waiting for production details',
+        status: connectionStatus(ProgrammeState.data.production ? 1 : 0, 'Add production details', 'Production details connected')
+      });
+    }
+    if (page.sectionKey === 'creative') {
+      connections.push({
+        label: 'Creative Team',
+        detail: ProgrammeState.data.team.length + ' team member' + (ProgrammeState.data.team.length === 1 ? '' : 's'),
+        status: connectionStatus(ProgrammeState.data.team.length, 'No team members added', 'Creative team connected')
+      });
+    }
+    if (page.sectionKey === 'cast' || page.sectionKey === 'characters') {
+      connections.push({
+        label: 'Cast List',
+        detail: cast.length + ' performer' + (cast.length === 1 ? '' : 's') + ' from casting',
+        status: connectionStatus(cast.length, 'No cast assigned yet', 'Cast list connected')
+      });
+    }
+    if (page.sectionKey === 'bios') {
+      connections.push({
+        label: 'Cast Bios',
+        detail: biosReady + ' bio' + (biosReady === 1 ? '' : 's') + ' ready',
+        status: connectionStatus(cast.length, 'No cast bios available', 'Cast bios connected')
+      });
+    }
+    if (page.sectionKey === 'sponsors') {
+      connections.push({
+        label: 'Sponsors',
+        detail: ProgrammeState.data.packages.length + ' sponsor package' + (ProgrammeState.data.packages.length === 1 ? '' : 's'),
+        status: connectionStatus(ProgrammeState.data.packages.length, 'No sponsors booked yet', 'Sponsors connected')
+      });
+    }
+    if (page.sectionKey === 'ads') {
+      connections.push({
+        label: 'Programme Ads',
+        detail: ProgrammeState.data.ads.length + ' ad placement' + (ProgrammeState.data.ads.length === 1 ? '' : 's'),
+        status: connectionStatus(ProgrammeState.data.ads.length, 'No ad placements yet', 'Programme ads connected')
+      });
+    }
+    if (page.sectionKey === 'thanks') {
+      connections.push({
+        label: 'Volunteers',
+        detail: volunteers.length + ' volunteer' + (volunteers.length === 1 ? '' : 's') + ' available to acknowledge',
+        status: connectionStatus(volunteers.length, 'No volunteers linked yet', 'Volunteer list connected')
+      });
+      connections.push({
+        label: 'Sponsors',
+        detail: ProgrammeState.data.packages.length + ' sponsor package' + (ProgrammeState.data.packages.length === 1 ? '' : 's') + ' available to thank',
+        status: connectionStatus(ProgrammeState.data.packages.length, 'No sponsors to thank yet', 'Sponsors connected')
+      });
+    }
+    return connections;
+  }
+
+  function pageConnectionSummary(page) {
+    var sources = page && page.connections ? page.connections : [];
+    if (!sources.length) return 'Manual page';
+    return sources.map(function (item) { return item.label; }).join(' · ');
   }
 
   function packAdPages() {
@@ -361,6 +439,7 @@
     ProgrammeState.settings.sections.forEach(function (key) {
       pagesForSection(key).forEach(function (page) {
         page.sectionKey = key;
+        page.connections = pageConnections(page);
         pages.push(page);
       });
     });
@@ -543,7 +622,7 @@
               '</span>'
             : '<span class="pgmb-page-index">' + (index + 1) + '</span>') +
           '<span class="pgmb-page-icon">' + iconImg(pageIcon(page), 15) + '</span>' +
-          '<button class="pgmb-page-copy" type="button" onclick="MarketingProgrammeModule.setCurrentPage(' + index + ')"><strong>' + esc(page.title || pageTypeLabel(page)) + '</strong><em>' + esc(page.subtitle || pageTypeLabel(page)) + '</em></button>' +
+          '<button class="pgmb-page-copy" type="button" onclick="MarketingProgrammeModule.setCurrentPage(' + index + ')"><strong>' + esc(page.title || pageTypeLabel(page)) + '</strong><em>' + esc(page.subtitle || pageTypeLabel(page)) + '</em><span class="pgmb-page-source">' + esc(pageConnectionSummary(page)) + '</span></button>' +
         '</div>';
       }).join('') + '</div>' +
       (addable.length ? '<div class="pgmb-add-page">' +
@@ -588,12 +667,27 @@
     return { left: ProgrammeState.currentPage - 1, right: ProgrammeState.currentPage };
   }
 
+  function renderConnectionPanel(page) {
+    var connections = page && page.connections ? page.connections : [];
+    if (!connections.length) return '';
+    return '<div class="pgmb-connection-panel">' +
+      '<div class="pgmb-connection-head"><strong>Connected Data</strong><span>This page can stay synced with other parts of the show.</span></div>' +
+      '<div class="pgmb-connection-list">' + connections.map(function (item) {
+        return '<div class="pgmb-connection-item">' +
+          '<div class="pgmb-connection-copy"><strong>' + esc(item.label) + '</strong><span>' + esc(item.detail) + '</span></div>' +
+          '<span class="pgmb-connection-pill is-' + esc(item.status.tone) + '">' + esc(item.status.label) + '</span>' +
+        '</div>';
+      }).join('') + '</div>' +
+    '</div>';
+  }
+
   function renderSpreadStage(pages) {
     var images = programmePageImages(pages);
     var isSingleView = ProgrammeState.pageView === 'single';
     var spread = isSingleView ? { left: ProgrammeState.currentPage, right: -1 } : spreadForPage(pages);
     var showSingle = isSingleView || spread.right < 0 || spread.left === spread.right;
     var counter = (ProgrammeState.currentPage + 1) + ' of ' + pages.length;
+    var current = pages[ProgrammeState.currentPage];
     return '<section class="pgmb-stage-card">' +
       '<div class="pgmb-stage-toolbar">' +
         '<div class="pgmb-stage-controls">' +
@@ -613,6 +707,7 @@
           '<button class="pgmb-nav-btn" type="button" onclick="MarketingProgrammeModule.stepPage(1)">&gt;</button>' +
         '</div>' +
       '</div>' +
+      renderConnectionPanel(current) +
       '<div class="pgmb-stage">' +
         '<button class="pgmb-arrow pgmb-arrow--left" type="button" onclick="MarketingProgrammeModule.stepPage(-1)">&lt;</button>' +
         '<div class="pgmb-spread' + (showSingle ? ' is-single' : '') + '">' +
