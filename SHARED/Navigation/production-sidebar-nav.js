@@ -420,7 +420,10 @@
       });
     }
 
-    // Promote — marketing, sponsors, programme each control sub-wraps
+    // Promote — marketing, sponsors, programme each control sub-wraps, and (like
+    // Volunteers/Financials/Departments) each individual page inside those wraps
+    // needs its own specific key so someone granted only Marketing Dashboard can't
+    // also browse Assets/Media/Calendar/Tasks just because the wrap itself is open.
     var showMarketing = hasKeyOrChild('marketing');
     var showSponsors  = hasKeyOrChild('sponsors');
     var showProgramme = keys.has('programme');
@@ -429,8 +432,27 @@
       if (grpPromote) { grpPromote.style.display = ''; grpPromote.classList.add('open'); }
       var mktWrap = document.getElementById('marketing-wrap');
       if (mktWrap) mktWrap.style.display = showMarketing ? '' : 'none';
+      if (showMarketing) {
+        [
+          ['msub-dashboard', 'marketing:dashboard'], ['msub-assets', 'marketing:assets'],
+          ['msub-media', 'marketing:media'], ['msub-calendar', 'marketing:calendar'],
+          ['msub-tasks', 'marketing:tasks'],
+        ].forEach(function (pair) {
+          var el = document.getElementById(pair[0]);
+          if (el) el.style.display = keys.has(pair[1]) ? '' : 'none';
+        });
+      }
       var spnWrap = document.getElementById('sponsors-wrap');
       if (spnWrap) spnWrap.style.display = showSponsors ? '' : 'none';
+      if (showSponsors) {
+        [
+          ['msub-sponsors', 'sponsors:dashboard'], ['msub-programmeads', 'sponsors:ads'],
+          ['msub-showsponsors', 'sponsors:show'], ['msub-sponsorssettings', 'sponsors:settings'],
+        ].forEach(function (pair) {
+          var el = document.getElementById(pair[0]);
+          if (el) el.style.display = keys.has(pair[1]) ? '' : 'none';
+        });
+      }
     }
 
     // Ticketing
