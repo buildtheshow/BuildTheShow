@@ -123,6 +123,9 @@
     viewer: null,
     currentPage: 0,
     pageView: 'spread',
+    reordering: false,
+    settingsOpen: false,
+    settingsTab: 'sections',
     settings: {
       paper: 'letter-folded',
       output: 'print',
@@ -325,48 +328,53 @@
     }).filter(function (group) { return group.items.length; });
   }
 
-  function buildProgrammePages() {
-    var selected = new Set(ProgrammeState.settings.sections);
-    var pages = [];
+  function pagesForSection(key) {
     var prod = ProgrammeState.data.production || {};
     var cast = castApplications();
     var team = ProgrammeState.data.team;
-    if (selected.has('cover')) pages.push({ type: 'cover', title: prod.title || prod.name || 'Production Title', subtitle: [prod.venue, prod.start_date].filter(Boolean).join(' · ') || 'Cover page' });
-    if (selected.has('welcome')) pages.push({ type: 'note', title: 'Welcome Note', subtitle: 'Producer or organisation message placeholder' });
-    if (selected.has('director')) pages.push({ type: 'note', title: 'Director Note', subtitle: prod.director ? 'From ' + prod.director : 'Director note placeholder' });
-    if (selected.has('land')) pages.push({ type: 'note', title: 'Land Acknowledgement', subtitle: 'Structured text placeholder' });
-    if (selected.has('creative')) pages.push({ type: 'creative', title: 'Creative Team', subtitle: team.length + ' team member' + (team.length === 1 ? '' : 's'), items: team });
-    if (selected.has('cast')) pages.push({ type: 'cast', title: 'Cast List', subtitle: cast.length + ' performer' + (cast.length === 1 ? '' : 's'), items: cast, layout: ProgrammeState.settings.pageLayouts.cast });
-    if (selected.has('characters')) pages.push({ type: 'characters', title: 'Character List', subtitle: ProgrammeState.data.roles.length + ' role' + (ProgrammeState.data.roles.length === 1 ? '' : 's'), items: ProgrammeState.data.roles, layout: ProgrammeState.settings.pageLayouts.cast });
-    if (selected.has('bios')) {
+    if (key === 'cover') return [{ type: 'cover', title: prod.title || prod.name || 'Production Title', subtitle: [prod.venue, prod.start_date].filter(Boolean).join(' · ') || 'Cover page' }];
+    if (key === 'welcome') return [{ type: 'note', title: 'Welcome Note', subtitle: 'Producer or organisation message placeholder' }];
+    if (key === 'director') return [{ type: 'note', title: 'Director Note', subtitle: prod.director ? 'From ' + prod.director : 'Director note placeholder' }];
+    if (key === 'land') return [{ type: 'note', title: 'Land Acknowledgement', subtitle: 'Structured text placeholder' }];
+    if (key === 'creative') return [{ type: 'creative', title: 'Creative Team', subtitle: team.length + ' team member' + (team.length === 1 ? '' : 's'), items: team }];
+    if (key === 'cast') return [{ type: 'cast', title: 'Cast List', subtitle: cast.length + ' performer' + (cast.length === 1 ? '' : 's'), items: cast, layout: ProgrammeState.settings.pageLayouts.cast }];
+    if (key === 'characters') return [{ type: 'characters', title: 'Character List', subtitle: ProgrammeState.data.roles.length + ' role' + (ProgrammeState.data.roles.length === 1 ? '' : 's'), items: ProgrammeState.data.roles, layout: ProgrammeState.settings.pageLayouts.cast }];
+    if (key === 'bios') {
       var bioCapacity = ProgrammeState.settings.pageLayouts.bios === 'bios-compact' ? 10 : ProgrammeState.settings.pageLayouts.bios === 'bios-featured' ? 4 : 6;
+      var bioPages = [];
       for (var i = 0; i < cast.length; i += bioCapacity) {
-        pages.push({ type: 'bios', title: 'Cast Bios', subtitle: 'Bios ' + (i + 1) + '-' + Math.min(i + bioCapacity, cast.length), items: cast.slice(i, i + bioCapacity), capacity: bioCapacity, layout: ProgrammeState.settings.pageLayouts.bios });
+        bioPages.push({ type: 'bios', title: 'Cast Bios', subtitle: 'Bios ' + (i + 1) + '-' + Math.min(i + bioCapacity, cast.length), items: cast.slice(i, i + bioCapacity), capacity: bioCapacity, layout: ProgrammeState.settings.pageLayouts.bios });
       }
-      if (!cast.length) pages.push({ type: 'bios', title: 'Cast Bios', subtitle: 'Waiting for cast list', items: [], capacity: bioCapacity, layout: ProgrammeState.settings.pageLayouts.bios });
+      if (!cast.length) bioPages.push({ type: 'bios', title: 'Cast Bios', subtitle: 'Waiting for cast list', items: [], capacity: bioCapacity, layout: ProgrammeState.settings.pageLayouts.bios });
+      return bioPages;
     }
-    if (selected.has('sponsors')) pages.push({ type: 'sponsors', title: 'Sponsors', subtitle: ProgrammeState.data.packages.length + ' sponsor package' + (ProgrammeState.data.packages.length === 1 ? '' : 's'), groups: sponsorGroups(), layout: ProgrammeState.settings.pageLayouts.sponsors });
-    if (selected.has('ads')) pages = pages.concat(packAdPages());
-    if (selected.has('thanks')) pages.push({ type: 'thanks', title: 'Special Thanks', subtitle: 'Community acknowledgements placeholder', layout: ProgrammeState.settings.pageLayouts.thanks });
-    if (selected.has('upcoming')) pages.push({ type: 'upcoming', title: 'Upcoming Shows', subtitle: 'Future season placeholder' });
-    if (selected.has('back')) pages.push({ type: 'back', title: 'Back Cover', subtitle: 'Back cover or final sponsor placement' });
+    if (key === 'sponsors') return [{ type: 'sponsors', title: 'Sponsors', subtitle: ProgrammeState.data.packages.length + ' sponsor package' + (ProgrammeState.data.packages.length === 1 ? '' : 's'), groups: sponsorGroups(), layout: ProgrammeState.settings.pageLayouts.sponsors }];
+    if (key === 'ads') return packAdPages();
+    if (key === 'thanks') return [{ type: 'thanks', title: 'Special Thanks', subtitle: 'Community acknowledgements placeholder', layout: ProgrammeState.settings.pageLayouts.thanks }];
+    if (key === 'upcoming') return [{ type: 'upcoming', title: 'Upcoming Shows', subtitle: 'Future season placeholder' }];
+    if (key === 'back') return [{ type: 'back', title: 'Back Cover', subtitle: 'Back cover or final sponsor placement' }];
+    return [];
+  }
+
+  function buildProgrammePages() {
+    var pages = [];
+    ProgrammeState.settings.sections.forEach(function (key) {
+      pagesForSection(key).forEach(function (page) {
+        page.sectionKey = key;
+        pages.push(page);
+      });
+    });
     return pages;
-  }
-
-  function statusClass(count) {
-    return count ? 'warn' : 'good';
-  }
-
-  function statusTile(label, value, sub, cls) {
-    return '<div class="pgm-status-tile pgm-status-tile--' + esc(cls || '') + '">' +
-      '<div class="pgm-status-label">' + esc(label) + '</div>' +
-      '<div class="pgm-status-value">' + esc(value) + '</div>' +
-      '<div class="pgm-status-sub">' + esc(sub || '') + '</div>' +
-    '</div>';
   }
 
   function selectedPaper() {
     return PAPER_OPTIONS.find(function (item) { return item.id === ProgrammeState.settings.paper; }) || PAPER_OPTIONS[0];
+  }
+
+  function estimatePrintCost(pageCount) {
+    var perPage = selectedPaper().id === 'tabloid-folded' ? 0.16 : 0.11;
+    var binding = 0.45;
+    return '~$' + (pageCount * perPage + binding).toFixed(2);
   }
 
   function ensureCurrentPage(pages) {
@@ -414,33 +422,22 @@
   }
 
   function pageIcon(page) {
-    if (!page) return 'P';
+    if (!page) return 'Placeholder - Poster or document.svg';
     var type = page.type;
-    if (type === 'cover' || type === 'back') return 'C';
-    if (type === 'note') return 'N';
-    if (type === 'cast' || type === 'characters') return 'L';
-    if (type === 'bios') return 'B';
-    if (type === 'creative') return 'T';
-    if (type === 'sponsors') return 'S';
-    if (type === 'ads') return 'A';
-    if (type === 'thanks') return 'Y';
-    if (type === 'upcoming') return 'U';
-    return 'P';
+    if (type === 'cover' || type === 'back') return 'Placeholder - Poster or document.svg';
+    if (type === 'note') return 'Messages.svg';
+    if (type === 'cast' || type === 'characters') return 'page-cast.svg';
+    if (type === 'bios') return 'navcastlist.svg';
+    if (type === 'creative') return 'navproductionteam.svg';
+    if (type === 'sponsors') return 'Budgeting-Sponsorship.svg';
+    if (type === 'ads') return 'Star.svg';
+    if (type === 'thanks') return 'heart.svg';
+    if (type === 'upcoming') return 'calendar-date.svg';
+    return 'Placeholder - Poster or document.svg';
   }
 
-  function layoutKeyForPage(page) {
-    if (!page) return '';
-    if (page.type === 'cast' || page.type === 'characters') return 'cast';
-    if (page.type === 'bios') return 'bios';
-    if (page.type === 'ads') return 'ads';
-    if (page.type === 'thanks') return 'thanks';
-    if (page.type === 'sponsors') return 'sponsors';
-    return '';
-  }
-
-  function selectedPage(pages) {
-    ensureCurrentPage(pages);
-    return pages[ProgrammeState.currentPage] || null;
+  function iconImg(file, size) {
+    return '<img src="/ASSETS/Images/Icons/' + encodeURIComponent(file) + '" alt="" style="width:' + (size || 16) + 'px;height:' + (size || 16) + 'px;object-fit:contain;display:block;" onerror="this.style.display=\'none\'">';
   }
 
   function renderSetupTab() {
@@ -505,16 +502,10 @@
       }).join('') + '</div>';
   }
 
-  function renderReadiness(pages) {
+  function readinessSummary() {
     var ready = buildReadiness();
     var blockers = ready.missingAds + ready.unapprovedAds + ready.missingBios + ready.missingHeadshots + ready.openDeliverables;
-    var paper = selectedPaper();
-    return '<div class="pgmb-status-grid">' +
-      statusTile('Page Estimate', String(pages.length), paper.pageLabel, 'info') +
-      statusTile('Print Readiness', blockers ? 'Needs Review' : 'Ready', blockers ? blockers + ' item' + (blockers === 1 ? '' : 's') + ' need attention' : 'Ready for proof review', blockers ? 'warn' : 'good') +
-      statusTile('Missing Ads', String(ready.missingAds), 'Artwork placeholders', statusClass(ready.missingAds)) +
-      statusTile('Unapproved Art', String(ready.unapprovedAds), 'Needs artwork approval', statusClass(ready.unapprovedAds)) +
-    '</div>';
+    return { blockers: blockers, label: blockers ? blockers + ' item' + (blockers === 1 ? '' : 's') + ' need attention' : 'Ready for proof review' };
   }
 
   function renderBuilderHeader(pages) {
@@ -523,55 +514,70 @@
       '<div class="pgmb-header-copy">' +
         '<div class="pgmb-header-kicker">Programme Builder</div>' +
         '<h1>' + esc(prod.title || prod.name || 'Programme Builder') + '</h1>' +
-        '<p>Create and customise your show programme with live page planning and spread previews.</p>' +
+        '<p>Create and customise your show programme.</p>' +
       '</div>' +
       '<div class="pgmb-header-actions">' +
         '<button class="pgmb-btn pgmb-btn--ghost" type="button" onclick="MarketingProgrammeModule.previewAll()">Preview All Pages</button>' +
-        '<button class="pgmb-btn pgmb-btn--primary" type="button">Export PDF</button>' +
-        '<button class="pgmb-btn pgmb-btn--soft" type="button">More</button>' +
+        '<button class="pgmb-btn pgmb-btn--primary" type="button">' + iconImg('Upload - Document.svg', 15) + ' Export PDF</button>' +
+        '<button class="pgmb-btn pgmb-btn--soft" type="button" onclick="MarketingProgrammeModule.openSettings()">More</button>' +
       '</div>' +
     '</div>';
   }
 
   function renderPageList(pages) {
+    var reordering = !!ProgrammeState.reordering;
+    var addable = SECTION_OPTIONS.filter(function (item) { return ProgrammeState.settings.sections.indexOf(item[0]) === -1; });
+    var readiness = readinessSummary();
     return '<aside class="pgmb-sidebar">' +
       '<div class="pgmb-sidebar-head">' +
         '<div><strong>Pages</strong><span>' + pages.length + ' total</span></div>' +
-        '<button class="pgmb-link-btn" type="button">Reorder</button>' +
+        '<button class="pgmb-link-btn' + (reordering ? ' is-active' : '') + '" type="button" onclick="MarketingProgrammeModule.toggleReorder()">' + (reordering ? 'Done' : 'Reorder') + '</button>' +
       '</div>' +
       '<div class="pgmb-page-list">' + pages.map(function (page, index) {
         var active = index === ProgrammeState.currentPage;
-        return '<button class="pgmb-page-row' + (active ? ' is-active' : '') + '" type="button" onclick="MarketingProgrammeModule.setCurrentPage(' + index + ')">' +
-          '<span class="pgmb-page-index">' + (index + 1) + '</span>' +
-          '<span class="pgmb-page-icon">' + esc(pageIcon(page)) + '</span>' +
-          '<span class="pgmb-page-copy"><strong>' + esc(page.title || pageTypeLabel(page)) + '</strong><em>' + esc(page.subtitle || pageTypeLabel(page)) + '</em></span>' +
-        '</button>';
+        return '<div class="pgmb-page-row' + (active ? ' is-active' : '') + '">' +
+          (reordering
+            ? '<span class="pgmb-page-move">' +
+                '<button type="button" class="pgmb-move-btn" ' + (index === 0 ? 'disabled' : '') + ' onclick="MarketingProgrammeModule.movePage(' + index + ',-1)" aria-label="Move page earlier">&#9650;</button>' +
+                '<button type="button" class="pgmb-move-btn" ' + (index === pages.length - 1 ? 'disabled' : '') + ' onclick="MarketingProgrammeModule.movePage(' + index + ',1)" aria-label="Move page later">&#9660;</button>' +
+              '</span>'
+            : '<span class="pgmb-page-index">' + (index + 1) + '</span>') +
+          '<span class="pgmb-page-icon">' + iconImg(pageIcon(page), 15) + '</span>' +
+          '<button class="pgmb-page-copy" type="button" onclick="MarketingProgrammeModule.setCurrentPage(' + index + ')"><strong>' + esc(page.title || pageTypeLabel(page)) + '</strong><em>' + esc(page.subtitle || pageTypeLabel(page)) + '</em></button>' +
+        '</div>';
       }).join('') + '</div>' +
-      '<div class="pgmb-sidebar-section">' + renderSelectedPageOptions(pages) + '</div>' +
+      (addable.length ? '<div class="pgmb-add-page">' +
+        '<select class="pgmb-add-page-select" onchange="if(this.value){MarketingProgrammeModule.toggleSection(this.value,true);this.value=\'\';}">' +
+          '<option value="">+ Add Page</option>' +
+          addable.map(function (item) { return '<option value="' + esc(item[0]) + '">' + esc(item[1]) + '</option>'; }).join('') +
+        '</select>' +
+      '</div>' : '') +
+      '<div class="pgmb-estimate-box">' +
+        '<div class="pgmb-estimate-label">Estimated Programme</div>' +
+        '<div class="pgmb-estimate-value">' + pages.length + ' <span>pages</span></div>' +
+        '<div class="pgmb-estimate-print">Printing (booklet) <strong>' + estimatePrintCost(pages.length) + '</strong> each</div>' +
+        '<div class="pgmb-estimate-readiness' + (readiness.blockers ? ' is-warn' : ' is-good') + '">' + esc(readiness.label) + '</div>' +
+      '</div>' +
     '</aside>';
   }
 
-  function renderOptionButtons(groupKey) {
-    var selected = ProgrammeState.settings.pageLayouts || {};
-    var group = PAGE_LAYOUT_GROUPS.find(function (item) { return item.key === groupKey; });
-    if (!group) return '';
-    return '<div class="pgmb-toggle-row">' + group.options.map(function (option) {
-      var isSelected = selected[groupKey] === option.id;
-      return '<button class="pgmb-toggle-btn' + (isSelected ? ' is-selected' : '') + '" type="button" onclick="MarketingProgrammeModule.setPageLayout(\'' + esc(groupKey) + '\', \'' + esc(option.id) + '\')">' + esc(option.label) + '</button>';
-    }).join('') + '</div>';
-  }
-
-  function renderSelectedPageOptions(pages) {
-    var page = selectedPage(pages);
-    var layoutKey = layoutKeyForPage(page);
-    return '<div class="pgmb-options-card">' +
-      '<div class="pgmb-options-eyebrow">' + esc(pageTypeLabel(page)).toUpperCase() + ' OPTIONS</div>' +
-      '<h3>' + esc(page ? page.title : 'Programme Page') + '</h3>' +
-      '<p>' + esc(page && page.subtitle ? page.subtitle : 'Adjust the structure and layout of this programme page.') + '</p>' +
-      (layoutKey ? '<div class="pgmb-option-group"><label>Layout</label>' + renderOptionButtons(layoutKey) + '</div>' : '') +
-      '<div class="pgmb-option-group"><label>Included Sections</label>' + renderSectionsTab() + '</div>' +
-      '<div class="pgmb-option-group"><label>Format</label>' + renderSetupTab() + '</div>' +
-      '</div>';
+  function renderSettingsModal() {
+    if (!ProgrammeState.settingsOpen) return '';
+    var tab = ProgrammeState.settingsTab || 'sections';
+    var tabs = [['sections', 'Sections'], ['layouts', 'Page Layouts'], ['format', 'Format']];
+    var body = tab === 'layouts' ? renderPageLayoutsTab() : tab === 'format' ? renderSetupTab() : renderSectionsTab();
+    return '<div class="pgmb-modal-overlay" onclick="if(event.target===this)MarketingProgrammeModule.closeSettings()">' +
+      '<div class="pgmb-modal">' +
+        '<div class="pgmb-modal-head">' +
+          '<div><strong>Programme Settings</strong><span>Choose what goes in the programme and how it looks</span></div>' +
+          '<button class="pgmb-modal-close" type="button" onclick="MarketingProgrammeModule.closeSettings()">&times;</button>' +
+        '</div>' +
+        '<div class="pgmb-modal-tabs">' + tabs.map(function (t) {
+          return '<button class="pgmb-modal-tab' + (tab === t[0] ? ' is-active' : '') + '" type="button" onclick="MarketingProgrammeModule.setSettingsTab(\'' + t[0] + '\')">' + esc(t[1]) + '</button>';
+        }).join('') + '</div>' +
+        '<div class="pgmb-modal-body">' + body + '</div>' +
+      '</div>' +
+    '</div>';
   }
 
   function spreadForPage(pages) {
@@ -584,18 +590,22 @@
 
   function renderSpreadStage(pages) {
     var images = programmePageImages(pages);
-    var spread = spreadForPage(pages);
-    var showSingle = spread.right < 0 || spread.left === spread.right;
+    var isSingleView = ProgrammeState.pageView === 'single';
+    var spread = isSingleView ? { left: ProgrammeState.currentPage, right: -1 } : spreadForPage(pages);
+    var showSingle = isSingleView || spread.right < 0 || spread.left === spread.right;
     var counter = (ProgrammeState.currentPage + 1) + ' of ' + pages.length;
     return '<section class="pgmb-stage-card">' +
       '<div class="pgmb-stage-toolbar">' +
         '<div class="pgmb-stage-controls">' +
           '<span class="pgmb-toolbar-label">Page Size:</span>' +
-          '<span class="pgmb-toolbar-pill">' + esc(selectedPaper().label) + '</span>' +
+          '<select class="pgmb-toolbar-select" onchange="MarketingProgrammeModule.setSetting(\'paper\', this.value)">' +
+            PAPER_OPTIONS.map(function (paper) { return '<option value="' + esc(paper.id) + '"' + (paper.id === selectedPaper().id ? ' selected' : '') + '>' + esc(paper.label) + '</option>'; }).join('') +
+          '</select>' +
         '</div>' +
         '<div class="pgmb-stage-controls">' +
           '<span class="pgmb-toolbar-label">View:</span>' +
-          '<button class="pgmb-icon-toggle is-selected" type="button" onclick="MarketingProgrammeModule.setPageView(\'spread\')">Spread</button>' +
+          '<button class="pgmb-icon-toggle' + (!isSingleView ? ' is-selected' : '') + '" type="button" title="Spread view" onclick="MarketingProgrammeModule.setPageView(\'spread\')">&#9636;&#9636;</button>' +
+          '<button class="pgmb-icon-toggle' + (isSingleView ? ' is-selected' : '') + '" type="button" title="Single page view" onclick="MarketingProgrammeModule.setPageView(\'single\')">&#9636;</button>' +
         '</div>' +
         '<div class="pgmb-stage-pagination">' +
           '<button class="pgmb-nav-btn" type="button" onclick="MarketingProgrammeModule.stepPage(-1)">&lt;</button>' +
@@ -687,10 +697,66 @@
     return ['Waiting for source data'];
   }
 
+  var SERIF = "Georgia, 'Times New Roman', serif";
+
+  function skylineSilhouette(W, H, color, opacity) {
+    var groundY = H - 30;
+    var widths = [26, 40, 20, 54, 30, 46, 24, 60, 28, 38, 22, 50, 32, 44, 20];
+    var buildings = [];
+    var x = 30, i = 0;
+    while (x < W - 30 && i < 40) {
+      var w = widths[i % widths.length];
+      var h = 24 + ((i * 37) % 50);
+      buildings.push('<rect x="' + x + '" y="' + (groundY - h) + '" width="' + w + '" height="' + h + '" fill="' + color + '"/>');
+      x += w + 6;
+      i++;
+    }
+    return '<g opacity="' + (opacity || 0.16) + '">' + buildings.join('') + '</g>';
+  }
+
+  function castPairsForPage(page) {
+    var isCharacters = page.type === 'characters';
+    var pairs = (page.items || []).map(function (item) {
+      if (isCharacters) {
+        var appId = item.cast_member_id ? String(item.cast_member_id) : '';
+        var app = appId ? ProgrammeState.data.applications.find(function (a) { return String(a.id) === appId; }) : null;
+        return { character: roleLabel(item), actor: app ? applicationName(app) : 'To be cast', blurb: item.description || item.bio || item.character_description || '' };
+      }
+      return { character: applicationName(item), actor: '', blurb: '' };
+    });
+    pairs.sort(function (a, b) { return a.character.localeCompare(b.character); });
+    return pairs;
+  }
+
+  function renderCastListArt(page, W, H, font) {
+    var pairs = castPairsForPage(page).slice(0, 11);
+    var isCharacters = page.type === 'characters';
+    if (!pairs.length) {
+      var panelY = 220, panelH = 180;
+      return '<rect x="56" y="' + panelY + '" width="' + (W - 112) + '" height="' + panelH + '" rx="16" fill="#efefef"/>' +
+        '<text x="' + (W / 2) + '" y="' + (panelY + panelH / 2 - 6) + '" fill="#572e88" text-anchor="middle" font-family="' + font + '" font-size="21" font-weight="800">Waiting for source data</text>' +
+        '<text x="' + (W / 2) + '" y="' + (panelY + panelH / 2 + 24) + '" fill="#000000" text-anchor="middle" font-family="' + font + '" font-size="14" font-weight="600">This page fills in automatically once information is added.</text>';
+    }
+    var kicker = '<text x="60" y="182" fill="#572e88" font-family="' + font + '" font-size="12" font-weight="800" letter-spacing="2">IN ALPHABETICAL ORDER' + (isCharacters ? ' BY CHARACTER' : '') + '</text>';
+    var rows = pairs.map(function (pair, i) {
+      var yy = 218 + i * 46;
+      var row = '<text x="60" y="' + yy + '" fill="#000000" font-family="' + font + '" font-size="17" font-weight="800">' + svgEsc(pair.character.slice(0, 24)) + '</text>';
+      if (pair.actor) {
+        row += '<text x="' + (W - 60) + '" y="' + yy + '" text-anchor="end" fill="#000000" font-family="' + SERIF + '" font-style="italic" font-size="16" font-weight="600">' + svgEsc(pair.actor.slice(0, 24)) + '</text>';
+      }
+      if (pair.blurb) {
+        row += '<text x="60" y="' + (yy + 17) + '" fill="#572e88" font-family="' + SERIF + '" font-style="italic" font-size="11" font-weight="500">' + svgEsc(String(pair.blurb).slice(0, 68)) + '</text>';
+      }
+      return row;
+    }).join('');
+    return kicker + rows + skylineSilhouette(W, H, '#572e88', 0.14);
+  }
+
   function programmePageImage(page, index) {
     var size = pagePixelSize();
     var W = size.width, H = size.height;
     var isCover = page && page.type === 'cover';
+    var isCastList = page && (page.type === 'cast' || page.type === 'characters');
     var title = page && page.title ? page.title : 'Programme Page';
     var lines = pageSummaryLines(page);
     var font = 'Arial, Helvetica, sans-serif';
@@ -701,40 +767,49 @@
 
     var svg;
     if (isCover) {
-      var bandHeight = Math.round(H * 0.6);
+      var bandHeight = Math.round(H * 0.62);
       var subtitle = lines[0] || 'Digital Programme';
       svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '">' +
         '<rect width="100%" height="100%" fill="#ffffff"/>' +
         '<rect x="0" y="0" width="' + W + '" height="' + bandHeight + '" fill="#572e88"/>' +
-        '<text x="60" y="90" fill="#ffffff" opacity="0.82" font-family="' + font + '" font-size="16" font-weight="800" letter-spacing="2">DIGITAL PROGRAMME</text>' +
-        '<text x="60" y="172" fill="#ffffff" font-family="' + font + '" font-size="50" font-weight="900">' + svgEsc(title.slice(0, 22)) + '</text>' +
-        '<rect x="60" y="198" width="120" height="6" rx="3" fill="#efab45"/>' +
-        '<text x="60" y="' + (bandHeight - 46) + '" fill="#ffffff" font-family="' + font + '" font-size="22" font-weight="700">' + svgEsc(subtitle.slice(0, 40)) + '</text>' +
+        skylineSilhouette(W, bandHeight, '#000000', 0.18) +
+        '<text x="60" y="76" fill="#ffffff" opacity="0.8" font-family="' + font + '" font-size="14" font-weight="800" letter-spacing="3">DIGITAL PROGRAMME</text>' +
+        '<text x="' + (W / 2) + '" y="' + Math.round(bandHeight * 0.42) + '" fill="#ffffff" text-anchor="middle" font-family="' + SERIF + '" font-style="italic" font-size="46" font-weight="700">' + svgEsc(title.slice(0, 24)) + '</text>' +
+        '<rect x="' + (W / 2 - 60) + '" y="' + (Math.round(bandHeight * 0.42) + 22) + '" width="120" height="4" rx="2" fill="#efab45"/>' +
+        '<text x="' + (W / 2) + '" y="' + (bandHeight - 40) + '" fill="#ffffff" text-anchor="middle" font-family="' + font + '" font-size="19" font-weight="700">' + svgEsc(subtitle.slice(0, 40)) + '</text>' +
         pageNumberChip +
       '</svg>';
       return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
     }
 
-    var hasContent = lines.length > 0 && lines[0] !== 'Waiting for source data';
     var body;
-    if (hasContent) {
-      body = lines.map(function (line, lineIndex) {
-        var yy = 210 + lineIndex * 40;
-        return '<circle cx="70" cy="' + (yy - 7) + '" r="4" fill="#efab45"/>' +
-          '<text x="88" y="' + yy + '" fill="#000000" font-family="' + font + '" font-size="21" font-weight="700">' + svgEsc(String(line).slice(0, 44)) + '</text>';
-      }).join('');
+    if (isCastList) {
+      body = renderCastListArt(page, W, H, font);
     } else {
-      var panelY = 210, panelH = 190;
-      body =
-        '<rect x="56" y="' + panelY + '" width="' + (W - 112) + '" height="' + panelH + '" rx="16" fill="#efefef"/>' +
-        '<text x="' + (W / 2) + '" y="' + (panelY + panelH / 2 - 6) + '" fill="#572e88" text-anchor="middle" font-family="' + font + '" font-size="21" font-weight="800">Waiting for source data</text>' +
-        '<text x="' + (W / 2) + '" y="' + (panelY + panelH / 2 + 24) + '" fill="#000000" text-anchor="middle" font-family="' + font + '" font-size="14" font-weight="600">This page fills in automatically once information is added.</text>';
+      var hasContent = lines.length > 0 && lines[0] !== 'Waiting for source data';
+      if (hasContent) {
+        body = lines.map(function (line, lineIndex) {
+          var yy = 210 + lineIndex * 40;
+          return '<circle cx="70" cy="' + (yy - 7) + '" r="4" fill="#efab45"/>' +
+            '<text x="88" y="' + yy + '" fill="#000000" font-family="' + font + '" font-size="21" font-weight="700">' + svgEsc(String(line).slice(0, 44)) + '</text>';
+        }).join('');
+      } else {
+        var panelY = 210, panelH = 190;
+        body =
+          '<rect x="56" y="' + panelY + '" width="' + (W - 112) + '" height="' + panelH + '" rx="16" fill="#efefef"/>' +
+          '<text x="' + (W / 2) + '" y="' + (panelY + panelH / 2 - 6) + '" fill="#572e88" text-anchor="middle" font-family="' + font + '" font-size="21" font-weight="800">Waiting for source data</text>' +
+          '<text x="' + (W / 2) + '" y="' + (panelY + panelH / 2 + 24) + '" fill="#000000" text-anchor="middle" font-family="' + font + '" font-size="14" font-weight="600">This page fills in automatically once information is added.</text>';
+      }
     }
+
+    var titleHtml = isCastList
+      ? '<text x="60" y="128" fill="#572e88" font-family="' + SERIF + '" font-style="italic" font-size="36" font-weight="700">' + svgEsc(title.slice(0, 26)) + '</text>'
+      : '<text x="60" y="128" fill="#000000" font-family="' + font + '" font-size="38" font-weight="900">' + svgEsc(title.slice(0, 26)) + '</text>';
 
     svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '">' +
       '<rect width="100%" height="100%" fill="#ffffff"/>' +
       '<text x="60" y="76" fill="#572e88" font-family="' + font + '" font-size="15" font-weight="800" letter-spacing="2">PROGRAMME</text>' +
-      '<text x="60" y="128" fill="#000000" font-family="' + font + '" font-size="38" font-weight="900">' + svgEsc(title.slice(0, 26)) + '</text>' +
+      titleHtml +
       '<rect x="60" y="148" width="70" height="6" rx="3" fill="#efab45"/>' +
       body +
       pageNumberChip +
@@ -798,8 +873,8 @@
     ProgrammeState.container.innerHTML =
       '<div class="pgmb-page">' +
         renderBuilderHeader(pages) +
-        renderReadiness(pages) +
         renderBuilderShell(pages) +
+        renderSettingsModal() +
       '</div>';
   }
 
@@ -851,6 +926,36 @@
       if (checked) next.add(key);
       else next.delete(key);
       ProgrammeState.settings.sections = Array.from(next);
+      renderPlanner();
+    },
+    toggleReorder: function () {
+      ProgrammeState.reordering = !ProgrammeState.reordering;
+      renderPlanner();
+    },
+    movePage: function (index, delta) {
+      var pages = buildProgrammePages();
+      var page = pages[index];
+      if (!page) return;
+      var sections = ProgrammeState.settings.sections.slice();
+      var pos = sections.indexOf(page.sectionKey);
+      var newPos = pos + (delta > 0 ? 1 : -1);
+      if (pos < 0 || newPos < 0 || newPos >= sections.length) return;
+      var swap = sections[pos];
+      sections[pos] = sections[newPos];
+      sections[newPos] = swap;
+      ProgrammeState.settings.sections = sections;
+      renderPlanner();
+    },
+    openSettings: function () {
+      ProgrammeState.settingsOpen = true;
+      renderPlanner();
+    },
+    closeSettings: function () {
+      ProgrammeState.settingsOpen = false;
+      renderPlanner();
+    },
+    setSettingsTab: function (tab) {
+      ProgrammeState.settingsTab = tab;
       renderPlanner();
     },
     destroy: function () {},
