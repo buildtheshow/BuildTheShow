@@ -201,13 +201,30 @@
     .pt-module-group-items.collapsed { display: none; }
     .pt-module-group-row[data-depth="1"] .pt-module-name { font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(87,46,136,0.6); }
     .pt-module-name { font-size: 0.78rem; font-weight: 700; color: #000000; }
-    .pt-perm-toggle-group { display: flex; border: 1.5px solid #edeaf6; border-radius: 8px; overflow: hidden; flex-shrink: 0; }
-    .pt-perm-toggle { border: none; border-right: 1px solid #edeaf6; background: #fff; color: #c8bad7; font-size: 0.69rem; font-weight: 700; padding: 0.28rem 0.6rem; cursor: pointer; font-family: inherit; white-space: nowrap; transition: background 0.1s, color 0.1s; }
-    .pt-perm-toggle:last-child { border-right: none; }
-    .pt-perm-toggle:hover:not(.selected) { background: #f4f2fb; color: #572e88; }
-    .pt-perm-toggle.selected[data-level="none"] { background: #000000; color: #fff; }
-    .pt-perm-toggle.selected[data-level="view"] { background: #f0ecfc; color: #572e88; font-weight: 800; }
-    .pt-perm-toggle.selected[data-level="edit"] { background: #dff1e5; color: #2e6639; font-weight: 800; }
+    .pt-perm-select {
+      flex-shrink: 0;
+      appearance: none;
+      border: 1.5px solid #edeaf6;
+      border-radius: 8px;
+      background-color: #fff;
+      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 8"><path d="M1 1l5 5 5-5" fill="none" stroke="%23572e88" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+      background-repeat: no-repeat;
+      background-position: right 0.55rem center;
+      background-size: 9px 6px;
+      color: #000000;
+      font: inherit;
+      font-size: 0.72rem;
+      font-weight: 800;
+      padding: 0.32rem 1.55rem 0.32rem 0.6rem;
+      cursor: pointer;
+      min-width: 6.4rem;
+      transition: background-color 0.1s, color 0.1s, border-color 0.1s;
+    }
+    .pt-perm-select:hover { border-color: #d6ccec; }
+    .pt-perm-select[data-level="none"] { color: #c8bad7; }
+    .pt-perm-select[data-level="view"] { background-color: #f0ecfc; border-color: #e0d6f7; color: #572e88; }
+    .pt-perm-select[data-level="edit"] { background-color: #dff1e5; border-color: #c7e6d1; color: #2e6639; }
+    .pt-perm-select[data-level=""] { color: #b0a8c8; font-style: italic; font-weight: 700; }
   </style>
 </head>
 <body>
@@ -2245,17 +2262,6 @@
     // ── Edit Access Drawer ─────────────────────────────────────────────────────
     let _editPersonIdx = null;
 
-    function setPermToggle(btn) {
-      const group = btn.closest('.pt-perm-toggle-group');
-      if (!group) return;
-      group.querySelectorAll('.pt-perm-toggle').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-      const row = btn.closest('[data-module-key]');
-      const lbl = row && row.querySelector('.pt-custom-label');
-      if (lbl) lbl.style.display = (btn.dataset.level !== row.dataset.defaultAccess) ? '' : 'none';
-      refreshAllGroupSummaries();
-    }
-
     async function openEditAccessDrawer(idx) {
       _editPersonIdx = idx;
       const rawPerson = _visiblePeople[idx];
@@ -2301,7 +2307,13 @@
 
       const roleKey = (src === 'producer' || src === 'admin') ? 'producer' : (person.portals[0] || src);
 
-      const tog = (level, current) => `<button class="pt-perm-toggle${current === level ? ' selected' : ''}" data-level="${level}" onclick="setPermToggle(this)">${level === 'none' ? 'No Access' : level === 'view' ? 'View' : 'Edit'}</button>`;
+      // One dropdown per row instead of three tiled buttons - the buttons were
+      // repeating the same three choices on every single row at every depth, which
+      // is most of what made this screen feel so noisy.
+      function permSelectHtml(current) {
+        const opt = (level, label) => `<option value="${level}"${current === level ? ' selected' : ''}>${label}</option>`;
+        return `<select class="pt-perm-select" data-level="${esc(current)}" onchange="setPermSelect(this)">${opt('none','No Access')}${opt('view','View')}${opt('edit','Edit')}</select>`;
+      }
 
       function renderModuleRow(node, depth, roleKey) {
         const defAccess = resolveDefaultAccess(node.key, roleKey);
@@ -2312,7 +2324,7 @@
             <span class="pt-module-name">${esc(node.label)}</span>
             <span class="pt-custom-label" style="font-size:0.64rem;font-weight:700;color:#ca7ea7;flex-shrink:0${isCustom ? '' : ';display:none'}">custom</span>
           </div>
-          <div class="pt-perm-toggle-group">${tog('none',current)}${tog('view',current)}${tog('edit',current)}</div>
+          ${permSelectHtml(current)}
         </div>`;
       }
 
@@ -2322,9 +2334,15 @@
       // on the header itself (the old behaviour) meant a header set to Edit silently
       // granted real access regardless of what its children said, which is exactly
       // the bug that let a restricted portal preview land in the full producer view.
-      function bulkToggleButtons(nodeKey) {
-        const bulk = (level) => `<button class="pt-perm-toggle" data-level="${level}" onclick="bulkSetGroup('${esc(nodeKey)}','${level}')">${level === 'none' ? 'No Access' : level === 'view' ? 'View' : 'Edit'}</button>`;
-        return `${bulk('none')}${bulk('view')}${bulk('edit')}`;
+      // The dropdown starts on a disabled, hidden "Mixed" placeholder option so it can
+      // display an indeterminate state without that state being independently pickable.
+      function bulkSelectHtml(nodeKey) {
+        return `<select class="pt-perm-select" data-level="" onchange="bulkSetGroup('${esc(nodeKey)}', this.value)">
+          <option value="" disabled selected hidden>Mixed</option>
+          <option value="none">No Access</option>
+          <option value="view">View</option>
+          <option value="edit">Edit</option>
+        </select>`;
       }
 
       function renderGroupRow(node, depth, roleKey) {
@@ -2335,7 +2353,7 @@
             <span class="pt-module-name">${esc(node.label)}</span>
             <span class="pt-custom-label" style="font-size:0.64rem;font-weight:700;color:#ca7ea7;flex-shrink:0;display:none">custom</span>
           </div>
-          <div class="pt-perm-toggle-group">${bulkToggleButtons(node.key)}</div>
+          ${bulkSelectHtml(node.key)}
         </div>
         <div class="pt-module-group-items collapsed" id="${groupId}">${renderChildren(node.children, depth + 1, roleKey)}</div>`;
       }
@@ -2357,36 +2375,45 @@
       function currentLevelFromDom(key) {
         const row = document.querySelector('[data-module-key="' + CSS.escape(key) + '"][data-is-leaf="1"]');
         if (!row) return 'none';
-        const sel = row.querySelector('.pt-perm-toggle.selected');
-        return sel ? sel.dataset.level : (row.dataset.defaultAccess || 'none');
+        const select = row.querySelector('.pt-perm-select');
+        return select ? select.value : (row.dataset.defaultAccess || 'none');
       }
 
-      // Re-derive every header's summary badge (a single level if all leaves below it
-      // agree, or "custom" if mixed) from whatever the leaf rows actually show right now.
+      // Re-derive every header's dropdown (a single level if all leaves below it
+      // agree, or the "Mixed" placeholder if not) from whatever the leaf rows
+      // actually show right now.
       function refreshAllGroupSummaries() {
         document.querySelectorAll('[data-module-key][data-is-leaf="0"]').forEach(headerRow => {
           const node = findTreeNode(headerRow.dataset.moduleKey);
           if (!node) return;
           const levels = new Set(leafKeysUnder(node).map(currentLevelFromDom));
-          const summary = levels.size === 1 ? [...levels][0] : 'custom';
-          const group = headerRow.querySelector('.pt-perm-toggle-group');
-          if (group) group.querySelectorAll('.pt-perm-toggle').forEach(b => b.classList.toggle('selected', b.dataset.level === summary));
+          const summary = levels.size === 1 ? [...levels][0] : '';
+          const select = headerRow.querySelector('.pt-perm-select');
+          if (select) { select.value = summary; select.dataset.level = summary; }
           const lbl = headerRow.querySelector('.pt-custom-label');
-          if (lbl) lbl.style.display = (summary === 'custom') ? '' : 'none';
+          if (lbl) lbl.style.display = (summary === '') ? '' : 'none';
         });
       }
 
       window.bulkSetGroup = function (nodeKey, level) {
         const node = findTreeNode(nodeKey);
-        if (!node) return;
+        if (!node || !level) return;
         leafKeysUnder(node).forEach(leafKey => {
           const row = document.querySelector('[data-module-key="' + CSS.escape(leafKey) + '"][data-is-leaf="1"]');
           if (!row) return;
-          const group = row.querySelector('.pt-perm-toggle-group');
-          if (group) group.querySelectorAll('.pt-perm-toggle').forEach(b => b.classList.toggle('selected', b.dataset.level === level));
+          const select = row.querySelector('.pt-perm-select');
+          if (select) { select.value = level; select.dataset.level = level; }
           const lbl = row.querySelector('.pt-custom-label');
           if (lbl) lbl.style.display = (level !== (row.dataset.defaultAccess || 'none')) ? '' : 'none';
         });
+        refreshAllGroupSummaries();
+      };
+
+      window.setPermSelect = function (select) {
+        select.dataset.level = select.value;
+        const row = select.closest('[data-module-key]');
+        const lbl = row && row.querySelector('.pt-custom-label');
+        if (lbl) lbl.style.display = (select.value !== row.dataset.defaultAccess) ? '' : 'none';
         refreshAllGroupSummaries();
       };
 
@@ -2410,7 +2437,7 @@
               <span class="pt-custom-label" style="font-size:0.64rem;font-weight:700;color:#ffd9ef;flex-shrink:0;display:none">custom</span>
               <span class="pt-section-chevron">&#9660;</span>
             </div>
-            <div class="pt-perm-toggle-group">${bulkToggleButtons(section.key)}</div>
+            ${bulkSelectHtml(section.key)}
           </div>
           <div class="pt-module-section-items collapsed" id="${sectionId}">${itemsHtml}</div>
         </div>`;
@@ -2495,8 +2522,8 @@
           document.querySelectorAll('[data-module-key][data-is-leaf="1"]').forEach(row => {
             const key = row.dataset.moduleKey;
             const defaultAccess = row.dataset.defaultAccess || 'none';
-            const selected = row.querySelector('.pt-perm-toggle.selected');
-            const selectedLevel = selected?.dataset.level || defaultAccess;
+            const select = row.querySelector('.pt-perm-select');
+            const selectedLevel = select?.value || defaultAccess;
             if (!key || selectedLevel === defaultAccess) return;
             overrides.push({
               production_id: _prodId,
