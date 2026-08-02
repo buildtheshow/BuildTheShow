@@ -469,7 +469,50 @@
       accentColor: '#572e88',
       textColor: page && page.type === 'cover' ? '#ffffff' : '#000000',
       showHeader: true,
+      blocks: [],
     };
+  }
+
+  function createPageBlock(type) {
+    if (type === 'image') {
+      return {
+        type: 'image',
+        title: 'Image Caption',
+        text: 'Add a photo, poster, or artwork URL.',
+        imageUrl: '',
+      };
+    }
+    if (type === 'quote') {
+      return {
+        type: 'quote',
+        title: 'Pull Quote',
+        text: 'A short quote, testimonial, or highlighted line.',
+        imageUrl: '',
+      };
+    }
+    if (type === 'divider') {
+      return {
+        type: 'divider',
+        title: 'Section Break',
+        text: '',
+        imageUrl: '',
+      };
+    }
+    return {
+      type: 'text',
+      title: 'Text Block',
+      text: 'Add body copy, acknowledgements, or custom programme notes.',
+      imageUrl: '',
+    };
+  }
+
+  function normaliseBlocks(blocks) {
+    if (!Array.isArray(blocks)) return [];
+    return blocks.map(function (block) {
+      var type = block && block.type ? block.type : 'text';
+      var base = createPageBlock(type);
+      return Object.assign({}, base, block, { type: type });
+    });
   }
 
   function pageOverride(page) {
@@ -491,6 +534,7 @@
     next.accentColor = override.accentColor || '#572e88';
     next.textColor = override.textColor || (next.type === 'cover' ? '#ffffff' : '#000000');
     next.showHeader = override.showHeader !== false;
+    next.blocks = normaliseBlocks(override.blocks);
     return next;
   }
 
@@ -817,6 +861,7 @@
     if (!page) return '';
     var override = page.override || pageOverride(page);
     var isCustom = page.sectionKey === 'custom';
+    var blocks = normaliseBlocks(override.blocks);
     return '<div class="pgmb-modal-overlay" onclick="if(event.target===this)MarketingProgrammeModule.closeEditor()">' +
       '<div class="pgmb-modal pgmb-editor-modal">' +
         '<div class="pgmb-modal-head">' +
@@ -834,6 +879,42 @@
             '<label class="pgmb-editor-field"><span>Accent Colour</span><input type="color" value="' + esc(override.accentColor || '#572e88') + '" oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'accentColor\',this.value)" /></label>' +
             '<label class="pgmb-editor-field"><span>Text Colour</span><input type="color" value="' + esc(override.textColor || (page.type === 'cover' ? '#ffffff' : '#000000')) + '" oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'textColor\',this.value)" /></label>' +
             '<label class="pgmb-editor-check"><input type="checkbox"' + (override.showHeader !== false ? ' checked' : '') + ' onchange="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'showHeader\',this.checked)" /> <span>Show page header label</span></label>' +
+          '</div>' +
+          '<div class="pgmb-blocks-section">' +
+            '<div class="pgmb-blocks-head">' +
+              '<div><strong>Page Blocks</strong><span>Build a custom page with text, quotes, images, and dividers.</span></div>' +
+              '<div class="pgmb-block-actions">' +
+                '<button class="pgmb-mini-btn" type="button" onclick="MarketingProgrammeModule.addPageBlock(\'' + esc(page.pageId) + '\',\'text\')">+ Text</button>' +
+                '<button class="pgmb-mini-btn" type="button" onclick="MarketingProgrammeModule.addPageBlock(\'' + esc(page.pageId) + '\',\'image\')">+ Image</button>' +
+                '<button class="pgmb-mini-btn" type="button" onclick="MarketingProgrammeModule.addPageBlock(\'' + esc(page.pageId) + '\',\'quote\')">+ Quote</button>' +
+                '<button class="pgmb-mini-btn" type="button" onclick="MarketingProgrammeModule.addPageBlock(\'' + esc(page.pageId) + '\',\'divider\')">+ Divider</button>' +
+              '</div>' +
+            '</div>' +
+            (blocks.length
+              ? '<div class="pgmb-block-list">' + blocks.map(function (block, index) {
+                  var isTextual = block.type === 'text' || block.type === 'quote';
+                  var isImage = block.type === 'image';
+                  return '<div class="pgmb-block-card">' +
+                    '<div class="pgmb-block-card-head">' +
+                      '<strong>' + esc((block.type || 'text').charAt(0).toUpperCase() + (block.type || 'text').slice(1)) + ' Block</strong>' +
+                      '<div class="pgmb-block-moves">' +
+                        '<button class="pgmb-mini-btn" type="button" ' + (index === 0 ? 'disabled' : '') + ' onclick="MarketingProgrammeModule.movePageBlock(\'' + esc(page.pageId) + '\',' + index + ',-1)">Up</button>' +
+                        '<button class="pgmb-mini-btn" type="button" ' + (index === blocks.length - 1 ? 'disabled' : '') + ' onclick="MarketingProgrammeModule.movePageBlock(\'' + esc(page.pageId) + '\',' + index + ',1)">Down</button>' +
+                        '<button class="pgmb-mini-btn is-danger" type="button" onclick="MarketingProgrammeModule.removePageBlock(\'' + esc(page.pageId) + '\',' + index + ')">Remove</button>' +
+                      '</div>' +
+                    '</div>' +
+                    (block.type === 'divider'
+                      ? '<div class="pgmb-block-divider-preview"></div>'
+                      : '<label class="pgmb-editor-field"><span>Heading</span><input type="text" value="' + esc(block.title || '') + '" oninput="MarketingProgrammeModule.updatePageBlock(\'' + esc(page.pageId) + '\',' + index + ',\'title\',this.value)" placeholder="Block heading" /></label>') +
+                    (isTextual || isImage
+                      ? '<label class="pgmb-editor-field"><span>' + (isImage ? 'Caption / Description' : 'Copy') + '</span><textarea oninput="MarketingProgrammeModule.updatePageBlock(\'' + esc(page.pageId) + '\',' + index + ',\'text\',this.value)" placeholder="' + (isImage ? 'Describe the image, add a caption, or note placement.' : 'Add custom copy for this block.') + '">' + esc(block.text || '') + '</textarea></label>'
+                      : '') +
+                    (isImage
+                      ? '<label class="pgmb-editor-field"><span>Image URL</span><input type="text" value="' + esc(block.imageUrl || '') + '" oninput="MarketingProgrammeModule.updatePageBlock(\'' + esc(page.pageId) + '\',' + index + ',\'imageUrl\',this.value)" placeholder="https://... or /ASSETS/..." /></label>'
+                      : '') +
+                  '</div>';
+                }).join('') + '</div>'
+              : '<div class="pgmb-block-empty">No custom blocks yet. Add a few to create bespoke pages throughout the programme.</div>') +
           '</div>' +
           '<div class="pgmb-editor-actions">' +
             '<button class="pgmb-btn pgmb-btn--soft" type="button" onclick="MarketingProgrammeModule.resetPageOverride(\'' + esc(page.pageId) + '\')">Reset Page</button>' +
@@ -959,6 +1040,13 @@
 
   function pageSummaryLines(page) {
     if (!page) return [];
+    if (page.syncMode === 'manual' && Array.isArray(page.blocks) && page.blocks.length) {
+      return page.blocks.map(function (block) {
+        if (block.type === 'divider') return block.title || 'Section break';
+        if (block.type === 'image') return [block.title, block.text].filter(Boolean).join(' · ') || 'Image block';
+        return block.title || block.text || 'Custom block';
+      }).slice(0, 8);
+    }
     if (page.syncMode === 'manual' && page.bodyText) {
       return String(page.bodyText).split(/\n+/).filter(Boolean).slice(0, 8);
     }
@@ -1036,6 +1124,64 @@
     return kicker + rows + skylineSilhouette(W, H, '#572e88', 0.14);
   }
 
+  function renderManualBlocksArt(page, W, H, font) {
+    var blocks = Array.isArray(page.blocks) ? page.blocks.slice(0, 6) : [];
+    var accent = page.accentColor || '#572e88';
+    var textColor = page.textColor || '#000000';
+    var y = 188;
+    if (!blocks.length && page.bodyText) {
+      blocks = String(page.bodyText).split(/\n+/).filter(Boolean).slice(0, 5).map(function (line) {
+        return { type: 'text', title: '', text: line };
+      });
+    }
+    if (!blocks.length) {
+      return '<rect x="56" y="210" width="' + (W - 112) + '" height="200" rx="18" fill="#efefef"/>' +
+        '<text x="' + (W / 2) + '" y="304" fill="' + svgEsc(accent) + '" text-anchor="middle" font-family="' + font + '" font-size="22" font-weight="800">Add custom blocks to shape this page</text>' +
+        '<text x="' + (W / 2) + '" y="334" fill="#000000" text-anchor="middle" font-family="' + font + '" font-size="14" font-weight="600">Text, quotes, dividers, and images can all be mixed together.</text>';
+    }
+    return blocks.map(function (block) {
+      var markup = '';
+      if (block.type === 'divider') {
+        markup = '<line x1="70" y1="' + y + '" x2="' + (W - 70) + '" y2="' + y + '" stroke="' + svgEsc(accent) + '" stroke-width="4" stroke-linecap="round" opacity="0.4"/>';
+        if (block.title) {
+          markup += '<text x="' + (W / 2) + '" y="' + (y - 10) + '" fill="' + svgEsc(accent) + '" text-anchor="middle" font-family="' + font + '" font-size="13" font-weight="800" letter-spacing="2">' + svgEsc(String(block.title).slice(0, 28).toUpperCase()) + '</text>';
+        }
+        y += 42;
+        return markup;
+      }
+      if (block.type === 'quote') {
+        markup += '<rect x="64" y="' + (y - 24) + '" width="' + (W - 128) + '" height="86" rx="20" fill="' + svgEsc(accent) + '" opacity="0.08"/>';
+        markup += '<text x="90" y="' + y + '" fill="' + svgEsc(accent) + '" font-family="' + SERIF + '" font-style="italic" font-size="26" font-weight="700">"</text>';
+        markup += '<text x="116" y="' + y + '" fill="' + svgEsc(textColor) + '" font-family="' + SERIF + '" font-style="italic" font-size="20" font-weight="700">' + svgEsc(String(block.text || block.title || 'Quote').slice(0, 64)) + '</text>';
+        if (block.title) {
+          markup += '<text x="116" y="' + (y + 24) + '" fill="' + svgEsc(accent) + '" font-family="' + font + '" font-size="12" font-weight="800" letter-spacing="1.4">' + svgEsc(String(block.title).slice(0, 36).toUpperCase()) + '</text>';
+        }
+        y += 112;
+        return markup;
+      }
+      if (block.type === 'image') {
+        var imageHeight = 118;
+        markup += '<rect x="70" y="' + (y - 12) + '" width="' + (W - 140) + '" height="' + imageHeight + '" rx="18" fill="#f4eff9" stroke="' + svgEsc(accent) + '" stroke-width="2" stroke-dasharray="8 8" opacity="0.9"/>';
+        if (block.imageUrl) {
+          markup += '<image href="' + svgEsc(block.imageUrl) + '" x="74" y="' + (y - 8) + '" width="' + (W - 148) + '" height="' + (imageHeight - 8) + '" preserveAspectRatio="xMidYMid slice" clip-path="inset(0 round 16px)"/>';
+          markup += '<rect x="74" y="' + (y - 8) + '" width="' + (W - 148) + '" height="' + (imageHeight - 8) + '" rx="16" fill="' + svgEsc(accent) + '" opacity="0.14"/>';
+        } else {
+          markup += '<text x="' + (W / 2) + '" y="' + (y + 38) + '" fill="' + svgEsc(accent) + '" text-anchor="middle" font-family="' + font + '" font-size="18" font-weight="800">Image Placeholder</text>';
+        }
+        markup += '<text x="82" y="' + (y + imageHeight + 22) + '" fill="' + svgEsc(textColor) + '" font-family="' + font + '" font-size="15" font-weight="800">' + svgEsc(String(block.title || 'Image block').slice(0, 34)) + '</text>';
+        if (block.text) {
+          markup += '<text x="82" y="' + (y + imageHeight + 42) + '" fill="' + svgEsc(accent) + '" font-family="' + SERIF + '" font-style="italic" font-size="12" font-weight="600">' + svgEsc(String(block.text).slice(0, 72)) + '</text>';
+        }
+        y += 188;
+        return markup;
+      }
+      markup += '<text x="70" y="' + y + '" fill="' + svgEsc(accent) + '" font-family="' + font + '" font-size="13" font-weight="900" letter-spacing="1.6">' + svgEsc(String(block.title || 'TEXT').slice(0, 26).toUpperCase()) + '</text>';
+      markup += '<text x="70" y="' + (y + 28) + '" fill="' + svgEsc(textColor) + '" font-family="' + font + '" font-size="19" font-weight="700">' + svgEsc(String(block.text || '').slice(0, 68)) + '</text>';
+      y += 76;
+      return markup;
+    }).join('');
+  }
+
   function programmePageImage(page, index) {
     var size = pagePixelSize();
     var W = size.width, H = size.height;
@@ -1069,6 +1215,8 @@
     var body;
     if (isCastList) {
       body = renderCastListArt(page, W, H, font);
+    } else if (page.syncMode === 'manual' || (Array.isArray(page.blocks) && page.blocks.length)) {
+      body = renderManualBlocksArt(page, W, H, font);
     } else {
       var hasContent = lines.length > 0 && lines[0] !== 'Waiting for source data';
       if (hasContent) {
@@ -1273,6 +1421,83 @@
       queueProgrammeSave();
       renderPlanner();
     },
+    addPageBlock: function (pageId, type) {
+      ProgrammeState.settings.pageOverrides = ProgrammeState.settings.pageOverrides || {};
+      var current = Object.assign({}, pageOverride({ pageId: pageId }), ProgrammeState.settings.pageOverrides[pageId] || {});
+      current.syncMode = 'manual';
+      current.blocks = normaliseBlocks(current.blocks);
+      current.blocks.push(createPageBlock(type));
+      ProgrammeState.settings.pageOverrides[pageId] = current;
+      if (pageId.indexOf('custom-') === 0) {
+        ProgrammeState.settings.customPages = (ProgrammeState.settings.customPages || []).map(function (page) {
+          if (page.pageId !== pageId) return page;
+          page.blocks = current.blocks.slice();
+          return page;
+        });
+      }
+      queueProgrammeSave();
+      renderPlanner();
+    },
+    updatePageBlock: function (pageId, index, key, value) {
+      ProgrammeState.settings.pageOverrides = ProgrammeState.settings.pageOverrides || {};
+      var current = Object.assign({}, pageOverride({ pageId: pageId }), ProgrammeState.settings.pageOverrides[pageId] || {});
+      var blocks = normaliseBlocks(current.blocks);
+      if (!blocks[index]) return;
+      blocks[index][key] = value;
+      current.syncMode = 'manual';
+      current.blocks = blocks;
+      ProgrammeState.settings.pageOverrides[pageId] = current;
+      if (pageId.indexOf('custom-') === 0) {
+        ProgrammeState.settings.customPages = (ProgrammeState.settings.customPages || []).map(function (page) {
+          if (page.pageId !== pageId) return page;
+          page.blocks = blocks.slice();
+          return page;
+        });
+      }
+      queueProgrammeSave();
+      renderPlanner();
+    },
+    movePageBlock: function (pageId, index, delta) {
+      ProgrammeState.settings.pageOverrides = ProgrammeState.settings.pageOverrides || {};
+      var current = Object.assign({}, pageOverride({ pageId: pageId }), ProgrammeState.settings.pageOverrides[pageId] || {});
+      var blocks = normaliseBlocks(current.blocks);
+      var nextIndex = index + (delta > 0 ? 1 : -1);
+      if (!blocks[index] || nextIndex < 0 || nextIndex >= blocks.length) return;
+      var swap = blocks[index];
+      blocks[index] = blocks[nextIndex];
+      blocks[nextIndex] = swap;
+      current.syncMode = 'manual';
+      current.blocks = blocks;
+      ProgrammeState.settings.pageOverrides[pageId] = current;
+      if (pageId.indexOf('custom-') === 0) {
+        ProgrammeState.settings.customPages = (ProgrammeState.settings.customPages || []).map(function (page) {
+          if (page.pageId !== pageId) return page;
+          page.blocks = blocks.slice();
+          return page;
+        });
+      }
+      queueProgrammeSave();
+      renderPlanner();
+    },
+    removePageBlock: function (pageId, index) {
+      ProgrammeState.settings.pageOverrides = ProgrammeState.settings.pageOverrides || {};
+      var current = Object.assign({}, pageOverride({ pageId: pageId }), ProgrammeState.settings.pageOverrides[pageId] || {});
+      var blocks = normaliseBlocks(current.blocks);
+      if (!blocks[index]) return;
+      blocks.splice(index, 1);
+      current.syncMode = 'manual';
+      current.blocks = blocks;
+      ProgrammeState.settings.pageOverrides[pageId] = current;
+      if (pageId.indexOf('custom-') === 0) {
+        ProgrammeState.settings.customPages = (ProgrammeState.settings.customPages || []).map(function (page) {
+          if (page.pageId !== pageId) return page;
+          page.blocks = blocks.slice();
+          return page;
+        });
+      }
+      queueProgrammeSave();
+      renderPlanner();
+    },
     resetPageOverride: function (pageId) {
       if (ProgrammeState.settings.pageOverrides) delete ProgrammeState.settings.pageOverrides[pageId];
       queueProgrammeSave();
@@ -1296,16 +1521,20 @@
       var page = currentPageData();
       if (!page) return;
       var nextId = 'custom-' + Date.now();
+      var copiedBlocks = normaliseBlocks((page.override && page.override.blocks) || page.blocks || []);
       ProgrammeState.settings.customPages.push({
         pageId: nextId,
         type: 'custom',
         title: page.title + ' Copy',
         subtitle: page.subtitle,
+        blocks: copiedBlocks,
       });
       ProgrammeState.settings.pageOverrides = ProgrammeState.settings.pageOverrides || {};
       ProgrammeState.settings.pageOverrides[nextId] = Object.assign({}, page.override || {}, {
         title: page.title + ' Copy',
-        subtitle: page.subtitle
+        subtitle: page.subtitle,
+        syncMode: 'manual',
+        blocks: copiedBlocks,
       });
       queueProgrammeSave();
       renderPlanner();
