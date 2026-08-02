@@ -125,6 +125,7 @@
     pageView: 'spread',
     reordering: false,
     settingsOpen: false,
+    editorOpen: false,
     settingsTab: 'sections',
     settings: {
       paper: 'letter-folded',
@@ -140,6 +141,8 @@
         sponsors: 'sponsors-tiered',
       },
       sections: ['cover', 'welcome', 'creative', 'cast', 'bios', 'sponsors', 'ads', 'thanks', 'back'],
+      customPages: [],
+      pageOverrides: {},
     },
     openLayoutGroup: 'cast',
     data: {
@@ -369,6 +372,42 @@
     return connections;
   }
 
+  function defaultOverrideForPage(page) {
+    return {
+      syncMode: page && page.sectionKey === 'custom' ? 'manual' : 'auto',
+      title: page && page.title ? page.title : '',
+      subtitle: page && page.subtitle ? page.subtitle : '',
+      headerText: page && page.type === 'cover' ? 'DIGITAL PROGRAMME' : 'PROGRAMME',
+      bodyText: '',
+      coverImage: '',
+      accentColor: '#572e88',
+      textColor: page && page.type === 'cover' ? '#ffffff' : '#000000',
+      showHeader: true,
+    };
+  }
+
+  function pageOverride(page) {
+    var map = ProgrammeState.settings.pageOverrides || {};
+    var existing = map[page.pageId] || {};
+    return Object.assign({}, defaultOverrideForPage(page), existing);
+  }
+
+  function pageWithOverrides(page) {
+    if (!page) return page;
+    var override = pageOverride(page);
+    var next = Object.assign({}, page, { override: override });
+    if (override.title) next.title = override.title;
+    if (override.subtitle) next.subtitle = override.subtitle;
+    next.syncMode = override.syncMode || 'auto';
+    next.headerText = override.headerText;
+    next.bodyText = override.bodyText;
+    next.coverImage = override.coverImage;
+    next.accentColor = override.accentColor || '#572e88';
+    next.textColor = override.textColor || (next.type === 'cover' ? '#ffffff' : '#000000');
+    next.showHeader = override.showHeader !== false;
+    return next;
+  }
+
   function pageConnectionSummary(page) {
     var sources = page && page.connections ? page.connections : [];
     if (!sources.length) return 'Manual page';
@@ -385,6 +424,7 @@
       var booked = ProgrammeState.data.ads.filter(function (ad) { return String(ad.ad_size || '') === sizeId; });
       for (var i = 0; i < booked.length; i += capacity) {
         pages.push({
+          pageId: 'ads-' + sizeId + '-' + (i / capacity),
           type: 'ads',
           title: (size && size.label ? size.label : sizeId) + ' Ads',
           subtitle: booked.slice(i, i + capacity).length + ' of ' + capacity + ' placements',
@@ -410,27 +450,27 @@
     var prod = ProgrammeState.data.production || {};
     var cast = castApplications();
     var team = ProgrammeState.data.team;
-    if (key === 'cover') return [{ type: 'cover', title: prod.title || prod.name || 'Production Title', subtitle: [prod.venue, prod.start_date].filter(Boolean).join(' · ') || 'Cover page' }];
-    if (key === 'welcome') return [{ type: 'note', title: 'Welcome Note', subtitle: 'Producer or organisation message placeholder' }];
-    if (key === 'director') return [{ type: 'note', title: 'Director Note', subtitle: prod.director ? 'From ' + prod.director : 'Director note placeholder' }];
-    if (key === 'land') return [{ type: 'note', title: 'Land Acknowledgement', subtitle: 'Structured text placeholder' }];
-    if (key === 'creative') return [{ type: 'creative', title: 'Creative Team', subtitle: team.length + ' team member' + (team.length === 1 ? '' : 's'), items: team }];
-    if (key === 'cast') return [{ type: 'cast', title: 'Cast List', subtitle: cast.length + ' performer' + (cast.length === 1 ? '' : 's'), items: cast, layout: ProgrammeState.settings.pageLayouts.cast }];
-    if (key === 'characters') return [{ type: 'characters', title: 'Character List', subtitle: ProgrammeState.data.roles.length + ' role' + (ProgrammeState.data.roles.length === 1 ? '' : 's'), items: ProgrammeState.data.roles, layout: ProgrammeState.settings.pageLayouts.cast }];
+    if (key === 'cover') return [{ pageId: 'cover-0', type: 'cover', title: prod.title || prod.name || 'Production Title', subtitle: [prod.venue, prod.start_date].filter(Boolean).join(' · ') || 'Cover page' }];
+    if (key === 'welcome') return [{ pageId: 'welcome-0', type: 'note', title: 'Welcome Note', subtitle: 'Producer or organisation message placeholder' }];
+    if (key === 'director') return [{ pageId: 'director-0', type: 'note', title: 'Director Note', subtitle: prod.director ? 'From ' + prod.director : 'Director note placeholder' }];
+    if (key === 'land') return [{ pageId: 'land-0', type: 'note', title: 'Land Acknowledgement', subtitle: 'Structured text placeholder' }];
+    if (key === 'creative') return [{ pageId: 'creative-0', type: 'creative', title: 'Creative Team', subtitle: team.length + ' team member' + (team.length === 1 ? '' : 's'), items: team }];
+    if (key === 'cast') return [{ pageId: 'cast-0', type: 'cast', title: 'Cast List', subtitle: cast.length + ' performer' + (cast.length === 1 ? '' : 's'), items: cast, layout: ProgrammeState.settings.pageLayouts.cast }];
+    if (key === 'characters') return [{ pageId: 'characters-0', type: 'characters', title: 'Character List', subtitle: ProgrammeState.data.roles.length + ' role' + (ProgrammeState.data.roles.length === 1 ? '' : 's'), items: ProgrammeState.data.roles, layout: ProgrammeState.settings.pageLayouts.cast }];
     if (key === 'bios') {
       var bioCapacity = ProgrammeState.settings.pageLayouts.bios === 'bios-compact' ? 10 : ProgrammeState.settings.pageLayouts.bios === 'bios-featured' ? 4 : 6;
       var bioPages = [];
       for (var i = 0; i < cast.length; i += bioCapacity) {
-        bioPages.push({ type: 'bios', title: 'Cast Bios', subtitle: 'Bios ' + (i + 1) + '-' + Math.min(i + bioCapacity, cast.length), items: cast.slice(i, i + bioCapacity), capacity: bioCapacity, layout: ProgrammeState.settings.pageLayouts.bios });
+        bioPages.push({ pageId: 'bios-' + (i / bioCapacity), type: 'bios', title: 'Cast Bios', subtitle: 'Bios ' + (i + 1) + '-' + Math.min(i + bioCapacity, cast.length), items: cast.slice(i, i + bioCapacity), capacity: bioCapacity, layout: ProgrammeState.settings.pageLayouts.bios });
       }
-      if (!cast.length) bioPages.push({ type: 'bios', title: 'Cast Bios', subtitle: 'Waiting for cast list', items: [], capacity: bioCapacity, layout: ProgrammeState.settings.pageLayouts.bios });
+      if (!cast.length) bioPages.push({ pageId: 'bios-0', type: 'bios', title: 'Cast Bios', subtitle: 'Waiting for cast list', items: [], capacity: bioCapacity, layout: ProgrammeState.settings.pageLayouts.bios });
       return bioPages;
     }
-    if (key === 'sponsors') return [{ type: 'sponsors', title: 'Sponsors', subtitle: ProgrammeState.data.packages.length + ' sponsor package' + (ProgrammeState.data.packages.length === 1 ? '' : 's'), groups: sponsorGroups(), layout: ProgrammeState.settings.pageLayouts.sponsors }];
+    if (key === 'sponsors') return [{ pageId: 'sponsors-0', type: 'sponsors', title: 'Sponsors', subtitle: ProgrammeState.data.packages.length + ' sponsor package' + (ProgrammeState.data.packages.length === 1 ? '' : 's'), groups: sponsorGroups(), layout: ProgrammeState.settings.pageLayouts.sponsors }];
     if (key === 'ads') return packAdPages();
-    if (key === 'thanks') return [{ type: 'thanks', title: 'Special Thanks', subtitle: 'Community acknowledgements placeholder', layout: ProgrammeState.settings.pageLayouts.thanks }];
-    if (key === 'upcoming') return [{ type: 'upcoming', title: 'Upcoming Shows', subtitle: 'Future season placeholder' }];
-    if (key === 'back') return [{ type: 'back', title: 'Back Cover', subtitle: 'Back cover or final sponsor placement' }];
+    if (key === 'thanks') return [{ pageId: 'thanks-0', type: 'thanks', title: 'Special Thanks', subtitle: 'Community acknowledgements placeholder', layout: ProgrammeState.settings.pageLayouts.thanks }];
+    if (key === 'upcoming') return [{ pageId: 'upcoming-0', type: 'upcoming', title: 'Upcoming Shows', subtitle: 'Future season placeholder' }];
+    if (key === 'back') return [{ pageId: 'back-0', type: 'back', title: 'Back Cover', subtitle: 'Back cover or final sponsor placement' }];
     return [];
   }
 
@@ -440,8 +480,19 @@
       pagesForSection(key).forEach(function (page) {
         page.sectionKey = key;
         page.connections = pageConnections(page);
-        pages.push(page);
+        pages.push(pageWithOverrides(page));
       });
+    });
+    (ProgrammeState.settings.customPages || []).forEach(function (page, index) {
+      var custom = pageWithOverrides(Object.assign({
+        pageId: page.pageId || ('custom-' + index),
+        sectionKey: 'custom',
+        type: 'custom',
+        title: page.title || 'Custom Page',
+        subtitle: page.subtitle || 'Fully custom content',
+        connections: [],
+      }, page));
+      pages.push(custom);
     });
     return pages;
   }
@@ -597,6 +648,7 @@
       '</div>' +
       '<div class="pgmb-header-actions">' +
         '<button class="pgmb-btn pgmb-btn--ghost" type="button" onclick="MarketingProgrammeModule.previewAll()">Preview All Pages</button>' +
+        '<button class="pgmb-btn pgmb-btn--ghost" type="button" onclick="MarketingProgrammeModule.openEditor()">Edit Page</button>' +
         '<button class="pgmb-btn pgmb-btn--primary" type="button">' + iconImg('Upload - Document.svg', 15) + ' Export PDF</button>' +
         '<button class="pgmb-btn pgmb-btn--soft" type="button" onclick="MarketingProgrammeModule.openSettings()">More</button>' +
       '</div>' +
@@ -631,6 +683,7 @@
           addable.map(function (item) { return '<option value="' + esc(item[0]) + '">' + esc(item[1]) + '</option>'; }).join('') +
         '</select>' +
       '</div>' : '') +
+      '<button class="pgmb-add-custom-btn" type="button" onclick="MarketingProgrammeModule.addCustomPage()">+ Add Custom Page</button>' +
       '<div class="pgmb-estimate-box">' +
         '<div class="pgmb-estimate-label">Estimated Programme</div>' +
         '<div class="pgmb-estimate-value">' + pages.length + ' <span>pages</span></div>' +
@@ -655,6 +708,44 @@
           return '<button class="pgmb-modal-tab' + (tab === t[0] ? ' is-active' : '') + '" type="button" onclick="MarketingProgrammeModule.setSettingsTab(\'' + t[0] + '\')">' + esc(t[1]) + '</button>';
         }).join('') + '</div>' +
         '<div class="pgmb-modal-body">' + body + '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function currentPageData() {
+    return buildProgrammePages()[ProgrammeState.currentPage] || null;
+  }
+
+  function renderEditorModal() {
+    if (!ProgrammeState.editorOpen) return '';
+    var page = currentPageData();
+    if (!page) return '';
+    var override = page.override || pageOverride(page);
+    var isCustom = page.sectionKey === 'custom';
+    return '<div class="pgmb-modal-overlay" onclick="if(event.target===this)MarketingProgrammeModule.closeEditor()">' +
+      '<div class="pgmb-modal pgmb-editor-modal">' +
+        '<div class="pgmb-modal-head">' +
+          '<div><strong>Edit ' + esc(page.title || pageTypeLabel(page)) + '</strong><span>Customise this page while keeping live BTS data available when you want it.</span></div>' +
+          '<button class="pgmb-modal-close" type="button" onclick="MarketingProgrammeModule.closeEditor()">&times;</button>' +
+        '</div>' +
+        '<div class="pgmb-modal-body">' +
+          '<div class="pgmb-editor-grid">' +
+            '<label class="pgmb-editor-field"><span>Sync Mode</span><select onchange="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'syncMode\',this.value)"><option value="auto"' + (override.syncMode === 'auto' ? ' selected' : '') + '>Connected to BTS data</option><option value="manual"' + (override.syncMode === 'manual' ? ' selected' : '') + '>Manual override</option></select></label>' +
+            '<label class="pgmb-editor-field"><span>Header Label</span><input type="text" value="' + esc(override.headerText || '') + '" oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'headerText\',this.value)" placeholder="PROGRAMME" /></label>' +
+            '<label class="pgmb-editor-field"><span>Page Title</span><input type="text" value="' + esc(override.title || '') + '" oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'title\',this.value)" placeholder="Page title" /></label>' +
+            '<label class="pgmb-editor-field"><span>Subtitle</span><input type="text" value="' + esc(override.subtitle || '') + '" oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'subtitle\',this.value)" placeholder="Subtitle or supporting line" /></label>' +
+            '<label class="pgmb-editor-field pgmb-editor-field--full"><span>Body Copy</span><textarea oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'bodyText\',this.value)" placeholder="Add manual copy, a note, acknowledgements, or custom text.">' + esc(override.bodyText || '') + '</textarea></label>' +
+            '<label class="pgmb-editor-field pgmb-editor-field--full"><span>Cover / Background Image URL</span><input type="text" value="' + esc(override.coverImage || '') + '" oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'coverImage\',this.value)" placeholder="https://... or /ASSETS/..." /></label>' +
+            '<label class="pgmb-editor-field"><span>Accent Colour</span><input type="color" value="' + esc(override.accentColor || '#572e88') + '" oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'accentColor\',this.value)" /></label>' +
+            '<label class="pgmb-editor-field"><span>Text Colour</span><input type="color" value="' + esc(override.textColor || (page.type === 'cover' ? '#ffffff' : '#000000')) + '" oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'textColor\',this.value)" /></label>' +
+            '<label class="pgmb-editor-check"><input type="checkbox"' + (override.showHeader !== false ? ' checked' : '') + ' onchange="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'showHeader\',this.checked)" /> <span>Show page header label</span></label>' +
+          '</div>' +
+          '<div class="pgmb-editor-actions">' +
+            '<button class="pgmb-btn pgmb-btn--soft" type="button" onclick="MarketingProgrammeModule.resetPageOverride(\'' + esc(page.pageId) + '\')">Reset Page</button>' +
+            '<button class="pgmb-btn pgmb-btn--soft" type="button" onclick="MarketingProgrammeModule.duplicateCurrentPage()">Duplicate Page</button>' +
+            (isCustom ? '<button class="pgmb-btn pgmb-btn--soft" type="button" onclick="MarketingProgrammeModule.deleteCurrentPage()">Delete Custom Page</button>' : '') +
+          '</div>' +
+        '</div>' +
       '</div>' +
     '</div>';
   }
@@ -773,6 +864,9 @@
 
   function pageSummaryLines(page) {
     if (!page) return [];
+    if (page.syncMode === 'manual' && page.bodyText) {
+      return String(page.bodyText).split(/\n+/).filter(Boolean).slice(0, 8);
+    }
     if (page.type === 'cover') return [page.subtitle || 'Digital programme'];
     if (Array.isArray(page.items) && page.items.length) {
       return page.items.slice(0, 8).map(function (item) {
@@ -866,12 +960,12 @@
       var subtitle = lines[0] || 'Digital Programme';
       svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '">' +
         '<rect width="100%" height="100%" fill="#ffffff"/>' +
-        '<rect x="0" y="0" width="' + W + '" height="' + bandHeight + '" fill="#572e88"/>' +
+        (page.coverImage ? '<image href="' + svgEsc(page.coverImage) + '" x="0" y="0" width="' + W + '" height="' + bandHeight + '" preserveAspectRatio="xMidYMid slice"/><rect x="0" y="0" width="' + W + '" height="' + bandHeight + '" fill="' + svgEsc(page.accentColor || '#572e88') + '" opacity="0.58"/>' : '<rect x="0" y="0" width="' + W + '" height="' + bandHeight + '" fill="' + svgEsc(page.accentColor || '#572e88') + '"/>') +
         skylineSilhouette(W, bandHeight, '#000000', 0.18) +
-        '<text x="60" y="76" fill="#ffffff" opacity="0.8" font-family="' + font + '" font-size="14" font-weight="800" letter-spacing="3">DIGITAL PROGRAMME</text>' +
-        '<text x="' + (W / 2) + '" y="' + Math.round(bandHeight * 0.42) + '" fill="#ffffff" text-anchor="middle" font-family="' + SERIF + '" font-style="italic" font-size="46" font-weight="700">' + svgEsc(title.slice(0, 24)) + '</text>' +
+        (page.showHeader === false ? '' : '<text x="60" y="76" fill="' + svgEsc(page.textColor || '#ffffff') + '" opacity="0.8" font-family="' + font + '" font-size="14" font-weight="800" letter-spacing="3">' + svgEsc(page.headerText || 'DIGITAL PROGRAMME') + '</text>') +
+        '<text x="' + (W / 2) + '" y="' + Math.round(bandHeight * 0.42) + '" fill="' + svgEsc(page.textColor || '#ffffff') + '" text-anchor="middle" font-family="' + SERIF + '" font-style="italic" font-size="46" font-weight="700">' + svgEsc(title.slice(0, 24)) + '</text>' +
         '<rect x="' + (W / 2 - 60) + '" y="' + (Math.round(bandHeight * 0.42) + 22) + '" width="120" height="4" rx="2" fill="#efab45"/>' +
-        '<text x="' + (W / 2) + '" y="' + (bandHeight - 40) + '" fill="#ffffff" text-anchor="middle" font-family="' + font + '" font-size="19" font-weight="700">' + svgEsc(subtitle.slice(0, 40)) + '</text>' +
+        '<text x="' + (W / 2) + '" y="' + (bandHeight - 40) + '" fill="' + svgEsc(page.textColor || '#ffffff') + '" text-anchor="middle" font-family="' + font + '" font-size="19" font-weight="700">' + svgEsc(subtitle.slice(0, 40)) + '</text>' +
         pageNumberChip +
       '</svg>';
       return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
@@ -898,12 +992,12 @@
     }
 
     var titleHtml = isCastList
-      ? '<text x="60" y="128" fill="#572e88" font-family="' + SERIF + '" font-style="italic" font-size="36" font-weight="700">' + svgEsc(title.slice(0, 26)) + '</text>'
-      : '<text x="60" y="128" fill="#000000" font-family="' + font + '" font-size="38" font-weight="900">' + svgEsc(title.slice(0, 26)) + '</text>';
+      ? '<text x="60" y="128" fill="' + svgEsc(page.accentColor || '#572e88') + '" font-family="' + SERIF + '" font-style="italic" font-size="36" font-weight="700">' + svgEsc(title.slice(0, 26)) + '</text>'
+      : '<text x="60" y="128" fill="' + svgEsc(page.textColor || '#000000') + '" font-family="' + font + '" font-size="38" font-weight="900">' + svgEsc(title.slice(0, 26)) + '</text>';
 
     svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '">' +
       '<rect width="100%" height="100%" fill="#ffffff"/>' +
-      '<text x="60" y="76" fill="#572e88" font-family="' + font + '" font-size="15" font-weight="800" letter-spacing="2">PROGRAMME</text>' +
+      (page.showHeader === false ? '' : '<text x="60" y="76" fill="' + svgEsc(page.accentColor || '#572e88') + '" font-family="' + font + '" font-size="15" font-weight="800" letter-spacing="2">' + svgEsc(page.headerText || 'PROGRAMME') + '</text>') +
       titleHtml +
       '<rect x="60" y="148" width="70" height="6" rx="3" fill="#efab45"/>' +
       body +
@@ -956,6 +1050,9 @@
   }
 
   function renderThanksPage(page) {
+    if (page.syncMode === 'manual' && page.bodyText) {
+      return '<div class="pgm-thanks-layout pgm-thanks-layout--note"><strong>' + esc(page.title || 'Thank You') + '</strong><em>' + esc(page.bodyText) + '</em></div>';
+    }
     var layout = page.layout || 'thanks-note';
     if (layout === 'thanks-columns') return '<div class="pgm-thanks-layout pgm-thanks-layout--columns"><strong>Special Thanks</strong><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>';
     if (layout === 'thanks-spotlight') return '<div class="pgm-thanks-layout pgm-thanks-layout--spotlight"><strong>Thank You</strong><em>Families, volunteers, donors, and community partners</em><span></span><span></span><span></span></div>';
@@ -970,6 +1067,7 @@
         renderBuilderHeader(pages) +
         renderBuilderShell(pages) +
         renderSettingsModal() +
+        renderEditorModal() +
       '</div>';
   }
 
@@ -1051,6 +1149,70 @@
     },
     setSettingsTab: function (tab) {
       ProgrammeState.settingsTab = tab;
+      renderPlanner();
+    },
+    openEditor: function () {
+      ProgrammeState.editorOpen = true;
+      renderPlanner();
+    },
+    closeEditor: function () {
+      ProgrammeState.editorOpen = false;
+      renderPlanner();
+    },
+    setPageOverride: function (pageId, key, value) {
+      ProgrammeState.settings.pageOverrides = ProgrammeState.settings.pageOverrides || {};
+      var current = ProgrammeState.settings.pageOverrides[pageId] || {};
+      current[key] = value;
+      ProgrammeState.settings.pageOverrides[pageId] = current;
+      if (pageId.indexOf('custom-') === 0) {
+        ProgrammeState.settings.customPages = (ProgrammeState.settings.customPages || []).map(function (page) {
+          if (page.pageId !== pageId) return page;
+          page[key] = value;
+          return page;
+        });
+      }
+      renderPlanner();
+    },
+    resetPageOverride: function (pageId) {
+      if (ProgrammeState.settings.pageOverrides) delete ProgrammeState.settings.pageOverrides[pageId];
+      renderPlanner();
+    },
+    addCustomPage: function () {
+      ProgrammeState.settings.customPages = ProgrammeState.settings.customPages || [];
+      var pageId = 'custom-' + Date.now();
+      ProgrammeState.settings.customPages.push({
+        pageId: pageId,
+        type: 'custom',
+        title: 'Custom Page',
+        subtitle: 'Manual content',
+      });
+      ProgrammeState.currentPage = buildProgrammePages().length;
+      ProgrammeState.editorOpen = true;
+      renderPlanner();
+    },
+    duplicateCurrentPage: function () {
+      var page = currentPageData();
+      if (!page) return;
+      var nextId = 'custom-' + Date.now();
+      ProgrammeState.settings.customPages.push({
+        pageId: nextId,
+        type: 'custom',
+        title: page.title + ' Copy',
+        subtitle: page.subtitle,
+      });
+      ProgrammeState.settings.pageOverrides = ProgrammeState.settings.pageOverrides || {};
+      ProgrammeState.settings.pageOverrides[nextId] = Object.assign({}, page.override || {}, {
+        title: page.title + ' Copy',
+        subtitle: page.subtitle
+      });
+      renderPlanner();
+    },
+    deleteCurrentPage: function () {
+      var page = currentPageData();
+      if (!page || page.sectionKey !== 'custom') return;
+      ProgrammeState.settings.customPages = (ProgrammeState.settings.customPages || []).filter(function (item) { return item.pageId !== page.pageId; });
+      if (ProgrammeState.settings.pageOverrides) delete ProgrammeState.settings.pageOverrides[page.pageId];
+      ProgrammeState.editorOpen = false;
       renderPlanner();
     },
     destroy: function () {},
