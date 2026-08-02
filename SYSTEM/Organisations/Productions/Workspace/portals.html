@@ -605,6 +605,22 @@
       return '';
     }
 
+    // Maps a person's own department (departmentForRole's label) to the matching
+    // financials:budgeting:<key> leaf(es) so their own department's budget defaults
+    // to visible without a producer having to set it - Costume & Makeup covers two
+    // sidebar leaves since budgeting doesn't split them the way departments does.
+    const BUDGET_DEPT_KEYS_BY_LABEL = {
+      'Front of House': ['foh'],
+      'Backstage & Rehearsal Support': ['backstage'],
+      'Technical Crew': ['technical'],
+      'Design & Construction': ['design'],
+      'Costume & Makeup': ['costumes', 'hair'],
+      'Marketing & Publicity': ['marketing'],
+    };
+    function budgetDeptKeysForPerson(person) {
+      return BUDGET_DEPT_KEYS_BY_LABEL[person.roleDepartment || ''] || [];
+    }
+
     function roleStyleFor(roleName, explicitDept, fallbackColor = '#572e88', fallbackBg = fallbackColor) {
       const dept = departmentForRole(roleName, explicitDept);
       const palette = DEPT_ROLE_PALETTES[dept];
@@ -2210,7 +2226,17 @@
       ]},
       { key: 'financials', label: 'Financials', icon: 'Budgeting-total-spent-cad-usd.svg', children: [
         { key: 'financials:dashboard', label: 'Dashboard' },
-        { key: 'financials:budgeting', label: 'Budgeting' },
+        { key: 'financials:budgeting', label: 'Budgeting', children: [
+          { key: 'financials:budgeting:foh',       label: 'Front of House' },
+          { key: 'financials:budgeting:backstage', label: 'Backstage & Rehearsal Support' },
+          { key: 'financials:budgeting:technical', label: 'Technical Crew' },
+          { key: 'financials:budgeting:design',    label: 'Design & Construction' },
+          { key: 'financials:budgeting:costumes',  label: 'Costumes' },
+          { key: 'financials:budgeting:hair',      label: 'Hair & Makeup' },
+          { key: 'financials:budgeting:marketing', label: 'Marketing & Publicity' },
+          { key: 'financials:budgeting:stage',     label: 'Stage Management' },
+          { key: 'financials:budgeting:shared',    label: 'Shared / Whole Show' },
+        ]},
         { key: 'financials:receipts',  label: 'Receipts' },
         { key: 'financials:reports',   label: 'Reports' },
       ]},
@@ -2346,7 +2372,10 @@
       }
 
       function renderModuleRow(node, depth, roleKey) {
-        const defAccess = resolveDefaultAccess(node.key, roleKey);
+        let defAccess = resolveDefaultAccess(node.key, roleKey);
+        const budgetDeptMatch = node.key.startsWith('financials:budgeting:') && node.key !== 'financials:budgeting:shared'
+          && budgetDeptKeysForPerson(person).includes(node.key.split(':')[2]);
+        if (budgetDeptMatch) defAccess = 'edit';
         const current = perms[node.key] !== undefined ? perms[node.key] : defAccess;
         const isCustom = perms[node.key] !== undefined && perms[node.key] !== defAccess;
         return `<div class="pt-module-row" data-module-key="${esc(node.key)}" data-default-access="${esc(defAccess)}" data-original-value="${perms[node.key] !== undefined ? esc(perms[node.key]) : ''}" data-touched="0" data-depth="${depth}" data-is-leaf="1">

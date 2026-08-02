@@ -929,6 +929,17 @@
       <div class="bg-field"><label>Budget Amount ($)</label><input type="number" id="bg-cat-budget" min="0" step="0.01" placeholder="0.00" /></div>
       <div class="bg-field"><label>Type</label><select id="bg-cat-type"><option value="expense">Expense</option><option value="income">Income</option></select></div>
     </div>
+    <div class="bg-field"><label>Department</label><select id="bg-cat-dept">
+      <option value="">Shared / Whole Show</option>
+      <option value="foh">Front of House</option>
+      <option value="backstage">Backstage &amp; Rehearsal Support</option>
+      <option value="technical">Technical Crew</option>
+      <option value="design">Design &amp; Construction</option>
+      <option value="costumes">Costumes</option>
+      <option value="hair">Hair &amp; Makeup</option>
+      <option value="marketing">Marketing &amp; Publicity</option>
+      <option value="stage">Stage Management</option>
+    </select></div>
     <div class="bg-field"><label>Colour</label><div class="bg-color-grid" id="bg-cat-colors"></div></div>
     <div class="bg-modal-footer">
       <button class="bg-btn bg-btn--ghost" onclick="BP.closeCatModal()">Cancel</button>
@@ -2361,6 +2372,27 @@ const BP = {
   },
 
   // ── Data (Supabase) ───────────────────────────────────────────────────
+  // A restricted team-portal session (Dept Lead, Treasurer) only sees the department
+  // budgets they've been granted via Manage Access, not the whole show's budget.
+  // No session at all (producer's own workspace) means unrestricted.
+  _restrictedBudgetDeptKeys() {
+    try {
+      const raw = sessionStorage.getItem('bts-team-portal-v1');
+      if (!raw) return null;
+      const sess = JSON.parse(raw);
+      const menuKeys = Array.isArray(sess.menuKeys) ? sess.menuKeys : [];
+      if (menuKeys.includes('financials') || menuKeys.includes('financials:dashboard')) return null;
+      return menuKeys.filter(k => k.startsWith('budget:')).map(k => k.slice('budget:'.length));
+    } catch(_) { return null; }
+  },
+  _scopeToSessionDepartments() {
+    const allowed = this._restrictedBudgetDeptKeys();
+    if (allowed === null) return;
+    this.cats = (this.cats || []).filter(c => allowed.includes(c.department_key || 'shared'));
+    const catIds = new Set(this.cats.map(c => c.id));
+    this.items = (this.items || []).filter(i => catIds.has(i.category_id));
+    this.receipts = (this.receipts || []).filter(r => catIds.has(r.category_id));
+  },
   async load() {
     try {
       const [cr,ir,rr] = await Promise.all([
@@ -2372,6 +2404,7 @@ const BP = {
       this.items = ir.ok ? await ir.json() : [];
       this.receipts = rr.ok ? await rr.json() : [];
     } catch(_) { this.cats=[]; this.items=[]; this.receipts=[]; }
+    this._scopeToSessionDepartments();
     this._fixCatColors(); // silently patch any off-brand colours in DB
     // Auto-expand categories that have items; collapse empty ones
     this.cats.forEach(c => {
@@ -3972,6 +4005,7 @@ const BP = {
     document.getElementById('bg-cat-name').value=cat?cat.name:'';
     document.getElementById('bg-cat-budget').value=cat?((cat.planned_cents||0)/100).toFixed(2):'';
     document.getElementById('bg-cat-type').value=cat?(cat.type||'expense'):'expense';
+    document.getElementById('bg-cat-dept').value=cat?(cat.department_key||''):'';
     this.selectedColor=cat?(cat.color||'#572e88'):'#572e88';
     this._syncColorGrid();
     document.getElementById('bg-cat-modal').classList.add('open');
@@ -3981,8 +4015,9 @@ const BP = {
     const name=document.getElementById('bg-cat-name').value.trim();
     const budget=Math.round((parseFloat(document.getElementById('bg-cat-budget').value)||0)*100);
     const type=document.getElementById('bg-cat-type').value;
+    const departmentKey=document.getElementById('bg-cat-dept').value||null;
     if(!name){alert('Category name is required.');return;}
-    const payload={name,planned_cents:budget,type,color:this.selectedColor};
+    const payload={name,planned_cents:budget,type,color:this.selectedColor,department_key:departmentKey};
     try{
       if(this.editCatId) {
         await this._patch('budget_categories',this.editCatId,payload);
