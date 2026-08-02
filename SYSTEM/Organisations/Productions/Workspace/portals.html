@@ -199,6 +199,25 @@
     .pt-module-group-items.collapsed { display: none; }
     .pt-module-group-row[data-depth="1"] .pt-module-name { font-size: 0.64rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(87,46,136,0.55); }
     .pt-module-name { font-size: 0.76rem; font-weight: 700; color: #000000; }
+    .pt-access-mode-toggle { display: flex; gap: 0.4rem; }
+    .pt-access-mode-btn {
+      flex: 1;
+      padding: 0.5rem 0.75rem;
+      border-radius: 9px;
+      border: 1.5px solid rgba(87,46,136,0.16);
+      background: #ffffff;
+      color: #572e88;
+      font-size: 0.78rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s, color 0.12s;
+    }
+    .pt-access-mode-btn.active {
+      background: #efab45;
+      border-color: #efab45;
+      color: #000000;
+    }
     /* Gold = on, light neutral = off - deliberately not purple, so the switch
        never blends into the purple section-header background it sits on. */
     .module-toggle-switch {
@@ -2539,14 +2558,44 @@
           <div class="pt-drawer-section-label">Module Access</div>
           ${src === 'cast'
             ? `<div style="font-size:0.82rem;color:#4a3d6b;line-height:1.5;background:#f8f7fc;border-radius:10px;padding:0.75rem 0.9rem;">Performers don't use these per-module toggles - what a cast member sees in their portal is driven entirely by their registration and casting status, not a custom permission list. There's nothing to set here for this person.</div>`
-            : `<div class="pt-module-list">${moduleListHtml}</div>
-               <div style="font-size:0.7rem;color:#b0a8c8;margin-top:0.65rem">Role sets the default. Toggle any module to override for this person.</div>`}
+            : `<div class="pt-access-mode-toggle">
+                 <button type="button" class="pt-access-mode-btn" id="pt-access-mode-full" onclick="setAccessMode('full')">Full Access</button>
+                 <button type="button" class="pt-access-mode-btn" id="pt-access-mode-limited" onclick="setAccessMode('limited')">Limited Access</button>
+               </div>
+               <div style="font-size:0.72rem;color:#b0a8c8;margin:0.5rem 0 0.85rem">Full Access gives edit access to everything, same as a Producer. Limited Access lets you pick exactly what this person can see.</div>
+               <div id="pt-module-list-wrap">
+                 <div class="pt-module-list">${moduleListHtml}</div>
+                 <div style="font-size:0.7rem;color:#b0a8c8;margin-top:0.65rem">Role sets the default. Toggle any module to override for this person.</div>
+               </div>`}
         </div>
         ${roleEditorHtml}`;
 
       document.getElementById('pt-drawer-save-btn').style.display = '';
-      if (src !== 'cast') refreshAllGroupSummaries();
+      if (src !== 'cast') {
+        refreshAllGroupSummaries();
+        const allLeafKeys = leafKeysUnder({ children: SIDEBAR_TREE });
+        const isFullAccess = allLeafKeys.every(k => (perms[k] !== undefined ? perms[k] : resolveDefaultAccess(k, roleKey)) !== 'none');
+        setAccessMode(isFullAccess ? 'full' : 'limited', /*skipBulkSet*/ true);
+      }
     }
+
+    // "Full Access" is a shortcut, not a stored concept of its own - it just flips
+    // every leaf toggle on (same as a Producer) and hides the granular list so it
+    // reads as one clean choice; switching to Limited reveals the tree so specific
+    // modules can be picked. skipBulkSet is used on initial render so opening the
+    // drawer doesn't silently overwrite an already-limited person's toggles.
+    window.setAccessMode = function (mode, skipBulkSet) {
+      const fullBtn = document.getElementById('pt-access-mode-full');
+      const limitedBtn = document.getElementById('pt-access-mode-limited');
+      const listWrap = document.getElementById('pt-module-list-wrap');
+      if (!fullBtn || !limitedBtn || !listWrap) return;
+      fullBtn.classList.toggle('active', mode === 'full');
+      limitedBtn.classList.toggle('active', mode === 'limited');
+      listWrap.style.display = mode === 'full' ? 'none' : '';
+      if (mode === 'full' && !skipBulkSet) {
+        SIDEBAR_TREE.forEach(section => bulkSetGroup(section.key, 'edit'));
+      }
+    };
 
     async function saveEditAccess() {
       const rawPerson = _visiblePeople[_editPersonIdx];
