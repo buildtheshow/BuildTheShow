@@ -2005,6 +2005,22 @@
         var n = String(c.name || '').trim().toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ');
         return sectionAliases.some(function (a) { return n === a || n.includes(a) || a.includes(n); });
       }).map(function (c) { return c.id; });
+      // No category is named for this section directly - fall back to whichever
+      // category holds an item whose own name matches instead (e.g. a "Painting"
+      // item inside a shared "Set Construction" category), same rule as
+      // sectionExtraItems(). Without this, a section sharing a category with
+      // another section (rather than having its own) could never save a receipt
+      // at all - there'd be no valid category to attach it to.
+      if (!catIds.length) {
+        var itemMatchedCatIds = {};
+        (state.items || []).forEach(function (item) {
+          var itemName = String(item.name || '').trim().toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ');
+          if (sectionAliases.some(function (a) { return itemName === a || itemName.includes(a) || a.includes(itemName); })) {
+            itemMatchedCatIds[item.category_id] = true;
+          }
+        });
+        catIds = Object.keys(itemMatchedCatIds);
+      }
 
       // Pass all data via a global — no fragile string replacements needed
       var isProducer = state.group && state.group.key === 'producer';
