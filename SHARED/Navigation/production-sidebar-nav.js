@@ -364,9 +364,19 @@
         });
       }
 
-      // Registration wrap — show if explicitly granted
+      // Registration wrap — group shows on any grant, each page needs its own key.
       var regWrap = document.getElementById('registration-wrap');
-      if (regWrap) regWrap.style.display = keys.has('registration') ? '' : 'none';
+      var showReg = hasKeyOrChild('registration');
+      if (regWrap) regWrap.style.display = showReg ? '' : 'none';
+      if (showReg) {
+        [
+          ['rsub-dashboard', 'registration:dashboard'], ['rsub-publicview', 'registration:form'],
+          ['rsub-payments', 'registration:status'], ['rsub-settings', 'registration:settings'],
+        ].forEach(function (pair) {
+          var el = document.getElementById(pair[0]);
+          if (el) el.style.display = keys.has(pair[1]) ? '' : 'none';
+        });
+      }
     }
 
     // Overview
@@ -375,10 +385,18 @@
       if (grpOverview) grpOverview.style.display = '';
     }
 
-    // Plan
+    // Plan — group shows on any grant, each page needs its own key.
     if (hasKeyOrChild('schedule')) {
       var grpPlan = document.getElementById('group-plan');
       if (grpPlan) { grpPlan.style.display = ''; grpPlan.classList.add('open'); }
+      [
+        ['psub-dashboard', 'schedule:dashboard'], ['psub-calendar', 'schedule:calendar'],
+        ['psub-rehearsal', 'schedule:rehearsal'], ['psub-team', 'schedule:team'],
+        ['psub-script', 'schedule:script'], ['nav-producer-timeline', 'schedule:timeline'],
+      ].forEach(function (pair) {
+        var el = document.getElementById(pair[0]);
+        if (el) el.style.display = keys.has(pair[1]) ? '' : 'none';
+      });
     }
 
     // Departments — group shows if any dept key is granted, but each department
@@ -455,10 +473,18 @@
       }
     }
 
-    // Ticketing
+    // Ticketing — group shows on any grant, each page needs its own key.
     if (hasKeyOrChild('ticketing')) {
       var grpTicketing = document.getElementById('group-ticketing');
       if (grpTicketing) { grpTicketing.style.display = ''; grpTicketing.classList.add('open'); }
+      [
+        ['tsub-dashboard', 'ticketing:dashboard'], ['tsub-build', 'ticketing:build'],
+        ['tsub-orders', 'ticketing:orders'], ['tsub-checkin', 'ticketing:checkin'],
+        ['tsub-reports', 'ticketing:reports'], ['tsub-settings', 'ticketing:settings'],
+      ].forEach(function (pair) {
+        var el = document.getElementById(pair[0]);
+        if (el) el.style.display = keys.has(pair[1]) ? '' : 'none';
+      });
     }
 
     // Volunteers — group shows on any grant, but each sub-page needs its own key
@@ -490,16 +516,34 @@
       });
     }
 
-    // Wrap-up
-    if (keys.has('wrapup')) {
+    // Wrap-up — group shows on any grant, each page needs its own key.
+    if (hasKeyOrChild('wrapup')) {
       var grpWrapup = document.getElementById('group-wrapup');
       if (grpWrapup) { grpWrapup.style.display = ''; grpWrapup.classList.add('open'); }
+      [
+        ['wsub-dashboard', 'wrapup:dashboard'], ['wsub-surveys', 'wrapup:surveys'],
+        ['wsub-archive', 'wrapup:archive'],
+      ].forEach(function (pair) {
+        var el = document.getElementById(pair[0]);
+        if (el) el.style.display = keys.has(pair[1]) ? '' : 'none';
+      });
     }
 
-    // Settings
-    if (keys.has('settings')) {
+    // Settings — group shows on any grant, each page needs its own key. The
+    // Manage Access tree has a few extra granular entries (team/communications/
+    // emails/forms/payments) that correspond to tabs inside production-settings.html
+    // itself rather than separate sidebar links, so only the 4 real nav items are
+    // filtered here.
+    if (hasKeyOrChild('settings')) {
       var grpSettings = document.getElementById('group-settings');
       if (grpSettings) { grpSettings.style.display = ''; grpSettings.classList.add('open'); }
+      [
+        ['setsub-dashboard', 'settings:dashboard'], ['setsub-production', 'settings:production'],
+        ['setsub-features', 'settings:features'], ['setsub-integrations', 'settings:integrations'],
+      ].forEach(function (pair) {
+        var el = document.getElementById(pair[0]);
+        if (el) el.style.display = keys.has(pair[1]) ? '' : 'none';
+      });
     }
 
     // Override nav functions to use standalone pages (not production-workspace.html)
