@@ -458,6 +458,16 @@
     return connections;
   }
 
+  function connectionRoute(item) {
+    if (!item || !item.label) return null;
+    if (item.label === 'Creative Team') return { type: 'production', tab: 'team', label: 'Open Team' };
+    if (item.label === 'Cast List' || item.label === 'Cast Bios') return { type: 'production', tab: 'cast', label: 'Open Cast' };
+    if (item.label === 'Sponsors') return { type: 'marketing', tab: 'sponsors', label: 'Open Sponsors' };
+    if (item.label === 'Programme Ads') return { type: 'marketing', tab: 'programmeads', label: 'Open Ads' };
+    if (item.label === 'Volunteers') return { type: 'production', tab: 'volunteers', label: 'Open Volunteers' };
+    return null;
+  }
+
   function defaultOverrideForPage(page) {
     return {
       syncMode: page && page.sectionKey === 'custom' ? 'manual' : 'auto',
@@ -862,6 +872,8 @@
     var override = page.override || pageOverride(page);
     var isCustom = page.sectionKey === 'custom';
     var blocks = normaliseBlocks(override.blocks);
+    var isManual = override.syncMode === 'manual';
+    var sourceCount = (page.connections || []).length;
     return '<div class="pgmb-modal-overlay" onclick="if(event.target===this)MarketingProgrammeModule.closeEditor()">' +
       '<div class="pgmb-modal pgmb-editor-modal">' +
         '<div class="pgmb-modal-head">' +
@@ -869,28 +881,40 @@
           '<button class="pgmb-modal-close" type="button" onclick="MarketingProgrammeModule.closeEditor()">&times;</button>' +
         '</div>' +
         '<div class="pgmb-modal-body">' +
+          '<div class="pgmb-mode-card-row">' +
+            '<button class="pgmb-mode-card' + (!isManual ? ' is-active' : '') + '" type="button" onclick="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'syncMode\',\'auto\')">' +
+              '<strong>Keep Synced</strong><span>' + (sourceCount ? 'This page stays connected to live show data.' : 'Use this for standard generated pages.') + '</span>' +
+            '</button>' +
+            '<button class="pgmb-mode-card' + (isManual ? ' is-active' : '') + '" type="button" onclick="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'syncMode\',\'manual\')">' +
+              '<strong>Customise Freely</strong><span>Add your own layout, copy, images, and section breaks.</span>' +
+            '</button>' +
+          '</div>' +
+          '<div class="pgmb-editor-note">' + (isManual
+            ? 'Manual mode is on. This page can use custom content blocks and override the live programme layout.'
+            : 'Connected mode is on. Titles and colours can still be adjusted, and you can switch to manual whenever you want a bespoke layout.') + '</div>' +
           '<div class="pgmb-editor-grid">' +
             '<label class="pgmb-editor-field"><span>Sync Mode</span><select onchange="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'syncMode\',this.value)"><option value="auto"' + (override.syncMode === 'auto' ? ' selected' : '') + '>Connected to BTS data</option><option value="manual"' + (override.syncMode === 'manual' ? ' selected' : '') + '>Manual override</option></select></label>' +
             '<label class="pgmb-editor-field"><span>Header Label</span><input type="text" value="' + esc(override.headerText || '') + '" oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'headerText\',this.value)" placeholder="PROGRAMME" /></label>' +
             '<label class="pgmb-editor-field"><span>Page Title</span><input type="text" value="' + esc(override.title || '') + '" oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'title\',this.value)" placeholder="Page title" /></label>' +
             '<label class="pgmb-editor-field"><span>Subtitle</span><input type="text" value="' + esc(override.subtitle || '') + '" oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'subtitle\',this.value)" placeholder="Subtitle or supporting line" /></label>' +
-            '<label class="pgmb-editor-field pgmb-editor-field--full"><span>Body Copy</span><textarea oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'bodyText\',this.value)" placeholder="Add manual copy, a note, acknowledgements, or custom text.">' + esc(override.bodyText || '') + '</textarea></label>' +
+            '<label class="pgmb-editor-field pgmb-editor-field--full"><span>' + (isManual ? 'Fallback Body Copy' : 'Manual Note / Override Copy') + '</span><textarea oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'bodyText\',this.value)" placeholder="' + (isManual ? 'Optional backup text if you are not using blocks.' : 'Optional copy if you later switch this page to manual.') + '">' + esc(override.bodyText || '') + '</textarea></label>' +
             '<label class="pgmb-editor-field pgmb-editor-field--full"><span>Cover / Background Image URL</span><input type="text" value="' + esc(override.coverImage || '') + '" oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'coverImage\',this.value)" placeholder="https://... or /ASSETS/..." /></label>' +
             '<label class="pgmb-editor-field"><span>Accent Colour</span><input type="color" value="' + esc(override.accentColor || '#572e88') + '" oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'accentColor\',this.value)" /></label>' +
             '<label class="pgmb-editor-field"><span>Text Colour</span><input type="color" value="' + esc(override.textColor || (page.type === 'cover' ? '#ffffff' : '#000000')) + '" oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'textColor\',this.value)" /></label>' +
             '<label class="pgmb-editor-check"><input type="checkbox"' + (override.showHeader !== false ? ' checked' : '') + ' onchange="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'showHeader\',this.checked)" /> <span>Show page header label</span></label>' +
           '</div>' +
-          '<div class="pgmb-blocks-section">' +
+          '<div class="pgmb-blocks-section' + (isManual ? '' : ' is-disabled') + '">' +
             '<div class="pgmb-blocks-head">' +
               '<div><strong>Page Blocks</strong><span>Build a custom page with text, quotes, images, and dividers.</span></div>' +
               '<div class="pgmb-block-actions">' +
-                '<button class="pgmb-mini-btn" type="button" onclick="MarketingProgrammeModule.addPageBlock(\'' + esc(page.pageId) + '\',\'text\')">+ Text</button>' +
-                '<button class="pgmb-mini-btn" type="button" onclick="MarketingProgrammeModule.addPageBlock(\'' + esc(page.pageId) + '\',\'image\')">+ Image</button>' +
-                '<button class="pgmb-mini-btn" type="button" onclick="MarketingProgrammeModule.addPageBlock(\'' + esc(page.pageId) + '\',\'quote\')">+ Quote</button>' +
-                '<button class="pgmb-mini-btn" type="button" onclick="MarketingProgrammeModule.addPageBlock(\'' + esc(page.pageId) + '\',\'divider\')">+ Divider</button>' +
+                '<button class="pgmb-mini-btn" type="button"' + (isManual ? '' : ' disabled') + ' onclick="MarketingProgrammeModule.addPageBlock(\'' + esc(page.pageId) + '\',\'text\')">+ Text</button>' +
+                '<button class="pgmb-mini-btn" type="button"' + (isManual ? '' : ' disabled') + ' onclick="MarketingProgrammeModule.addPageBlock(\'' + esc(page.pageId) + '\',\'image\')">+ Image</button>' +
+                '<button class="pgmb-mini-btn" type="button"' + (isManual ? '' : ' disabled') + ' onclick="MarketingProgrammeModule.addPageBlock(\'' + esc(page.pageId) + '\',\'quote\')">+ Quote</button>' +
+                '<button class="pgmb-mini-btn" type="button"' + (isManual ? '' : ' disabled') + ' onclick="MarketingProgrammeModule.addPageBlock(\'' + esc(page.pageId) + '\',\'divider\')">+ Divider</button>' +
               '</div>' +
             '</div>' +
-            (blocks.length
+            (isManual ? '' : '<div class="pgmb-block-empty">Switch this page to manual mode to arrange your own blocks while keeping the connected version available as a fallback.</div>') +
+            (isManual && blocks.length
               ? '<div class="pgmb-block-list">' + blocks.map(function (block, index) {
                   var isTextual = block.type === 'text' || block.type === 'quote';
                   var isImage = block.type === 'image';
@@ -914,7 +938,7 @@
                       : '') +
                   '</div>';
                 }).join('') + '</div>'
-              : '<div class="pgmb-block-empty">No custom blocks yet. Add a few to create bespoke pages throughout the programme.</div>') +
+              : isManual ? '<div class="pgmb-block-empty">No custom blocks yet. Add a few to create bespoke pages throughout the programme.</div>' : '') +
           '</div>' +
           '<div class="pgmb-editor-actions">' +
             '<button class="pgmb-btn pgmb-btn--soft" type="button" onclick="MarketingProgrammeModule.resetPageOverride(\'' + esc(page.pageId) + '\')">Reset Page</button>' +
@@ -940,9 +964,13 @@
     return '<div class="pgmb-connection-panel">' +
       '<div class="pgmb-connection-head"><strong>Connected Data</strong><span>This page can stay synced with other parts of the show.</span></div>' +
       '<div class="pgmb-connection-list">' + connections.map(function (item) {
+        var route = connectionRoute(item);
         return '<div class="pgmb-connection-item">' +
           '<div class="pgmb-connection-copy"><strong>' + esc(item.label) + '</strong><span>' + esc(item.detail) + '</span></div>' +
-          '<span class="pgmb-connection-pill is-' + esc(item.status.tone) + '">' + esc(item.status.label) + '</span>' +
+          '<div class="pgmb-connection-meta">' +
+            '<span class="pgmb-connection-pill is-' + esc(item.status.tone) + '">' + esc(item.status.label) + '</span>' +
+            (route ? '<button class="pgmb-connection-link" type="button" onclick="MarketingProgrammeModule.goToSource(\'' + esc(route.type) + '\',\'' + esc(route.tab) + '\')">' + esc(route.label) + '</button>' : '') +
+          '</div>' +
         '</div>';
       }).join('') + '</div>' +
     '</div>';
@@ -1139,6 +1167,15 @@
         '<text x="' + (W / 2) + '" y="304" fill="' + svgEsc(accent) + '" text-anchor="middle" font-family="' + font + '" font-size="22" font-weight="800">Add custom blocks to shape this page</text>' +
         '<text x="' + (W / 2) + '" y="334" fill="#000000" text-anchor="middle" font-family="' + font + '" font-size="14" font-weight="600">Text, quotes, dividers, and images can all be mixed together.</text>';
     }
+    function multiLineText(text, x, baseY, options) {
+      var lines = String(text || '').split(/\n+/).map(function (line) { return line.trim(); }).filter(Boolean).slice(0, options.maxLines || 3);
+      if (!lines.length) return '';
+      return '<text x="' + x + '" y="' + baseY + '" fill="' + svgEsc(options.fill || textColor) + '" font-family="' + (options.font || font) + '" font-size="' + (options.size || 18) + '" font-weight="' + (options.weight || 700) + '"' + (options.anchor ? ' text-anchor="' + options.anchor + '"' : '') + (options.italic ? ' font-style="italic"' : '') + '>' +
+        lines.map(function (line, lineIndex) {
+          return '<tspan x="' + x + '" dy="' + (lineIndex === 0 ? 0 : (options.lineHeight || 24)) + '">' + svgEsc(line.slice(0, options.maxChars || 68)) + '</tspan>';
+        }).join('') +
+      '</text>';
+    }
     return blocks.map(function (block) {
       var markup = '';
       if (block.type === 'divider') {
@@ -1152,7 +1189,7 @@
       if (block.type === 'quote') {
         markup += '<rect x="64" y="' + (y - 24) + '" width="' + (W - 128) + '" height="86" rx="20" fill="' + svgEsc(accent) + '" opacity="0.08"/>';
         markup += '<text x="90" y="' + y + '" fill="' + svgEsc(accent) + '" font-family="' + SERIF + '" font-style="italic" font-size="26" font-weight="700">"</text>';
-        markup += '<text x="116" y="' + y + '" fill="' + svgEsc(textColor) + '" font-family="' + SERIF + '" font-style="italic" font-size="20" font-weight="700">' + svgEsc(String(block.text || block.title || 'Quote').slice(0, 64)) + '</text>';
+        markup += multiLineText(block.text || block.title || 'Quote', 116, y, { fill: textColor, font: SERIF, italic: true, size: 18, weight: 700, lineHeight: 22, maxLines: 2, maxChars: 62 });
         if (block.title) {
           markup += '<text x="116" y="' + (y + 24) + '" fill="' + svgEsc(accent) + '" font-family="' + font + '" font-size="12" font-weight="800" letter-spacing="1.4">' + svgEsc(String(block.title).slice(0, 36).toUpperCase()) + '</text>';
         }
@@ -1170,14 +1207,14 @@
         }
         markup += '<text x="82" y="' + (y + imageHeight + 22) + '" fill="' + svgEsc(textColor) + '" font-family="' + font + '" font-size="15" font-weight="800">' + svgEsc(String(block.title || 'Image block').slice(0, 34)) + '</text>';
         if (block.text) {
-          markup += '<text x="82" y="' + (y + imageHeight + 42) + '" fill="' + svgEsc(accent) + '" font-family="' + SERIF + '" font-style="italic" font-size="12" font-weight="600">' + svgEsc(String(block.text).slice(0, 72)) + '</text>';
+          markup += multiLineText(block.text, 82, y + imageHeight + 42, { fill: accent, font: SERIF, italic: true, size: 12, weight: 600, lineHeight: 16, maxLines: 2, maxChars: 70 });
         }
         y += 188;
         return markup;
       }
       markup += '<text x="70" y="' + y + '" fill="' + svgEsc(accent) + '" font-family="' + font + '" font-size="13" font-weight="900" letter-spacing="1.6">' + svgEsc(String(block.title || 'TEXT').slice(0, 26).toUpperCase()) + '</text>';
-      markup += '<text x="70" y="' + (y + 28) + '" fill="' + svgEsc(textColor) + '" font-family="' + font + '" font-size="19" font-weight="700">' + svgEsc(String(block.text || '').slice(0, 68)) + '</text>';
-      y += 76;
+      markup += multiLineText(block.text || '', 70, y + 28, { fill: textColor, font: font, size: 18, weight: 700, lineHeight: 24, maxLines: 3, maxChars: 66 });
+      y += 92;
       return markup;
     }).join('');
   }
@@ -1405,6 +1442,21 @@
     closeEditor: function () {
       ProgrammeState.editorOpen = false;
       renderPlanner();
+    },
+    goToSource: function (type, tab) {
+      if (type === 'marketing' && typeof window.navigateToMarketing === 'function') {
+        window.navigateToMarketing(tab || 'dashboard');
+        return;
+      }
+      if (type === 'production') {
+        if (tab === 'volunteers' && typeof window.navigateToVolunteers === 'function') {
+          window.navigateToVolunteers('calendar');
+          return;
+        }
+        if (typeof window.switchProdTab === 'function') {
+          window.switchProdTab(tab || 'dashboard');
+        }
+      }
     },
     setPageOverride: function (pageId, key, value) {
       ProgrammeState.settings.pageOverrides = ProgrammeState.settings.pageOverrides || {};
