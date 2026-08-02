@@ -2253,6 +2253,7 @@
       const row = btn.closest('[data-module-key]');
       const lbl = row && row.querySelector('.pt-custom-label');
       if (lbl) lbl.style.display = (btn.dataset.level !== row.dataset.defaultAccess) ? '' : 'none';
+      refreshAllGroupSummaries();
     }
 
     async function openEditAccessDrawer(idx) {
@@ -2306,7 +2307,7 @@
         const defAccess = resolveDefaultAccess(node.key, roleKey);
         const current = perms[node.key] !== undefined ? perms[node.key] : defAccess;
         const isCustom = perms[node.key] !== undefined && perms[node.key] !== defAccess;
-        return `<div class="pt-module-row" data-module-key="${esc(node.key)}" data-default-access="${esc(defAccess)}" data-depth="${depth}">
+        return `<div class="pt-module-row" data-module-key="${esc(node.key)}" data-default-access="${esc(defAccess)}" data-depth="${depth}" data-is-leaf="1">
           <div style="display:flex;align-items:center;gap:0.4rem;min-width:0;flex:1">
             <span class="pt-module-name">${esc(node.label)}</span>
             <span class="pt-custom-label" style="font-size:0.64rem;font-weight:700;color:#ca7ea7;flex-shrink:0${isCustom ? '' : ';display:none'}">custom</span>
@@ -2315,21 +2316,79 @@
         </div>`;
       }
 
+      // Group/section headers are not their own independent permission - they are
+      // a bulk "set everything below to X" action plus a read-only summary of what
+      // the leaves underneath currently resolve to. Storing a separate access level
+      // on the header itself (the old behaviour) meant a header set to Edit silently
+      // granted real access regardless of what its children said, which is exactly
+      // the bug that let a restricted portal preview land in the full producer view.
+      function bulkToggleButtons(nodeKey) {
+        const bulk = (level) => `<button class="pt-perm-toggle" data-level="${level}" onclick="bulkSetGroup('${esc(nodeKey)}','${level}')">${level === 'none' ? 'No Access' : level === 'view' ? 'View' : 'Edit'}</button>`;
+        return `${bulk('none')}${bulk('view')}${bulk('edit')}`;
+      }
+
       function renderGroupRow(node, depth, roleKey) {
-        const defAccess = resolveDefaultAccess(node.key, roleKey);
-        const current = perms[node.key] !== undefined ? perms[node.key] : defAccess;
-        const isCustom = perms[node.key] !== undefined && perms[node.key] !== defAccess;
         const groupId = 'pt-group-' + node.key.replace(/[^a-zA-Z0-9_-]/g, '-');
-        return `<div class="pt-module-row pt-module-group-row" data-module-key="${esc(node.key)}" data-default-access="${esc(defAccess)}" data-depth="${depth}">
+        return `<div class="pt-module-row pt-module-group-row" data-module-key="${esc(node.key)}" data-depth="${depth}" data-is-leaf="0">
           <div class="pt-module-group-click collapsed" onclick="this.classList.toggle('collapsed');document.getElementById('${groupId}').classList.toggle('collapsed')">
             <span class="pt-section-chevron">&#9660;</span>
             <span class="pt-module-name">${esc(node.label)}</span>
-            <span class="pt-custom-label" style="font-size:0.64rem;font-weight:700;color:#ca7ea7;flex-shrink:0${isCustom ? '' : ';display:none'}">custom</span>
+            <span class="pt-custom-label" style="font-size:0.64rem;font-weight:700;color:#ca7ea7;flex-shrink:0;display:none">custom</span>
           </div>
-          <div class="pt-perm-toggle-group">${tog('none',current)}${tog('view',current)}${tog('edit',current)}</div>
+          <div class="pt-perm-toggle-group">${bulkToggleButtons(node.key)}</div>
         </div>
         <div class="pt-module-group-items collapsed" id="${groupId}">${renderChildren(node.children, depth + 1, roleKey)}</div>`;
       }
+
+      function findTreeNode(key, nodes) {
+        nodes = nodes || SIDEBAR_TREE;
+        for (const n of nodes) {
+          if (n.key === key) return n;
+          if (n.children) { const found = findTreeNode(key, n.children); if (found) return found; }
+        }
+        return null;
+      }
+
+      function leafKeysUnder(node) {
+        if (!node.children || !node.children.length) return [node.key];
+        return node.children.flatMap(leafKeysUnder);
+      }
+
+      function currentLevelFromDom(key) {
+        const row = document.querySelector('[data-module-key="' + CSS.escape(key) + '"][data-is-leaf="1"]');
+        if (!row) return 'none';
+        const sel = row.querySelector('.pt-perm-toggle.selected');
+        return sel ? sel.dataset.level : (row.dataset.defaultAccess || 'none');
+      }
+
+      // Re-derive every header's summary badge (a single level if all leaves below it
+      // agree, or "custom" if mixed) from whatever the leaf rows actually show right now.
+      function refreshAllGroupSummaries() {
+        document.querySelectorAll('[data-module-key][data-is-leaf="0"]').forEach(headerRow => {
+          const node = findTreeNode(headerRow.dataset.moduleKey);
+          if (!node) return;
+          const levels = new Set(leafKeysUnder(node).map(currentLevelFromDom));
+          const summary = levels.size === 1 ? [...levels][0] : 'custom';
+          const group = headerRow.querySelector('.pt-perm-toggle-group');
+          if (group) group.querySelectorAll('.pt-perm-toggle').forEach(b => b.classList.toggle('selected', b.dataset.level === summary));
+          const lbl = headerRow.querySelector('.pt-custom-label');
+          if (lbl) lbl.style.display = (summary === 'custom') ? '' : 'none';
+        });
+      }
+
+      window.bulkSetGroup = function (nodeKey, level) {
+        const node = findTreeNode(nodeKey);
+        if (!node) return;
+        leafKeysUnder(node).forEach(leafKey => {
+          const row = document.querySelector('[data-module-key="' + CSS.escape(leafKey) + '"][data-is-leaf="1"]');
+          if (!row) return;
+          const group = row.querySelector('.pt-perm-toggle-group');
+          if (group) group.querySelectorAll('.pt-perm-toggle').forEach(b => b.classList.toggle('selected', b.dataset.level === level));
+          const lbl = row.querySelector('.pt-custom-label');
+          if (lbl) lbl.style.display = (level !== (row.dataset.defaultAccess || 'none')) ? '' : 'none';
+        });
+        refreshAllGroupSummaries();
+      };
 
       function renderChildren(children, depth, roleKey) {
         return (children || []).map(child => {
@@ -2343,18 +2402,15 @@
         const iconHtml = iconSrc ? `<img src="${esc(iconSrc)}" alt="" />` : '';
         const sectionId = 'pt-section-' + section.key;
         const itemsHtml = section.children ? renderChildren(section.children, 1, roleKey) : '';
-        const defAccess = resolveDefaultAccess(section.key, roleKey);
-        const current = perms[section.key] !== undefined ? perms[section.key] : defAccess;
-        const isCustom = perms[section.key] !== undefined && perms[section.key] !== defAccess;
         return `<div class="pt-module-section">
-          <div class="pt-module-section-header" data-module-key="${esc(section.key)}" data-default-access="${esc(defAccess)}">
+          <div class="pt-module-section-header" data-module-key="${esc(section.key)}" data-is-leaf="0">
             <div class="pt-module-section-click collapsed" onclick="this.classList.toggle('collapsed');document.getElementById('${sectionId}').classList.toggle('collapsed')">
               ${iconHtml}
               ${esc(section.label)}
-              <span class="pt-custom-label" style="font-size:0.64rem;font-weight:700;color:#ffd9ef;flex-shrink:0${isCustom ? '' : ';display:none'}">custom</span>
+              <span class="pt-custom-label" style="font-size:0.64rem;font-weight:700;color:#ffd9ef;flex-shrink:0;display:none">custom</span>
               <span class="pt-section-chevron">&#9660;</span>
             </div>
-            <div class="pt-perm-toggle-group">${tog('none',current)}${tog('view',current)}${tog('edit',current)}</div>
+            <div class="pt-perm-toggle-group">${bulkToggleButtons(section.key)}</div>
           </div>
           <div class="pt-module-section-items collapsed" id="${sectionId}">${itemsHtml}</div>
         </div>`;
@@ -2416,6 +2472,7 @@
         ${roleEditorHtml}`;
 
       document.getElementById('pt-drawer-save-btn').style.display = '';
+      refreshAllGroupSummaries();
     }
 
     async function saveEditAccess() {
@@ -2433,7 +2490,9 @@
         // Save only per-person overrides; role defaults do not need rows in portal_permissions.
         if (personId && _prodId) {
           const overrides = [];
-          document.querySelectorAll('[data-module-key]').forEach(row => {
+          // Only leaf modules carry a real, independent permission - group/section
+          // headers are just a bulk-set control now, never saved on their own.
+          document.querySelectorAll('[data-module-key][data-is-leaf="1"]').forEach(row => {
             const key = row.dataset.moduleKey;
             const defaultAccess = row.dataset.defaultAccess || 'none';
             const selected = row.querySelector('.pt-perm-toggle.selected');
