@@ -2243,15 +2243,30 @@
 
     // Per-role defaults: keys not listed default to 'none'.
     // A section key (e.g. 'cast') grants all children by default.
+    // These buckets are transcribed straight from what each real session actually
+    // grants by default (ROLE_MENU_DEFAULTS in treasurer-portal.html / team-portal.html),
+    // not guessed - keep them in sync when those files change.
     const ROLE_DEFAULT_ACCESS = {
       cast:      { 'plan:calendar': 'view', 'cast:registration': 'view', 'cast:registration:dashboard': 'view', 'cast:registration:status': 'view' },
-      volunteer: { 'volunteers:calendar': 'view', 'volunteers:requests': 'view' },
-      dept_lead: { 'volunteers': 'edit', 'departments': 'view', 'financials:budgeting': 'view' },
-      treasurer: { 'financials': 'view', 'financials:dashboard': 'view', 'financials:budgeting': 'edit', 'financials:receipts': 'view', 'financials:reports': 'view', 'cast': 'none', 'cast:registration': 'view', 'cast:registration:dashboard': 'view', 'cast:registration:form': 'none', 'cast:registration:status': 'view', 'cast:registration:settings': 'none' },
-      team:      { 'cast:dashboard': 'view', 'cast:auditions': 'view', 'cast:casting': 'view', 'plan:calendar': 'edit' },
-      producer:  Object.fromEntries(flattenTree(SIDEBAR_TREE).map(k => [k, 'edit'])),
+      volunteer: {},
+      dept_lead: { 'volunteers:calendar': 'edit', 'departments': 'view' },
+      treasurer: { 'volunteers:calendar': 'view', 'financials': 'view', 'financials:dashboard': 'view', 'financials:budgeting': 'edit', 'financials:receipts': 'view', 'financials:reports': 'view', 'cast': 'none', 'cast:registration': 'view', 'cast:registration:dashboard': 'view', 'cast:registration:form': 'none', 'cast:registration:status': 'view', 'cast:registration:settings': 'none' },
+      team_creative_leadership: { 'cast:auditions:dashboard': 'view', 'cast:auditions:schedule': 'view', 'cast:casting:board': 'edit', 'cast:casting:list': 'edit', 'plan:calendar': 'edit' },
+      team_producer:            { 'cast:auditions:dashboard': 'view', 'cast:auditions:schedule': 'view', 'cast:auditions:performers': 'view', 'cast:casting:board': 'edit', 'cast:casting:list': 'edit', 'plan:calendar': 'edit' },
+      team_admin:               { 'cast:auditions:dashboard': 'view', 'cast:auditions:schedule': 'view', 'cast:auditions:performers': 'view', 'cast:auditions:settings': 'edit', 'cast:casting:board': 'edit', 'cast:casting:list': 'edit', 'cast:casting:offers': 'edit', 'plan:calendar': 'edit' },
+      team_other:               { 'cast:auditions:dashboard': 'view', 'cast:auditions:schedule': 'view' },
       board:     { 'overview': 'view', 'overview:dashboard': 'view' },
     };
+
+    // Mirrors team-portal.html's CREATIVE_LEADERSHIP_ROLES / ROLE_MENU_DEFAULTS split -
+    // a Creative Team member's real default access depends on their specific role, never
+    // a single generic bucket.
+    function teamRoleBucket(src) {
+      if (src === 'director' || src === 'choreographer' || src === 'vocal_director') return 'team_creative_leadership';
+      if (src === 'admin') return 'team_admin';
+      if (src === 'producer') return 'team_producer';
+      return 'team_other';
+    }
 
     function resolveDefaultAccess(key, roleKey) {
       const defs = ROLE_DEFAULT_ACCESS[roleKey] || {};
@@ -2311,7 +2326,14 @@
         return def ? def.label : '';
       }).filter(Boolean).join(', ');
 
-      const roleKey = (src === 'producer' || src === 'admin') ? 'producer' : (person.portals[0] || src);
+      // src is the person's real role/source (e.g. 'dept_lead', 'director', 'treasurer') -
+      // resolve it straight to its bucket rather than falling back to person.portals[0],
+      // which used to silently mis-bucket Dept Leads (portals[0] is 'volunteer' for them)
+      // and every Creative Team role (which has no portals[0]-shaped bucket at all).
+      const roleKey = src === 'dept_lead_planned' ? 'dept_lead'
+        : src === 'board_planned' ? 'board'
+        : (person.portals && person.portals[0] === 'team') ? teamRoleBucket(src)
+        : src;
 
       // Just Access / No Access now - View-only was a distinction nobody was
       // actually using and made every row look like a 3-way decision. A single
