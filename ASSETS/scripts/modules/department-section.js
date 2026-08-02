@@ -205,6 +205,38 @@
     return state.receipts.filter(function (receipt) { return ids.has(receipt.category_id); });
   }
 
+  // Some departments (e.g. Design & Construction) track everything under one
+  // shared budget category with per-item breakdowns instead of a separate
+  // category per section - "Set Construction" with items named Construction/
+  // Painting/Set Dec, rather than a "Set Painting" category of its own. When a
+  // category itself doesn't match this section, check its individual items by
+  // name instead, so a $200 "Painting" line item still counts toward Set
+  // Painting's budget even though it lives inside "Set Construction".
+  function sectionExtraItems() {
+    const matchedCatIds = new Set(sectionCategories().map(function (cat) { return cat.id; }));
+    const aliases = categoryAliases().map(norm);
+    return (state.items || []).filter(function (item) {
+      if (matchedCatIds.has(item.category_id)) return false; // already counted via its own category
+      const name = norm(item.name);
+      if (!name) return false;
+      return aliases.some(function (alias) { return name === alias || name.includes(alias) || alias.includes(name); });
+    });
+  }
+
+  function sectionExtraItemsReceiptSpend(extraItems) {
+    const itemIds = new Set(extraItems.map(function (item) { return String(item.id); }));
+    if (!itemIds.size) return 0;
+    let total = 0;
+    (state.receipts || []).forEach(function (receipt) {
+      if (receipt.status === 'rejected') return;
+      const lines = Array.isArray(receipt.line_items) ? receipt.line_items : [];
+      lines.forEach(function (line) {
+        if (line && itemIds.has(String(line.budget_item_id))) total += (line.amount_cents || 0);
+      });
+    });
+    return total;
+  }
+
   function sectionProps() {
     const matches = sectionMatchesText();
     return state.props.filter(function (prop) { return matches(prop.department_name || 'Props'); });
@@ -857,8 +889,11 @@
     const receipts = sectionReceipts();
     const counted = receipts.filter(function (receipt) { return receipt.status !== 'rejected'; });
     const cats = sectionCategories();
-    const allocated = cats.reduce(function (sum, cat) { return sum + (cat.planned_cents || 0); }, 0);
-    const spent = counted.reduce(function (sum, receipt) { return sum + (receipt.amount_cents || 0); }, 0);
+    const extraItems = sectionExtraItems();
+    const allocated = cats.reduce(function (sum, cat) { return sum + (cat.planned_cents || 0); }, 0)
+      + extraItems.reduce(function (sum, item) { return sum + (item.budgeted_cents || 0); }, 0);
+    const spent = counted.reduce(function (sum, receipt) { return sum + (receipt.amount_cents || 0); }, 0)
+      + sectionExtraItemsReceiptSpend(extraItems);
     const remaining = Math.max(0, allocated - spent);
     const opportunities = sectionOpportunities();
     const signups = sectionSignups(opportunities);
