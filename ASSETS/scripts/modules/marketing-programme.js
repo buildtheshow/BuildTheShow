@@ -2,8 +2,8 @@
 (function () {
   'use strict';
 
-  var SUPABASE_URL = 'https://tkmaiktxpwqfbgeojbnf.supabase.co';
-  var SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDc4NTI4NTYsImV4cCI6MjAyMzQyODg1Nn0.tVxOMkaMdBnuqQbLdHl00h4WA7DV8LHuVxCt6z5LFCY';
+  var SUPABASE_URL = window.SUPABASE_URL || 'https://tkmaiktxpwqfbgeojbnf.supabase.co';
+  var SUPABASE_ANON = window.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8';
 
   var DEFAULT_AD_SIZES = [
     { id: 'full', label: 'Full Page', capacity: 1 },
@@ -175,7 +175,7 @@
 
   function dbFetch(table, extra) {
     var url = SUPABASE_URL + '/rest/v1/' + table + '?' + (extra || '') + '&production_id=eq.' + encodeURIComponent(ProgrammeState.prodId);
-    return fetch(url, { headers: { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + SUPABASE_ANON } })
+    return fetch(url, { headers: sponsorHeaders() })
       .then(function (res) {
         if (!res.ok) return res.text().then(function (text) { throw new Error(text); });
         return res.json();
@@ -184,7 +184,7 @@
 
   function dbFetchById(table, id, select) {
     var url = SUPABASE_URL + '/rest/v1/' + table + '?id=eq.' + encodeURIComponent(id) + '&select=' + encodeURIComponent(select || '*') + '&limit=1';
-    return fetch(url, { headers: { apikey: SUPABASE_ANON, Authorization: 'Bearer ' + SUPABASE_ANON } })
+    return fetch(url, { headers: sponsorHeaders() })
       .then(function (res) {
         if (!res.ok) return res.text().then(function (text) { throw new Error(text); });
         return res.json();
@@ -202,8 +202,16 @@
   function sponsorHeaders(extra) {
     return Object.assign({
       apikey: SUPABASE_ANON,
-      Authorization: 'Bearer ' + SUPABASE_ANON,
+      Authorization: 'Bearer ' + (programmeAccessToken() || SUPABASE_ANON),
     }, extra || {});
+  }
+
+  function programmeAccessToken() {
+    try {
+      var raw = localStorage.getItem('sb-tkmaiktxpwqfbgeojbnf-auth-token');
+      var stored = raw ? JSON.parse(raw) : null;
+      return stored && (stored.access_token || (stored.currentSession && stored.currentSession.access_token)) || '';
+    } catch (_) { return ''; }
   }
 
   function safeFileName(name) {
@@ -258,14 +266,14 @@
 
   function loadProgrammeData() {
     return Promise.all([
-      safeFetch(dbFetchById('productions', ProgrammeState.prodId, 'id,title,name,subtitle,venue,start_date,end_date,producer,director,org_name,slug'), null),
+      safeFetch(dbFetchById('productions', ProgrammeState.prodId, '*'), null),
       safeFetch(dbFetch('sponsor_businesses', 'select=*'), []),
       safeFetch(dbFetch('programme_ads', 'select=*'), []),
       safeFetch(dbFetch('sponsor_packages', 'select=*'), []),
       safeFetch(dbFetch('sponsor_deliverables', 'select=*'), []),
       safeFetch(dbFetch('sponsor_settings', 'select=settings&limit=1'), []),
       safeFetch(dbFetch('production_roles', 'select=*'), []),
-      safeFetch(dbFetch('audition_applications', 'select=id,name,first_name,last_name,headshot_url,custom_answers,status,created_at'), []),
+      safeFetch(dbFetch('audition_applications', 'select=*'), []),
       safeFetch(dbFetch('production_team_members', 'select=id,name,role,department,bio,headshot_url,is_active'), []),
       safeFetch(dbFetch('volunteer_signups', 'select=id,name,role_name,department,status,email'), []),
     ]).then(function (results) {
@@ -376,7 +384,7 @@
   }
 
   function applicationName(app) {
-    return app.name || [app.first_name, app.last_name].filter(Boolean).join(' ') || 'Unnamed performer';
+    return app.name || app.display_name || app.full_name || 'Unnamed performer';
   }
 
   function customAnswers(app) {
