@@ -20,6 +20,7 @@
     { id: 'friend', label: 'Friend', amount: 50 },
   ];
   var FLIPBOOK_SCRIPT = '/SHARED/Components/flipbook-viewer.js?v=20260521-real-viewer';
+  var PROGRAMME_ASSET_BUCKET = 'production-files';
 
   var SECTION_OPTIONS = [
     ['cover', 'Cover'],
@@ -130,6 +131,7 @@
     saving: false,
     saveError: '',
     saveTimer: 0,
+    uploadingAssetKey: '',
     settingsTab: 'sections',
     settings: {
       paper: 'letter-folded',
@@ -202,6 +204,34 @@
       apikey: SUPABASE_ANON,
       Authorization: 'Bearer ' + SUPABASE_ANON,
     }, extra || {});
+  }
+
+  function safeFileName(name) {
+    return String(name || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
+  }
+
+  function uploadProgrammeAsset(file, folder, prefix) {
+    var safeName = safeFileName(file && file.name ? file.name : 'asset');
+    var path = ProgrammeState.prodId + '/programme-builder/' + folder + '/' + Date.now() + '_' + (prefix || 'asset') + '_' + safeName;
+    return fetch(SUPABASE_URL + '/storage/v1/object/' + PROGRAMME_ASSET_BUCKET + '/' + path, {
+      method: 'POST',
+      headers: sponsorHeaders({ 'Content-Type': (file && file.type) || 'application/octet-stream' }),
+      body: file,
+    }).then(function (response) {
+      if (!response.ok) return response.text().then(function (text) { throw new Error(text); });
+      return {
+        url: SUPABASE_URL + '/storage/v1/object/public/' + PROGRAMME_ASSET_BUCKET + '/' + path,
+        path: path,
+      };
+    });
+  }
+
+  function removeProgrammeAsset(path) {
+    if (!path) return Promise.resolve();
+    return fetch(SUPABASE_URL + '/storage/v1/object/' + PROGRAMME_ASSET_BUCKET + '/' + path, {
+      method: 'DELETE',
+      headers: sponsorHeaders(),
+    }).catch(function () { return null; });
   }
 
   function loadScript(src) {
@@ -476,6 +506,7 @@
       headerText: page && page.type === 'cover' ? 'DIGITAL PROGRAMME' : 'PROGRAMME',
       bodyText: '',
       coverImage: '',
+      coverImagePath: '',
       accentColor: '#572e88',
       textColor: page && page.type === 'cover' ? '#ffffff' : '#000000',
       showHeader: true,
@@ -490,6 +521,7 @@
         title: 'Image Caption',
         text: 'Add a photo, poster, or artwork URL.',
         imageUrl: '',
+        imagePath: '',
       };
     }
     if (type === 'quote') {
@@ -498,6 +530,7 @@
         title: 'Pull Quote',
         text: 'A short quote, testimonial, or highlighted line.',
         imageUrl: '',
+        imagePath: '',
       };
     }
     if (type === 'divider') {
@@ -506,6 +539,7 @@
         title: 'Section Break',
         text: '',
         imageUrl: '',
+        imagePath: '',
       };
     }
     return {
@@ -513,6 +547,7 @@
       title: 'Text Block',
       text: 'Add body copy, acknowledgements, or custom programme notes.',
       imageUrl: '',
+      imagePath: '',
     };
   }
 
@@ -541,6 +576,7 @@
     next.headerText = override.headerText;
     next.bodyText = override.bodyText;
     next.coverImage = override.coverImage;
+    next.coverImagePath = override.coverImagePath || '';
     next.accentColor = override.accentColor || '#572e88';
     next.textColor = override.textColor || (next.type === 'cover' ? '#ffffff' : '#000000');
     next.showHeader = override.showHeader !== false;
@@ -899,6 +935,13 @@
             '<label class="pgmb-editor-field"><span>Subtitle</span><input type="text" value="' + esc(override.subtitle || '') + '" oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'subtitle\',this.value)" placeholder="Subtitle or supporting line" /></label>' +
             '<label class="pgmb-editor-field pgmb-editor-field--full"><span>' + (isManual ? 'Fallback Body Copy' : 'Manual Note / Override Copy') + '</span><textarea oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'bodyText\',this.value)" placeholder="' + (isManual ? 'Optional backup text if you are not using blocks.' : 'Optional copy if you later switch this page to manual.') + '">' + esc(override.bodyText || '') + '</textarea></label>' +
             '<label class="pgmb-editor-field pgmb-editor-field--full"><span>Cover / Background Image URL</span><input type="text" value="' + esc(override.coverImage || '') + '" oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'coverImage\',this.value)" placeholder="https://... or /ASSETS/..." /></label>' +
+            '<div class="pgmb-upload-row pgmb-editor-field pgmb-editor-field--full">' +
+              '<span>Cover / Background Upload</span>' +
+              '<div class="pgmb-upload-actions">' +
+                '<button class="pgmb-mini-btn" type="button" onclick="MarketingProgrammeModule.uploadCoverImage(\'' + esc(page.pageId) + '\')">' + (ProgrammeState.uploadingAssetKey === ('cover:' + page.pageId) ? 'Uploading...' : 'Upload Image') + '</button>' +
+                (override.coverImage ? '<button class="pgmb-mini-btn is-danger" type="button" onclick="MarketingProgrammeModule.clearCoverImage(\'' + esc(page.pageId) + '\')">Remove Image</button>' : '') +
+              '</div>' +
+            '</div>' +
             '<label class="pgmb-editor-field"><span>Accent Colour</span><input type="color" value="' + esc(override.accentColor || '#572e88') + '" oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'accentColor\',this.value)" /></label>' +
             '<label class="pgmb-editor-field"><span>Text Colour</span><input type="color" value="' + esc(override.textColor || (page.type === 'cover' ? '#ffffff' : '#000000')) + '" oninput="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'textColor\',this.value)" /></label>' +
             '<label class="pgmb-editor-check"><input type="checkbox"' + (override.showHeader !== false ? ' checked' : '') + ' onchange="MarketingProgrammeModule.setPageOverride(\'' + esc(page.pageId) + '\',\'showHeader\',this.checked)" /> <span>Show page header label</span></label>' +
@@ -934,7 +977,14 @@
                       ? '<label class="pgmb-editor-field"><span>' + (isImage ? 'Caption / Description' : 'Copy') + '</span><textarea oninput="MarketingProgrammeModule.updatePageBlock(\'' + esc(page.pageId) + '\',' + index + ',\'text\',this.value)" placeholder="' + (isImage ? 'Describe the image, add a caption, or note placement.' : 'Add custom copy for this block.') + '">' + esc(block.text || '') + '</textarea></label>'
                       : '') +
                     (isImage
-                      ? '<label class="pgmb-editor-field"><span>Image URL</span><input type="text" value="' + esc(block.imageUrl || '') + '" oninput="MarketingProgrammeModule.updatePageBlock(\'' + esc(page.pageId) + '\',' + index + ',\'imageUrl\',this.value)" placeholder="https://... or /ASSETS/..." /></label>'
+                      ? '<label class="pgmb-editor-field"><span>Image URL</span><input type="text" value="' + esc(block.imageUrl || '') + '" oninput="MarketingProgrammeModule.updatePageBlock(\'' + esc(page.pageId) + '\',' + index + ',\'imageUrl\',this.value)" placeholder="https://... or /ASSETS/..." /></label>' +
+                        '<div class="pgmb-upload-row pgmb-editor-field">' +
+                          '<span>Image Upload</span>' +
+                          '<div class="pgmb-upload-actions">' +
+                            '<button class="pgmb-mini-btn" type="button" onclick="MarketingProgrammeModule.uploadPageBlockImage(\'' + esc(page.pageId) + '\',' + index + ')">' + (ProgrammeState.uploadingAssetKey === ('block:' + page.pageId + ':' + index) ? 'Uploading...' : 'Upload Image') + '</button>' +
+                            (block.imageUrl ? '<button class="pgmb-mini-btn is-danger" type="button" onclick="MarketingProgrammeModule.clearPageBlockImage(\'' + esc(page.pageId) + '\',' + index + ')">Remove Image</button>' : '') +
+                          '</div>' +
+                        '</div>'
                       : '') +
                   '</div>';
                 }).join('') + '</div>'
@@ -1458,6 +1508,64 @@
         }
       }
     },
+    uploadCoverImage: function (pageId) {
+      var input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/jpeg,image/png,image/webp,image/gif,image/svg+xml';
+      input.onchange = function () {
+        var file = input.files && input.files[0];
+        if (!file) return;
+        var existing = pageOverride({ pageId: pageId });
+        ProgrammeState.uploadingAssetKey = 'cover:' + pageId;
+        renderPlanner();
+        uploadProgrammeAsset(file, 'covers', pageId)
+          .then(function (asset) {
+            ProgrammeState.settings.pageOverrides = ProgrammeState.settings.pageOverrides || {};
+            var current = Object.assign({}, existing, ProgrammeState.settings.pageOverrides[pageId] || {});
+            current.coverImage = asset.url;
+            current.coverImagePath = asset.path;
+            ProgrammeState.settings.pageOverrides[pageId] = current;
+            if (pageId.indexOf('custom-') === 0) {
+              ProgrammeState.settings.customPages = (ProgrammeState.settings.customPages || []).map(function (page) {
+                if (page.pageId !== pageId) return page;
+                page.coverImage = asset.url;
+                page.coverImagePath = asset.path;
+                return page;
+              });
+            }
+            queueProgrammeSave();
+            renderPlanner();
+            if (existing.coverImagePath && existing.coverImagePath !== asset.path) removeProgrammeAsset(existing.coverImagePath);
+          })
+          .catch(function (error) {
+            alert('Could not upload cover image: ' + error.message);
+          })
+          .finally(function () {
+            ProgrammeState.uploadingAssetKey = '';
+            renderPlanner();
+          });
+      };
+      input.click();
+    },
+    clearCoverImage: function (pageId) {
+      var current = pageOverride({ pageId: pageId });
+      ProgrammeState.settings.pageOverrides = ProgrammeState.settings.pageOverrides || {};
+      ProgrammeState.settings.pageOverrides[pageId] = Object.assign({}, current, {
+        coverImage: '',
+        coverImagePath: '',
+      });
+      if (pageId.indexOf('custom-') === 0) {
+        ProgrammeState.settings.customPages = (ProgrammeState.settings.customPages || []).map(function (page) {
+          if (page.pageId !== pageId) return page;
+          page.coverImage = '';
+          page.coverImagePath = '';
+          return page;
+        });
+      }
+      queueProgrammeSave();
+      renderPlanner();
+      if (current.coverImagePath) removeProgrammeAsset(current.coverImagePath);
+    },
     setPageOverride: function (pageId, key, value) {
       ProgrammeState.settings.pageOverrides = ProgrammeState.settings.pageOverrides || {};
       var current = ProgrammeState.settings.pageOverrides[pageId] || {};
@@ -1508,6 +1616,70 @@
       }
       queueProgrammeSave();
       renderPlanner();
+    },
+    uploadPageBlockImage: function (pageId, index) {
+      var input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/jpeg,image/png,image/webp,image/gif,image/svg+xml';
+      input.onchange = function () {
+        var file = input.files && input.files[0];
+        if (!file) return;
+        ProgrammeState.uploadingAssetKey = 'block:' + pageId + ':' + index;
+        renderPlanner();
+        var current = Object.assign({}, pageOverride({ pageId: pageId }), (ProgrammeState.settings.pageOverrides || {})[pageId] || {});
+        var blocks = normaliseBlocks(current.blocks);
+        var previousPath = blocks[index] && blocks[index].imagePath ? blocks[index].imagePath : '';
+        uploadProgrammeAsset(file, 'blocks', pageId + '_' + index)
+          .then(function (asset) {
+            if (!blocks[index]) throw new Error('This image block no longer exists.');
+            blocks[index].imageUrl = asset.url;
+            blocks[index].imagePath = asset.path;
+            current.syncMode = 'manual';
+            current.blocks = blocks;
+            ProgrammeState.settings.pageOverrides = ProgrammeState.settings.pageOverrides || {};
+            ProgrammeState.settings.pageOverrides[pageId] = current;
+            if (pageId.indexOf('custom-') === 0) {
+              ProgrammeState.settings.customPages = (ProgrammeState.settings.customPages || []).map(function (page) {
+                if (page.pageId !== pageId) return page;
+                page.blocks = blocks.slice();
+                return page;
+              });
+            }
+            queueProgrammeSave();
+            renderPlanner();
+            if (previousPath && previousPath !== asset.path) removeProgrammeAsset(previousPath);
+          })
+          .catch(function (error) {
+            alert('Could not upload block image: ' + error.message);
+          })
+          .finally(function () {
+            ProgrammeState.uploadingAssetKey = '';
+            renderPlanner();
+          });
+      };
+      input.click();
+    },
+    clearPageBlockImage: function (pageId, index) {
+      var current = Object.assign({}, pageOverride({ pageId: pageId }), (ProgrammeState.settings.pageOverrides || {})[pageId] || {});
+      var blocks = normaliseBlocks(current.blocks);
+      if (!blocks[index]) return;
+      var previousPath = blocks[index].imagePath || '';
+      blocks[index].imageUrl = '';
+      blocks[index].imagePath = '';
+      current.syncMode = 'manual';
+      current.blocks = blocks;
+      ProgrammeState.settings.pageOverrides = ProgrammeState.settings.pageOverrides || {};
+      ProgrammeState.settings.pageOverrides[pageId] = current;
+      if (pageId.indexOf('custom-') === 0) {
+        ProgrammeState.settings.customPages = (ProgrammeState.settings.customPages || []).map(function (page) {
+          if (page.pageId !== pageId) return page;
+          page.blocks = blocks.slice();
+          return page;
+        });
+      }
+      queueProgrammeSave();
+      renderPlanner();
+      if (previousPath) removeProgrammeAsset(previousPath);
     },
     movePageBlock: function (pageId, index, delta) {
       ProgrammeState.settings.pageOverrides = ProgrammeState.settings.pageOverrides || {};
