@@ -238,155 +238,6 @@
         document.title = (prod.title || 'Creative Team') + ' — Build The Show';
       }
 
-      // ── Auto-login via pvw params ──
-      if (pvwEmail && pvwPasscode) {
-        await attemptLogin(pvwEmail, pvwPasscode, null);
-        return;
-      }
-
-      // ── Offer saved session explicitly ──
-      const saved = loadSavedSession();
-      if (saved && saved.sessionToken) {
-        showSavedSessionChoice(saved);
-        return;
-      }
-
-      // ── Show login form ──
-      showLoginForm();
-
-      // ── Auth helpers ──
-
-      function loadSavedSession() {
-        try {
-          const raw = localStorage.getItem(STORAGE_KEY_PREFIX + prodId);
-          return raw ? JSON.parse(raw) : null;
-        } catch { return null; }
-      }
-
-      function clearSavedSession() {
-        try { localStorage.removeItem(STORAGE_KEY_PREFIX + prodId); } catch {}
-      }
-
-      function clearPortalSession() {
-        try { sessionStorage.removeItem(SESSION_KEY); } catch {}
-      }
-
-      function saveSession(email, token) {
-        try {
-          localStorage.setItem(STORAGE_KEY_PREFIX + prodId, JSON.stringify({
-            email,
-            sessionToken: token,
-            savedAt: new Date().toISOString(),
-          }));
-        } catch {}
-      }
-
-      async function attemptLogin(email, passcode, errEl) {
-        const cleanEmail    = (email || '').trim().toLowerCase();
-        const cleanPasscode = (passcode || '').replace(/\D+/g, '').slice(0, 6);
-        if (!cleanEmail || cleanPasscode.length !== 6) {
-          if (errEl) errEl.textContent = 'Enter your email and 6-digit access code.';
-          return;
-        }
-
-        if (errEl) errEl.textContent = '';
-        const btn = document.getElementById('tp-signin-btn');
-        if (btn) btn.disabled = true;
-
-        const { data, error } = await sb.rpc('team_member_start_session', {
-          p_production_id: prodId,
-          p_email: cleanEmail,
-          p_passcode: cleanPasscode,
-          p_user_agent: navigator.userAgent,
-        });
-
-        if (error || !data || !data.team_member) {
-          if (btn) btn.disabled = false;
-          const msg = (data && data.error) ? data.error : (error?.message || 'Access denied. Check your email and code.');
-          if (errEl) { errEl.textContent = msg; } else { showError(msg, true); }
-          return;
-        }
-
-        const member = data.team_member;
-        const token  = data.session_token || '';
-        clearPortalSession();
-        saveSession(cleanEmail, token);
-        await storePortalSession(member, token);
-        redirect();
-      }
-
-      async function attemptResume(token, email) {
-        const { data, error } = await sb.rpc('team_member_resume_session', {
-          p_production_id: prodId,
-          p_session_token: token,
-        });
-
-        if (error || !data || !data[0]) {
-          clearSavedSession();
-          clearPortalSession();
-          showLoginForm('Your session has expired. Please sign in again.');
-          return;
-        }
-
-        const member = data[0];
-        clearPortalSession();
-        await storePortalSession(member, token);
-        redirect();
-      }
-
-      async function storePortalSession(member, token) {
-        const role = String(member.role || member.access_level || '').trim().toLowerCase();
-        let menuKeys = buildMenuKeys(member);
-        const roleLabel = getRoleLabel(normalizeRole(role));
-
-        // Check portal_permissions for per-person overrides - layered on top of the
-        // role default, never a full replacement (portal_permissions only stores
-        // deltas from default, so a single override row must not wipe out every
-        // other default key the role would otherwise grant).
-        const memberId = (member.email || '').trim().toLowerCase();
-        if (memberId && prodId) {
-          try {
-            const { data: permRows } = await sb.from('portal_permissions')
-              .select('module_key,access_level')
-              .eq('production_id', prodId)
-              .eq('person_id', memberId);
-            if (permRows && permRows.length) {
-              const merged = new Set(menuKeys);
-              permRows.forEach(p => {
-                const mapped = MODULE_TO_MENU_KEYS[p.module_key];
-                if (!mapped) return;
-                if (p.access_level === 'none') mapped.forEach(k => merged.delete(k));
-                else mapped.forEach(k => merged.add(k));
-              });
-              menuKeys = [...merged];
-            }
-          } catch (_) {}
-        }
-
-        const context = {
-          memberId,
-          name: member.name || '',
-          role,
-          roleLabel,
-          email: member.email || '',
-          menuKeys,
-          sessionToken: token,
-          prodId,
-        };
-        try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(context)); } catch {}
-      }
-
-      function redirect() {
-        const raw = sessionStorage.getItem(SESSION_KEY);
-        if (!raw) { location.href = pageUrl('auditions-dashboard.html'); return; }
-        let ctx;
-        try { ctx = JSON.parse(raw); } catch { ctx = {}; }
-        const firstPage = getFirstPage(ctx.menuKeys || []);
-        location.href = pageUrl(firstPage);
-      }
-
-      // Convert portal_permissions rows (SIDEBAR_TREE keys) into creative team menu keys
-      // Includes legacy flat keys for backwards compatibility with old saved permissions
       const MODULE_TO_MENU_KEYS = {
         // New colon-delimited keys
         'overview':                     ['overview'],
@@ -586,6 +437,156 @@
         const norm = normalizeRole(role);
         return raw || ROLE_MENU_DEFAULTS[norm] || ROLE_MENU_DEFAULTS.creative;
       }
+
+      // ── Auto-login via pvw params ──
+      if (pvwEmail && pvwPasscode) {
+        await attemptLogin(pvwEmail, pvwPasscode, null);
+        return;
+      }
+
+      // ── Offer saved session explicitly ──
+      const saved = loadSavedSession();
+      if (saved && saved.sessionToken) {
+        showSavedSessionChoice(saved);
+        return;
+      }
+
+      // ── Show login form ──
+      showLoginForm();
+
+      // ── Auth helpers ──
+
+      function loadSavedSession() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY_PREFIX + prodId);
+          return raw ? JSON.parse(raw) : null;
+        } catch { return null; }
+      }
+
+      function clearSavedSession() {
+        try { localStorage.removeItem(STORAGE_KEY_PREFIX + prodId); } catch {}
+      }
+
+      function clearPortalSession() {
+        try { sessionStorage.removeItem(SESSION_KEY); } catch {}
+      }
+
+      function saveSession(email, token) {
+        try {
+          localStorage.setItem(STORAGE_KEY_PREFIX + prodId, JSON.stringify({
+            email,
+            sessionToken: token,
+            savedAt: new Date().toISOString(),
+          }));
+        } catch {}
+      }
+
+      async function attemptLogin(email, passcode, errEl) {
+        const cleanEmail    = (email || '').trim().toLowerCase();
+        const cleanPasscode = (passcode || '').replace(/\D+/g, '').slice(0, 6);
+        if (!cleanEmail || cleanPasscode.length !== 6) {
+          if (errEl) errEl.textContent = 'Enter your email and 6-digit access code.';
+          return;
+        }
+
+        if (errEl) errEl.textContent = '';
+        const btn = document.getElementById('tp-signin-btn');
+        if (btn) btn.disabled = true;
+
+        const { data, error } = await sb.rpc('team_member_start_session', {
+          p_production_id: prodId,
+          p_email: cleanEmail,
+          p_passcode: cleanPasscode,
+          p_user_agent: navigator.userAgent,
+        });
+
+        if (error || !data || !data.team_member) {
+          if (btn) btn.disabled = false;
+          const msg = (data && data.error) ? data.error : (error?.message || 'Access denied. Check your email and code.');
+          if (errEl) { errEl.textContent = msg; } else { showError(msg, true); }
+          return;
+        }
+
+        const member = data.team_member;
+        const token  = data.session_token || '';
+        clearPortalSession();
+        saveSession(cleanEmail, token);
+        await storePortalSession(member, token);
+        redirect();
+      }
+
+      async function attemptResume(token, email) {
+        const { data, error } = await sb.rpc('team_member_resume_session', {
+          p_production_id: prodId,
+          p_session_token: token,
+        });
+
+        if (error || !data || !data[0]) {
+          clearSavedSession();
+          clearPortalSession();
+          showLoginForm('Your session has expired. Please sign in again.');
+          return;
+        }
+
+        const member = data[0];
+        clearPortalSession();
+        await storePortalSession(member, token);
+        redirect();
+      }
+
+      async function storePortalSession(member, token) {
+        const role = String(member.role || member.access_level || '').trim().toLowerCase();
+        let menuKeys = buildMenuKeys(member);
+        const roleLabel = getRoleLabel(normalizeRole(role));
+
+        // Check portal_permissions for per-person overrides - layered on top of the
+        // role default, never a full replacement (portal_permissions only stores
+        // deltas from default, so a single override row must not wipe out every
+        // other default key the role would otherwise grant).
+        const memberId = (member.email || '').trim().toLowerCase();
+        if (memberId && prodId) {
+          try {
+            const { data: permRows } = await sb.from('portal_permissions')
+              .select('module_key,access_level')
+              .eq('production_id', prodId)
+              .eq('person_id', memberId);
+            if (permRows && permRows.length) {
+              const merged = new Set(menuKeys);
+              permRows.forEach(p => {
+                const mapped = MODULE_TO_MENU_KEYS[p.module_key];
+                if (!mapped) return;
+                if (p.access_level === 'none') mapped.forEach(k => merged.delete(k));
+                else mapped.forEach(k => merged.add(k));
+              });
+              menuKeys = [...merged];
+            }
+          } catch (_) {}
+        }
+
+        const context = {
+          memberId,
+          name: member.name || '',
+          role,
+          roleLabel,
+          email: member.email || '',
+          menuKeys,
+          sessionToken: token,
+          prodId,
+        };
+        try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(context)); } catch {}
+      }
+
+      function redirect() {
+        const raw = sessionStorage.getItem(SESSION_KEY);
+        if (!raw) { location.href = pageUrl('auditions-dashboard.html'); return; }
+        let ctx;
+        try { ctx = JSON.parse(raw); } catch { ctx = {}; }
+        const firstPage = getFirstPage(ctx.menuKeys || []);
+        location.href = pageUrl(firstPage);
+      }
+
+      // Convert portal_permissions rows (SIDEBAR_TREE keys) into creative team menu keys
+      // Includes legacy flat keys for backwards compatibility with old saved permissions
 
       function getFirstPage(menuKeys) {
         const keys = new Set(menuKeys);
