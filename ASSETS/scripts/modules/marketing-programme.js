@@ -127,6 +127,7 @@
     reordering: false,
     settingsOpen: false,
     editorOpen: false,
+    exportOpen: false,
     dirty: false,
     saving: false,
     saveError: '',
@@ -691,6 +692,86 @@
     return '~$' + (pageCount * perPage + binding).toFixed(2);
   }
 
+  function exportPaperSpec() {
+    var paper = selectedPaper();
+    if (paper.id === 'letter-flat') {
+      return {
+        id: paper.id,
+        label: paper.label,
+        mode: 'flat',
+        sheetLabel: '8.5 x 11 in sheet',
+        sideLabel: 'Full-page side',
+        pagesPerSheet: 2,
+      };
+    }
+    return {
+      id: paper.id,
+      label: paper.label,
+      mode: 'booklet',
+      sheetLabel: paper.id === 'tabloid-folded' ? '11 x 17 in folded sheet' : '8.5 x 11 in folded sheet',
+      sideLabel: 'Booklet side',
+      pagesPerSheet: 4,
+    };
+  }
+
+  function pageSlotLabel(slot) {
+    if (!slot || slot.isBlank) return 'Blank';
+    return 'Page ' + slot.pageNumber + ' · ' + (slot.title || 'Programme page');
+  }
+
+  function exportSlot(page, index, image) {
+    if (!page) return { isBlank: true, pageNumber: null, title: 'Blank', image: '', kind: 'blank' };
+    return {
+      isBlank: false,
+      pageNumber: index + 1,
+      title: page.title || pageTypeLabel(page),
+      image: image || '',
+      kind: page.type || 'page',
+    };
+  }
+
+  function exportPlan(pages) {
+    var list = pages || buildProgrammePages();
+    var images = programmePageImages(list);
+    var spec = exportPaperSpec();
+    if (spec.mode === 'flat') {
+      return {
+        spec: spec,
+        paddedCount: list.length,
+        blanksAdded: list.length % 2,
+        sheets: Array.from({ length: Math.ceil(list.length / 2) || 1 }).map(function (_, sheetIndex) {
+          var frontIndex = sheetIndex * 2;
+          var backIndex = frontIndex + 1;
+          return {
+            sheetNumber: sheetIndex + 1,
+            front: { side: 'Front', slots: [exportSlot(list[frontIndex], frontIndex, images[frontIndex])] },
+            back: { side: 'Back', slots: [exportSlot(list[backIndex], backIndex, images[backIndex])] },
+          };
+        }),
+      };
+    }
+    var paddedCount = Math.max(4, Math.ceil(list.length / 4) * 4);
+    var padded = [];
+    for (var i = 0; i < paddedCount; i++) padded.push(exportSlot(list[i], i, images[i]));
+    return {
+      spec: spec,
+      paddedCount: paddedCount,
+      blanksAdded: paddedCount - list.length,
+      sheets: Array.from({ length: paddedCount / 4 }).map(function (_, sheetIndex) {
+        var total = paddedCount;
+        var leftFront = padded[total - 1 - (sheetIndex * 2)];
+        var rightFront = padded[sheetIndex * 2];
+        var leftBack = padded[(sheetIndex * 2) + 1];
+        var rightBack = padded[total - 2 - (sheetIndex * 2)];
+        return {
+          sheetNumber: sheetIndex + 1,
+          front: { side: 'Front', slots: [leftFront, rightFront] },
+          back: { side: 'Back', slots: [leftBack, rightBack] },
+        };
+      }),
+    };
+  }
+
   function ensureCurrentPage(pages) {
     var count = (pages || []).length;
     if (!count) {
@@ -841,7 +922,7 @@
         '<span class="pgmb-save-pill' + (ProgrammeState.saveError ? ' is-error' : ProgrammeState.saving ? ' is-saving' : ProgrammeState.dirty ? ' is-dirty' : ' is-saved') + '">' + esc(saveLabel) + '</span>' +
         '<button class="pgmb-btn pgmb-btn--ghost" type="button" onclick="MarketingProgrammeModule.previewAll()">Preview All Pages</button>' +
         '<button class="pgmb-btn pgmb-btn--ghost" type="button" onclick="MarketingProgrammeModule.openEditor()">Edit Page</button>' +
-        '<button class="pgmb-btn pgmb-btn--primary" type="button">' + iconImg('Upload - Document.svg', 15) + ' Export PDF</button>' +
+        '<button class="pgmb-btn pgmb-btn--primary" type="button" onclick="MarketingProgrammeModule.openExport()">' + iconImg('Upload - Document.svg', 15) + ' Export PDF</button>' +
         '<button class="pgmb-btn pgmb-btn--soft" type="button" onclick="MarketingProgrammeModule.saveNow()">Save</button>' +
         '<button class="pgmb-btn pgmb-btn--soft" type="button" onclick="MarketingProgrammeModule.openSettings()">More</button>' +
       '</div>' +
@@ -1002,6 +1083,57 @@
             '<button class="pgmb-btn pgmb-btn--soft" type="button" onclick="MarketingProgrammeModule.resetPageOverride(\'' + esc(page.pageId) + '\')">Reset Page</button>' +
             '<button class="pgmb-btn pgmb-btn--soft" type="button" onclick="MarketingProgrammeModule.duplicateCurrentPage()">Duplicate Page</button>' +
             (isCustom ? '<button class="pgmb-btn pgmb-btn--soft" type="button" onclick="MarketingProgrammeModule.deleteCurrentPage()">Delete Custom Page</button>' : '') +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderExportModal() {
+    if (!ProgrammeState.exportOpen) return '';
+    var pages = buildProgrammePages();
+    var plan = exportPlan(pages);
+    var folded = plan.spec.mode === 'booklet';
+    return '<div class="pgmb-modal-overlay" onclick="if(event.target===this)MarketingProgrammeModule.closeExport()">' +
+      '<div class="pgmb-modal pgmb-export-modal">' +
+        '<div class="pgmb-modal-head">' +
+          '<div><strong>Export Programme</strong><span>The export plan adapts to ' + esc(plan.spec.label) + ' and lays out the physical print order for you.</span></div>' +
+          '<button class="pgmb-modal-close" type="button" onclick="MarketingProgrammeModule.closeExport()">&times;</button>' +
+        '</div>' +
+        '<div class="pgmb-modal-body">' +
+          '<div class="pgmb-export-summary">' +
+            '<div class="pgmb-export-stat"><strong>' + plan.sheets.length + '</strong><span>' + esc(plan.spec.sheetLabel) + (plan.sheets.length === 1 ? '' : 's') + '</span></div>' +
+            '<div class="pgmb-export-stat"><strong>' + plan.paddedCount + '</strong><span>print pages arranged</span></div>' +
+            '<div class="pgmb-export-stat"><strong>' + plan.blanksAdded + '</strong><span>blank page' + (plan.blanksAdded === 1 ? '' : 's') + ' added</span></div>' +
+          '</div>' +
+          '<div class="pgmb-export-note">' +
+            (folded
+              ? 'Folded booklet export pairs outer and inner pages automatically, so cover, back cover, and interior spreads land in the right physical order.'
+              : 'Loose-sheet export keeps one programme page per physical side, pairing fronts and backs for duplex printing.') +
+          '</div>' +
+          '<div class="pgmb-export-sheet-list">' + plan.sheets.map(function (sheet) {
+            return '<section class="pgmb-export-sheet">' +
+              '<div class="pgmb-export-sheet-head"><strong>Sheet ' + sheet.sheetNumber + '</strong><span>' + esc(plan.spec.sheetLabel) + '</span></div>' +
+              ['front', 'back'].map(function (sideKey) {
+                var side = sheet[sideKey];
+                return '<div class="pgmb-export-side">' +
+                  '<div class="pgmb-export-side-head"><strong>' + esc(side.side) + '</strong><span>' + esc(plan.spec.sideLabel) + '</span></div>' +
+                  '<div class="pgmb-export-slots pgmb-export-slots--' + (side.slots.length === 2 ? 'spread' : 'single') + '">' +
+                    side.slots.map(function (slot, slotIndex) {
+                      return '<div class="pgmb-export-slot">' +
+                        '<div class="pgmb-export-slot-kicker">' + (side.slots.length === 2 ? (slotIndex === 0 ? 'Left' : 'Right') : 'Side') + '</div>' +
+                        (slot.image ? '<div class="pgmb-export-thumb"><img src="' + esc(slot.image) + '" alt="' + esc(slot.title || 'Programme page') + '" /></div>' : '<div class="pgmb-export-thumb is-blank"><span>Blank</span></div>') +
+                        '<div class="pgmb-export-slot-copy"><strong>' + esc(pageSlotLabel(slot)) + '</strong><span>' + esc(slot.isBlank ? 'Inserted for print order' : slot.kind === 'cover' ? 'Cover placement' : 'Programme content') + '</span></div>' +
+                      '</div>';
+                    }).join('') +
+                  '</div>' +
+                '</div>';
+              }).join('') +
+            '</section>';
+          }).join('') + '</div>' +
+          '<div class="pgmb-editor-actions">' +
+            '<button class="pgmb-btn pgmb-btn--primary" type="button" onclick="MarketingProgrammeModule.openPrintLayout()">Open Print Layout</button>' +
+            '<button class="pgmb-btn pgmb-btn--soft" type="button" onclick="MarketingProgrammeModule.closeExport()">Close</button>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -1406,7 +1538,56 @@
         renderBuilderShell(pages) +
         renderSettingsModal() +
         renderEditorModal() +
+        renderExportModal() +
       '</div>';
+  }
+
+  function printLayoutHtml(plan) {
+    var folded = plan.spec.mode === 'booklet';
+    return '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Programme Print Layout</title><style>' +
+      'body{margin:0;padding:24px;font-family:Arial,Helvetica,sans-serif;background:#f3f0f8;color:#16111f;}' +
+      '.prt-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-end;margin-bottom:20px;}' +
+      '.prt-head h1{margin:0;font-size:28px;}' +
+      '.prt-head p{margin:6px 0 0;color:#5a4d71;font-size:14px;line-height:1.5;max-width:760px;}' +
+      '.prt-sheet{break-after:page;margin-bottom:28px;padding:20px;border-radius:20px;background:#fff;box-shadow:0 12px 28px rgba(0,0,0,.08);}' +
+      '.prt-sheet:last-child{break-after:auto;}' +
+      '.prt-sheet-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:14px;}' +
+      '.prt-sheet-head strong{font-size:20px;}' +
+      '.prt-sheet-head span{font-size:13px;color:#5a4d71;font-weight:700;}' +
+      '.prt-side{margin-top:16px;}' +
+      '.prt-side-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-size:13px;color:#5a4d71;font-weight:800;text-transform:uppercase;letter-spacing:.08em;}' +
+      '.prt-slots{display:grid;gap:14px;}' +
+      '.prt-slots--spread{grid-template-columns:repeat(2,minmax(0,1fr));}' +
+      '.prt-slot{display:grid;gap:10px;padding:12px;border:1px solid rgba(87,46,136,.12);border-radius:18px;background:#fcfbfe;}' +
+      '.prt-kicker{font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#572e88;}' +
+      '.prt-thumb{aspect-ratio:' + (folded ? '5.5 / 8.5' : '8.5 / 11') + ';border-radius:14px;overflow:hidden;background:#efefef;display:grid;place-items:center;}' +
+      '.prt-thumb img{width:100%;height:100%;object-fit:cover;display:block;}' +
+      '.prt-thumb.is-blank{border:2px dashed rgba(87,46,136,.22);background:#f6f1fb;color:#7a6a96;font-weight:800;}' +
+      '.prt-copy strong{display:block;font-size:14px;line-height:1.3;}' +
+      '.prt-copy span{display:block;margin-top:4px;font-size:12px;color:#5a4d71;line-height:1.45;}' +
+      '@media print{body{background:#fff;padding:0}.prt-sheet{box-shadow:none;border:0;padding:0 0 14px}.prt-head{padding:0 0 12px}}' +
+    '</style></head><body>' +
+      '<div class="prt-head"><div><h1>Programme Print Layout</h1><p>' +
+        esc(folded
+          ? 'This export is imposed as a folded booklet. Each sheet shows the exact left/right order for the front and back of the physical paper.'
+          : 'This export is arranged for duplex loose-sheet printing. Each sheet shows the front side and the back side order.') +
+      '</p></div><button onclick="window.print()" style="border:0;background:#572e88;color:#fff;padding:12px 18px;border-radius:999px;font-weight:800;cursor:pointer;">Print</button></div>' +
+      plan.sheets.map(function (sheet) {
+        return '<section class="prt-sheet"><div class="prt-sheet-head"><strong>Sheet ' + sheet.sheetNumber + '</strong><span>' + esc(plan.spec.sheetLabel) + '</span></div>' +
+          ['front','back'].map(function (sideKey) {
+            var side = sheet[sideKey];
+            return '<div class="prt-side"><div class="prt-side-head"><strong>' + esc(side.side) + '</strong><span>' + esc(plan.spec.sideLabel) + '</span></div>' +
+              '<div class="prt-slots prt-slots--' + (side.slots.length === 2 ? 'spread' : 'single') + '">' +
+                side.slots.map(function (slot, index) {
+                  return '<div class="prt-slot"><div class="prt-kicker">' + (side.slots.length === 2 ? (index === 0 ? 'Left' : 'Right') : 'Side') + '</div>' +
+                    (slot.image ? '<div class="prt-thumb"><img src="' + esc(slot.image) + '" alt="' + esc(slot.title || 'Programme page') + '"></div>' : '<div class="prt-thumb is-blank">Blank</div>') +
+                    '<div class="prt-copy"><strong>' + esc(pageSlotLabel(slot)) + '</strong><span>' + esc(slot.isBlank ? 'Inserted automatically to complete print order.' : 'Use this position on the physical sheet.') + '</span></div></div>';
+                }).join('') +
+              '</div></div>';
+          }).join('') +
+        '</section>';
+      }).join('') +
+    '</body></html>';
   }
 
   window.MarketingProgrammeModule = {
@@ -1453,6 +1634,25 @@
     previewAll: function () {
       ProgrammeState.currentPage = 0;
       renderPlanner();
+    },
+    openExport: function () {
+      ProgrammeState.exportOpen = true;
+      renderPlanner();
+    },
+    closeExport: function () {
+      ProgrammeState.exportOpen = false;
+      renderPlanner();
+    },
+    openPrintLayout: function () {
+      var plan = exportPlan(buildProgrammePages());
+      var win = window.open('', '_blank', 'noopener,noreferrer');
+      if (!win) {
+        alert('Could not open the print layout window. Please allow pop-ups for Build The Show and try again.');
+        return;
+      }
+      win.document.open();
+      win.document.write(printLayoutHtml(plan));
+      win.document.close();
     },
     toggleSection: function (key, checked) {
       var next = new Set(ProgrammeState.settings.sections);
