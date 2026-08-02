@@ -201,30 +201,34 @@
     .pt-module-group-items.collapsed { display: none; }
     .pt-module-group-row[data-depth="1"] .pt-module-name { font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(87,46,136,0.6); }
     .pt-module-name { font-size: 0.78rem; font-weight: 700; color: #000000; }
-    .pt-perm-select {
+    .module-toggle-switch {
+      position: relative;
+      width: 38px;
+      height: 22px;
       flex-shrink: 0;
-      appearance: none;
-      border: 1.5px solid #edeaf6;
-      border-radius: 8px;
-      background-color: #fff;
-      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 8"><path d="M1 1l5 5 5-5" fill="none" stroke="%23572e88" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>');
-      background-repeat: no-repeat;
-      background-position: right 0.55rem center;
-      background-size: 9px 6px;
-      color: #000000;
-      font: inherit;
-      font-size: 0.72rem;
-      font-weight: 800;
-      padding: 0.32rem 1.55rem 0.32rem 0.6rem;
-      cursor: pointer;
-      min-width: 6.4rem;
-      transition: background-color 0.1s, color 0.1s, border-color 0.1s;
     }
-    .pt-perm-select:hover { border-color: #d6ccec; }
-    .pt-perm-select[data-level="none"] { color: #c8bad7; }
-    .pt-perm-select[data-level="view"] { background-color: #f0ecfc; border-color: #e0d6f7; color: #572e88; }
-    .pt-perm-select[data-level="edit"] { background-color: #dff1e5; border-color: #c7e6d1; color: #2e6639; }
-    .pt-perm-select[data-level=""] { color: #b0a8c8; font-style: italic; font-weight: 700; }
+    .module-toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .module-toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: #d0c8e0;
+      border-radius: 22px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .module-toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      left: 3px;
+      top: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .module-toggle-switch input:checked + .module-toggle-slider { background: #572e88; }
+    .module-toggle-switch input:checked + .module-toggle-slider::before { transform: translateX(16px); }
   </style>
 </head>
 <body>
@@ -2307,24 +2311,26 @@
 
       const roleKey = (src === 'producer' || src === 'admin') ? 'producer' : (person.portals[0] || src);
 
-      // One dropdown per row instead of three tiled buttons - the buttons were
-      // repeating the same three choices on every single row at every depth, which
-      // is most of what made this screen feel so noisy.
-      function permSelectHtml(current) {
-        const opt = (level, label) => `<option value="${level}"${current === level ? ' selected' : ''}>${label}</option>`;
-        return `<select class="pt-perm-select" data-level="${esc(current)}" onchange="setPermSelect(this)">${opt('none','No Access')}${opt('view','View')}${opt('edit','Edit')}</select>`;
+      // Just Access / No Access now - View-only was a distinction nobody was
+      // actually using and made every row look like a 3-way decision. A single
+      // switch per row: on means Edit, off means No Access. Section/group headers
+      // are the same switch, showing on if anything below it is on, and flipping
+      // everything below to fully off (or fully on) in one click.
+      function permToggleHtml(current) {
+        const checked = current !== 'none';
+        return `<label class="module-toggle-switch" aria-label="Access"><input type="checkbox"${checked ? ' checked' : ''} onchange="setPermToggleSwitch(this)"><span class="module-toggle-slider"></span></label>`;
       }
 
       function renderModuleRow(node, depth, roleKey) {
         const defAccess = resolveDefaultAccess(node.key, roleKey);
         const current = perms[node.key] !== undefined ? perms[node.key] : defAccess;
         const isCustom = perms[node.key] !== undefined && perms[node.key] !== defAccess;
-        return `<div class="pt-module-row" data-module-key="${esc(node.key)}" data-default-access="${esc(defAccess)}" data-depth="${depth}" data-is-leaf="1">
+        return `<div class="pt-module-row" data-module-key="${esc(node.key)}" data-default-access="${esc(defAccess)}" data-original-value="${perms[node.key] !== undefined ? esc(perms[node.key]) : ''}" data-touched="0" data-depth="${depth}" data-is-leaf="1">
           <div style="display:flex;align-items:center;gap:0.4rem;min-width:0;flex:1">
             <span class="pt-module-name">${esc(node.label)}</span>
             <span class="pt-custom-label" style="font-size:0.64rem;font-weight:700;color:#ca7ea7;flex-shrink:0${isCustom ? '' : ';display:none'}">custom</span>
           </div>
-          ${permSelectHtml(current)}
+          ${permToggleHtml(current)}
         </div>`;
       }
 
@@ -2334,26 +2340,14 @@
       // on the header itself (the old behaviour) meant a header set to Edit silently
       // granted real access regardless of what its children said, which is exactly
       // the bug that let a restricted portal preview land in the full producer view.
-      // The dropdown starts on a disabled, hidden "Mixed" placeholder option so it can
-      // display an indeterminate state without that state being independently pickable.
-      function bulkSelectHtml(nodeKey) {
-        return `<select class="pt-perm-select" data-level="" onchange="bulkSetGroup('${esc(nodeKey)}', this.value)">
-          <option value="" disabled selected hidden>Mixed</option>
-          <option value="none">No Access</option>
-          <option value="view">View</option>
-          <option value="edit">Edit</option>
-        </select>`;
-      }
-
       function renderGroupRow(node, depth, roleKey) {
         const groupId = 'pt-group-' + node.key.replace(/[^a-zA-Z0-9_-]/g, '-');
         return `<div class="pt-module-row pt-module-group-row" data-module-key="${esc(node.key)}" data-depth="${depth}" data-is-leaf="0">
           <div class="pt-module-group-click collapsed" onclick="this.classList.toggle('collapsed');document.getElementById('${groupId}').classList.toggle('collapsed')">
             <span class="pt-section-chevron">&#9660;</span>
             <span class="pt-module-name">${esc(node.label)}</span>
-            <span class="pt-custom-label" style="font-size:0.64rem;font-weight:700;color:#ca7ea7;flex-shrink:0;display:none">custom</span>
           </div>
-          ${bulkSelectHtml(node.key)}
+          <label class="module-toggle-switch" aria-label="Toggle all"><input type="checkbox" onchange="bulkSetGroup('${esc(node.key)}', this.checked ? 'edit' : 'none')"><span class="module-toggle-slider"></span></label>
         </div>
         <div class="pt-module-group-items collapsed" id="${groupId}">${renderChildren(node.children, depth + 1, roleKey)}</div>`;
       }
@@ -2375,45 +2369,43 @@
       function currentLevelFromDom(key) {
         const row = document.querySelector('[data-module-key="' + CSS.escape(key) + '"][data-is-leaf="1"]');
         if (!row) return 'none';
-        const select = row.querySelector('.pt-perm-select');
-        return select ? select.value : (row.dataset.defaultAccess || 'none');
+        const input = row.querySelector('.module-toggle-switch input');
+        return input && input.checked ? 'edit' : 'none';
       }
 
-      // Re-derive every header's dropdown (a single level if all leaves below it
-      // agree, or the "Mixed" placeholder if not) from whatever the leaf rows
-      // actually show right now.
+      // Every header switch shows on if anything below it has access, off if
+      // everything below it is fully off.
       function refreshAllGroupSummaries() {
         document.querySelectorAll('[data-module-key][data-is-leaf="0"]').forEach(headerRow => {
           const node = findTreeNode(headerRow.dataset.moduleKey);
           if (!node) return;
-          const levels = new Set(leafKeysUnder(node).map(currentLevelFromDom));
-          const summary = levels.size === 1 ? [...levels][0] : '';
-          const select = headerRow.querySelector('.pt-perm-select');
-          if (select) { select.value = summary; select.dataset.level = summary; }
-          const lbl = headerRow.querySelector('.pt-custom-label');
-          if (lbl) lbl.style.display = (summary === '') ? '' : 'none';
+          const anyOn = leafKeysUnder(node).some(k => currentLevelFromDom(k) !== 'none');
+          const input = headerRow.querySelector('.module-toggle-switch input');
+          if (input) input.checked = anyOn;
         });
       }
 
       window.bulkSetGroup = function (nodeKey, level) {
         const node = findTreeNode(nodeKey);
-        if (!node || !level) return;
+        if (!node) return;
         leafKeysUnder(node).forEach(leafKey => {
           const row = document.querySelector('[data-module-key="' + CSS.escape(leafKey) + '"][data-is-leaf="1"]');
           if (!row) return;
-          const select = row.querySelector('.pt-perm-select');
-          if (select) { select.value = level; select.dataset.level = level; }
+          const input = row.querySelector('.module-toggle-switch input');
+          if (input) input.checked = (level !== 'none');
+          row.dataset.touched = '1';
           const lbl = row.querySelector('.pt-custom-label');
           if (lbl) lbl.style.display = (level !== (row.dataset.defaultAccess || 'none')) ? '' : 'none';
         });
         refreshAllGroupSummaries();
       };
 
-      window.setPermSelect = function (select) {
-        select.dataset.level = select.value;
-        const row = select.closest('[data-module-key]');
-        const lbl = row && row.querySelector('.pt-custom-label');
-        if (lbl) lbl.style.display = (select.value !== row.dataset.defaultAccess) ? '' : 'none';
+      window.setPermToggleSwitch = function (input) {
+        const row = input.closest('[data-module-key]');
+        row.dataset.touched = '1';
+        const level = input.checked ? 'edit' : 'none';
+        const lbl = row.querySelector('.pt-custom-label');
+        if (lbl) lbl.style.display = (level !== (row.dataset.defaultAccess || 'none')) ? '' : 'none';
         refreshAllGroupSummaries();
       };
 
@@ -2434,10 +2426,9 @@
             <div class="pt-module-section-click collapsed" onclick="this.classList.toggle('collapsed');document.getElementById('${sectionId}').classList.toggle('collapsed')">
               ${iconHtml}
               ${esc(section.label)}
-              <span class="pt-custom-label" style="font-size:0.64rem;font-weight:700;color:#ffd9ef;flex-shrink:0;display:none">custom</span>
               <span class="pt-section-chevron">&#9660;</span>
             </div>
-            ${bulkSelectHtml(section.key)}
+            <label class="module-toggle-switch" aria-label="Toggle all"><input type="checkbox" onchange="bulkSetGroup('${esc(section.key)}', this.checked ? 'edit' : 'none')"><span class="module-toggle-slider"></span></label>
           </div>
           <div class="pt-module-section-items collapsed" id="${sectionId}">${itemsHtml}</div>
         </div>`;
@@ -2522,8 +2513,18 @@
           document.querySelectorAll('[data-module-key][data-is-leaf="1"]').forEach(row => {
             const key = row.dataset.moduleKey;
             const defaultAccess = row.dataset.defaultAccess || 'none';
-            const select = row.querySelector('.pt-perm-select');
-            const selectedLevel = select?.value || defaultAccess;
+            // Only rows the user actually touched (directly or via a bulk header
+            // click) get a new binary value; anything untouched keeps whatever was
+            // already saved for it - including a pre-existing View-only grant, so
+            // just opening and saving the drawer can't silently upgrade or wipe it.
+            const touched = row.dataset.touched === '1';
+            let selectedLevel;
+            if (touched) {
+              const input = row.querySelector('.module-toggle-switch input');
+              selectedLevel = input && input.checked ? 'edit' : 'none';
+            } else {
+              selectedLevel = row.dataset.originalValue || defaultAccess;
+            }
             if (!key || selectedLevel === defaultAccess) return;
             overrides.push({
               production_id: _prodId,
