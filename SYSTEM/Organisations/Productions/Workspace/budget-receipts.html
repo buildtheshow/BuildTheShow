@@ -675,7 +675,32 @@
       } catch(e) {
         this.receipts = []; this.categories = []; this.budgetItems = [];
       }
+      this._scopeToSessionDepartments();
       this.render();
+    },
+
+    // Mirrors budgeting.html's session scoping - a restricted Dept Lead/Treasurer
+    // session only sees receipts for the departments they've been granted under
+    // Financials > Receipts in Manage Access. No session (producer's own view) is
+    // unrestricted. Runs after syncBudgetItemPaidFromReceipts so that sync always
+    // sees every receipt, not just the ones this viewer is allowed to see.
+    _restrictedReceiptDeptKeys() {
+      try {
+        const raw = sessionStorage.getItem('bts-team-portal-v1');
+        if (!raw) return null;
+        const sess = JSON.parse(raw);
+        const menuKeys = Array.isArray(sess.menuKeys) ? sess.menuKeys : [];
+        if (menuKeys.includes('financials') || menuKeys.includes('financials:dashboard')) return null;
+        return menuKeys.filter(k => k.startsWith('receipts:')).map(k => k.slice('receipts:'.length));
+      } catch(_) { return null; }
+    },
+    _scopeToSessionDepartments() {
+      const allowed = this._restrictedReceiptDeptKeys();
+      if (allowed === null) return;
+      const catDeptById = {};
+      (this.categories || []).forEach(c => { catDeptById[c.id] = c.department_key || 'shared'; });
+      this.categories = (this.categories || []).filter(c => allowed.includes(c.department_key || 'shared'));
+      this.receipts = (this.receipts || []).filter(r => allowed.includes(catDeptById[r.category_id] || 'shared'));
     },
 
     // Keeps budget_items.paid_cents in sync with paid receipts linked to it, so the
