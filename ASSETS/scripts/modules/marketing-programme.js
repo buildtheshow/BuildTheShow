@@ -126,6 +126,10 @@
     reordering: false,
     settingsOpen: false,
     editorOpen: false,
+    dirty: false,
+    saving: false,
+    saveError: '',
+    saveTimer: 0,
     settingsTab: 'sections',
     settings: {
       paper: 'letter-folded',
@@ -193,6 +197,13 @@
     });
   }
 
+  function sponsorHeaders(extra) {
+    return Object.assign({
+      apikey: SUPABASE_ANON,
+      Authorization: 'Bearer ' + SUPABASE_ANON,
+    }, extra || {});
+  }
+
   function loadScript(src) {
     if (!src) return Promise.resolve();
     if (src.indexOf('flipbook-viewer') !== -1 && window.createFlipbookViewer) return Promise.resolve();
@@ -238,7 +249,82 @@
       ProgrammeState.data.applications = results[7] || [];
       ProgrammeState.data.team = (results[8] || []).filter(function (member) { return member.is_active !== false; });
       ProgrammeState.data.volunteers = results[9] || [];
+      hydrateProgrammeSettings();
     });
+  }
+
+  function hydrateProgrammeSettings() {
+    var saved = ProgrammeState.data.sponsorSettings && ProgrammeState.data.sponsorSettings.programmeBuilder;
+    if (!saved || typeof saved !== 'object') return;
+    ProgrammeState.settings.paper = saved.paper || ProgrammeState.settings.paper;
+    ProgrammeState.settings.output = saved.output || ProgrammeState.settings.output;
+    ProgrammeState.settings.booklet = saved.booklet || ProgrammeState.settings.booklet;
+    ProgrammeState.settings.template = saved.template || ProgrammeState.settings.template;
+    ProgrammeState.settings.bioLayout = saved.bioLayout || ProgrammeState.settings.bioLayout;
+    ProgrammeState.settings.pageLayouts = Object.assign({}, ProgrammeState.settings.pageLayouts, saved.pageLayouts || {});
+    ProgrammeState.settings.sections = Array.isArray(saved.sections) && saved.sections.length ? saved.sections.slice() : ProgrammeState.settings.sections;
+    ProgrammeState.settings.customPages = Array.isArray(saved.customPages) ? saved.customPages.slice() : [];
+    ProgrammeState.settings.pageOverrides = saved.pageOverrides && typeof saved.pageOverrides === 'object' ? Object.assign({}, saved.pageOverrides) : {};
+  }
+
+  function programmeSettingsPayload() {
+    return {
+      paper: ProgrammeState.settings.paper,
+      output: ProgrammeState.settings.output,
+      booklet: ProgrammeState.settings.booklet,
+      template: ProgrammeState.settings.template,
+      bioLayout: ProgrammeState.settings.bioLayout,
+      pageLayouts: Object.assign({}, ProgrammeState.settings.pageLayouts || {}),
+      sections: (ProgrammeState.settings.sections || []).slice(),
+      customPages: (ProgrammeState.settings.customPages || []).map(function (page) { return Object.assign({}, page); }),
+      pageOverrides: Object.assign({}, ProgrammeState.settings.pageOverrides || {}),
+    };
+  }
+
+  function persistProgrammeSettings() {
+    var prodId = ProgrammeState.prodId;
+    var ts = new Date().toISOString();
+    var nextSettings = Object.assign({}, ProgrammeState.data.sponsorSettings || {});
+    nextSettings.programmeBuilder = programmeSettingsPayload();
+    ProgrammeState.saving = true;
+    ProgrammeState.saveError = '';
+    renderPlanner();
+    return fetch(SUPABASE_URL + '/rest/v1/sponsor_settings?production_id=eq.' + encodeURIComponent(prodId), {
+      method: 'PATCH',
+      headers: sponsorHeaders({ 'Content-Type': 'application/json', Prefer: 'return=minimal,count=exact' }),
+      body: JSON.stringify({ settings: nextSettings, updated_at: ts }),
+    }).then(function (response) {
+      if (!response.ok) return response.text().then(function (text) { throw new Error(text); });
+      var range = response.headers.get('content-range') || '';
+      if (/\/0$/.test(range)) {
+        return fetch(SUPABASE_URL + '/rest/v1/sponsor_settings', {
+          method: 'POST',
+          headers: sponsorHeaders({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
+          body: JSON.stringify({ production_id: prodId, settings: nextSettings, updated_at: ts }),
+        }).then(function (insertResponse) {
+          if (!insertResponse.ok) return insertResponse.text().then(function (text) { throw new Error(text); });
+        });
+      }
+    }).then(function () {
+      ProgrammeState.data.sponsorSettings = nextSettings;
+      ProgrammeState.dirty = false;
+    }).catch(function (error) {
+      console.error('[BTS] Could not save programme settings.', error);
+      ProgrammeState.saveError = 'Could not save changes';
+    }).finally(function () {
+      ProgrammeState.saving = false;
+      renderPlanner();
+    });
+  }
+
+  function queueProgrammeSave() {
+    ProgrammeState.dirty = true;
+    ProgrammeState.saveError = '';
+    if (ProgrammeState.saveTimer) window.clearTimeout(ProgrammeState.saveTimer);
+    ProgrammeState.saveTimer = window.setTimeout(function () {
+      ProgrammeState.saveTimer = 0;
+      persistProgrammeSettings();
+    }, 700);
   }
 
   function adSizes() {
@@ -640,6 +726,13 @@
 
   function renderBuilderHeader(pages) {
     var prod = ProgrammeState.data.production || {};
+    var saveLabel = ProgrammeState.saveError
+      ? ProgrammeState.saveError
+      : ProgrammeState.saving
+        ? 'Saving...'
+        : ProgrammeState.dirty
+          ? 'Unsaved changes'
+          : 'Saved';
     return '<div class="pgmb-header">' +
       '<div class="pgmb-header-copy">' +
         '<div class="pgmb-header-kicker">Programme Builder</div>' +
@@ -647,9 +740,11 @@
         '<p>Create and customise your show programme.</p>' +
       '</div>' +
       '<div class="pgmb-header-actions">' +
+        '<span class="pgmb-save-pill' + (ProgrammeState.saveError ? ' is-error' : ProgrammeState.saving ? ' is-saving' : ProgrammeState.dirty ? ' is-dirty' : ' is-saved') + '">' + esc(saveLabel) + '</span>' +
         '<button class="pgmb-btn pgmb-btn--ghost" type="button" onclick="MarketingProgrammeModule.previewAll()">Preview All Pages</button>' +
         '<button class="pgmb-btn pgmb-btn--ghost" type="button" onclick="MarketingProgrammeModule.openEditor()">Edit Page</button>' +
         '<button class="pgmb-btn pgmb-btn--primary" type="button">' + iconImg('Upload - Document.svg', 15) + ' Export PDF</button>' +
+        '<button class="pgmb-btn pgmb-btn--soft" type="button" onclick="MarketingProgrammeModule.saveNow()">Save</button>' +
         '<button class="pgmb-btn pgmb-btn--soft" type="button" onclick="MarketingProgrammeModule.openSettings()">More</button>' +
       '</div>' +
     '</div>';
@@ -1087,6 +1182,7 @@
         ProgrammeState.settings.pageLayouts = ProgrammeState.settings.pageLayouts || {};
         ProgrammeState.settings.pageLayouts.bios = value === 'text-compact' ? 'bios-compact' : value === 'featured-bios' ? 'bios-featured' : 'bios-grid';
       }
+      queueProgrammeSave();
       renderPlanner();
     },
     setPageLayout: function (key, value) {
@@ -1096,6 +1192,7 @@
       if (key === 'bios') {
         ProgrammeState.settings.bioLayout = value === 'bios-compact' ? 'text-compact' : value === 'bios-featured' ? 'featured-bios' : 'headshot-grid';
       }
+      queueProgrammeSave();
       renderPlanner();
     },
     setCurrentPage: function (index) {
@@ -1119,6 +1216,7 @@
       if (checked) next.add(key);
       else next.delete(key);
       ProgrammeState.settings.sections = Array.from(next);
+      queueProgrammeSave();
       renderPlanner();
     },
     toggleReorder: function () {
@@ -1137,6 +1235,7 @@
       sections[pos] = sections[newPos];
       sections[newPos] = swap;
       ProgrammeState.settings.sections = sections;
+      queueProgrammeSave();
       renderPlanner();
     },
     openSettings: function () {
@@ -1171,10 +1270,12 @@
           return page;
         });
       }
+      queueProgrammeSave();
       renderPlanner();
     },
     resetPageOverride: function (pageId) {
       if (ProgrammeState.settings.pageOverrides) delete ProgrammeState.settings.pageOverrides[pageId];
+      queueProgrammeSave();
       renderPlanner();
     },
     addCustomPage: function () {
@@ -1188,6 +1289,7 @@
       });
       ProgrammeState.currentPage = buildProgrammePages().length;
       ProgrammeState.editorOpen = true;
+      queueProgrammeSave();
       renderPlanner();
     },
     duplicateCurrentPage: function () {
@@ -1205,6 +1307,7 @@
         title: page.title + ' Copy',
         subtitle: page.subtitle
       });
+      queueProgrammeSave();
       renderPlanner();
     },
     deleteCurrentPage: function () {
@@ -1213,7 +1316,15 @@
       ProgrammeState.settings.customPages = (ProgrammeState.settings.customPages || []).filter(function (item) { return item.pageId !== page.pageId; });
       if (ProgrammeState.settings.pageOverrides) delete ProgrammeState.settings.pageOverrides[page.pageId];
       ProgrammeState.editorOpen = false;
+      queueProgrammeSave();
       renderPlanner();
+    },
+    saveNow: function () {
+      if (ProgrammeState.saveTimer) {
+        window.clearTimeout(ProgrammeState.saveTimer);
+        ProgrammeState.saveTimer = 0;
+      }
+      persistProgrammeSettings();
     },
     destroy: function () {},
   };
