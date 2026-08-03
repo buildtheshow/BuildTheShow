@@ -837,6 +837,25 @@
       } catch(e) { this.showToast("Couldn't save. Try again.", true); }
     },
 
+    async deleteReceipt(receiptId) {
+      const receipt = this.receipts.find(r => String(r.id) === String(receiptId));
+      if (!receipt) return;
+      if (!confirm('Delete this receipt (' + (receipt.vendor || receipt.description || 'this receipt') + ')? This can\'t be undone.')) return;
+      // Drop it from the in-memory list and re-render immediately so it
+      // disappears right away, instead of waiting on a full reload.
+      this.receipts = this.receipts.filter(r => String(r.id) !== String(receiptId));
+      this.render();
+      try {
+        const { error } = await this.sb.from('budget_receipts').delete().eq('id', receiptId);
+        if (error) throw error;
+        await this.syncBudgetItemPaidFromReceipts();
+        this.showToast('Deleted.', false);
+      } catch(e) {
+        this.showToast("Couldn't delete. Reloading.", true);
+        await this.load();
+      }
+    },
+
     filteredReceipts() {
       let list = this.receipts.slice();
       if (this.showPendingOnly) list = list.filter(r => r.paid_by === 'personal' && r.status !== 'paid');
