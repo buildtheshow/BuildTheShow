@@ -13960,7 +13960,7 @@ See you soon!
     const crmSubTabs = { sponsors: 1, programmeads: 1, showsponsors: 1, sponsorssettings: 1 };
     const moduleVersions = { programme: '?v=20260801-programme-builder-rebuild' };
     const scriptSrc = crmSubTabs[subSafe]
-      ? '/ASSETS/scripts/modules/sponsors-crm.js?v=20260731-export-full-detail'
+      ? '/ASSETS/scripts/modules/sponsors-crm.js?v=20260803-artwork-upload-button'
       : '/ASSETS/scripts/modules/marketing-' + subSafe + '.js' + (moduleVersions[subSafe] || '');
     loadScriptOnce(scriptSrc)
       .then(() => {

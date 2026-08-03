@@ -2079,6 +2079,18 @@
       var artReceived = artSt === 'received' || artOk;
       var approvalSt = b.approval_status || 'pending';
       html += crmPipelineStep(artReceived ? 'Artwork received' : 'Request artwork', artReceived, !artReceived ? 'MarketingSponsorsModule.crmArtworkRequestPopup(\'' + b.id + '\')' : null);
+      // uploadArtwork/removeArtwork already existed and worked, they just had
+      // no button anywhere calling them - a producer could only email-request
+      // artwork from the sponsor, never attach a file she already had herself.
+      html += artReceived
+        ? '<div class="spn-crm-pipe-artwork-row">' +
+            (b.artwork_url ? '<a href="' + esc(b.artwork_url) + '" target="_blank" rel="noopener" class="spn-crm-pipe-artwork-link">View uploaded artwork</a>' : '') +
+            '<button type="button" class="spn-crm-pipe-artwork-btn" data-upload-ad="' + esc(b.id) + '" onclick="MarketingSponsorsModule.uploadArtwork(\'' + esc(b.id) + '\')">Replace</button>' +
+            '<button type="button" class="spn-crm-pipe-artwork-btn spn-crm-pipe-artwork-btn--danger" onclick="MarketingSponsorsModule.removeArtwork(\'' + esc(b.id) + '\')">Remove</button>' +
+          '</div>'
+        : '<div class="spn-crm-pipe-artwork-row">' +
+            '<button type="button" class="spn-crm-pipe-artwork-btn" data-upload-ad="' + esc(b.id) + '" onclick="MarketingSponsorsModule.uploadArtwork(\'' + esc(b.id) + '\')">Upload artwork yourself</button>' +
+          '</div>';
       html += crmPipelineStep(approvalSt === 'approved' ? 'Artwork approved' : 'Approve artwork', approvalSt === 'approved', approvalSt === 'approved' ? null : (artReceived ? 'MarketingSponsorsModule.crmToggleField(\'programme_ads\',\'' + b.id + '\',\'approval_status\',\'approved\')' : null));
     }
     return html;
