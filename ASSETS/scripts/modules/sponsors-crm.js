@@ -2557,13 +2557,29 @@
     }).then(function (r) {
       if (!r.ok) return r.text().then(function (t) { throw new Error(t); });
       var url = SUPABASE_URL + '/storage/v1/object/public/' + STORAGE_BUCKET + '/' + path;
-      return dbInsert('sponsor_files', {
-        business_id: bizId,
-        file_url: url,
-        file_name: file.name,
-        file_type: 'asset',
-        file_size: file.size,
-        uploaded_by: 'producer',
+      // If this business has a booking still waiting on artwork, treat this
+      // upload as the artwork too - having a separate "Upload File" button
+      // that silently does NOT count as artwork received (while a different
+      // button elsewhere does) is exactly the confusing double-meaning that
+      // led to this fix, so one upload here now satisfies both.
+      var needsArtwork = (SpnsState.ads || []).filter(function (a) {
+        return a.business_id === bizId && (a.artwork_status || 'missing') === 'missing';
+      });
+      var markArtwork = needsArtwork.length
+        ? Promise.all(needsArtwork.map(function (a) {
+            return dbUpdate('programme_ads', a.id, { artwork_url: url, artwork_status: 'received' });
+          }))
+        : Promise.resolve();
+      return markArtwork.then(function () {
+        if (needsArtwork.length) SpnsState.loaded.ads = false;
+        return dbInsert('sponsor_files', {
+          business_id: bizId,
+          file_url: url,
+          file_name: file.name,
+          file_type: needsArtwork.length ? 'artwork' : 'asset',
+          file_size: file.size,
+          uploaded_by: 'producer',
+        });
       });
     });
   }
