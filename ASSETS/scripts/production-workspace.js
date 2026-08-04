@@ -34434,16 +34434,23 @@ See you soon!
   // active - Cast List, Sign In/Sign Out, and the Cast Dashboard roster all
   // filter this out, but audition_applications/audition_bookings are never
   // touched, so Auditions and Casting Board still show their full history.
+  function droppedOutIdsForApplicant(appId) {
+    const a = allApplicants.find(x => x.id === appId);
+    const ids = [appId, a?.booking_id, a?.id].filter(Boolean).map(String);
+    return [...new Set(ids)];
+  }
+
   async function renderDroppedOutRow(appId) {
     const row = document.getElementById('app-modal-dropped-row');
     if (!row) return;
     row.style.display = 'none';
     row.innerHTML = '';
     try {
+      const ids = droppedOutIdsForApplicant(appId);
       const { data, error } = await sb.from('casting_assignments')
         .select('id,dropped_out')
         .eq('production_id', prodId)
-        .eq('applicant_id', appId);
+        .in('applicant_id', ids);
       if (error) throw error;
       const rows = data || [];
       if (!rows.length) return;
@@ -34461,10 +34468,11 @@ See you soon!
   async function toggleDroppedOut(appId, dropped) {
     if (dropped && !confirm('Mark this performer as dropped out? They\'ll be removed from Cast List, Sign In/Sign Out, and the Cast Dashboard roster, but stay visible in Auditions and Casting Board.')) return;
     try {
+      const ids = droppedOutIdsForApplicant(appId);
       const { error } = await sb.from('casting_assignments')
         .update({ dropped_out: dropped })
         .eq('production_id', prodId)
-        .eq('applicant_id', appId);
+        .in('applicant_id', ids);
       if (error) throw error;
       await renderDroppedOutRow(appId);
       showToast?.(dropped ? 'Marked as dropped out.' : 'Restored to active cast.', false);
