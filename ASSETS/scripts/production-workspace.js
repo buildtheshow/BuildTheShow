@@ -20251,6 +20251,7 @@ See you soon!
       : registrationAssignmentRoleName(assignment);
     const roleMeta = household && items.length > 1 ? `${items.length} performers${roleName ? ` . ${roleName}` : ''}` : roleName;
     const isHouseholdRow = !!household && items.length > 1;
+    const isDropped = items.every(item => !!item.assignment?.dropped_out);
     const photos = items.slice(0, 3).map(item => rscPhotoHtml(item.app || {}, String(item.app?.name || 'Cast Member').trim())).join('');
     const _mobHs2 = app.headshot_url || app.headshot || app.photo_url || '';
     const _mobAge2 = age || '';
@@ -20274,7 +20275,7 @@ See you soon!
         ? `<img class="rpt-mob-photo" src="${esc(_mobHs2)}" alt="" />`
         : `<div class="rpt-mob-initials">${esc((names[0]||'').split(' ').map(w=>(w[0]||'')).join('').slice(0,2).toUpperCase())}</div>`;
 
-    return `<div class="rsc-status-row rpt-person--mob-collapsed" id="rpt-row-${esc(assignId)}">
+    return `<div class="rsc-status-row rpt-person--mob-collapsed${isDropped ? ' rsc-status-row--dropped' : ''}" id="rpt-row-${esc(assignId)}">
       <div class="rpt-mob-bar" onclick="rptToggleMobPerson(this)">
         ${_mobPh2}
         <div class="rpt-mob-bar-info">
@@ -20291,7 +20292,7 @@ See you soon!
             <div class="rsc-cast-photos">${photos}</div>
             <div class="rsc-cast-stack">
               <div>
-                <div class="rsc-cast-title">${esc(title)}</div>
+                <div class="rsc-cast-title">${esc(title)}${isDropped ? '<span class="rsc-dropped-tag">Dropped Out</span>' : ''}</div>
                 ${roleMeta ? `<div class="rsc-cast-role">${esc(roleMeta)}</div>` : ''}
               </div>
               ${rscStatusChecksForItemsHtml(items)}
@@ -22571,6 +22572,7 @@ See you soon!
     else if (_rptSortOrder === 'za') sorted.sort((a, b) => rptSortKey(b).localeCompare(rptSortKey(a)));
     else if (_rptSortOrder === 'fee-desc') sorted.sort((a, b) => rptBalanceAmount(b, settings) - rptBalanceAmount(a, settings) || rptSortKey(a).localeCompare(rptSortKey(b)));
     else if (_rptSortOrder === 'fee-asc') sorted.sort((a, b) => rptBalanceAmount(a, settings) - rptBalanceAmount(b, settings) || rptSortKey(a).localeCompare(rptSortKey(b)));
+    sorted.sort((a, b) => Number(!!a.assignment?.dropped_out) - Number(!!b.assignment?.dropped_out));
     const renderedHouseholdIds = new Set();
     return sorted.map(item => {
       const assignId = String(item.assignment?.id || '');
