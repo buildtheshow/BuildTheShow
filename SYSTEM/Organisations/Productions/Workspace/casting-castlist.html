@@ -171,6 +171,7 @@
 
     let _chars = [];
     let _assignments = [];
+    let _prodTitle = '';
     let _performers = [];
     let _castMembers = [];
     let _performerDirectory = [];
@@ -622,6 +623,15 @@
       document.body.style.overflow = '';
     }
 
+    // Shared, filesystem-safe base name so both CSV and PDF exports are
+    // actually labelled with the show and the date they were exported,
+    // instead of a bare generic "cast-list".
+    function exportFileLabel() {
+      const showSlug = String(_prodTitle || 'Production').trim().replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'Production';
+      const dateSlug = new Date().toISOString().slice(0, 10);
+      return showSlug + '_Cast-List_' + dateSlug;
+    }
+
     function exportCSV() {
       const sorted = [..._chars].sort((a, b) => sortRank(a) - sortRank(b) || (a.name||'').localeCompare(b.name||''));
       const rows = [['Character / Role', 'Performer(s)', 'Role Type', 'Status']];
@@ -635,7 +645,7 @@
       const blob = new Blob([csv], { type: 'text/csv' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = 'cast-list.csv';
+      a.download = exportFileLabel() + '.csv';
       a.click();
     }
 
@@ -671,7 +681,8 @@
         }).join('');
       }
 
-      const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Cast List</title>' +
+      const printTitle = (_prodTitle || 'Cast List') + ' - Cast List - ' + new Date().toISOString().slice(0, 10);
+      const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + esc(printTitle) + '</title>' +
         '<style>' +
           '@page{size:letter;margin:0.5in;}' +
           '*{box-sizing:border-box;}' +
@@ -703,14 +714,16 @@
       if (!prodId) return;
       const sb = supabase.createClient(SB_URL, SB_ANON);
 
-      const [charRes, assignRes, appRes, bookRes, castRes] = await Promise.all([
+      const [charRes, assignRes, appRes, bookRes, castRes, prodRes] = await Promise.all([
         sb.from('production_characters').select('id,name,role_type').eq('production_id', prodId).order('sort_order').order('name'),
         sb.from('casting_assignments').select('id,character_id,applicant_id,state').eq('production_id', prodId).in('state', ['chosen','offer_accepted','considering']),
         sb.from('audition_applications').select('id,name,date_conflicts').eq('production_id', prodId),
         sb.from('audition_bookings').select('id,name').eq('production_id', prodId),
         sb.from('cast_members').select('*').eq('production_id', prodId).in('state', ['chosen', 'offer_accepted']),
+        sb.from('productions').select('title').eq('id', prodId).single(),
       ]);
 
+      _prodTitle = prodRes?.data?.title || '';
       _chars = charRes.data || [];
       _assignments = assignRes.data || [];
       _castMembers = (castRes.data || []).map(member => {
