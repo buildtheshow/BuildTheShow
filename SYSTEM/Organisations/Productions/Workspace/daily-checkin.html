@@ -1477,7 +1477,22 @@ async function loadAll() {
   const characterNameById = {};
   (charsRes.data || []).forEach(c => { characterNameById[String(c.id)] = c.name; });
 
-  _todayEvents = (evRes.data || []).filter(e => !e.is_deadline);
+  // The single call-time banner (and its venue/end time, referenced elsewhere
+  // via _todayEvents[0]) is meant to be the cast's main session for the day,
+  // not whichever event the database happened to return first - unordered
+  // queries have no guaranteed order, and crew-only events like "Set Painting"
+  // were winning over the actual Rehearsal simply by coming back first.
+  // Sort in place so every _todayEvents[0] reference in this file benefits:
+  // real cast-facing event types first, then earliest chronologically.
+  const CAST_CALL_TYPES = ['rehearsal', 'tech', 'dress', 'performance', 'audition', 'strike'];
+  _todayEvents = (evRes.data || []).filter(e => !e.is_deadline).sort((a, b) => {
+    const aPri = CAST_CALL_TYPES.indexOf(a.event_type);
+    const bPri = CAST_CALL_TYPES.indexOf(b.event_type);
+    const aRank = aPri === -1 ? CAST_CALL_TYPES.length : aPri;
+    const bRank = bPri === -1 ? CAST_CALL_TYPES.length : bPri;
+    if (aRank !== bRank) return aRank - bRank;
+    return String(a.start_time || '').localeCompare(String(b.start_time || ''));
+  });
 
   const firstEv = _todayEvents[0];
   _eventStart = firstEv && firstEv.start_time ? String(firstEv.start_time).split('T')[1].slice(0, 5) : null;
