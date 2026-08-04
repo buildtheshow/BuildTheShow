@@ -130,7 +130,10 @@
             <h1 class="aud-visual-title">Cast List</h1>
             <p class="aud-visual-copy">Every character and grouping with current casting decisions.</p>
           </div>
-          <button class="btn-export" onclick="exportCSV()" style="background:#efab45;color:#000;border:none;border-radius:8px;padding:0.55rem 1.1rem;font-weight:900;font-size:0.82rem;cursor:pointer;flex-shrink:0;">Export CSV</button>
+          <div style="display:flex;gap:0.6rem;flex-shrink:0;">
+            <button class="btn-export" onclick="exportCSV()" style="background:#efab45;color:#000;border:none;border-radius:8px;padding:0.55rem 1.1rem;font-weight:900;font-size:0.82rem;cursor:pointer;">Export CSV</button>
+            <button class="btn-export" onclick="exportPDF()" style="background:#572e88;color:#fff;border:none;border-radius:8px;padding:0.55rem 1.1rem;font-weight:900;font-size:0.82rem;cursor:pointer;">Export PDF</button>
+          </div>
         </div>
       </div>
       <div id="cl-root"><div class="cl-loading">Loading...</div></div>
@@ -634,6 +637,50 @@
       a.href = URL.createObjectURL(blob);
       a.download = 'cast-list.csv';
       a.click();
+    }
+
+    // Opens a print-formatted window and triggers the browser's print dialog,
+    // same pattern as cast-checkin.html's attendance sheet - "Save as PDF" is
+    // a built-in browser print destination, no PDF library needed.
+    function exportPDF() {
+      const sorted = [..._chars].sort((a, b) => sortRank(a) - sortRank(b) || (a.name||'').localeCompare(b.name||''));
+      const named = sorted.filter(c => !isEnsemble(c));
+      const ensemble = sorted.filter(c => isEnsemble(c));
+      const title = document.title.replace(' - Build The Show', '') || 'Cast List';
+
+      function rowsHtml(chars) {
+        return chars.map(c => {
+          const assigned = getAssigned(c.id);
+          const names = assigned.length ? assigned.map(e => esc(e.perf.name || 'Unknown')).join('<br>') : '<span style="color:#999">Open</span>';
+          return '<tr><td>' + esc(c.name || '') + '</td><td>' + names + '</td></tr>';
+        }).join('');
+      }
+
+      const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + esc(title) + '</title>' +
+        '<style>' +
+          'body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#000;margin:0;padding:0}' +
+          '.sheet{padding:14mm 12mm}' +
+          '.hdr{border-bottom:2.5px solid #000;padding-bottom:8px;margin-bottom:14px}' +
+          '.hdr h1{margin:0 0 2px;font-size:19px;font-weight:900}' +
+          '.hdr p{margin:0;font-size:10px;color:#666}' +
+          '.section-label{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#572e88;margin:16px 0 6px}' +
+          'table{width:100%;border-collapse:collapse;margin-bottom:6px}' +
+          'th{background:#000;color:#fff;padding:6px 8px;font-size:9px;text-transform:uppercase;letter-spacing:.06em;text-align:left;font-weight:900}' +
+          'td{padding:7px 8px;border-bottom:1px solid #e5e5e5;vertical-align:top}' +
+          'tr:last-child td{border-bottom:none}' +
+          '.footer{margin-top:14px;border-top:1px solid #ccc;padding-top:5px;font-size:8.5px;color:#999}' +
+          '@media print{body{margin:0}.sheet{padding:10mm 8mm}}' +
+        '</style></head><body><div class="sheet">' +
+        '<div class="hdr"><h1>' + esc(title) + '</h1><p>Printed ' + new Date().toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'}) + ' &middot; Build The Show</p></div>' +
+        (named.length ? '<div class="section-label">Named Roles</div><table><thead><tr><th>Character / Role</th><th>Performer(s)</th></tr></thead><tbody>' + rowsHtml(named) + '</tbody></table>' : '') +
+        (ensemble.length ? '<div class="section-label">Ensemble &amp; Groups</div><table><thead><tr><th>Character / Role</th><th>Performer(s)</th></tr></thead><tbody>' + rowsHtml(ensemble) + '</tbody></table>' : '') +
+        '<div class="footer">' + esc(title) + '</div>' +
+        '</div><script>window.onload=function(){window.print();}<\/script></body></html>';
+
+      const win = window.open('', '_blank');
+      if (!win) { alert('Please allow pop-ups to export a PDF.'); return; }
+      win.document.write(html);
+      win.document.close();
     }
 
     (async function () {
