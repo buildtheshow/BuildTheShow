@@ -34430,6 +34430,50 @@ See you soon!
     };
   }
 
+  // Dropped Out marks a performer's casting_assignments rows as no longer
+  // active - Cast List, Sign In/Sign Out, and the Cast Dashboard roster all
+  // filter this out, but audition_applications/audition_bookings are never
+  // touched, so Auditions and Casting Board still show their full history.
+  async function renderDroppedOutRow(appId) {
+    const row = document.getElementById('app-modal-dropped-row');
+    if (!row) return;
+    row.style.display = 'none';
+    row.innerHTML = '';
+    try {
+      const { data, error } = await sb.from('casting_assignments')
+        .select('id,dropped_out')
+        .eq('production_id', prodId)
+        .eq('applicant_id', appId);
+      if (error) throw error;
+      const rows = data || [];
+      if (!rows.length) return;
+      const isDropped = rows.some(r => r.dropped_out);
+      row.style.display = 'block';
+      row.innerHTML = isDropped
+        ? `<span style="display:inline-flex;align-items:center;gap:0.4rem;font-size:0.74rem;font-weight:800;color:#d1523d;">Dropped Out
+             <button type="button" onclick="toggleDroppedOut('${esc(appId)}',false)" style="font-size:0.7rem;font-weight:700;color:#572e88;background:none;border:none;text-decoration:underline;cursor:pointer;padding:0;font-family:inherit;">Undo</button></span>`
+        : `<button type="button" onclick="toggleDroppedOut('${esc(appId)}',true)" style="font-size:0.72rem;font-weight:700;color:#d1523d;background:none;border:1.5px solid rgba(209,82,61,0.35);border-radius:6px;padding:0.2rem 0.55rem;cursor:pointer;font-family:inherit;">Mark as Dropped Out</button>`;
+    } catch (err) {
+      console.warn('[BTS] renderDroppedOutRow failed', err);
+    }
+  }
+
+  async function toggleDroppedOut(appId, dropped) {
+    if (dropped && !confirm('Mark this performer as dropped out? They\'ll be removed from Cast List, Sign In/Sign Out, and the Cast Dashboard roster, but stay visible in Auditions and Casting Board.')) return;
+    try {
+      const { error } = await sb.from('casting_assignments')
+        .update({ dropped_out: dropped })
+        .eq('production_id', prodId)
+        .eq('applicant_id', appId);
+      if (error) throw error;
+      await renderDroppedOutRow(appId);
+      showToast?.(dropped ? 'Marked as dropped out.' : 'Restored to active cast.', false);
+    } catch (err) {
+      console.warn('[BTS] toggleDroppedOut failed', err);
+      showToast?.('Could not update status.', true);
+    }
+  }
+
   async function openApplicantModal(id, options = {}) {
     activeApplicantId = id;
     let a = allApplicants.find(x => x.id === id);
@@ -34481,6 +34525,7 @@ See you soon!
       ageDisplay !== null && ageDisplay !== undefined ? esc(String(ageDisplay)) : '',
       pronouns ? esc(pronouns) : '',
     ].filter(Boolean).join(' · ');
+    renderDroppedOutRow(id);
 
     const bookedSlots = applicantBookedSlotSummaries(a);
     const slotHtml = bookedSlots.length ? `
