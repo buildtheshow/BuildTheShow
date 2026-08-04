@@ -903,8 +903,28 @@
     return { blockers: blockers, label: blockers ? blockers + ' item' + (blockers === 1 ? '' : 's') + ' need attention' : 'Ready for proof review' };
   }
 
+  function pageTagLabel(page) {
+    if (!page) return 'Page';
+    if (page.sectionKey === 'custom') return 'Custom';
+    return pageTypeLabel(page);
+  }
+
+  function spreadSummary(pages, spread, isSingleView) {
+    if (!pages.length || spread.left < 0) return 'No pages yet';
+    if (isSingleView || spread.right < 0 || spread.left === spread.right) return 'Page ' + (spread.left + 1);
+    return 'Pages ' + (spread.left + 1) + '-' + (spread.right + 1);
+  }
+
   function renderBuilderHeader(pages) {
     var prod = ProgrammeState.data.production || {};
+    var readiness = buildReadiness();
+    var overviewChips = [
+      { value: pages.length, label: 'pages planned' },
+      { value: castApplications().length, label: 'cast entries' },
+      { value: ProgrammeState.data.team.length, label: 'team credits' },
+      { value: ProgrammeState.data.ads.length + ProgrammeState.data.packages.length, label: 'sponsor items' }
+    ];
+    var paper = selectedPaper();
     var saveLabel = ProgrammeState.saveError
       ? ProgrammeState.saveError
       : ProgrammeState.saving
@@ -916,7 +936,12 @@
       '<div class="pgmb-header-copy">' +
         '<div class="pgmb-header-kicker">Programme Builder</div>' +
         '<h1>' + esc(prod.title || prod.name || 'Programme Builder') + '</h1>' +
-        '<p>Create and customise your show programme.</p>' +
+        '<p>Create and customise your show programme with booklet-ready pages, connected show data, and print planning that matches real theatre programmes.</p>' +
+        '<div class="pgmb-header-meta">' +
+          '<span class="pgmb-meta-pill">' + esc(paper.label) + '</span>' +
+          '<span class="pgmb-meta-pill">' + esc((prod.season || prod.year || 'Current production') + '') + '</span>' +
+          '<span class="pgmb-meta-pill' + (readinessSummary().blockers ? ' is-warn' : ' is-good') + '">' + esc(readinessSummary().label) + '</span>' +
+        '</div>' +
       '</div>' +
       '<div class="pgmb-header-actions">' +
         '<span class="pgmb-save-pill' + (ProgrammeState.saveError ? ' is-error' : ProgrammeState.saving ? ' is-saving' : ProgrammeState.dirty ? ' is-dirty' : ' is-saved') + '">' + esc(saveLabel) + '</span>' +
@@ -926,6 +951,11 @@
         '<button class="pgmb-btn pgmb-btn--soft" type="button" onclick="MarketingProgrammeModule.saveNow()">Save</button>' +
         '<button class="pgmb-btn pgmb-btn--soft" type="button" onclick="MarketingProgrammeModule.openSettings()">More</button>' +
       '</div>' +
+      '<div class="pgmb-overview-strip">' + overviewChips.map(function (chip) {
+        return '<div class="pgmb-overview-chip"><strong>' + esc(chip.value) + '</strong><span>' + esc(chip.label) + '</span></div>';
+      }).join('') +
+      '<div class="pgmb-overview-chip pgmb-overview-chip--attention"><strong>' + esc(readiness.missingBios + readiness.missingHeadshots + readiness.openDeliverables + readiness.missingAds + readiness.unapprovedAds) + '</strong><span>items still to fill</span></div>' +
+      '</div>' +
     '</div>';
   }
 
@@ -933,6 +963,7 @@
     var reordering = !!ProgrammeState.reordering;
     var addable = SECTION_OPTIONS.filter(function (item) { return ProgrammeState.settings.sections.indexOf(item[0]) === -1; });
     var readiness = readinessSummary();
+    var images = programmePageImages(pages);
     return '<aside class="pgmb-sidebar">' +
       '<div class="pgmb-sidebar-head">' +
         '<div><strong>Pages</strong><span>' + pages.length + ' total</span></div>' +
@@ -948,7 +979,11 @@
               '</span>'
             : '<span class="pgmb-page-index">' + (index + 1) + '</span>') +
           '<span class="pgmb-page-icon">' + iconImg(pageIcon(page), 15) + '</span>' +
-          '<button class="pgmb-page-copy" type="button" onclick="MarketingProgrammeModule.setCurrentPage(' + index + ')"><strong>' + esc(page.title || pageTypeLabel(page)) + '</strong><em>' + esc(page.subtitle || pageTypeLabel(page)) + '</em><span class="pgmb-page-source">' + esc(pageConnectionSummary(page)) + '</span></button>' +
+          '<button class="pgmb-page-copy" type="button" onclick="MarketingProgrammeModule.setCurrentPage(' + index + ')">' +
+            '<span class="pgmb-page-thumb"><img src="' + esc(images[index]) + '" alt="' + esc(page.title || 'Programme page') + '" /></span>' +
+            '<span class="pgmb-page-copy-main"><strong>' + esc(page.title || pageTypeLabel(page)) + '</strong><em>' + esc(page.subtitle || pageTypeLabel(page)) + '</em><span class="pgmb-page-source">' + esc(pageConnectionSummary(page)) + '</span></span>' +
+            '<span class="pgmb-page-tag">' + esc(pageTagLabel(page)) + '</span>' +
+          '</button>' +
         '</div>';
       }).join('') + '</div>' +
       (addable.length ? '<div class="pgmb-add-page">' +
@@ -1173,8 +1208,14 @@
     var showSingle = isSingleView || spread.right < 0 || spread.left === spread.right;
     var counter = (ProgrammeState.currentPage + 1) + ' of ' + pages.length;
     var current = pages[ProgrammeState.currentPage];
+    var currentPaper = selectedPaper();
     return '<section class="pgmb-stage-card">' +
       '<div class="pgmb-stage-toolbar">' +
+        '<div class="pgmb-stage-intro">' +
+          '<div class="pgmb-stage-kicker">Preview Stage</div>' +
+          '<strong>' + esc(spreadSummary(pages, spread, isSingleView)) + '</strong>' +
+          '<span>' + esc(currentPaper.note || currentPaper.label) + '</span>' +
+        '</div>' +
         '<div class="pgmb-stage-controls">' +
           '<span class="pgmb-toolbar-label">Page Size:</span>' +
           '<select class="pgmb-toolbar-select" onchange="MarketingProgrammeModule.setSetting(\'paper\', this.value)">' +
@@ -1194,6 +1235,7 @@
       '</div>' +
       renderConnectionPanel(current) +
       '<div class="pgmb-stage">' +
+        '<div class="pgmb-stage-glow"></div>' +
         '<button class="pgmb-arrow pgmb-arrow--left" type="button" onclick="MarketingProgrammeModule.stepPage(-1)">&lt;</button>' +
         '<div class="pgmb-spread' + (showSingle ? ' is-single' : '') + '">' +
           (spread.left > -1 ? '<div class="pgmb-sheet"><img src="' + esc(images[spread.left]) + '" alt="' + esc((pages[spread.left] && pages[spread.left].title) || 'Programme page') + '" /></div>' : '') +
