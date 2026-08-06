@@ -125,6 +125,28 @@
     .cl-answer-group { margin-bottom: 0.75rem; }
     .cl-answer-group:last-child { margin-bottom: 0; }
     .cl-answer-group-title { font-size: 0.66rem; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; color: var(--acc, #572e88); margin-bottom: 0.4rem; }
+
+    /* ── Conflict date tiles - same picker as the applicant modal ── */
+    .cl-conflict-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr)); gap: 0.6rem; margin-bottom: 0.75rem; }
+    .cl-conflict-tile { font-family: var(--bts-font); cursor: pointer; padding: 0.55rem 0.55rem 0.6rem; border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 0.2rem; background: #fff; border: 1.5px solid rgba(0,0,0,0.14); }
+    .cl-conflict-tile.active { background: color-mix(in srgb, var(--tile) 8%, #fff); border: 2px solid var(--tile); }
+    .cl-conflict-badge { width: 3.4rem; border: 1px solid rgba(0,0,0,0.1); border-radius: 0.85rem; overflow: hidden; background: #fff; }
+    .cl-conflict-badge-month { background: #b8b8c2; color: #fff; font-size: 0.72rem; font-weight: 800; line-height: 1; padding: 0.36rem 0 0.32rem; text-align: center; letter-spacing: 0.03em; }
+    .cl-conflict-tile.active .cl-conflict-badge-month { background: var(--tile); }
+    .cl-conflict-badge-day { color: #000000; font-size: 1.5rem; font-weight: 900; line-height: 1; padding: 0.28rem 0 0.16rem; text-align: center; }
+    .cl-conflict-weekday { font-size: 0.62rem; font-weight: 800; color: rgba(0,0,0,0.55); letter-spacing: 0.02em; }
+    .cl-conflict-tile.active .cl-conflict-weekday { color: var(--tile); }
+    .cl-conflict-caption { font-size: 0.52rem; font-weight: 800; color: var(--tile); letter-spacing: 0.02em; text-align: center; line-height: 1.1; }
+    .cl-conflict-picker { grid-column: 1 / -1; border: 1.5px solid rgba(0,0,0,0.12); border-radius: 12px; padding: 0.7rem 0.8rem; background: rgba(0,0,0,0.02); }
+    .cl-conflict-picker-head { display: flex; align-items: center; justify-content: space-between; gap: 0.7rem; margin-bottom: 0.55rem; }
+    .cl-conflict-picker-title { font-size: 0.8rem; font-weight: 800; color: #000000; }
+    .cl-conflict-picker-date { font-size: 0.7rem; font-weight: 700; color: rgba(0,0,0,0.5); letter-spacing: 0.03em; }
+    .cl-conflict-done-btn { background: #572e88; color: #fff; border: none; border-radius: 7px; padding: 0.26rem 0.65rem; font-size: 0.7rem; font-weight: 700; cursor: pointer; font-family: var(--bts-font); }
+    .cl-conflict-daytype-row { display: flex; gap: 0.5rem; }
+    .cl-conflict-daytype-btn { flex: 1; border: 1.5px solid rgba(0,0,0,0.16); background: #fff; color: #000000; border-radius: 8px; padding: 0.42rem 0.5rem; font-size: 0.74rem; font-weight: 700; cursor: pointer; font-family: var(--bts-font); }
+    .cl-conflict-daytype-btn.active { border-color: #572e88; background: #572e88; color: #fff; }
+    .cl-conflict-notes { width: 100%; box-sizing: border-box; min-height: 5.5rem; resize: vertical; border: 1.5px solid rgba(0,0,0,0.28); border-radius: 10px; padding: 0.6rem 0.7rem; font-size: 0.83rem; line-height: 1.4; color: #000000; background: #fff; font-family: var(--bts-font); outline: none; }
+    .cl-conflict-notes:focus { border-color: var(--acc, #572e88); }
     .cl-answer-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; }
     @media (max-width: 820px) {
       .cl-modal-hero { grid-template-columns: 1fr; }
@@ -245,6 +267,16 @@
     let sb = null;
     let prodId = '';
 
+    // Conflicts editor state - mirrors the tap-a-date-tile picker in the
+    // main applicant modal (production-workspace.js apmSetConflictDayType
+    // etc.) so this reads and writes the exact same date_conflicts shape.
+    let _rehearsalEvents = [];
+    let _rehearsalEventsLoaded = false;
+    let _clConflictMap = {};
+    let _clConflictNotes = '';
+    let _clConflictExpanded = new Set();
+    const CL_REHEARSAL_EVENT_TYPES = new Set(['rehearsal', 'music_rehearsal', 'choreography', 'tech', 'dress', 'tech_rehearsal', 'dress_rehearsal']);
+
     const SORT_RANKS = {
       lead: 0, featured: 1, supporting: 2,
       dancer: 3, swing: 4, ensemble: 5, group: 6, other: 7,
@@ -322,20 +354,164 @@
       return date.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
     }
 
-    function formatConflictLines(conflicts) {
-      const lines = [];
+    function clFormatTime12h(t) {
+      if (!t) return '';
+      const [h, m] = String(t).slice(0, 5).split(':').map(Number);
+      const ap = h >= 12 ? 'pm' : 'am';
+      return (h % 12 || 12) + (m ? ':' + String(m).padStart(2, '0') : '') + ap;
+    }
+    function clConflictTimeLabel(value) {
+      if (!value || typeof value !== 'object') return '';
+      if (value.full_day === false) {
+        const start = value.start_time ? clFormatTime12h(value.start_time) : '';
+        const end = value.end_time ? clFormatTime12h(value.end_time) : '';
+        if (start && end) return `${start} - ${end}`;
+        if (start) return `From ${start}`;
+        if (end) return `Until ${end}`;
+        return '';
+      }
+      return String(value.time_label || value.time || value.details || '').trim();
+    }
+    function clConflictEventMap(conflicts) {
+      const next = {};
       Object.entries(conflicts || {}).forEach(([key, value]) => {
         if (key === 'manual_notes') return;
-        const entry = value && typeof value === 'object' ? value : { conflict: value === true || value === 'true' };
-        if (!entry.conflict) return;
-        const base = entry.date ? formatDate(entry.date) : (entry.title || key);
-        const title = entry.title && entry.title !== base ? entry.title : '';
-        const timeLabel = String(entry.time_label || entry.time || entry.details || '').trim();
-        lines.push([base, title, timeLabel].filter(Boolean).join(' · '));
+        if (value && typeof value === 'object' && value.conflict) next[key] = { ...value };
+        else if (value === true || value === 'true') next[key] = { conflict: true, full_day: true };
       });
-      const manual = String(conflicts?.manual_notes || '').trim();
-      if (manual) lines.push(manual);
-      return lines.filter(Boolean);
+      return next;
+    }
+    function clConflictPayloadFromState(conflictMap, manualNotes) {
+      const payload = {};
+      Object.keys(conflictMap || {}).sort().forEach(key => {
+        const item = conflictMap[key];
+        if (!item || item.conflict !== true) return;
+        payload[key] = { conflict: true, title: item.title || '', date: item.date || '', full_day: item.full_day !== false };
+        if (item.full_day === false) {
+          if (item.start_time) payload[key].start_time = item.start_time;
+          if (item.end_time) payload[key].end_time = item.end_time;
+        }
+      });
+      const cleanNotes = String(manualNotes || '').trim();
+      if (cleanNotes) payload.manual_notes = cleanNotes;
+      return payload;
+    }
+    // Same weekday colour key as the applicant modal's conflict picker, so
+    // this reads as the same visual system rather than a new invented one.
+    function clConflictWeekdayColour(dateString) {
+      const d = dateString ? new Date(`${dateString}T12:00:00`) : null;
+      if (!(d instanceof Date) || Number.isNaN(d.getTime())) return '#74a2b4';
+      const colours = { 0: '#dd8233', 1: '#74a2b4', 2: '#476aaa', 3: '#769e7b', 4: '#ca7ea7', 5: '#572e88', 6: '#d1523d' };
+      return colours[d.getDay()] || '#74a2b4';
+    }
+    function clConflictDateParts(dateString) {
+      const d = dateString ? new Date(`${dateString}T12:00:00`) : null;
+      if (!(d instanceof Date) || Number.isNaN(d.getTime())) return { month: 'TBD', day: '--', weekday: '' };
+      return {
+        month: d.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase(),
+        day: String(d.getDate()),
+        weekday: d.toLocaleDateString('en-CA', { weekday: 'short' }).toUpperCase(),
+      };
+    }
+    async function loadRehearsalEvents() {
+      if (_rehearsalEventsLoaded) return _rehearsalEvents;
+      try {
+        const { data, error } = await sb.from('production_events').select('id,title,event_type,start_time').eq('production_id', prodId).order('start_time', { ascending: true });
+        if (error) throw error;
+        _rehearsalEvents = (data || [])
+          .filter(ev => ev?.id && ev?.start_time && CL_REHEARSAL_EVENT_TYPES.has(String(ev.event_type || '').toLowerCase()))
+          .map(ev => ({ id: ev.id, title: ev.title || 'Rehearsal', date: String(ev.start_time).slice(0, 10) }));
+      } catch (err) {
+        console.warn('[BTS] loadRehearsalEvents failed', err);
+        _rehearsalEvents = [];
+      }
+      _rehearsalEventsLoaded = true;
+      return _rehearsalEvents;
+    }
+
+    function clConflictGridHtml() {
+      if (!_rehearsalEvents.length) {
+        return `<div class="cl-detail-value soft">No rehearsal dates are in the calendar yet.</div>`;
+      }
+      const tiles = _rehearsalEvents.map(ev => {
+        const value = _clConflictMap[ev.id] || {};
+        const active = !!value.conflict;
+        const isExpanded = active && _clConflictExpanded.has(ev.id);
+        const colour = clConflictWeekdayColour(ev.date);
+        const parts = clConflictDateParts(ev.date);
+        const isFullDay = value.full_day !== false;
+        const caption = active && !isExpanded
+          ? `<div class="cl-conflict-caption">${esc(isFullDay ? 'FULL DAY' : (clConflictTimeLabel(value) || 'TIME SET'))}</div>`
+          : '';
+        const dateBtn = `<button type="button" class="cl-conflict-tile${active ? ' active' : ''}" style="--tile:${colour};" onclick="clToggleConflictDate('${esc(ev.id)}')" title="${esc(ev.title)}">
+          <div class="cl-conflict-badge"><div class="cl-conflict-badge-month">${esc(parts.month)}</div><div class="cl-conflict-badge-day">${esc(parts.day)}</div></div>
+          <div class="cl-conflict-weekday">${esc(parts.weekday)}</div>
+          ${caption}
+        </button>`;
+        if (!isExpanded) return dateBtn;
+        const picker = `<div class="cl-conflict-picker">
+          <div class="cl-conflict-picker-head">
+            <div class="cl-conflict-picker-title">${esc(ev.title)}</div>
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+              <div class="cl-conflict-picker-date">${esc(`${parts.month} ${parts.day} ${parts.weekday}`)}</div>
+              <button type="button" class="cl-conflict-done-btn" onclick="clCollapseConflict('${esc(ev.id)}')">Done</button>
+            </div>
+          </div>
+          <div class="cl-conflict-daytype-row">
+            <button type="button" class="cl-conflict-daytype-btn${isFullDay ? ' active' : ''}" onclick="clSetConflictDayType('${esc(ev.id)}', true)">Full day</button>
+            <button type="button" class="cl-conflict-daytype-btn${!isFullDay ? ' active' : ''}" onclick="clSetConflictDayType('${esc(ev.id)}', false)">Specific time</button>
+          </div>
+          ${isFullDay ? '' : `<div class="cl-field-grid" style="margin-top:0.5rem;">
+            <div class="cl-field"><label class="cl-field-label">From</label><input type="time" value="${esc(value.start_time || '')}" oninput="clUpdateConflictTime('${esc(ev.id)}','start_time',this.value)" /></div>
+            <div class="cl-field"><label class="cl-field-label">To</label><input type="time" value="${esc(value.end_time || '')}" oninput="clUpdateConflictTime('${esc(ev.id)}','end_time',this.value)" /></div>
+          </div>`}
+        </div>`;
+        return dateBtn + picker;
+      }).join('');
+      return `<div class="cl-conflict-grid">${tiles}</div>`;
+    }
+
+    function clConflictSectionHtml() {
+      return `<div id="cl-conflict-grid-wrap">${clConflictGridHtml()}</div>
+        <textarea class="cl-conflict-notes" id="cl-conflict-notes" placeholder="Add any extra notes like vacations, school conflicts, or details the team should know." oninput="clConflictNotesInput(this.value)">${esc(_clConflictNotes)}</textarea>`;
+    }
+
+    function clRenderConflictGrid() {
+      const wrap = document.getElementById('cl-conflict-grid-wrap');
+      if (wrap) wrap.innerHTML = clConflictGridHtml();
+      clMarkDirty();
+    }
+    function clToggleConflictDate(eventId) {
+      const existing = _clConflictMap[eventId];
+      if (existing && existing.conflict) {
+        delete _clConflictMap[eventId];
+        _clConflictExpanded.delete(eventId);
+      } else {
+        const ev = _rehearsalEvents.find(e => e.id === eventId);
+        _clConflictMap[eventId] = { conflict: true, full_day: true, date: ev?.date || '', title: ev?.title || '' };
+        _clConflictExpanded.add(eventId);
+      }
+      clRenderConflictGrid();
+    }
+    function clSetConflictDayType(eventId, isFullDay) {
+      const item = _clConflictMap[eventId];
+      if (!item) return;
+      item.full_day = isFullDay;
+      clRenderConflictGrid();
+    }
+    function clUpdateConflictTime(eventId, field, val) {
+      const item = _clConflictMap[eventId];
+      if (!item) return;
+      item[field] = val;
+      clMarkDirty();
+    }
+    function clCollapseConflict(eventId) {
+      _clConflictExpanded.delete(eventId);
+      clRenderConflictGrid();
+    }
+    function clConflictNotesInput(val) {
+      _clConflictNotes = val;
+      clMarkDirty();
     }
 
     function performerPhotoHtml(record, className, fallbackClass) {
@@ -684,14 +860,18 @@
       </div>`;
     }
 
-    function openPerformerCard(id) {
+    async function openPerformerCard(id) {
       _selectedPerformerId = String(id || '');
       const record = _performerDirectory.find(item => String(item.id) === _selectedPerformerId);
       const modal = document.getElementById('cl-performer-modal');
       const body = document.getElementById('cl-performer-modal-body');
       if (!record || !modal || !body) return;
+      await loadRehearsalEvents();
+      const rawConflicts = record.date_conflicts || {};
+      _clConflictMap = clConflictEventMap(rawConflicts);
+      _clConflictNotes = String(rawConflicts.manual_notes || '').trim();
+      _clConflictExpanded = new Set();
       const answers = record.answers || {};
-      const conflicts = formatConflictLines(record.date_conflicts || {});
       const answerEntries = cleanAnswerEntries(answers);
       body.innerHTML = `
         <div class="cl-modal-hero">
@@ -716,9 +896,7 @@
           <button type="button" class="cl-modal-save-btn" id="cl-modal-save-btn" onclick="clSavePerformerEdits()" disabled>Save Changes</button>
         </div>
         <div class="cl-modal-grid">
-          ${clAccordionSection('conflicts', 'Days Off / Conflicts', conflicts.length
-              ? `<div class="cl-detail-list">${conflicts.map(line => detailItem('Conflict', line)).join('')}</div>`
-              : `<div class="cl-detail-value soft">No conflicts recorded</div>`)}
+          ${clAccordionSection('conflicts', 'Days Off / Conflicts', clConflictSectionHtml())}
           ${clAccordionSection('contact', 'Contact', `
             <div class="cl-field-grid">
               ${clField('cl-edit-legal-name', 'Legal / Full Name', record.legal_name)}
@@ -784,6 +962,7 @@
       };
       const dobVal = val('cl-edit-dob');
       if (dobVal) payload.date_of_birth = dobVal;
+      payload.date_conflicts = clConflictPayloadFromState(_clConflictMap, _clConflictNotes);
       // Registration Answers inputs write back into the same JSONB blob they
       // came from, keyed by their original answer key - everything not shown
       // here (hidden __bts_ flags, audition-form answers) passes through
@@ -801,7 +980,7 @@
           .eq('production_id', prodId).eq('applicant_id', record.applicant_id);
         if (error) throw error;
         await loadCastListData();
-        openPerformerCard(_selectedPerformerId);
+        await openPerformerCard(_selectedPerformerId);
         const savedStatus = document.getElementById('cl-modal-save-status');
         if (savedStatus) savedStatus.classList.add('visible');
       } catch (err) {
