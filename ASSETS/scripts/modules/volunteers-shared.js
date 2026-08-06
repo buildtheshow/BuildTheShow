@@ -1,4 +1,4 @@
-/* volunteers-shared.js — shared helpers for the standalone Volunteers pages
+/* volunteers-shared.js : shared helpers for the standalone Volunteers pages
    (volunteer-calendar.html, volunteer-roles.html, volunteer-applicants.html/
    Requests, volunteer-settings.html; volunteers.html just redirects into the
    Plan tab of production-workspace.html).
@@ -37,7 +37,7 @@
     } catch (_) { return String(raw).slice(0, 10); }
   }
 
-  // Mirrors VOLUNTEER_DEPARTMENTS in production-workspace.js — keep in sync.
+  // Mirrors VOLUNTEER_DEPARTMENTS in production-workspace.js : keep in sync.
   const VOLUNTEER_DEPARTMENTS = [
     { key: 'foh', label: 'Front of House', hint: 'Audience-facing shifts: ushers, concessions, ticket table, lobby help.', match: /front|house|usher|concession|ticket|baker|treat|audience|lobby/i },
     { key: 'backstage', label: 'Backstage & Rehearsal Support', hint: 'People who keep performers safe, ready, and in the right place.', match: /stage|backstage|rehearsal|wrangler|quick|assistant|performer/i },
@@ -68,7 +68,7 @@
   // Mirrors DEPT_LEAD_ROLE_TO_GROUP_KEY in departments-dashboard.html, mapped onto
   // VOLUNTEER_DEPARTMENTS' short keys instead of department-config group keys.
   // Treasurer and any role not listed here (incl. plain "Volunteer") are left
-  // unscoped — only named Dept Lead roles get narrowed to their own department.
+  // unscoped : only named Dept Lead roles get narrowed to their own department.
   const DEPT_LEAD_ROLE_TO_VOL_DEPT_KEY = {
     'stage manager': 'backstage',
     'front of house manager': 'foh',
@@ -401,7 +401,7 @@
     return ctrl;
   }
 
-  // Mirrors buildVolunteerSuggestions() in production-workspace.js — needs the
+  // Mirrors buildVolunteerSuggestions() in production-workspace.js : needs the
   // production_events list (for per-event-type counts) plus the current
   // opportunities list (so already-created roles are not suggested again).
   function buildVolunteerSuggestions(events, opportunities) {

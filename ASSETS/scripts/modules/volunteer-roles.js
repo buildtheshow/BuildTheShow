@@ -1,4 +1,4 @@
-/* volunteer-roles.js — Volunteer Roster standalone module.
+/* volunteer-roles.js: Volunteer Roster standalone module.
    Roles is the roster of actual volunteers: who they are, what role/date
    they're filling, and a place to edit or manually add them. Replaced the
    old "internal opportunity definitions" version of this page - the
