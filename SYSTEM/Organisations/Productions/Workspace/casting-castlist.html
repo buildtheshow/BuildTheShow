@@ -633,9 +633,33 @@
       document.getElementById('cl-add-role-error').classList.remove('visible');
       document.getElementById('cl-add-role-sub').textContent = `Assign ${record.display_name} to another character.`;
       const heldNames = new Set(record.roles.map(r => r.toLowerCase()));
-      const available = [..._chars].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      // Group by whether the role is already filled so an open ensemble slot
+      // doesn't get buried under twenty already-cast principal roles - and
+      // flag who's already in a role before double-casting it.
+      const assigneesByChar = new Map();
+      _castMembers.forEach(member => {
+        if (!member.character_id || String(member.applicant_id) === String(record.applicant_id)) return;
+        const answers = registrationAnswers(member);
+        const name = displayNameForRecord(member, answers) || 'Unknown';
+        const key = String(member.character_id);
+        if (!assigneesByChar.has(key)) assigneesByChar.set(key, []);
+        assigneesByChar.get(key).push(name);
+      });
+      const sortedChars = [..._chars].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      const openChars = sortedChars.filter(c => !assigneesByChar.has(String(c.id)));
+      const filledChars = sortedChars.filter(c => assigneesByChar.has(String(c.id)));
+      const optionHtml = c => {
+        const held = heldNames.has(String(c.name || '').toLowerCase());
+        const filledBy = assigneesByChar.get(String(c.id));
+        const label = held ? `${c.name || ''} (already assigned to this performer)`
+          : filledBy ? `${c.name || ''} — cast: ${filledBy.join(', ')}`
+          : c.name || '';
+        return `<option value="${esc(c.id)}"${held ? ' disabled' : ''}>${esc(label)}</option>`;
+      };
       const select = document.getElementById('cl-add-role-character');
-      select.innerHTML = available.map(c => `<option value="${esc(c.id)}"${heldNames.has(String(c.name || '').toLowerCase()) ? ' disabled' : ''}>${esc(c.name || '')}${heldNames.has(String(c.name || '').toLowerCase()) ? ' (already assigned)' : ''}</option>`).join('');
+      select.innerHTML =
+        (openChars.length ? `<optgroup label="Open roles">${openChars.map(optionHtml).join('')}</optgroup>` : '') +
+        (filledChars.length ? `<optgroup label="Already cast">${filledChars.map(optionHtml).join('')}</optgroup>` : '');
       document.getElementById('cl-add-role-state').value = 'chosen';
       document.getElementById('cl-add-role-modal').classList.add('open');
     }
