@@ -255,6 +255,7 @@
     let _assignments = [];
     let _prodTitle = '';
     let _performers = [];
+    let _applicationIds = new Set();
     let _castMembers = [];
     let _performerDirectory = [];
     let _selectedPerformerId = null;
@@ -975,6 +976,17 @@
         const { error } = await sb.from('cast_members').update(payload)
           .eq('production_id', prodId).eq('applicant_id', record.applicant_id);
         if (error) throw error;
+        // date_conflicts on cast_members is a local cache for this page -
+        // Auditions, the applicant modal, and everywhere else read it off
+        // audition_applications directly (pronouns/date_conflicts/custom_answers
+        // are Clio-only and never mirrored to audition_bookings), so write
+        // there too whenever this performer's id is an application id.
+        if (_applicationIds.has(String(record.applicant_id))) {
+          const { error: appError } = await sb.from('audition_applications')
+            .update({ date_conflicts: payload.date_conflicts })
+            .eq('production_id', prodId).eq('id', record.applicant_id);
+          if (appError) console.warn('[BTS] conflict sync to audition_applications failed', appError);
+        }
         await loadCastListData();
         await openPerformerCard(_selectedPerformerId);
         const savedStatus = document.getElementById('cl-modal-save-status');
@@ -1208,6 +1220,7 @@
       });
       const apps = appRes.data || [];
       const bookIds = new Set(apps.map(a => String(a.id)));
+      _applicationIds = bookIds;
       _performers = [
         ...apps,
         ...(bookRes.data || []).filter(b => !bookIds.has(String(b.id))),
