@@ -1,11 +1,19 @@
-/* volunteers-shared.js — shared helpers for the 5 standalone Volunteers pages
-   (volunteer-suggestions.html, volunteer-roles.html, volunteer-publish.html,
-   volunteer-share.html, volunteer-applicants.html/Requests).
+/* volunteers-shared.js — shared helpers for the standalone Volunteers pages
+   (volunteer-calendar.html, volunteer-roles.html, volunteer-applicants.html/
+   Requests, volunteer-settings.html; volunteers.html just redirects into the
+   Plan tab of production-workspace.html).
+
+   volunteer-suggestions.html/volunteer-publish.html/volunteer-share.html
+   still exist on disk but are unlinked from the sidebar - that whole
+   opportunity-draft/publish workflow was removed. Roles now reads/writes
+   volunteer_signups directly instead of the opportunities table it used to
+   manage. createOppController/buildVolunteerSuggestions below are unused by
+   any linked page but left in place since nothing currently depends on
+   removing them.
 
    Mirrors the equivalent logic in ASSETS/scripts/production-workspace.js:
-   VOLUNTEER_DEPARTMENTS, volunteerDeptForOpp(), loadOpportunities(),
-   openOppModal()/submitOpp()/toggleOppStatus()/deleteOpp(), roleCardHtml(),
-   buildVolunteerSuggestions(). Keep in sync if the in-app versions change.
+   VOLUNTEER_DEPARTMENTS, volunteerDeptForOpp(). Keep in sync if the in-app
+   versions change.
 
    Security: getPortalSession()/hasMenuKey()/scopeDeptKeyForSession() implement
    the same "no session -> full producer view; session present -> gate on the
@@ -86,14 +94,24 @@
     return DEPT_LEAD_ROLE_TO_VOL_DEPT_KEY[role] || null;
   }
 
-  function heroHtml(kicker, title, copy) {
+  // Public sign-up links used to live on their own "Share" page - now they're
+  // always available from the header of every Volunteers page instead, since
+  // there's no reason a producer should have to navigate to a specific step
+  // just to grab the family-facing link.
+  function heroHtml(kicker, title, copy, prodId) {
+    const actionsHtml = prodId ? (
+      '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;flex-shrink:0;">' +
+      '<a href="/volunteers?prod=' + encodeURIComponent(prodId) + '" target="_blank" rel="noopener" class="btn-secondary" style="text-decoration:none;">Volunteer page</a>' +
+      '<a href="/volunteer-quiz?prod=' + encodeURIComponent(prodId) + '" target="_blank" rel="noopener" class="btn-secondary" style="text-decoration:none;">Best-fit quiz</a>' +
+      '</div>'
+    ) : '';
     return '<div class="aud-visual-hero" style="margin-bottom:0.75rem;">' +
       '<div class="aud-visual-hero-content"><div>' +
       '<div class="aud-visual-kicker"><span class="aud-visual-kicker-dot" aria-hidden="true"></span>' +
       '<span class="page-hierarchy"><span class="page-hierarchy-page">Volunteers</span><span class="page-hierarchy-sep"> - </span><span class="page-hierarchy-sub">' + esc(kicker) + '</span></span></div>' +
       '<h1 class="aud-visual-title">' + esc(title) + '</h1>' +
       (copy ? '<p class="aud-visual-copy">' + esc(copy) + '</p>' : '') +
-      '</div></div></div>';
+      '</div>' + actionsHtml + '</div></div>';
   }
 
   function accessDeniedHtml(pageLabel) {

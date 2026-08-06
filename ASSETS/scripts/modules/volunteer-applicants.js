@@ -24,7 +24,7 @@
         return;
       }
 
-      container.innerHTML = S.heroHtml('Requests', 'Role Requests', 'Review and respond to volunteers who have requested roles.') +
+      container.innerHTML = S.heroHtml('Requests', 'Role Requests', 'Review and respond to volunteers who have requested roles.', prodId) +
         '<div id="vreq-body">Loading requests...</div>';
 
       const sb = supabase.createClient(S.SB_URL, S.SB_ANON);

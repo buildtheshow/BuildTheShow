@@ -228,10 +228,7 @@
     var pages = {
       calendar:    'volunteer-calendar.html',
       plan:        'volunteers.html',
-      suggestions: 'volunteer-suggestions.html',
       roles:       'volunteer-roles.html',
-      publish:     'volunteer-publish.html',
-      share:       'volunteer-share.html',
       requests:    'volunteer-applicants.html',
       settings:    'volunteer-settings.html',
     };
@@ -499,8 +496,7 @@
       if (grpVolunteers) { grpVolunteers.style.display = ''; grpVolunteers.classList.add('open'); }
       [
         ['vsub-calendar', 'vol:calendar'], ['vsub-plan', 'vol:plan'],
-        ['vsub-suggestions', 'vol:suggestions'], ['vsub-roles', 'vol:roles'],
-        ['vsub-publish', 'vol:publish'], ['vsub-share', 'vol:share'],
+        ['vsub-roles', 'vol:roles'],
         ['vsub-requests', 'vol:requests'], ['vsub-settings', 'vol:settings'],
       ].forEach(function (pair) {
         var el = document.getElementById(pair[0]);
@@ -577,10 +573,7 @@
       var pages = {
         calendar:    'volunteer-calendar.html',
         plan:        'volunteers.html',
-        suggestions: 'volunteer-suggestions.html',
         roles:       'volunteer-roles.html',
-        publish:     'volunteer-publish.html',
-        share:       'volunteer-share.html',
         requests:    'volunteer-applicants.html',
         settings:    'volunteer-settings.html',
       };
@@ -600,7 +593,7 @@
   };
 
   window.loadProductionSidebar = function (activeGroup, activePage) {
-    const key = 'bts-prod-sidebar-v74';
+    const key = 'bts-prod-sidebar-v75';
     const cached = sessionStorage.getItem(key);
     const host = document.getElementById('prod-sidebar-host');
     if (!host) return;
@@ -631,7 +624,7 @@
 
     if (cached) applyAndInit(cached);
 
-    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v74-20260804')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v75-20260805')
       .then(function (res) { return res.text(); })
       .then(function (html) {
         sessionStorage.setItem(key, html);
