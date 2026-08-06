@@ -145,6 +145,7 @@
     .cl-conflict-notes { width: 100%; box-sizing: border-box; min-height: 5.5rem; resize: vertical; border: 1.5px solid rgba(0,0,0,0.28); border-radius: 10px; padding: 0.6rem 0.7rem; font-size: 0.83rem; line-height: 1.4; color: #000000; background: #fff; font-family: var(--bts-font); outline: none; }
     .cl-conflict-notes:focus { border-color: var(--acc, #572e88); }
     .cl-answer-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; }
+    .cl-answer-lock-note { margin-top: 0.65rem; font-size: 0.7rem; color: rgba(0,0,0,0.42); line-height: 1.4; font-style: italic; }
     @media (max-width: 820px) {
       .cl-modal-hero { grid-template-columns: 1fr; }
       .cl-modal-grid { grid-template-columns: 1fr; }
@@ -562,6 +563,7 @@
           if (nextGuardianPhone && !existing.guardian_phone) existing.guardian_phone = nextGuardianPhone;
           if (member.headshot_url && !existing.headshot_url) existing.headshot_url = member.headshot_url;
           if (member.date_of_birth && !existing.date_of_birth) existing.date_of_birth = member.date_of_birth;
+          if (member.internal_notes && !existing.internal_notes) existing.internal_notes = member.internal_notes;
           if (member.state === 'offer_accepted') existing.state = 'offer_accepted';
           existing.answers = { ...existing.answers, ...answers };
           return;
@@ -580,6 +582,7 @@
           programmeName: nextProgrammeName,
           date_of_birth: member.date_of_birth || '',
           headshot_url: member.headshot_url || '',
+          internal_notes: member.internal_notes || '',
           state: member.state || 'chosen',
           roles: roleName ? [roleName] : [],
           roleTypes: roleType ? [roleType] : [],
@@ -918,13 +921,17 @@
               ${detailItem('Roles', compactField(record.roles.join(', ')), !record.roles.length)}
               ${detailItem('Programme Name', compactField(record.programmeName), !record.programmeName)}
             </div>`)}
+          ${clAccordionSection('notes', 'Internal Notes', `
+            <textarea class="cl-conflict-notes" id="cl-internal-notes" placeholder="Notes staff should know - not shown on the performer's registration record." oninput="clMarkDirty()">${esc(record.internal_notes || '')}</textarea>`, { color: '#000000', fullWidth: true })}
           ${answerEntries.length
               ? groupAnswerEntriesByCategory(answerEntries).map(({ cat, entries }) => clAccordionSection(cat.key, cat.label, `
+                  ${cat.key === 'ans_checkin' ? `<div style="margin-bottom:0.6rem;"><button type="button" class="cl-add-role-btn" onclick="clAddPickupPerson()">+ Add Pickup Person</button></div>` : ''}
                   <div class="cl-answer-grid">${entries.map(([key, value]) => `
                     <div class="cl-field">
                       <label class="cl-field-label">${esc(answerLabel(key))}</label>
-                      <input type="text" data-answer-key="${esc(key)}" value="${esc(formatAnswerValue(value))}" oninput="clMarkDirty()" />
-                    </div>`).join('')}</div>`, { color: cat.color, fullWidth: true })).join('')
+                      <div class="cl-detail-value">${esc(formatAnswerValue(value)) || '<span class="soft">Not provided</span>'}</div>
+                    </div>`).join('')}</div>
+                  <div class="cl-answer-lock-note">Registration answers are read-only - this is a signed record (media release, medical, agreements). Use Internal Notes above for anything staff needs to add.</div>`, { color: cat.color, fullWidth: true })).join('')
               : clAccordionSection('answers', 'Registration Answers', `<div class="cl-detail-value soft">No registration answers have been saved yet for this performer.</div>`, { color: '#572e88', fullWidth: true })}
         </div>`;
       modal.classList.add('open');
@@ -942,51 +949,58 @@
     // character the performer holds) rather than the audition record itself,
     // so a save writes every row sharing this applicant_id to keep them in
     // sync - the same reason Add Role mirrors into cast_members on write.
+    // Personal info and conflicts live on cast_members AND on the real
+    // source record (audition_applications, or audition_bookings for
+    // performers who never got an application row) - everywhere else in
+    // the app (Auditions, the applicant modal, script breakdown) reads the
+    // source record directly, so both have to be written or edits made here
+    // are invisible everywhere else. date_conflicts/pronouns/guardian_contact
+    // are Clio-only and never mirrored to audition_bookings, matching how
+    // the applicant modal's own sync already works.
     async function clSavePerformerEdits() {
       const record = _performerDirectory.find(item => String(item.id) === _selectedPerformerId);
       const btn = document.getElementById('cl-modal-save-btn');
-      const status = document.getElementById('cl-modal-save-status');
       if (!record || !btn) return;
       const val = id => document.getElementById(id).value.trim();
-      const payload = {
-        name: val('cl-edit-legal-name') || null,
-        pronouns: val('cl-edit-pronouns') || null,
-        email: val('cl-edit-email') || null,
-        phone: val('cl-edit-phone') || null,
-        guardian_name: val('cl-edit-guardian-name') || null,
-        guardian_email: val('cl-edit-guardian-email') || null,
-        guardian_phone: val('cl-edit-guardian-phone') || null,
+      const name = val('cl-edit-legal-name') || null;
+      const pronouns = val('cl-edit-pronouns') || null;
+      const email = val('cl-edit-email') || null;
+      const phone = val('cl-edit-phone') || null;
+      const guardianName = val('cl-edit-guardian-name') || null;
+      const guardianEmail = val('cl-edit-guardian-email') || null;
+      const guardianPhone = val('cl-edit-guardian-phone') || null;
+      const dobVal = val('cl-edit-dob') || null;
+      const conflictPayload = clConflictPayloadFromState(_clConflictMap, _clConflictNotes);
+      const notesVal = document.getElementById('cl-internal-notes')?.value.trim() || null;
+
+      const castMembersPayload = {
+        name, pronouns, email, phone,
+        guardian_name: guardianName, guardian_email: guardianEmail, guardian_phone: guardianPhone,
+        internal_notes: notesVal,
       };
-      const dobVal = val('cl-edit-dob');
-      if (dobVal) payload.date_of_birth = dobVal;
-      payload.date_conflicts = clConflictPayloadFromState(_clConflictMap, _clConflictNotes);
-      // Registration Answers inputs write back into the same JSONB blob they
-      // came from, keyed by their original answer key - everything not shown
-      // here (hidden __bts_ flags, audition-form answers) passes through
-      // untouched since we start from the existing object.
-      const answerInputs = document.querySelectorAll('#cl-performer-modal-body [data-answer-key]');
-      if (answerInputs.length) {
-        const nextAnswers = { ...(record.answers || {}) };
-        answerInputs.forEach(input => { nextAnswers[input.dataset.answerKey] = input.value.trim(); });
-        payload.registration_answers = nextAnswers;
-      }
+      if (dobVal) castMembersPayload.date_of_birth = dobVal;
+
       btn.disabled = true;
       btn.textContent = 'Saving...';
       try {
-        const { error } = await sb.from('cast_members').update(payload)
+        const { error } = await sb.from('cast_members').update(castMembersPayload)
           .eq('production_id', prodId).eq('applicant_id', record.applicant_id);
         if (error) throw error;
-        // date_conflicts on cast_members is a local cache for this page -
-        // Auditions, the applicant modal, and everywhere else read it off
-        // audition_applications directly (pronouns/date_conflicts/custom_answers
-        // are Clio-only and never mirrored to audition_bookings), so write
-        // there too whenever this performer's id is an application id.
-        if (_applicationIds.has(String(record.applicant_id))) {
-          const { error: appError } = await sb.from('audition_applications')
-            .update({ date_conflicts: payload.date_conflicts })
+
+        const isApplication = _applicationIds.has(String(record.applicant_id));
+        if (isApplication) {
+          const guardianContact = [guardianEmail, guardianPhone].filter(Boolean).join(' · ') || null;
+          const { error: appError } = await sb.from('audition_applications').update({
+            name, email, phone, pronouns, guardian_name: guardianName, guardian_contact: guardianContact,
+            date_of_birth: dobVal, date_conflicts: conflictPayload,
+          }).eq('production_id', prodId).eq('id', record.applicant_id);
+          if (appError) console.warn('[BTS] contact/conflict sync to audition_applications failed', appError);
+        } else {
+          const { error: bookError } = await sb.from('audition_bookings').update({ name, email, phone })
             .eq('production_id', prodId).eq('id', record.applicant_id);
-          if (appError) console.warn('[BTS] conflict sync to audition_applications failed', appError);
+          if (bookError) console.warn('[BTS] contact sync to audition_bookings failed', bookError);
         }
+
         await loadCastListData();
         await openPerformerCard(_selectedPerformerId);
         const savedStatus = document.getElementById('cl-modal-save-status');
@@ -995,6 +1009,35 @@
         alert('Could not save: ' + (err.message || 'Unknown error'));
         btn.disabled = false;
         btn.textContent = 'Save Changes';
+      }
+    }
+
+    // Registration answers (media release, medical, agreements) stay
+    // read-only here - editing signed legal/medical answers from a roster
+    // view is a liability risk. Adding a pickup person appends a new,
+    // clearly-numbered entry instead of touching any existing answer.
+    async function clAddPickupPerson() {
+      const record = _performerDirectory.find(item => String(item.id) === _selectedPerformerId);
+      if (!record) return;
+      const name = prompt('Name of the additional pickup person:');
+      if (!name || !name.trim()) return;
+      const relationship = prompt('Relationship to performer (optional):') || '';
+      const phone = prompt('Phone number (optional):') || '';
+      const existing = record.answers || {};
+      let n = 1;
+      while (existing[`Authorised Pickup ${n} Full Name`] !== undefined) n++;
+      const nextAnswers = { ...existing };
+      nextAnswers[`Authorised Pickup ${n} Full Name`] = name.trim();
+      if (relationship.trim()) nextAnswers[`Authorised Pickup ${n} Relationship To Performer`] = relationship.trim();
+      if (phone.trim()) nextAnswers[`Authorised Pickup ${n} Phone Number`] = phone.trim();
+      try {
+        const { error } = await sb.from('cast_members').update({ registration_answers: nextAnswers })
+          .eq('production_id', prodId).eq('applicant_id', record.applicant_id);
+        if (error) throw error;
+        await loadCastListData();
+        await openPerformerCard(_selectedPerformerId);
+      } catch (err) {
+        alert('Could not add pickup person: ' + (err.message || 'Unknown error'));
       }
     }
 
