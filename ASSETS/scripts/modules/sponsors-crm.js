@@ -445,9 +445,16 @@
 
   function hydratePublicPageAction() {
     var action = document.getElementById('spn-public-page-action');
-    if (!action) return;
-    action.href = window.location.origin + '/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId);
-    publicPageMeta().then(function (meta) { action.href = sponsorPublicUrl(meta); }).catch(function () {});
+    var bookLink = document.getElementById('spn-crm-book-public-link');
+    if (!action && !bookLink) return;
+    var fallbackUrl = window.location.origin + '/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId);
+    if (action) action.href = fallbackUrl;
+    if (bookLink) bookLink.href = fallbackUrl;
+    publicPageMeta().then(function (meta) {
+      var url = sponsorPublicUrl(meta);
+      if (action) action.href = url;
+      if (bookLink) bookLink.href = url;
+    }).catch(function () {});
   }
 
   // -- DASHBOARD ---------------------------------------------------------------
@@ -4007,7 +4014,8 @@
             '<span class="spn-toolbar-title" id="spn-crm-count">Businesses</span>' +
             '<div style="display:flex;gap:0.5rem;">' +
               '<button class="spn-btn spn-btn--ghost" id="spn-crm-export-btn" onclick="MarketingSponsorsModule.crmExportReport()">Export</button>' +
-              '<button class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.openBizModal()">+ Add Business</button>' +
+              '<a class="spn-btn spn-btn--ghost" id="spn-crm-book-public-link" href="#" target="_blank" rel="noopener">Book on the Public Form</a>' +
+              '<button class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.openBizModal()">+ Add Business (quick)</button>' +
             '</div>' +
           '</div>' +
           '<div id="spn-crm-biz-list"><div class="spn-loading-row">Loading sponsor data...</div></div>' +
