@@ -1805,21 +1805,9 @@
     });
     if (!bookingsHtml) bookingsHtml = '<div class="spn-crm-empty-section">No bookings yet</div>';
 
-    // Primary booking (for the Overview tab's Sponsorship + Workflow cards): first
-    // active booking, falling back to the first booking if everything is declined.
+    // Primary booking: first active booking, falling back to the first booking if
+    // everything is declined. Used only to decide whether there's anything to show.
     var primary = allBookingsList.filter(function (b) { return b.row.booking_status !== 'declined'; })[0] || allBookingsList[0] || null;
-    var primaryLabel = '', primaryDetail = '', primaryPrice = '';
-    if (primary) {
-      if (primary.table === 'sponsor_packages') {
-        primaryLabel = primary.row.tier_name || 'Sponsor Package';
-        primaryPrice = fmtD(primary.row.amount_cents);
-      } else {
-        var pSz = crmAdSizeLabel(primary.row);
-        primaryLabel = pSz.label;
-        primaryDetail = crmAdTypeLabel(primary.row, pSz) + (pSz.dims ? ' · ' + pSz.dims : '');
-        primaryPrice = fmtD(primary.row.price_cents);
-      }
-    }
 
     // === PAYMENT SUMMARY ===
     var outstandingCents = totalCents - receivedCents;
@@ -1876,41 +1864,6 @@
     // === NOTES ===
     var notesVal = (biz.notes || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
-    // === TIMELINE ===
-    var events = [];
-    events.push({ label: 'Added', date: biz.created_at, precise: true });
-    bizPkgs.forEach(function (p) {
-      events.push({ label: (p.tier_name || 'Sponsor') + ' booked', date: p.created_at, precise: true });
-      if (p.invoice_sent_date) events.push({ label: 'Invoice sent', date: p.invoice_sent_date, precise: false });
-      if (p.payment_status === 'trade') events.push({ label: 'Marked as in trade', date: p.updated_at || p.created_at, precise: true });
-      else if (p.payment_status === 'paid') {
-        if (p.payment_received_date) events.push({ label: 'Payment received', date: p.payment_received_date, precise: false });
-        else events.push({ label: 'Payment received', date: p.updated_at || p.created_at, precise: true });
-      }
-    });
-    bizAds.forEach(function (a) {
-      var adName = crmAdSizeLabel(a).label;
-      events.push({ label: adName + ' ad booked', date: a.created_at, precise: true });
-      if (a.invoice_sent_date) events.push({ label: 'Invoice sent', date: a.invoice_sent_date, precise: false });
-      if (a.payment_status === 'trade') events.push({ label: 'Marked as in trade', date: a.updated_at || a.created_at, precise: true });
-      else if (a.payment_status === 'paid') {
-        if (a.payment_received_date) events.push({ label: 'Payment received', date: a.payment_received_date, precise: false });
-        else events.push({ label: 'Payment received', date: a.updated_at || a.created_at, precise: true });
-      }
-      if (a.artwork_status === 'received' || a.artwork_status === 'approved') events.push({ label: 'Artwork received', date: a.updated_at || a.created_at, precise: true });
-      if (a.artwork_status === 'approved') events.push({ label: 'Artwork approved', date: a.updated_at || a.created_at, precise: true });
-    });
-    events.sort(function (a, b) { return new Date(a.date) - new Date(b.date); });
-    var timelineHtml = '';
-    events.forEach(function (ev, idx) {
-      var d = ev.precise ? fmtDateTime(ev.date) : (ev.date ? new Date(ev.date).toLocaleDateString('en-CA') : '');
-      var isLast = idx === events.length - 1;
-      timelineHtml += '<div class="spn-crm-tl-step' + (isLast ? ' spn-crm-tl-step--last' : '') + '">' +
-        '<div class="spn-crm-tl-dot"></div>' +
-        '<div class="spn-crm-tl-content"><span class="spn-crm-tl-label">' + esc(ev.label) + '</span><span class="spn-crm-tl-date">' + esc(d) + '</span></div>' +
-      '</div>';
-    });
-
     // === FILES (sponsor_files + artwork_url fallback from programme_ads) ===
     var allFiles = crmCollectBusinessFiles(biz, bizAds, bizFiles);
     var filesHtml = '';
@@ -1940,23 +1893,12 @@
       }
     });
 
-    // === OVERVIEW TAB (Sponsorship / Workflow / Payment / Contact snapshot) ===
-    var moreBookingsNote = allBookingsList.length > 1
-      ? '<div class="spn-crm-overview-more">+' + (allBookingsList.length - 1) + ' more booking' + (allBookingsList.length - 1 !== 1 ? 's' : '') + ' &mdash; see the Bookings tab</div>'
-      : '';
+    // === OVERVIEW TAB (Bookings with the sponsor's own request + Payment / Contact snapshot) ===
     var overviewHtml = !primary ? '<div class="spn-crm-empty-section">No bookings yet</div>' : (
       '<div class="spn-crm-overview-grid">' +
-        '<div class="spn-crm-overview-card">' +
-          '<div class="spn-crm-overview-card-head">Sponsorship</div>' +
-          '<div class="spn-crm-card-status ' + crmBookingStatusInfo(primary.row.booking_status).cls + '">' + crmBookingStatusInfo(primary.row.booking_status).label + '</div>' +
-          '<div class="spn-crm-overview-product">' + esc(primaryLabel) + '</div>' +
-          (primaryDetail ? '<div class="spn-crm-overview-detail">' + esc(primaryDetail) + '</div>' : '') +
-          '<div class="spn-crm-overview-price">' + primaryPrice + '</div>' +
-          moreBookingsNote +
-        '</div>' +
-        '<div class="spn-crm-overview-card">' +
-          '<div class="spn-crm-overview-card-head">Workflow</div>' +
-          '<div class="spn-crm-card-pipeline">' + crmBookingPipelineHtml(primary.table, primary.row) + '</div>' +
+        '<div class="spn-crm-overview-card spn-crm-overview-card--bookings">' +
+          '<div class="spn-crm-overview-card-head">Booking' + (allBookingsList.length !== 1 ? 's' : '') + '</div>' +
+          '<div class="spn-crm-cards-stack">' + bookingsHtml + '</div>' +
         '</div>' +
         '<div class="spn-crm-overview-card">' +
           '<div class="spn-crm-overview-card-head">Payment</div>' +
@@ -1969,19 +1911,6 @@
       '</div>'
     );
 
-    // === FOOTER (submitted + artwork intent + primary booking actions) ===
-    var footerHtml = '';
-    if (primary) {
-      var submittedStr = primary.row.created_at ? fmtDateTime(primary.row.created_at) : '';
-      footerHtml = '<div class="spn-crm-detail-footer">' +
-        '<div class="spn-crm-detail-footer-info">' +
-          (submittedStr ? '<span><strong>Submitted:</strong> ' + esc(submittedStr) + '</span>' : '') +
-          crmArtworkIntentBadge(primary.row) +
-        '</div>' +
-        '<div class="spn-crm-card-actions">' + crmActionButtonsHtml(primary.table, primary.row) + '</div>' +
-      '</div>';
-    }
-
     // === TABS ===
     // No separate identity header here -- the row header directly above (business
     // name, contact, status) already shows all of that. Repeating it below just
@@ -1989,10 +1918,8 @@
     var activeTab = CrmUi.tab[biz.id] || 'overview';
     var TAB_DEFS = [
       { key: 'overview', label: 'Overview' },
-      { key: 'bookings', label: 'Bookings' },
       { key: 'deliverables', label: 'Deliverables' },
       { key: 'files', label: 'Files' },
-      { key: 'activity', label: 'Activity' },
       { key: 'notes', label: 'Notes' }
     ];
     var tabsHtml = '<div class="spn-crm-tabs" role="tablist">' + TAB_DEFS.map(function (t) {
@@ -2005,13 +1932,11 @@
 
     var panelsHtml =
       panel('overview', overviewHtml) +
-      panel('bookings', '<div class="spn-crm-cards-stack">' + bookingsHtml + '</div>') +
       panel('deliverables', '<div class="spn-crm-deliverables-grid">' + delivHtml + '</div>') +
       panel('files',
         '<div class="spn-crm-section-head"><span>Files</span><span class="spn-crm-file-count">' + allFiles.length + ' file' + (allFiles.length !== 1 ? 's' : '') + '</span><div class="spn-crm-file-tools"><button class="spn-crm-mini-btn spn-crm-mini-btn--ghost" onclick="event.stopPropagation();MarketingSponsorsModule.crmDownloadAllFiles(\'' + biz.id + '\',this)"' + (allFiles.length ? '' : ' disabled') + '>Download All</button><button class="spn-crm-mini-btn spn-crm-mini-btn--upload" onclick="event.stopPropagation();MarketingSponsorsModule.uploadCrmFile(\'' + biz.id + '\')">Upload File</button></div></div>' +
         '<div class="spn-crm-file-grid">' + (filesHtml || '<div class="spn-crm-empty-section">No files uploaded yet</div>') + '</div>'
       ) +
-      panel('activity', '<div class="spn-crm-timeline">' + timelineHtml + '</div>') +
       panel('notes', '<div class="spn-crm-notes"><textarea data-last-saved="' + notesVal + '" onchange="MarketingSponsorsModule.saveCrmNotes(\'' + biz.id + '\')">' + notesVal + '</textarea></div>');
 
     // === ASSEMBLE ===
@@ -2032,7 +1957,6 @@
       '<div class="spn-crm-row-detail">' +
         tabsHtml +
         '<div class="spn-crm-tab-panels">' + panelsHtml + '</div>' +
-        footerHtml +
       '</div>' +
     '</div>';
   }
