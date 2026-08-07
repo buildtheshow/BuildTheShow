@@ -530,19 +530,22 @@
       var savedSettings = results[4] && results[4][0] && results[4][0].settings || {};
       var deadlines = savedSettings.deadlines || {};
 
-      var bookedRevenue = packages.reduce(function (sum, item) { return sum + (item.amount_cents || 0); }, 0);
-      var paidPackages = packages.filter(function (item) { return item.payment_status === 'paid' || item.payment_status === 'trade'; });
-      var paidRevenue = paidPackages.reduce(function (sum, item) { return sum + (item.amount_cents || 0); }, 0);
+      // Trade bookings carry no dollar value, so they're excluded from revenue sums, but
+      // they still count as a "settled" booking for the completion progress bars.
+      var cashPackages = packages.filter(function (item) { return item.payment_status !== 'trade'; });
+      var bookedRevenue = cashPackages.reduce(function (sum, item) { return sum + (item.amount_cents || 0); }, 0);
+      var paidRevenue = cashPackages.filter(function (item) { return item.payment_status === 'paid'; }).reduce(function (sum, item) { return sum + (item.amount_cents || 0); }, 0);
+      var settledPackages = packages.filter(function (item) { return item.payment_status === 'paid' || item.payment_status === 'trade'; });
       var paidAds = ads.filter(function (item) { return item.payment_status === 'paid' || item.payment_status === 'trade'; }).length;
       var revenuePercent = dashboardPercent(paidRevenue, bookedRevenue);
-      var sponsorPercent = dashboardPercent(paidPackages.length, packages.length);
+      var sponsorPercent = dashboardPercent(settledPackages.length, packages.length);
       var adsPercent = dashboardPercent(paidAds, ads.length);
 
       dashboardSet('spn-dashboard-revenue', fmtDollars(paidRevenue));
       dashboardSet('spn-dashboard-revenue-sub', bookedRevenue ? 'of ' + fmtDollars(bookedRevenue) + ' booked' : 'No sponsorships booked yet');
       dashboardSet('spn-dashboard-revenue-percent', revenuePercent + '%');
       dashboardSetProgress('spn-dashboard-revenue-bar', revenuePercent);
-      dashboardSet('spn-dashboard-sponsors', paidPackages.length);
+      dashboardSet('spn-dashboard-sponsors', settledPackages.length);
       dashboardSet('spn-dashboard-sponsors-sub', packages.length ? 'of ' + packages.length + ' sponsor booking' + (packages.length === 1 ? '' : 's') : 'No sponsor bookings yet');
       dashboardSet('spn-dashboard-sponsors-percent', sponsorPercent + '%');
       dashboardSetProgress('spn-dashboard-sponsors-bar', sponsorPercent);
@@ -608,8 +611,8 @@
       var pkgList   = results[2];
       var delivList = results[3];
 
-      var adRev       = adList.filter(function (a) { return a.payment_status === 'paid' || a.payment_status === 'trade'; }).reduce(function (s, a) { return s + (a.price_cents || 0); }, 0);
-      var spnRev      = pkgList.filter(function (p) { return p.payment_status === 'paid' || p.payment_status === 'trade'; }).reduce(function (s, p) { return s + (p.amount_cents || 0); }, 0);
+      var adRev       = adList.filter(function (a) { return a.payment_status === 'paid'; }).reduce(function (s, a) { return s + (a.price_cents || 0); }, 0);
+      var spnRev      = pkgList.filter(function (p) { return p.payment_status === 'paid'; }).reduce(function (s, p) { return s + (p.amount_cents || 0); }, 0);
       var missingArt  = adList.filter(function (a) { return a.artwork_status === 'missing'; }).length;
       var pendingAppr = adList.filter(function (a) { return a.approval_status === 'pending'; }).length;
       var unpaid      = adList.filter(function (a) { return a.payment_status === 'unpaid'; }).length +
@@ -1233,14 +1236,16 @@
 
     ads.forEach(function (a) {
       if (a.booking_status === 'declined') return;
-      totalBooked += (a.price_cents || 0);
-      if (a.payment_status === 'paid' || a.payment_status === 'trade') totalReceived += (a.price_cents || 0);
       if (a.artwork_status === 'missing') artworkMissing++;
+      if (a.payment_status === 'trade') return; // trade bookings carry no dollar value
+      totalBooked += (a.price_cents || 0);
+      if (a.payment_status === 'paid') totalReceived += (a.price_cents || 0);
     });
     packages.forEach(function (p) {
       if (p.booking_status === 'declined') return;
+      if (p.payment_status === 'trade') return; // trade bookings carry no dollar value
       totalBooked += (p.amount_cents || 0);
-      if (p.payment_status === 'paid' || p.payment_status === 'trade') totalReceived += (p.amount_cents || 0);
+      if (p.payment_status === 'paid') totalReceived += (p.amount_cents || 0);
     });
     deliverables.forEach(function (d) {
       if (d.status !== 'done' && d.due_date) {
@@ -1380,14 +1385,14 @@
     businesses.forEach(function (biz) {
       var t = 0, r = 0;
       (pkgsMap[biz.id] || []).forEach(function (p) {
-        if (p.booking_status === 'declined') return;
+        if (p.booking_status === 'declined' || p.payment_status === 'trade') return;
         t += (p.amount_cents || 0);
-        if (p.payment_status === 'paid' || p.payment_status === 'trade') r += (p.amount_cents || 0);
+        if (p.payment_status === 'paid') r += (p.amount_cents || 0);
       });
       (adsMap[biz.id] || []).forEach(function (a) {
-        if (a.booking_status === 'declined') return;
+        if (a.booking_status === 'declined' || a.payment_status === 'trade') return;
         t += (a.price_cents || 0);
-        if (a.payment_status === 'paid' || a.payment_status === 'trade') r += (a.price_cents || 0);
+        if (a.payment_status === 'paid') r += (a.price_cents || 0);
       });
       outstandingFor[biz.id] = t - r;
     });
@@ -1405,8 +1410,8 @@
       var bizTotal = 0, bizReceived = 0;
 
       pkgs.forEach(function (p) {
-        bizTotal += p.booking_status === 'declined' ? 0 : (p.amount_cents || 0);
-        if (p.booking_status !== 'declined' && (p.payment_status === 'paid' || p.payment_status === 'trade')) bizReceived += (p.amount_cents || 0);
+        bizTotal += (p.booking_status === 'declined' || p.payment_status === 'trade') ? 0 : (p.amount_cents || 0);
+        if (p.booking_status !== 'declined' && p.payment_status === 'paid') bizReceived += (p.amount_cents || 0);
         bookingsHtml += '<div style="margin-top:0.5rem;padding:0.5rem 0.6rem;background:#f7f5fb;border-radius:6px;">' +
           '<div style="display:flex;justify-content:space-between;font-size:0.82rem;font-weight:900;color:#000000;"><span>' + esc(p.tier_name || 'Sponsor Package') + '</span><span>' + fmtDollars(p.amount_cents || 0) + '</span></div>' +
           row('Status', bookingStatusLabelFor(p.booking_status)) +
@@ -1421,8 +1426,8 @@
         '</div>';
       });
       ads.forEach(function (a) {
-        bizTotal += a.booking_status === 'declined' ? 0 : (a.price_cents || 0);
-        if (a.booking_status !== 'declined' && (a.payment_status === 'paid' || a.payment_status === 'trade')) bizReceived += (a.price_cents || 0);
+        bizTotal += (a.booking_status === 'declined' || a.payment_status === 'trade') ? 0 : (a.price_cents || 0);
+        if (a.booking_status !== 'declined' && a.payment_status === 'paid') bizReceived += (a.price_cents || 0);
         var sz = crmAdSizeLabel(a);
         var typeLabel = crmAdTypeLabel(a, sz);
         var ad = a.artwork_data && typeof a.artwork_data === 'object' ? a.artwork_data : {};
@@ -1756,17 +1761,18 @@
 
     bizPkgs.forEach(function (p) {
       if (p.booking_status === 'declined') return;
+      if (p.payment_status === 'trade') { hasTradeBooking = true; return; } // trade bookings carry no dollar value
       totalCents += (p.amount_cents || 0);
-      if (p.payment_status === 'trade') { receivedCents += (p.amount_cents || 0); hasTradeBooking = true; return; }
       hasCashBooking = true;
       if (p.payment_status === 'paid') receivedCents += (p.amount_cents || 0);
       else if (p.payment_amount_cents) receivedCents += p.payment_amount_cents;
     });
     bizAds.forEach(function (a) {
       if (a.booking_status === 'declined') return;
-      totalCents += (a.price_cents || 0);
-      if (a.payment_status === 'trade') { receivedCents += (a.price_cents || 0); hasTradeBooking = true; }
-      else {
+      if (a.payment_status === 'trade') {
+        hasTradeBooking = true; // trade bookings carry no dollar value
+      } else {
+        totalCents += (a.price_cents || 0);
         hasCashBooking = true;
         if (a.payment_status === 'paid') receivedCents += (a.price_cents || 0);
         else if (a.payment_amount_cents) receivedCents += a.payment_amount_cents;
@@ -1784,8 +1790,8 @@
     }
 
     var payLabel, payClass, payFraction;
-    if (totalCents === 0) { payLabel = '--'; payClass = ''; payFraction = ''; }
-    else if (hasTradeBooking && !hasCashBooking) { payLabel = 'In Trade'; payClass = 'spn-crm-pay-badge--trade'; payFraction = ''; }
+    if (hasTradeBooking && !hasCashBooking) { payLabel = 'In Trade'; payClass = 'spn-crm-pay-badge--trade'; payFraction = ''; }
+    else if (totalCents === 0) { payLabel = '--'; payClass = ''; payFraction = ''; }
     else if (receivedCents >= totalCents) { payLabel = 'Paid in Full'; payClass = 'spn-crm-pay-badge--paid'; payFraction = '$' + (receivedCents/100).toLocaleString() + ' / $' + (totalCents/100).toLocaleString(); }
     else if (receivedCents > 0) { payLabel = 'Partial'; payClass = 'spn-crm-pay-badge--partial'; payFraction = '$' + (receivedCents/100).toLocaleString() + ' / $' + (totalCents/100).toLocaleString(); }
     else { payLabel = 'Unpaid'; payClass = 'spn-crm-pay-badge--unpaid'; payFraction = '$0 / $' + (totalCents/100).toLocaleString(); }
