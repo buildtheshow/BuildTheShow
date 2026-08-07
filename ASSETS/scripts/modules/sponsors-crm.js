@@ -1715,6 +1715,26 @@
       });
   }
 
+  function crmExportAllPhotos(buttonEl) {
+    var businesses = SpnsState.businesses || [];
+    var allFiles = [];
+    businesses.forEach(function (biz) {
+      var bizAds = (SpnsState.ads || []).filter(function (ad) { return ad.business_id === biz.id; });
+      var bizFiles = (SpnsState.files || []).filter(function (file) { return file.business_id === biz.id; });
+      allFiles = allFiles.concat(crmCollectBusinessFiles(biz, bizAds, bizFiles).filter(function (f) { return f.is_image; }));
+    });
+    var button = buttonEl || null;
+    var originalLabel = button ? button.textContent : '';
+    if (button) { button.disabled = true; button.textContent = 'Preparing...'; }
+    crmDownloadFiles(allFiles, 'Sponsor Photos')
+      .catch(function (error) {
+        alert('Could not download photos: ' + error.message);
+      })
+      .finally(function () {
+        if (button) { button.disabled = false; button.textContent = originalLabel; }
+      });
+  }
+
   function crmBookingStatusInfo(status) {
     if (status === 'approved') return { label: 'Accepted', cls: 'spn-crm-card-status--accepted', active: true, declined: false };
     if (status === 'declined') return { label: 'Declined', cls: 'spn-crm-card-status--declined', active: false, declined: true };
@@ -4043,6 +4063,7 @@
             '<span class="spn-toolbar-title" id="spn-crm-count">Businesses</span>' +
             '<div style="display:flex;gap:0.5rem;">' +
               '<button class="spn-btn spn-btn--ghost" id="spn-crm-export-btn" onclick="MarketingSponsorsModule.crmExportReport()">Export</button>' +
+              '<button class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.crmExportAllPhotos(this)">Export Photos</button>' +
               '<button class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.openBizModal()">+ Add Business (quick, no artwork step)</button>' +
               '<button class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.openPublicBookingModal()">+ Add Business</button>' +
             '</div>' +
@@ -4451,6 +4472,7 @@
 
     switchTab:       switchTab,
     crmExportReport: crmExportReport,
+    crmExportAllPhotos: crmExportAllPhotos,
     openBizModal:    openBizModal,
     closeBizModal:   closeBizModal,
     saveBiz:         saveBiz,
