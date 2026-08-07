@@ -696,7 +696,11 @@
         document.getElementById('spn-biz-ad-price').value = '';
         document.getElementById('spn-biz-booking-type').value = '';
         document.getElementById('spn-biz-booking-trade').checked = false;
+        document.querySelectorAll('input[name="spn-biz-artwork-status"]').forEach(function (r) { r.checked = false; });
+        document.getElementById('spn-biz-artwork-about').value = '';
+        document.getElementById('spn-biz-artwork-extra').value = '';
         crmBizModalSyncBookingFields();
+        crmBizModalSyncArtworkFields();
         crmBizModalToggleTrade();
       }
     }
@@ -717,7 +721,18 @@
     var type = typeEl.value;
     document.getElementById('spn-biz-booking-pkg-fields').style.display = type === 'package' ? '' : 'none';
     document.getElementById('spn-biz-booking-ad-fields').style.display = type === 'ad' ? '' : 'none';
+    document.getElementById('spn-biz-artwork-wrap').style.display = type ? '' : 'none';
     document.getElementById('spn-biz-booking-payment-wrap').style.display = type ? '' : 'none';
+    if (!type) {
+      document.querySelectorAll('input[name="spn-biz-artwork-status"]').forEach(function (r) { r.checked = false; });
+      crmBizModalSyncArtworkFields();
+    }
+  }
+
+  function crmBizModalSyncArtworkFields() {
+    var checked = document.querySelector('input[name="spn-biz-artwork-status"]:checked');
+    var helpFields = document.getElementById('spn-biz-artwork-help-fields');
+    if (helpFields) helpFields.style.display = (checked && checked.value === 'help') ? '' : 'none';
   }
 
   function crmBizModalToggleTrade() {
@@ -727,18 +742,33 @@
     statusWrap.style.display = checkbox.checked ? 'none' : '';
   }
 
+  function crmBizModalArtworkData() {
+    var checked = document.querySelector('input[name="spn-biz-artwork-status"]:checked');
+    if (!checked) return {};
+    var data = { status: checked.value };
+    if (checked.value === 'help') {
+      var adTypeSel = document.getElementById('spn-biz-artwork-adtype');
+      data.ad_type = adTypeSel.options[adTypeSel.selectedIndex].text;
+      data.about = document.getElementById('spn-biz-artwork-about').value.trim();
+      data.extra_notes = document.getElementById('spn-biz-artwork-extra').value.trim();
+    }
+    return data;
+  }
+
   function crmBizModalSaveBooking(bizId) {
     var typeEl = document.getElementById('spn-biz-booking-type');
     var type = typeEl ? typeEl.value : '';
     if (!type) return Promise.resolve();
     var isTrade = document.getElementById('spn-biz-booking-trade').checked;
     var paymentStatus = isTrade ? 'trade' : document.getElementById('spn-biz-booking-payment').value;
+    var artworkData = crmBizModalArtworkData();
     if (type === 'package') {
       return dbInsert('sponsor_packages', {
         business_id: bizId,
         tier_name: document.getElementById('spn-biz-pkg-tier').value || null,
         amount_cents: Math.round((parseFloat(document.getElementById('spn-biz-pkg-amount').value) || 0) * 100),
         payment_status: paymentStatus,
+        artwork_data: artworkData,
       });
     }
     if (type === 'ad') {
@@ -754,6 +784,7 @@
         payment_status: paymentStatus,
         artwork_status: 'missing',
         approval_status: 'pending',
+        artwork_data: artworkData,
       });
     }
     return Promise.resolve();
@@ -3994,6 +4025,20 @@
                   '<div class="spn-row-2"><div class="spn-field"><label>Ad Size *</label><select id="spn-biz-ad-size"><option value="">Select size...</option></select></div><div class="spn-field"><label>Colour or Black &amp; White</label><select id="spn-biz-ad-type"><option value="colour">Colour</option><option value="bw">Black &amp; White</option></select></div></div>' +
                   '<div class="spn-field"><label>Price ($)</label><input type="number" id="spn-biz-ad-price" min="0" step="0.01" placeholder="0.00" /></div>' +
                 '</div>' +
+                '<div id="spn-biz-artwork-wrap" style="display:none;">' +
+                  '<div class="spn-field"><label>Artwork Plan</label>' +
+                    '<div class="spn-crm-artwork-choice-group">' +
+                      '<label class="spn-crm-artwork-choice"><input type="radio" name="spn-biz-artwork-status" value="ready" onchange="MarketingSponsorsModule.crmBizModalSyncArtworkFields()" /> I have it ready to upload</label>' +
+                      '<label class="spn-crm-artwork-choice"><input type="radio" name="spn-biz-artwork-status" value="later" onchange="MarketingSponsorsModule.crmBizModalSyncArtworkFields()" /> They&rsquo;ll send it before the deadline</label>' +
+                      '<label class="spn-crm-artwork-choice"><input type="radio" name="spn-biz-artwork-status" value="help" onchange="MarketingSponsorsModule.crmBizModalSyncArtworkFields()" /> They need help creating an ad</label>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div id="spn-biz-artwork-help-fields" style="display:none;">' +
+                    '<div class="spn-field"><label>What are they advertising?</label><select id="spn-biz-artwork-adtype"><option value="My business">My business</option><option value="A specific product">A specific product</option><option value="A sale or promotion">A sale or promotion</option><option value="An event">An event</option><option value="Other">Other</option></select></div>' +
+                    '<div class="spn-field"><label>Tell us a little about it</label><textarea id="spn-biz-artwork-about" placeholder="What would you like people to know?"></textarea></div>' +
+                    '<div class="spn-field"><label>Anything else we should know? (optional)</label><textarea id="spn-biz-artwork-extra" placeholder="Colours, style preferences, special requests..."></textarea></div>' +
+                  '</div>' +
+                '</div>' +
                 '<div id="spn-biz-booking-payment-wrap" style="display:none;">' +
                   '<div class="spn-field"><label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-weight:700;"><input type="checkbox" id="spn-biz-booking-trade" onchange="MarketingSponsorsModule.crmBizModalToggleTrade()" style="accent-color:#572e88;width:16px;height:16px;" /> In trade (no payment required)</label></div>' +
                   '<div class="spn-field" id="spn-biz-booking-payment-status-wrap"><label>Payment Status</label><select id="spn-biz-booking-payment"><option value="unpaid">Unpaid</option><option value="paid">Paid</option><option value="invoice_sent">Invoice Sent</option><option value="overdue">Overdue</option></select></div>' +
@@ -4349,6 +4394,7 @@
     saveBiz:         saveBiz,
     crmBizModalToggleExisting: crmBizModalToggleExisting,
     crmBizModalSyncBookingFields: crmBizModalSyncBookingFields,
+    crmBizModalSyncArtworkFields: crmBizModalSyncArtworkFields,
     crmBizModalToggleTrade: crmBizModalToggleTrade,
     deleteBiz:       deleteBiz,
     openAdModal:     openAdModal,

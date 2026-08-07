@@ -13960,7 +13960,7 @@ See you soon!
     const crmSubTabs = { sponsors: 1, programmeads: 1, showsponsors: 1, sponsorssettings: 1 };
     const moduleVersions = { programme: '?v=20260804-programme-workspace-live-fix' };
     const scriptSrc = crmSubTabs[subSafe]
-      ? '/ASSETS/scripts/modules/sponsors-crm.js?v=20260806b-artwork-badge-fix'
+      ? '/ASSETS/scripts/modules/sponsors-crm.js?v=20260806c-add-business-artwork'
       : '/ASSETS/scripts/modules/marketing-' + subSafe + '.js' + (moduleVersions[subSafe] || '');
     loadScriptOnce(scriptSrc)
       .then(() => {
