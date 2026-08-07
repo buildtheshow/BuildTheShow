@@ -664,8 +664,10 @@
     document.getElementById('spn-biz-email').value     = (b && b.contact_email)                            || '';
     document.getElementById('spn-biz-phone').value     = (b && b.contact_phone)                            || '';
     document.getElementById('spn-biz-website').value   = (b && b.website)                                  || '';
-    document.getElementById('spn-biz-instagram').value = (b && b.social_links && b.social_links.instagram) || '';
-    document.getElementById('spn-biz-notes').value     = (b && b.notes)                                    || '';
+    var instagramEl = document.getElementById('spn-biz-instagram');
+    if (instagramEl) instagramEl.value = (b && b.social_links && b.social_links.instagram) || '';
+    var notesEl = document.getElementById('spn-biz-notes');
+    if (notesEl) notesEl.value = (b && b.notes) || '';
 
     // These only exist on the Show Sponsors CRM's combined Add Business + Booking modal.
     var existingWrap = document.getElementById('spn-biz-existing-wrap');
@@ -697,6 +699,8 @@
         document.getElementById('spn-biz-booking-type').value = '';
         document.getElementById('spn-biz-booking-trade').checked = false;
         document.querySelectorAll('input[name="spn-biz-artwork-status"]').forEach(function (r) { r.checked = false; });
+        document.querySelectorAll('.spn-biz-artwork-include-check').forEach(function (c) { c.checked = false; });
+        document.getElementById('spn-biz-artwork-adtype').value = '';
         document.getElementById('spn-biz-artwork-about').value = '';
         document.getElementById('spn-biz-artwork-extra').value = '';
         crmBizModalSyncBookingFields();
@@ -750,6 +754,7 @@
       var adTypeSel = document.getElementById('spn-biz-artwork-adtype');
       data.ad_type = adTypeSel.options[adTypeSel.selectedIndex].text;
       data.about = document.getElementById('spn-biz-artwork-about').value.trim();
+      data.include = Array.prototype.slice.call(document.querySelectorAll('.spn-biz-artwork-include-check:checked')).map(function (c) { return c.value; });
       data.extra_notes = document.getElementById('spn-biz-artwork-extra').value.trim();
     }
     return data;
@@ -813,14 +818,16 @@
 
     var name = document.getElementById('spn-biz-name').value.trim();
     if (!name) { alert('Business name is required.'); return; }
+    var instagramEl2 = document.getElementById('spn-biz-instagram');
+    var notesEl2 = document.getElementById('spn-biz-notes');
     var payload = {
       name:          name,
       contact_name:  document.getElementById('spn-biz-contact').value.trim()  || null,
       contact_email: document.getElementById('spn-biz-email').value.trim()    || null,
       contact_phone: document.getElementById('spn-biz-phone').value.trim()    || null,
       website:       document.getElementById('spn-biz-website').value.trim()  || null,
-      social_links:  { instagram: document.getElementById('spn-biz-instagram').value.trim() || null },
-      notes:         document.getElementById('spn-biz-notes').value.trim()    || null,
+      social_links:  { instagram: instagramEl2 ? (instagramEl2.value.trim() || null) : null },
+      notes:         notesEl2 ? (notesEl2.value.trim() || null) : null,
     };
     var p = id ? dbUpdate('sponsor_businesses', id, payload) : dbInsert('sponsor_businesses', payload);
     p.then(function (result) {
@@ -4010,14 +4017,15 @@
               '<div class="spn-modal-title" id="spn-biz-modal-title">Add Business</div>' +
               '<input type="hidden" id="spn-biz-id" />' +
               '<div class="spn-field" id="spn-biz-existing-wrap" style="display:none;"><label>Business</label><select id="spn-biz-existing" onchange="MarketingSponsorsModule.crmBizModalToggleExisting()"><option value="__new">+ New business</option></select></div>' +
+              '<h3 class="spn-modal-section-head">Your Details</h3>' +
               '<div id="spn-biz-fields">' +
-                '<div class="spn-row-2"><div class="spn-field"><label>Business Name *</label><input type="text" id="spn-biz-name" placeholder="Rainbow Youth Theatre" /></div><div class="spn-field"><label>Contact Person</label><input type="text" id="spn-biz-contact" placeholder="Jane Smith" /></div></div>' +
-                '<div class="spn-row-2"><div class="spn-field"><label>Email</label><input type="email" id="spn-biz-email" placeholder="jane@example.com" /></div><div class="spn-field"><label>Phone</label><input type="tel" id="spn-biz-phone" placeholder="250-555-0100" /></div></div>' +
-                '<div class="spn-row-2"><div class="spn-field"><label>Website</label><input type="url" id="spn-biz-website" placeholder="https://example.com" /></div><div class="spn-field"><label>Instagram</label><input type="text" id="spn-biz-instagram" placeholder="@handle" /></div></div>' +
-                '<div class="spn-field"><label>Notes</label><textarea id="spn-biz-notes" placeholder="Any notes about this business..."></textarea></div>' +
+                '<div class="spn-row-2"><div class="spn-field"><label>Contact Name *</label><input type="text" id="spn-biz-contact" placeholder="e.g. Jane Smith" /></div><div class="spn-field"><label>Business / Organisation Name *</label><input type="text" id="spn-biz-name" placeholder="e.g. Smith &amp; Co. Accounting" /></div></div>' +
+                '<div class="spn-row-2"><div class="spn-field"><label>Email Address *</label><input type="email" id="spn-biz-email" placeholder="e.g. jane@smithco.com" /></div><div class="spn-field"><label>Phone Number *</label><input type="tel" id="spn-biz-phone" placeholder="(555) 123-4567" /></div></div>' +
+                '<div class="spn-field"><label>Website (optional)</label><input type="url" id="spn-biz-website" placeholder="e.g. www.smithco.com" /></div>' +
               '</div>' +
               '<div id="spn-biz-booking-wrap" style="margin-top:0.5rem;padding-top:0.75rem;border-top:1px solid rgba(87,46,136,0.1);">' +
-                '<div class="spn-field"><label>Booking</label><select id="spn-biz-booking-type" onchange="MarketingSponsorsModule.crmBizModalSyncBookingFields()"><option value="">No booking yet</option><option value="package">Sponsor Package</option><option value="ad">Programme Ad</option></select></div>' +
+                '<h3 class="spn-modal-section-head">Which sponsorship?</h3>' +
+                '<div class="spn-field"><select id="spn-biz-booking-type" onchange="MarketingSponsorsModule.crmBizModalSyncBookingFields()"><option value="">No booking yet</option><option value="package">Sponsor Package</option><option value="ad">Programme Ad</option></select></div>' +
                 '<div id="spn-biz-booking-pkg-fields" style="display:none;">' +
                   '<div class="spn-row-2"><div class="spn-field"><label>Tier / Package</label><select id="spn-biz-pkg-tier"><option value="">Custom / no tier</option></select></div><div class="spn-field"><label>Amount ($)</label><input type="number" id="spn-biz-pkg-amount" min="0" step="0.01" placeholder="0.00" /></div></div>' +
                 '</div>' +
@@ -4026,16 +4034,27 @@
                   '<div class="spn-field"><label>Price ($)</label><input type="number" id="spn-biz-ad-price" min="0" step="0.01" placeholder="0.00" /></div>' +
                 '</div>' +
                 '<div id="spn-biz-artwork-wrap" style="display:none;">' +
-                  '<div class="spn-field"><label>Artwork Plan</label>' +
-                    '<div class="spn-crm-artwork-choice-group">' +
-                      '<label class="spn-crm-artwork-choice"><input type="radio" name="spn-biz-artwork-status" value="ready" onchange="MarketingSponsorsModule.crmBizModalSyncArtworkFields()" /> I have it ready to upload</label>' +
-                      '<label class="spn-crm-artwork-choice"><input type="radio" name="spn-biz-artwork-status" value="later" onchange="MarketingSponsorsModule.crmBizModalSyncArtworkFields()" /> They&rsquo;ll send it before the deadline</label>' +
-                      '<label class="spn-crm-artwork-choice"><input type="radio" name="spn-biz-artwork-status" value="help" onchange="MarketingSponsorsModule.crmBizModalSyncArtworkFields()" /> They need help creating an ad</label>' +
-                    '</div>' +
+                  '<h3 class="spn-modal-section-head">Artwork</h3>' +
+                  '<p class="spn-modal-section-subcopy">Do they have their artwork ready?</p>' +
+                  '<div class="spn-crm-artwork-choice-group">' +
+                    '<label class="spn-crm-artwork-choice"><input type="radio" name="spn-biz-artwork-status" value="ready" onchange="MarketingSponsorsModule.crmBizModalSyncArtworkFields()" /><span><span class="spn-crm-artwork-choice-title">I have it ready to upload</span><span class="spn-crm-artwork-choice-sub">Upload their finished ad artwork now.</span></span></label>' +
+                    '<label class="spn-crm-artwork-choice"><input type="radio" name="spn-biz-artwork-status" value="later" onchange="MarketingSponsorsModule.crmBizModalSyncArtworkFields()" /><span><span class="spn-crm-artwork-choice-title">I&rsquo;ll have it before the deadline</span><span class="spn-crm-artwork-choice-sub">Follow up closer to the deadline.</span></span></label>' +
+                    '<label class="spn-crm-artwork-choice"><input type="radio" name="spn-biz-artwork-status" value="help" onchange="MarketingSponsorsModule.crmBizModalSyncArtworkFields()" /><span><span class="spn-crm-artwork-choice-title">I would like help creating an ad</span><span class="spn-crm-artwork-choice-sub">Tell us about the ad and we&rsquo;ll design it for them.</span></span></label>' +
                   '</div>' +
                   '<div id="spn-biz-artwork-help-fields" style="display:none;">' +
-                    '<div class="spn-field"><label>What are they advertising?</label><select id="spn-biz-artwork-adtype"><option value="My business">My business</option><option value="A specific product">A specific product</option><option value="A sale or promotion">A sale or promotion</option><option value="An event">An event</option><option value="Other">Other</option></select></div>' +
-                    '<div class="spn-field"><label>Tell us a little about it</label><textarea id="spn-biz-artwork-about" placeholder="What would you like people to know?"></textarea></div>' +
+                    '<div class="spn-field"><label>What are they advertising?</label><select id="spn-biz-artwork-adtype"><option value="">Select one...</option><option value="business">My business</option><option value="product">A product or service</option><option value="sale">A sale or promotion</option><option value="event">An event</option><option value="other">Something else</option></select></div>' +
+                    '<div class="spn-field"><label>Tell us a little about it.</label><textarea id="spn-biz-artwork-about" placeholder="What would you like people to know?"></textarea></div>' +
+                    '<div class="spn-field"><label>What would you like included?</label>' +
+                      '<div class="spn-crm-artwork-include-grid">' +
+                        '<label class="spn-crm-artwork-include"><input type="checkbox" value="logo" class="spn-biz-artwork-include-check" /> Logo</label>' +
+                        '<label class="spn-crm-artwork-include"><input type="checkbox" value="photos" class="spn-biz-artwork-include-check" /> Photos</label>' +
+                        '<label class="spn-crm-artwork-include"><input type="checkbox" value="phone" class="spn-biz-artwork-include-check" /> Phone Number</label>' +
+                        '<label class="spn-crm-artwork-include"><input type="checkbox" value="email" class="spn-biz-artwork-include-check" /> Email Address</label>' +
+                        '<label class="spn-crm-artwork-include"><input type="checkbox" value="website" class="spn-biz-artwork-include-check" /> Website</label>' +
+                        '<label class="spn-crm-artwork-include"><input type="checkbox" value="address" class="spn-biz-artwork-include-check" /> Address</label>' +
+                        '<label class="spn-crm-artwork-include"><input type="checkbox" value="social" class="spn-biz-artwork-include-check" /> Social Media</label>' +
+                      '</div>' +
+                    '</div>' +
                     '<div class="spn-field"><label>Anything else we should know? (optional)</label><textarea id="spn-biz-artwork-extra" placeholder="Colours, style preferences, special requests..."></textarea></div>' +
                   '</div>' +
                 '</div>' +
