@@ -312,6 +312,7 @@
     body.spp-embed-mode > *:not(.sp-overlay) { display: none !important; }
     body.spp-embed-mode { background: #fff; }
     body.spp-embed-mode .sp-overlay.open { position: static; background: none; padding: 0; height: 100vh; }
+    body.spp-embed-mode .spp-embed-mode-only { display: block !important; }
 
     /* ---- REQUEST MODAL ---- */
     .sp-overlay { display: none; position: fixed; inset: 0; z-index: 1000; align-items: center; justify-content: center; padding: 1rem; background: rgba(0,0,0,0.76); }
@@ -1048,6 +1049,9 @@
             <div class="sp-field">
               <label>Website <span class="spb-opt-tag">(optional)</span></label>
               <input id="sp-website" placeholder="e.g. www.smithco.com" />
+            </div>
+            <div class="sp-field spp-embed-mode-only" style="display:none;">
+              <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;font-weight:700;"><input type="checkbox" id="sp-trade-checkbox" style="accent-color:#572e88;width:18px;height:18px;" /> In trade (no payment required)</label>
             </div>
           </div>
 
@@ -2165,7 +2169,9 @@
 
         var zone = spbArtworkStatus === 'ready' ? 'artwork' : 'help';
         var uploadedUrls = await uploadSponsorFiles(bizId, spbUploadedFiles[zone] || []);
-        await finalizeSponsorSubmission(bizId, website, notes, uploadedUrls);
+        var tradeEl = document.getElementById('sp-trade-checkbox');
+        var paymentStatus = (tradeEl && tradeEl.checked) ? 'trade' : null;
+        await finalizeSponsorSubmission(bizId, website, notes, uploadedUrls, paymentStatus);
 
         var optionLabel = selected.tier || selected.size || '';
         var amountLabel = selected.amount ? '$' + Number(selected.amount).toLocaleString() : '';
@@ -2193,8 +2199,10 @@
               '</table></div>';
           }
         }
-        sendSponsorConfirmation(contact, email, business, selected.kind, optionLabel, amountLabel, detailHtml, uploadedUrls).catch(function(e) { console.warn('Confirmation failed:', e); });
-        sendSponsorNotification(business, contact, email, selected.kind, optionLabel, uploadedUrls).catch(function(e) { console.warn('Notification failed:', e); });
+        if (!document.body.classList.contains('spp-embed-mode')) {
+          sendSponsorConfirmation(contact, email, business, selected.kind, optionLabel, amountLabel, detailHtml, uploadedUrls).catch(function(e) { console.warn('Confirmation failed:', e); });
+          sendSponsorNotification(business, contact, email, selected.kind, optionLabel, uploadedUrls).catch(function(e) { console.warn('Notification failed:', e); });
+        }
 
         document.getElementById('sp-request-modal').innerHTML =
           '<div class="sp-modal" style="text-align:center;padding:3rem 2rem;">' +
@@ -2259,7 +2267,7 @@
       return msg.indexOf('sponsor_files') !== -1 && msg.indexOf('production_id') !== -1;
     }
 
-    async function finalizeSponsorSubmission(bizId, website, notes, uploadedUrls) {
+    async function finalizeSponsorSubmission(bizId, website, notes, uploadedUrls, paymentStatus) {
       var payload = {
         p_production_id: production.id,
         p_business_id: bizId,
@@ -2269,15 +2277,23 @@
         p_artwork_status: spbArtworkStatus || null,
         p_files: uploadedUrls || [],
         p_artwork_data: selected.artworkData || {},
+        p_payment_status: paymentStatus || null,
       };
       var res = await sb.rpc('finalize_sponsor_submission', payload);
       if (res.error && isMissingRpcFunctionError(res.error)) {
-        // Database hasn't been migrated to accept p_artwork_data yet -- fall back to the
+        // Database hasn't been migrated to accept p_payment_status yet -- fall back to the
         // older signature so the submission still goes through instead of hard-failing.
-        console.warn('finalize_sponsor_submission: retrying without p_artwork_data (DB migration pending)', res.error);
-        var fallbackPayload = Object.assign({}, payload);
-        delete fallbackPayload.p_artwork_data;
-        res = await sb.rpc('finalize_sponsor_submission', fallbackPayload);
+        console.warn('finalize_sponsor_submission: retrying without p_payment_status (DB migration pending)', res.error);
+        var noTradePayload = Object.assign({}, payload);
+        delete noTradePayload.p_payment_status;
+        res = await sb.rpc('finalize_sponsor_submission', noTradePayload);
+        if (res.error && isMissingRpcFunctionError(res.error)) {
+          // Also hasn't been migrated to accept p_artwork_data -- fall back further.
+          console.warn('finalize_sponsor_submission: retrying without p_artwork_data (DB migration pending)', res.error);
+          var fallbackPayload = Object.assign({}, noTradePayload);
+          delete fallbackPayload.p_artwork_data;
+          res = await sb.rpc('finalize_sponsor_submission', fallbackPayload);
+        }
       }
       if (res.error && isSponsorFilesProductionIdError(res.error)) {
         // The DB function's sponsor_files insert is missing a required column (pending
