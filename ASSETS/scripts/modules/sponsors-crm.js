@@ -1654,7 +1654,7 @@
     if (status === 'ready') return '<div class="spn-crm-artwork-intent spn-crm-artwork-intent--ready">Has Artwork Now</div>';
     if (status === 'later') return '<div class="spn-crm-artwork-intent spn-crm-artwork-intent--later">Sending Artwork Later</div>';
     if (status === 'help') return '<div class="spn-crm-artwork-intent spn-crm-artwork-intent--help">Needs Design Help</div>';
-    return '';
+    return '<div class="spn-crm-artwork-intent spn-crm-artwork-intent--unknown">Artwork Plan Not Specified</div>';
   }
 
   function crmActionButtonsHtml(table, booking) {
