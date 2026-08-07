@@ -445,17 +445,40 @@
 
   function hydratePublicPageAction() {
     var action = document.getElementById('spn-public-page-action');
-    var bookLink = document.getElementById('spn-crm-book-public-link');
-    if (!action && !bookLink) return;
+    if (!action) return;
+    action.href = window.location.origin + '/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId);
+    publicPageMeta().then(function (meta) { action.href = sponsorPublicUrl(meta); }).catch(function () {});
+  }
+
+  function withUrlParam(url, key, value) {
+    return url + (url.indexOf('?') === -1 ? '?' : '&') + key + '=' + encodeURIComponent(value);
+  }
+
+  function openPublicBookingModal() {
+    var modal = document.getElementById('spn-crm-public-book-modal');
+    var frame = document.getElementById('spn-crm-public-book-frame');
+    if (!modal || !frame) return;
     var fallbackUrl = window.location.origin + '/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId);
-    if (action) action.href = fallbackUrl;
-    if (bookLink) bookLink.href = fallbackUrl;
+    frame.src = withUrlParam(fallbackUrl, 'open_booking', '1');
+    modal.classList.add('open');
     publicPageMeta().then(function (meta) {
-      var url = sponsorPublicUrl(meta);
-      if (action) action.href = url;
-      if (bookLink) bookLink.href = url;
+      frame.src = withUrlParam(sponsorPublicUrl(meta), 'open_booking', '1');
     }).catch(function () {});
   }
+
+  function closePublicBookingModal() {
+    var modal = document.getElementById('spn-crm-public-book-modal');
+    var frame = document.getElementById('spn-crm-public-book-frame');
+    if (modal) modal.classList.remove('open');
+    if (frame) frame.src = 'about:blank';
+  }
+
+  window.addEventListener('message', function (event) {
+    if (event.origin !== window.location.origin || !event.data || event.data.type !== 'bts-sponsor-booking-submitted') return;
+    closePublicBookingModal();
+    SpnsState.loaded.businesses = false;
+    if (document.getElementById('spn-crm-biz-list')) loadShowSponsorsCRM();
+  });
 
   // -- DASHBOARD ---------------------------------------------------------------
 
@@ -4014,11 +4037,17 @@
             '<span class="spn-toolbar-title" id="spn-crm-count">Businesses</span>' +
             '<div style="display:flex;gap:0.5rem;">' +
               '<button class="spn-btn spn-btn--ghost" id="spn-crm-export-btn" onclick="MarketingSponsorsModule.crmExportReport()">Export</button>' +
-              '<a class="spn-btn spn-btn--ghost" id="spn-crm-book-public-link" href="#" target="_blank" rel="noopener">Book on the Public Form</a>' +
-              '<button class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.openBizModal()">+ Add Business (quick)</button>' +
+              '<button class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.openBizModal()">+ Add Business (quick, no artwork step)</button>' +
+              '<button class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.openPublicBookingModal()">+ Add Business</button>' +
             '</div>' +
           '</div>' +
           '<div id="spn-crm-biz-list"><div class="spn-loading-row">Loading sponsor data...</div></div>' +
+          '<div class="spn-modal-overlay" id="spn-crm-public-book-modal">' +
+            '<div class="spn-modal spn-modal--public-book">' +
+              '<button type="button" class="spn-crm-public-book-close" onclick="MarketingSponsorsModule.closePublicBookingModal()" aria-label="Close">&times;</button>' +
+              '<iframe id="spn-crm-public-book-frame" class="spn-crm-public-book-frame" title="Book a sponsor"></iframe>' +
+            '</div>' +
+          '</div>' +
 
           '<div class="spn-modal-overlay" id="spn-biz-modal">' +
             '<div class="spn-modal">' +
@@ -4422,6 +4451,8 @@
     crmBizModalToggleExisting: crmBizModalToggleExisting,
     crmBizModalSyncBookingFields: crmBizModalSyncBookingFields,
     crmBizModalSyncArtworkFields: crmBizModalSyncArtworkFields,
+    openPublicBookingModal: openPublicBookingModal,
+    closePublicBookingModal: closePublicBookingModal,
     crmBizModalToggleTrade: crmBizModalToggleTrade,
     deleteBiz:       deleteBiz,
     openAdModal:     openAdModal,
