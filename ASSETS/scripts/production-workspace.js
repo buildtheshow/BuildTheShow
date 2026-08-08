@@ -17445,7 +17445,8 @@ See you soon!
     const { data: assignments, error } = await sb.from('casting_assignments')
       .select('*')
       .eq('production_id', prodId)
-      .eq('state', 'offer_accepted');
+      .eq('state', 'offer_accepted')
+      .order('created_at', { ascending: true });
     if (error) throw error;
     if (!assignments?.length) return [];
     const applicantIds = [...new Set(assignments.map(r => r.applicant_id).filter(Boolean))];
