@@ -21123,7 +21123,37 @@ See you soon!
   }
 
   function rptLoadHouseholds() {
-    _rptHouseholds = Array.isArray(prod?.registration_households) ? prod.registration_households : [];
+    const raw = Array.isArray(prod?.registration_households) ? prod.registration_households : [];
+    // Self-heal: a member's assignment id can go stale when they're given an
+    // additional character (a new casting_assignments row). Re-resolve each
+    // member against their current canonical registration record by applicant_id
+    // so the household link survives that without needing a manual data fix.
+    let healed = raw.map(h => {
+      if (!Array.isArray(h.members) || !h.members.length) return h;
+      const member_ids = h.members.map(m => {
+        const current = _rptCastItems.find(i => String(i.app?.id || '') === String(m.applicant_id || ''));
+        return current ? String(current.assignment?.id || '') : String(m.assignment_id || '');
+      }).filter(Boolean);
+      return member_ids.length ? { ...h, member_ids } : h;
+    });
+    // Drop stale duplicate household records left behind by the same re-add:
+    // if one household's members are a subset of (or identical to) another's,
+    // keep only the more complete/earlier one.
+    const applicantSet = h => new Set((h.members || []).map(m => String(m.applicant_id || '')).filter(Boolean));
+    healed = healed.filter((h, idx) => {
+      const setH = applicantSet(h);
+      if (!setH.size) return true;
+      return !healed.some((other, j) => {
+        if (j === idx) return false;
+        const setO = applicantSet(other);
+        if (!setO.size) return false;
+        const isSuperset = setO.size > setH.size;
+        const isEarlierDup = setO.size === setH.size && j < idx;
+        if (!isSuperset && !isEarlierDup) return false;
+        return [...setH].every(a => setO.has(a));
+      });
+    });
+    _rptHouseholds = healed;
   }
 
   async function rptSaveHouseholdsToDb(households) {
