@@ -74,7 +74,7 @@
       }
       function groupRows() {
         const map = new Map();
-        rows.forEach(row => {
+        rows.filter(row => (row.status || 'pending') !== 'declined').forEach(row => {
           const key = personKey(row);
           if (!map.has(key)) map.set(key, { key, name: row.name || 'Unknown', email: row.email || '', phone: row.phone || '', shifts: [] });
           const g = map.get(key);
