@@ -43,11 +43,6 @@
         render();
       }
 
-      function fmtDateShift(row) {
-        if (row.shift_date) return S.fmtDate(row.shift_date);
-        const rd = Array.isArray(row.required_dates) ? row.required_dates.filter(Boolean) : [];
-        return rd.length ? rd.join(', ') : 'Flexible';
-      }
       function fmtTime(t) {
         if (!t) return '';
         const [h, m] = String(t).slice(0, 5).split(':').map(Number);
@@ -62,24 +57,81 @@
         const map = { pending: 'Pending', approved: 'Approved', declined: 'Declined' };
         return map[status] || 'Pending';
       }
+      const CAL_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      function calBadgeHtml(dateStr) {
+        const parts = String(dateStr).split('-');
+        const month = CAL_MONTHS[parseInt(parts[1], 10) - 1] || '';
+        const day = parseInt(parts[2], 10);
+        return `<div class="cal-badge"><div class="cal-badge-month">${month}</div><div class="cal-badge-day">${day || ''}</div></div>`;
+      }
 
-      function rowCardHtml(row) {
+      // ── Group shifts into one card per person ──────────────────────────
+      function personKey(row) {
+        const email = String(row.email || '').trim().toLowerCase();
+        if (email) return 'email:' + email;
+        const name = String(row.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        return name ? 'name:' + name : 'row:' + row.id;
+      }
+      function groupRows() {
+        const map = new Map();
+        rows.forEach(row => {
+          const key = personKey(row);
+          if (!map.has(key)) map.set(key, { key, name: row.name || 'Unknown', email: row.email || '', phone: row.phone || '', shifts: [] });
+          const g = map.get(key);
+          if (!g.email && row.email) g.email = row.email;
+          if (!g.phone && row.phone) g.phone = row.phone;
+          if (String(row.name || '').length > String(g.name || '').length) g.name = row.name || g.name;
+          g.shifts.push(row);
+        });
+        return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+      }
+
+      function shiftChipHtml(row) {
+        const st = row.status || 'pending';
         const timeStr = fmtTime(row.shift_start_time) && fmtTime(row.shift_end_time)
-          ? fmtTime(row.shift_start_time) + ' - ' + fmtTime(row.shift_end_time)
+          ? fmtTime(row.shift_start_time) + '-' + fmtTime(row.shift_end_time)
           : fmtTime(row.shift_start_time) || '';
+        if (!row.shift_date) {
+          const rd = Array.isArray(row.required_dates) ? row.required_dates.filter(Boolean) : [];
+          const label = rd.length ? rd.length + ' dates' : 'Flexible';
+          return `<div class="vol-shift-flex" onclick="window.__volRoster.openEdit('${esc(row.id)}')" title="${esc(row.role_name || '')}">${esc(label)}</div>`;
+        }
         return `
-          <div class="vol-role-card">
-            <div class="vol-role-top">
+          <div class="vol-shift-chip status-${esc(st)}">
+            <div onclick="window.__volRoster.openEdit('${esc(row.id)}')" title="Edit this shift">${calBadgeHtml(row.shift_date)}</div>
+            ${timeStr ? `<div class="vol-shift-time">${esc(timeStr)}</div>` : ''}
+            ${row.role_name ? `<div class="vol-shift-role">${esc(row.role_name)}</div>` : ''}
+            <button class="vol-shift-x" onclick="window.__volRoster.remove('${esc(row.id)}')" title="Remove this shift">&#10005;</button>
+          </div>`;
+      }
+
+      function personCardHtml(group) {
+        const roles = [...new Set(group.shifts.map(s => s.role_name || 'Volunteer'))].join(' &middot; ');
+        const depts = [...new Set(group.shifts.map(s => s.department).filter(Boolean))].join(' &middot; ');
+        const statusCounts = group.shifts.reduce((m, s) => { const st = s.status || 'pending'; m[st] = (m[st] || 0) + 1; return m; }, {});
+        const statusKeys = Object.keys(statusCounts);
+        const statusHtml = statusKeys.length === 1
+          ? `<span class="${badgeClass(statusKeys[0])}">${badgeLabel(statusKeys[0])}</span>`
+          : `<span class="${badgeClass('pending')}">${group.shifts.length} shifts, mixed status</span>`;
+        const shiftsHtml = group.shifts.slice()
+          .sort((a, b) => String(a.shift_date || '').localeCompare(String(b.shift_date || '')))
+          .map(shiftChipHtml).join('');
+        return `
+          <div class="vol-person-card">
+            <div class="vol-person-top">
               <div style="min-width:0;flex:1;">
-                <div class="vol-role-title">${esc(row.name || 'Unknown')}</div>
-                <div class="vol-role-meta">${esc(row.role_name || 'Volunteer')}${row.department ? ` &middot; ${esc(row.department)}` : ''} &middot; ${esc(fmtDateShift(row))}${timeStr ? ` &middot; ${esc(timeStr)}` : ''}</div>
-                <div class="vol-role-meta">${row.email ? esc(row.email) : ''}${row.email && row.phone ? ' &middot; ' : ''}${row.phone ? esc(row.phone) : ''}</div>
+                <div class="vol-person-name">${esc(group.name || 'Unknown')}</div>
+                <div class="vol-role-meta">${esc(roles || 'Volunteer')}${depts ? ` &middot; ${esc(depts)}` : ''}</div>
+                <div class="vol-role-meta">${group.email ? esc(group.email) : ''}${group.email && group.phone ? ' &middot; ' : ''}${group.phone ? esc(group.phone) : ''}</div>
               </div>
-              <span class="${badgeClass(row.status || 'pending')}">${badgeLabel(row.status || 'pending')}</span>
+              <div class="vol-person-actions">${statusHtml}</div>
+            </div>
+            <div class="vol-shift-row">
+              ${shiftsHtml}
+              <button class="vol-shift-flex" onclick="window.__volRoster.addShift('${esc(group.key)}')" title="Add another shift for ${esc(group.name)}">+ Shift</button>
             </div>
             <div class="vol-role-actions">
-              <button class="btn-secondary" style="font-size:0.76rem;padding:0.34rem 0.72rem;" onclick="window.__volRoster.openEdit('${esc(row.id)}')">Edit</button>
-              <button class="btn-secondary" style="font-size:0.76rem;padding:0.34rem 0.6rem;color:#b91c1c;border-color:rgba(200,40,40,0.22);" onclick="window.__volRoster.remove('${esc(row.id)}')" title="Remove">&#10005;</button>
+              <button class="btn-secondary" style="font-size:0.76rem;padding:0.34rem 0.72rem;" onclick="window.__volRoster.openMerge('${esc(group.key)}')">Merge with...</button>
             </div>
           </div>`;
       }
@@ -87,10 +139,13 @@
       function render() {
         const body = document.getElementById('vroles-body');
         if (!body) return;
-        body.innerHTML = rows.length
-          ? `<div class="vol-role-stack">${rows.map(rowCardHtml).join('')}</div>`
+        const groups = groupRows();
+        currentGroups = groups;
+        body.innerHTML = groups.length
+          ? `<div class="vol-role-stack">${groups.map(personCardHtml).join('')}</div>`
           : `<div class="vol-empty-dept">No volunteers on the roster yet. Add one with the button above, or wait for sign-ups to come in through Requests.</div>`;
       }
+      let currentGroups = [];
 
       // ── Edit / add modal ──────────────────────────────────────────────
       const MODAL_ID = 'bts-vol-roster-modal';
@@ -181,12 +236,48 @@
         document.getElementById('vr-notes').value = row?.notes || row?.message || '';
       }
 
+      // ── Merge modal ──────────────────────────────────────────────────
+      const MERGE_MODAL_ID = 'bts-vol-merge-modal';
+      function ensureMergeModalMounted() {
+        if (document.getElementById(MERGE_MODAL_ID)) return;
+        const div = document.createElement('div');
+        div.innerHTML = `
+          <div class="modal-overlay" id="${MERGE_MODAL_ID}">
+            <div class="modal">
+              <div class="modal-header">
+                <div class="modal-title">Merge with...</div>
+                <button class="modal-close" type="button" aria-label="Close" onclick="window.__volRoster.closeMerge()">&#10005;</button>
+              </div>
+              <div class="vol-role-meta">Pick the volunteer this is actually the same person as. Every shift on this card will move onto that record.</div>
+              <div class="vol-merge-list" id="vr-merge-list"></div>
+            </div>
+          </div>`;
+        document.body.appendChild(div.firstElementChild);
+      }
+      let mergeSourceKey = null;
+
       window.__volRoster = {
         openCreate() {
           ensureModalMounted();
           editingId = null;
           fillModal(null);
           document.getElementById('vr-modal-title').textContent = 'Add Volunteer';
+          document.getElementById(MODAL_ID).classList.add('open');
+        },
+        addShift(key) {
+          ensureModalMounted();
+          editingId = null;
+          const g = currentGroups.find(x => x.key === key);
+          fillModal(null);
+          if (g) {
+            document.getElementById('vr-name').value = g.name || '';
+            document.getElementById('vr-email').value = g.email || '';
+            document.getElementById('vr-phone').value = g.phone || '';
+            const last = g.shifts[g.shifts.length - 1];
+            if (last?.department) document.getElementById('vr-department').value = last.department;
+            if (last?.role_name) document.getElementById('vr-role').value = last.role_name;
+          }
+          document.getElementById('vr-modal-title').textContent = 'Add Shift' + (g ? ' for ' + g.name : '');
           document.getElementById(MODAL_ID).classList.add('open');
         },
         openEdit(id) {
@@ -241,9 +332,37 @@
           await load();
         },
         async remove(id) {
-          if (!confirm('Remove this volunteer from the roster? This cannot be undone.')) return;
+          if (!confirm('Remove this shift from the roster? This cannot be undone.')) return;
           const { error } = await sb.from('volunteer_signups').delete().eq('id', id);
           if (error) { alert('Could not remove: ' + error.message); return; }
+          await load();
+        },
+        openMerge(key) {
+          ensureMergeModalMounted();
+          mergeSourceKey = key;
+          const source = currentGroups.find(g => g.key === key);
+          const others = currentGroups.filter(g => g.key !== key);
+          const listEl = document.getElementById('vr-merge-list');
+          listEl.innerHTML = others.length
+            ? others.map(g => `<div class="vol-merge-option" onclick="window.__volRoster.confirmMerge('${esc(g.key)}')"><span>${esc(g.name)}${g.email ? ' &middot; ' + esc(g.email) : ''}</span><span>${g.shifts.length} shift${g.shifts.length === 1 ? '' : 's'}</span></div>`).join('')
+            : `<div class="vol-empty-dept">No other volunteers on the roster to merge with.</div>`;
+          document.getElementById(MERGE_MODAL_ID).classList.add('open');
+        },
+        closeMerge() {
+          const el = document.getElementById(MERGE_MODAL_ID);
+          if (el) el.classList.remove('open');
+          mergeSourceKey = null;
+        },
+        async confirmMerge(targetKey) {
+          const source = currentGroups.find(g => g.key === mergeSourceKey);
+          const target = currentGroups.find(g => g.key === targetKey);
+          if (!source || !target) return;
+          if (!confirm(`Merge "${source.name}" into "${target.name}"? All of ${source.name}'s shifts will move onto ${target.name}'s record.`)) return;
+          const ids = source.shifts.map(s => s.id);
+          const payload = { name: target.name, email: target.email || null, phone: target.phone || null };
+          const { error } = await sb.from('volunteer_signups').update(payload).in('id', ids);
+          if (error) { alert('Could not merge: ' + error.message); return; }
+          window.__volRoster.closeMerge();
           await load();
         },
       };
