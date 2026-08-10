@@ -19508,7 +19508,7 @@ See you soon!
 
   function rptFormatDate(iso) {
     if (!iso) return '';
-    try { return new Date(iso).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }); }
+    try { return new Date(`${iso}T00:00:00`).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }); }
     catch { return String(iso); }
   }
 
@@ -19605,26 +19605,31 @@ See you soon!
         if (seenHouseholds.has(hh.id)) return;
         seenHouseholds.add(hh.id);
         const hhMembers = (hh.member_ids || []).map(mid => _rptCastItems.find(i => String(i.assignment?.id) === String(mid))).filter(Boolean);
-        const hhTotalFee = hhMembers.reduce((s, mi) => s + rptEffectiveFee(mi, settings).total, 0);
-        const logs = _rptHouseholdPaymentLogs[hh.id] || [];
-        const hhPaid = logs.reduce((s, l) => s + ((l.amount_cents || 0) / 100), 0);
-        totalDue += hhTotalFee;
-        totalPaid += hhPaid;
-        const settingsInsts = rptGetInstallments(settings);
-        const totalInstAmt = settingsInsts.reduce((s, i) => s + (i.amount || 0), 0);
-        let pastDueTarget = 0;
-        settingsInsts.forEach(inst => {
-          if (inst.dueDate) {
-            dueDates.push(inst.dueDate);
-            const dueDateMs = new Date(`${inst.dueDate}T00:00:00`).getTime();
-            if (Number.isFinite(dueDateMs) && dueDateMs < todayStartMs) {
-              const proportion = totalInstAmt > 0 ? (inst.amount || 0) / totalInstAmt : 0;
-              pastDueTarget += proportion * hhTotalFee;
+        // Use each member's own scaled installments and real payment records —
+        // household_payment_logs isn't where payments actually get logged
+        // (that happens per-person via registration_payment_records, same as
+        // everyone else), so relying on it here silently treated every paid
+        // household member as fully unpaid.
+        let hhPastDue = 0;
+        hhMembers.forEach(mi => {
+          const mAssignId = String(mi.assignment?.id || '');
+          const mEf = rptEffectiveFee(mi, settings);
+          const mRecords = _rptPaymentRecords[mAssignId] || [];
+          const mPaid = mRecords.filter(r => r.paid).reduce((s, r) => s + (r.amount_cents ? r.amount_cents / 100 : (mEf.installments[r.installment_index]?.amount || 0)), 0);
+          totalDue += mEf.total;
+          totalPaid += mPaid;
+          mEf.installments.forEach((inst, idx) => {
+            const paidRecord = mRecords.find(r => r.installment_index === idx && r.paid);
+            if (!paidRecord && inst.dueDate) {
+              dueDates.push(inst.dueDate);
+              const dueDateMs = new Date(`${inst.dueDate}T00:00:00`).getTime();
+              if (Number.isFinite(dueDateMs) && dueDateMs < todayStartMs) {
+                hhPastDue += inst.amount || 0;
+              }
             }
-          }
+          });
         });
-        const shortfall = Math.max(0, pastDueTarget - hhPaid);
-        if (shortfall > 0) { pastDueOwing += shortfall; pastDueCount++; }
+        if (hhPastDue > 0) { pastDueOwing += hhPastDue; pastDueCount++; }
         return;
       }
       const ef = rptEffectiveFee(item, settings);
