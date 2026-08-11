@@ -19598,6 +19598,28 @@ See you soon!
     const dueDates = [];
     const todayStartMs = new Date(new Date().toDateString()).getTime();
     const seenHouseholds = new Set();
+    // Applies a paid dollar total against installments in date order (earliest
+    // first) rather than requiring a "paid" flag on the exact matching
+    // installment_index. A lump-sum payment logged against one slot still
+    // covers whichever installments it's actually enough to cover, so someone
+    // who's paid their full fee never reads as still owing on an untouched slot.
+    function waterfallOwed(installments, paidAmt) {
+      let remaining = paidAmt;
+      let owedPastDue = 0;
+      installments.forEach(inst => {
+        const amt = inst.amount || 0;
+        if (amt <= 0) return;
+        const covered = Math.min(amt, Math.max(0, remaining));
+        remaining -= covered;
+        const owed = amt - covered;
+        if (owed > 0 && inst.dueDate) {
+          dueDates.push(inst.dueDate);
+          const dueDateMs = new Date(`${inst.dueDate}T00:00:00`).getTime();
+          if (Number.isFinite(dueDateMs) && dueDateMs < todayStartMs) owedPastDue += owed;
+        }
+      });
+      return owedPastDue;
+    }
     items.forEach(item => {
       const assignmentId = String(item.assignment?.id || '');
       const hh = rptHouseholdFor(assignmentId);
@@ -19618,16 +19640,7 @@ See you soon!
           const mPaid = mRecords.filter(r => r.paid).reduce((s, r) => s + (r.amount_cents ? r.amount_cents / 100 : (mEf.installments[r.installment_index]?.amount || 0)), 0);
           totalDue += mEf.total;
           totalPaid += mPaid;
-          mEf.installments.forEach((inst, idx) => {
-            const paidRecord = mRecords.find(r => r.installment_index === idx && r.paid);
-            if (!paidRecord && inst.dueDate) {
-              dueDates.push(inst.dueDate);
-              const dueDateMs = new Date(`${inst.dueDate}T00:00:00`).getTime();
-              if (Number.isFinite(dueDateMs) && dueDateMs < todayStartMs) {
-                hhPastDue += inst.amount || 0;
-              }
-            }
-          });
+          hhPastDue += waterfallOwed(mEf.installments, mPaid);
         });
         if (hhPastDue > 0) { pastDueOwing += hhPastDue; pastDueCount++; }
         return;
@@ -19637,17 +19650,7 @@ See you soon!
       const paid = records.filter(r => r.paid).reduce((s, r) => s + (r.amount_cents ? r.amount_cents / 100 : (ef.installments[r.installment_index]?.amount || 0)), 0);
       totalDue += ef.total;
       totalPaid += paid;
-      let itemPastDue = 0;
-      ef.installments.forEach((inst, idx) => {
-        const paidRecord = records.find(r => r.installment_index === idx && r.paid);
-        if (!paidRecord && inst.dueDate) {
-          dueDates.push(inst.dueDate);
-          const dueDateMs = new Date(`${inst.dueDate}T00:00:00`).getTime();
-          if (Number.isFinite(dueDateMs) && dueDateMs < todayStartMs) {
-            itemPastDue += inst.amount || 0;
-          }
-        }
-      });
+      const itemPastDue = waterfallOwed(ef.installments, paid);
       if (itemPastDue > 0) { pastDueOwing += itemPastDue; pastDueCount++; }
     });
     const registeredCount = items.filter(item => registrationFormsComplete(item.app)).length;
