@@ -20042,16 +20042,21 @@ See you soon!
       const data = activeItems.map(item => {
         const id = String(item.assignment?.id || '');
         const ef = rptEffectiveFee(item, settings);
-        return { item, id, ef };
+        const records = _rptPaymentRecords[id] || [];
+        const paid = records.filter(r => r.paid).reduce((s, r) => s + (r.amount_cents ? r.amount_cents / 100 : (ef.installments[r.installment_index]?.amount || 0)), 0);
+        const firstName = (item.app?.name || '').trim().split(/\s+/)[0] || 'Member';
+        return { item, id, ef, records, paid, firstName };
       });
       const hasFee = (settings.mode === 'flat' || settings.mode === 'split') && data.some(d => d.ef.total > 0);
       if (!hasFee) return `<div class="rsc-stmt-empty">No fee configured for this household.</div>`;
       const totalFee = data.reduce((sum, d) => sum + d.ef.total, 0);
 
-      // Household is one account — track via household_payment_logs (one row per payment, unlimited)
-      const settingsInsts = rptGetInstallments(settings);
-      const logs = _rptHouseholdPaymentLogs[household.id] || [];
-      const totalPaid = logs.reduce((sum, l) => sum + ((l.amount_cents || 0) / 100), 0);
+      // Each member's own registration_payment_records is the source of truth
+      // here — same one the Overdue summary and every non-household card use.
+      // household_payment_logs is a second, separate ledger nothing keeps in
+      // sync with it, so relying on it here could show a balance that
+      // disagrees with what the household's own members' cards say.
+      const totalPaid = data.reduce((sum, d) => sum + d.paid, 0);
       const balance = Math.max(0, totalFee - totalPaid);
       const allPaid = totalFee > 0 && balance <= 0;
       const stateClass = allPaid ? 'full' : totalPaid > 0 ? 'partial' : 'unpaid';
@@ -20097,28 +20102,45 @@ See you soon!
         <span>Total Due</span><span>${esc(fmt(totalFee))}</span>
       </div>`;
 
-      // Ledger: one line per payment — × removes that specific log entry by UUID
-      const sortedLogs = [...logs].sort((a, b) => new Date(a.paid_at || 0) - new Date(b.paid_at || 0));
-      const ledgerHtml = sortedLogs.length
-        ? sortedLogs.map(l => `<div class="rsc-stmt-row rsc-stmt-paid-row">
-              <span>${esc(rptFormatDate(l.paid_at) || '')}</span><span>${esc(fmt((l.amount_cents || 0) / 100))}<button class="rsc-remove-pay" onclick="rscRemoveHouseholdPayment('${esc(household.id)}','${esc(l.id)}')" title="Remove payment">&times;</button></span>
+      // Ledger: one line per real payment record, name-labeled since it's a shared card
+      const ledgerEntries = [];
+      data.forEach(d => {
+        d.records.filter(r => r.paid).forEach(r => {
+          ledgerEntries.push({
+            paid_at: r.paid_at,
+            amount: r.amount_cents ? r.amount_cents / 100 : (d.ef.installments[r.installment_index]?.amount || 0),
+            firstName: d.firstName,
+            assignId: d.id,
+            idx: r.installment_index,
+          });
+        });
+      });
+      ledgerEntries.sort((a, b) => new Date(a.paid_at || 0) - new Date(b.paid_at || 0));
+      const ledgerHtml = ledgerEntries.length
+        ? ledgerEntries.map(e => `<div class="rsc-stmt-row rsc-stmt-paid-row">
+              <span>${esc(rptFormatDate(e.paid_at) || '')} &middot; ${esc(e.firstName)}</span><span>${esc(fmt(e.amount))}<button class="rsc-remove-pay" onclick="rscRemovePayment('${esc(e.assignId)}',${e.idx})" title="Remove payment">&times;</button></span>
             </div>`).join('')
         : `<div class="rsc-stmt-row rsc-stmt-none">No payments yet</div>`;
 
-      // Installment tiles are milestone indicators only — paid = any log entry tagged to that index
-      const firstUnpaidIdx = settingsInsts.findIndex((_, idx) => !logs.some(l => l.installment_index === idx));
-      const logToIdx = firstUnpaidIdx >= 0 ? firstUnpaidIdx : 0;
-      const cardsHtml = settingsInsts.map((inst, idx) => {
-        const isPaid = allPaid || logs.some(l => l.installment_index === idx);
+      // Milestone tiles — one row per member, name-labeled, so logging or
+      // reviewing a payment always targets a specific person's own record
+      // (same rscOpenMarkPaidModal/rscOpenPaymentDetailModal individuals use).
+      const cardsHtml = data.map(d => d.ef.installments.map((inst, idx) => {
+        const rec = d.records.find(r => r.installment_index === idx);
+        const isPaid = !!rec?.paid;
         const isOverdue = !isPaid && inst.dueDate && new Date(`${inst.dueDate}T00:00:00`) < new Date(new Date().toDateString());
-        const label = inst.label || (settingsInsts.length === 1 ? 'Payment' : idx === 0 ? 'First Payment' : idx === settingsInsts.length - 1 ? 'Final Payment' : `Payment ${idx + 1}`);
+        const label = (inst.label || '').replace(/\s*\(.*\)$/, '') || (d.ef.installments.length === 1 ? 'Payment' : idx === 0 ? 'First' : idx === d.ef.installments.length - 1 ? 'Final' : `Payment ${idx + 1}`);
         const sub = isPaid ? 'Paid' : (inst.dueDate ? `Due ${rptFormatDate(inst.dueDate)}` : 'Due date not set');
-        return `<button type="button" class="rsc-inst-card ${isPaid ? 'paid' : isOverdue ? 'overdue' : ''}" id="rsc-hh-inst-${esc(household.id)}-${idx}" onclick="${isPaid ? '' : `rscOpenHouseholdPayModal('${esc(household.id)}',${idx})`}">
-          <div class="rsc-inst-label">${esc(label)}</div>
+        return `<button type="button" class="rsc-inst-card ${isPaid ? 'paid' : isOverdue ? 'overdue' : ''}" id="rsc-inst-${esc(d.id)}-${idx}" onclick="${isPaid ? `rscOpenPaymentDetailModal('${esc(d.id)}',${idx})` : `rscOpenMarkPaidModal('${esc(d.id)}',${idx})`}">
+          <div class="rsc-inst-label">${esc(d.firstName)} &ndash; ${esc(label)}</div>
           <div class="rsc-inst-sub">${esc(sub)}</div>
         </button>`;
-      }).join('');
-      const logBtnHtml = allPaid ? '' : `<button type="button" class="rsc-log-btn" onclick="rscOpenHouseholdPayModal('${esc(household.id)}',${logToIdx})">Log Payment</button>`;
+      }).join('')).join('');
+      const firstUnpaid = data.map(d => ({
+        d,
+        idx: d.ef.installments.findIndex((inst, idx) => !d.records.find(r => r.installment_index === idx)?.paid),
+      })).find(x => x.idx >= 0);
+      const logBtnHtml = allPaid || !firstUnpaid ? '' : `<button type="button" class="rsc-log-btn" onclick="rscOpenMarkPaidModal('${esc(firstUnpaid.d.id)}',${firstUnpaid.idx})">Log Payment</button>`;
       return buildStmtHtml({ totalFee, totalPaid, balance, allPaid, stateClass, statusLabel, feeBreakdownHtml, ledgerHtml, cardsHtml, logBtnHtml });
     }
 
