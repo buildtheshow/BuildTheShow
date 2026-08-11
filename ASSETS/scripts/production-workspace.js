@@ -19598,9 +19598,12 @@ See you soon!
     return records.filter(r => r.paid).reduce((s, r) => s + (installments[r.installment_index]?.amount || 0), 0);
   }
 
-  function rptRenderSummaryBar(items, settings) {
+  function rptRenderSummaryBar(itemsInput, settings) {
     const currency = registrationPaymentCurrency(settings);
     const symbol = { CAD: '$', USD: '$', GBP: '£' }[currency] || '$';
+    // Dropped-out cast don't owe a fee anymore — exclude them from every
+    // total on this bar (Registered, Collected, Overdue, Next Due Date).
+    const items = itemsInput.filter(item => !item.assignment?.dropped_out);
     const castCount = items.length;
     let totalDue = 0, totalPaid = 0;
     let pastDueOwing = 0, pastDueCount = 0;
@@ -19635,7 +19638,7 @@ See you soon!
       if (hh) {
         if (seenHouseholds.has(hh.id)) return;
         seenHouseholds.add(hh.id);
-        const hhMembers = (hh.member_ids || []).map(mid => _rptCastItems.find(i => String(i.assignment?.id) === String(mid))).filter(Boolean);
+        const hhMembers = (hh.member_ids || []).map(mid => _rptCastItems.find(i => String(i.assignment?.id) === String(mid))).filter(Boolean).filter(mi => !mi.assignment?.dropped_out);
         // Use each member's own scaled installments and real payment records —
         // household_payment_logs isn't where payments actually get logged
         // (that happens per-person via registration_payment_records, same as
@@ -20122,6 +20125,7 @@ See you soon!
     const item = primaryItem || {};
     const assignment = item.assignment || {};
     const assignId = String(assignment.id || '');
+    if (assignment.dropped_out) return `<div class="rsc-stmt-empty">Dropped out &mdash; no longer counted toward fees or balances.</div>`;
     const ef = rptEffectiveFee(item, settings);
     const records = _rptPaymentRecords[assignId] || [];
     const hasFee = (settings.mode === 'flat' || settings.mode === 'split') && ef.total > 0;
@@ -20275,7 +20279,7 @@ See you soon!
     const _mobAge2 = age || '';
     const _mobEf = rptEffectiveFee(primary, settings);
     const _mobRec = _rptPaymentRecords[assignId] || [];
-    const _mobHasFee = (settings.mode === 'flat' || settings.mode === 'split') && _mobEf.total > 0;
+    const _mobHasFee = !isDropped && (settings.mode === 'flat' || settings.mode === 'split') && _mobEf.total > 0;
     const _mobPaid = _mobHasFee ? _mobRec.filter(r => r.paid).reduce((s, r) => s + (r.amount_cents ? r.amount_cents / 100 : (_mobEf.installments[r.installment_index]?.amount || 0)), 0) : 0;
     const _mobBal = _mobHasFee ? Math.max(0, _mobEf.total - _mobPaid) : 0;
     const _mobBalStr = !_mobHasFee ? '' : (_mobBal === 0 && _mobPaid > 0) ? 'Paid' : registrationFormatPaymentAmount(_mobBal, settings);
