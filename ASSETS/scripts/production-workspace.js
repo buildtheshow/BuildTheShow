@@ -20125,21 +20125,35 @@ See you soon!
       // Milestone tiles — one row per member, name-labeled, so logging or
       // reviewing a payment always targets a specific person's own record
       // (same rscOpenMarkPaidModal/rscOpenPaymentDetailModal individuals use).
-      const cardsHtml = data.map(d => d.ef.installments.map((inst, idx) => {
-        const rec = d.records.find(r => r.installment_index === idx);
-        const isPaid = !!rec?.paid;
-        const isOverdue = !isPaid && inst.dueDate && new Date(`${inst.dueDate}T00:00:00`) < new Date(new Date().toDateString());
-        const label = (inst.label || '').replace(/\s*\(.*\)$/, '') || (d.ef.installments.length === 1 ? 'Payment' : idx === 0 ? 'First' : idx === d.ef.installments.length - 1 ? 'Final' : `Payment ${idx + 1}`);
-        const sub = isPaid ? 'Paid' : (inst.dueDate ? `Due ${rptFormatDate(inst.dueDate)}` : 'Due date not set');
-        return `<button type="button" class="rsc-inst-card ${isPaid ? 'paid' : isOverdue ? 'overdue' : ''}" id="rsc-inst-${esc(d.id)}-${idx}" onclick="${isPaid ? `rscOpenPaymentDetailModal('${esc(d.id)}',${idx})` : `rscOpenMarkPaidModal('${esc(d.id)}',${idx})`}">
-          <div class="rsc-inst-label">${esc(d.firstName)} &ndash; ${esc(label)}</div>
-          <div class="rsc-inst-sub">${esc(sub)}</div>
-        </button>`;
-      }).join('')).join('');
-      const firstUnpaid = data.map(d => ({
-        d,
-        idx: d.ef.installments.findIndex((inst, idx) => !d.records.find(r => r.installment_index === idx)?.paid),
-      })).find(x => x.idx >= 0);
+      const cardsHtml = data.map(d => {
+        let _rem = d.paid;
+        const coverage = d.ef.installments.map(inst => {
+          const amt = inst.amount || 0;
+          const covered = Math.min(amt, Math.max(0, _rem));
+          _rem -= covered;
+          return amt > 0 && covered >= amt;
+        });
+        return d.ef.installments.map((inst, idx) => {
+          const isPaid = coverage[idx];
+          const isOverdue = !isPaid && inst.dueDate && new Date(`${inst.dueDate}T00:00:00`) < new Date(new Date().toDateString());
+          const label = (inst.label || '').replace(/\s*\(.*\)$/, '') || (d.ef.installments.length === 1 ? 'Payment' : idx === 0 ? 'First' : idx === d.ef.installments.length - 1 ? 'Final' : `Payment ${idx + 1}`);
+          const sub = isPaid ? 'Paid' : (inst.dueDate ? `Due ${rptFormatDate(inst.dueDate)}` : 'Due date not set');
+          return `<button type="button" class="rsc-inst-card ${isPaid ? 'paid' : isOverdue ? 'overdue' : ''}" id="rsc-inst-${esc(d.id)}-${idx}" onclick="${isPaid ? `rscOpenPaymentDetailModal('${esc(d.id)}',${idx})` : `rscOpenMarkPaidModal('${esc(d.id)}',${idx})`}">
+            <div class="rsc-inst-label">${esc(d.firstName)} &ndash; ${esc(label)}</div>
+            <div class="rsc-inst-sub">${esc(sub)}</div>
+          </button>`;
+        }).join('');
+      }).join('');
+      const firstUnpaid = data.map(d => {
+        let _rem = d.paid;
+        const idx = d.ef.installments.findIndex(inst => {
+          const amt = inst.amount || 0;
+          const covered = Math.min(amt, Math.max(0, _rem));
+          _rem -= covered;
+          return !(amt > 0 && covered >= amt);
+        });
+        return { d, idx };
+      }).find(x => x.idx >= 0);
       const logBtnHtml = allPaid || !firstUnpaid ? '' : `<button type="button" class="rsc-log-btn" onclick="rscOpenMarkPaidModal('${esc(firstUnpaid.d.id)}',${firstUnpaid.idx})">Log Payment</button>`;
       return buildStmtHtml({ totalFee, totalPaid, balance, allPaid, stateClass, statusLabel, feeBreakdownHtml, ledgerHtml, cardsHtml, logBtnHtml });
     }
@@ -20168,13 +20182,24 @@ See you soon!
           <span>${esc(rptFormatDate(r.paid_at) || '')}</span><span>${esc(fmt(r.amount))}<button class="rsc-remove-pay" onclick="rscRemovePayment('${esc(assignId)}',${r.installment_index})" title="Remove payment">&times;</button></span>
         </div>`).join('')
       : `<div class="rsc-stmt-row rsc-stmt-none">No payments yet</div>`;
-    const logIdx = Math.max(0, ef.installments.findIndex((inst, idx) => !records.find(r => r.installment_index === idx && r.paid)));
+    // A slot only shows "paid" once the money actually paid (in date order)
+    // covers it — not because that exact slot has its own "paid" flag. A
+    // lump sum logged against one slot still clears the other slot(s) it's
+    // enough to cover, instead of leaving them stuck reading overdue.
+    let _waterfallRemaining = paidAmt;
+    const coverage = ef.installments.map(inst => {
+      const amt = inst.amount || 0;
+      const covered = Math.min(amt, Math.max(0, _waterfallRemaining));
+      _waterfallRemaining -= covered;
+      return amt > 0 && covered >= amt;
+    });
+    const logIdx = Math.max(0, coverage.findIndex(c => !c));
     const cardsHtml = ef.installments.map((inst, idx) => {
       const rec = records.find(r => r.installment_index === idx);
-      const isPaid = !!rec?.paid;
+      const isPaid = coverage[idx];
       const label = (inst.label || '').replace(/\s*\(.*\)$/, '') || (ef.installments.length === 1 ? 'Payment' : `Payment ${idx + 1}`);
       const sub = isPaid
-        ? `Paid ${rptFormatDate(rec.paid_at) || ''}`.trim()
+        ? (rec?.paid ? `Paid ${rptFormatDate(rec.paid_at) || ''}`.trim() : 'Paid')
         : (inst.dueDate ? `Due ${rptFormatDate(inst.dueDate)}` : 'Due date not set');
       const isOverdue = !isPaid && inst.dueDate && new Date(`${inst.dueDate}T00:00:00`) < new Date(new Date().toDateString());
       return `<button type="button" class="rsc-inst-card ${isPaid ? 'paid' : isOverdue ? 'overdue' : ''}" id="rsc-inst-${esc(assignId)}-${idx}" onclick="${isPaid ? `rscOpenPaymentDetailModal('${esc(assignId)}',${idx})` : `rscOpenMarkPaidModal('${esc(assignId)}',${idx})`}">
