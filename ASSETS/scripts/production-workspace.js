@@ -19508,8 +19508,17 @@ See you soon!
 
   function rptFormatDate(iso) {
     if (!iso) return '';
-    try { return new Date(`${iso}T00:00:00`).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }); }
-    catch { return String(iso); }
+    // Date-only strings ("2026-08-07") need a local-midnight anchor so they
+    // don't shift a day in negative-UTC-offset timezones. Full timestamps
+    // (payment paid_at values, e.g. "2026-06-25T19:00:00+00:00") already
+    // carry their own time/offset and must be passed through as-is.
+    const s = String(iso);
+    const withTime = s.includes('T') ? s : `${s}T00:00:00`;
+    try {
+      const d = new Date(withTime);
+      if (isNaN(d.getTime())) return String(iso);
+      return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch { return String(iso); }
   }
 
   function rptHouseholdFor(assignmentId) {
