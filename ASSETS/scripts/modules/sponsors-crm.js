@@ -1734,18 +1734,67 @@
       });
   }
 
+  // A file can finish uploading to storage while the DB row linking it to a
+  // business/ad never saves (e.g. an RLS-rejected update that returns 200
+  // with zero rows changed — see dbUpdate). Those files are invisible to
+  // crmCollectBusinessFiles since it only reads DB rows. This lists the
+  // storage bucket directly and returns anything not already accounted for,
+  // so "Export Photos" can't silently drop a real, uploaded file.
+  function crmListStorageObjects(prefix) {
+    return fetch(SUPABASE_URL + '/storage/v1/object/list/' + STORAGE_BUCKET, {
+      method: 'POST',
+      headers: sponsorHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ prefix: prefix, limit: 1000, sortBy: { column: 'name', order: 'asc' } }),
+    }).then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); return r.json(); });
+  }
+
+  function crmFindOrphanedStorageFiles(knownUrlSet) {
+    var prodId = SpnsState.prodId;
+    return crmListStorageObjects(prodId + '/').then(function (entries) {
+      var folders = (entries || []).filter(function (e) { return e && e.name && e.name !== 'past-posters' && !e.created_at; });
+      return Promise.all(folders.map(function (folder) {
+        return crmListStorageObjects(prodId + '/' + folder.name + '/').catch(function () { return []; });
+      })).then(function (results) {
+        var orphans = [];
+        results.forEach(function (items, i) {
+          (items || []).forEach(function (item) {
+            if (!item || !item.created_at) return; // nested folder, not a file
+            var url = SUPABASE_URL + '/storage/v1/object/public/' + STORAGE_BUCKET + '/' + prodId + '/' + folders[i].name + '/' + item.name;
+            if (knownUrlSet[url]) return;
+            var ext = crmUrlExtension(url);
+            orphans.push({
+              file_url: url,
+              file_name: item.name,
+              download_name: 'UNLINKED - ' + item.name,
+              ext: ext,
+              is_image: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].indexOf(ext) >= 0,
+            });
+          });
+        });
+        return orphans;
+      });
+    });
+  }
+
   function crmExportAllPhotos(buttonEl) {
     var businesses = SpnsState.businesses || [];
     var allFiles = [];
+    var knownUrls = {};
     businesses.forEach(function (biz) {
       var bizAds = (SpnsState.ads || []).filter(function (ad) { return ad.business_id === biz.id; });
       var bizFiles = (SpnsState.files || []).filter(function (file) { return file.business_id === biz.id; });
-      allFiles = allFiles.concat(crmCollectBusinessFiles(biz, bizAds, bizFiles).filter(function (f) { return f.is_image; }));
+      var collected = crmCollectBusinessFiles(biz, bizAds, bizFiles);
+      collected.forEach(function (f) { knownUrls[f.file_url] = true; });
+      allFiles = allFiles.concat(collected.filter(function (f) { return f.is_image; }));
     });
     var button = buttonEl || null;
     var originalLabel = button ? button.textContent : '';
     if (button) { button.disabled = true; button.textContent = 'Preparing...'; }
-    crmDownloadFiles(allFiles, 'Sponsor Photos')
+    crmFindOrphanedStorageFiles(knownUrls)
+      .catch(function (err) { console.warn('[BTS CRM] orphaned artwork scan failed', err); return []; })
+      .then(function (orphans) {
+        return crmDownloadFiles(allFiles.concat(orphans.filter(function (f) { return f.is_image; })), 'Sponsor Photos');
+      })
       .catch(function (error) {
         alert('Could not download photos: ' + error.message);
       })
