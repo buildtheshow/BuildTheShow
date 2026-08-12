@@ -2226,16 +2226,25 @@
     async function uploadSponsorFiles(bizId, files) {
       if (!files || !files.length) return [];
       var urls = [];
+      var failures = [];
       for (var i = 0; i < files.length; i++) {
         try {
           var f = files[i];
           var safeName = f.name.replace(/[^a-zA-Z0-9._-]/g, '_');
           var path = production.id + '/' + bizId + '/' + Date.now() + '_' + safeName;
           var res = await sb.storage.from('programme-ads').upload(path, f, { contentType: f.type, upsert: false });
-          if (res.error) { console.warn('Upload failed:', res.error); continue; }
+          if (res.error) { failures.push(f.name); console.warn('Upload failed:', res.error); continue; }
           var publicUrl = sb.storage.from('programme-ads').getPublicUrl(path);
           if (publicUrl?.data?.publicUrl) urls.push({ name: f.name, path: path, url: publicUrl.data.publicUrl });
-        } catch (e) { console.warn('Upload error:', e); }
+          else failures.push(f.name);
+        } catch (e) { failures.push(files[i] && files[i].name); console.warn('Upload error:', e); }
+      }
+      // A failed upload used to just log a console warning and move on, so
+      // the form still showed "Request sent!" even when every file silently
+      // failed to attach. Throwing here surfaces it through submitRequest()'s
+      // existing error alert instead of reporting a false success.
+      if (failures.length) {
+        throw new Error('Could not upload: ' + failures.filter(Boolean).join(', ') + '. Please try again — your business info was saved, but you\'ll need to resubmit the artwork.');
       }
       return urls;
     }
