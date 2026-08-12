@@ -1699,29 +1699,42 @@
       crmSaveBlob(await response.blob(), only.download_name || only.file_name || 'file');
       return;
     }
+    // JSZip failing to load (blocked CDN, ad blocker, flaky network) used to
+    // just log a console warning and quietly fall back to firing one
+    // individual browser download per file. Chrome and other browsers
+    // silently block automatic downloads past the first few unless the user
+    // explicitly allows "multiple downloads" for the site — with no error
+    // anywhere — so a 31-file export could easily land as ~20 with nothing
+    // to explain the gap. Bundling into one real zip file avoids that
+    // failure mode entirely, so a broken zip loader must stop and say so.
     try {
       await crmEnsureZipLoaded();
     } catch (error) {
-      console.warn('[BTS CRM] JSZip unavailable, falling back to individual downloads', error);
+      throw new Error('Could not prepare the download bundle (network or ad blocker issue). Please try again.');
     }
-    if (window.JSZip) {
-      var zip = new window.JSZip();
-      var usedNames = {};
-      for (var i = 0; i < validFiles.length; i++) {
-        var item = validFiles[i];
+    var zip = new window.JSZip();
+    var usedNames = {};
+    var failed = [];
+    for (var i = 0; i < validFiles.length; i++) {
+      var item = validFiles[i];
+      try {
         var zipResponse = await fetch(item.file_url);
-        if (!zipResponse.ok) throw new Error('Could not download ' + (item.file_name || 'file') + '.');
+        if (!zipResponse.ok) throw new Error('HTTP ' + zipResponse.status);
         zip.file(crmUniqueZipName(item, usedNames), await zipResponse.blob());
+      } catch (fileError) {
+        // One bad/expired URL used to throw here and abort the whole batch,
+        // discarding every file already fetched. Skip it and keep going —
+        // the rest of the bundle is still worth having.
+        failed.push(item.file_name || item.download_name || 'file ' + (i + 1));
+        console.warn('[BTS CRM] Could not fetch file for download:', item.file_url, fileError);
       }
-      crmSaveBlob(await zip.generateAsync({ type: 'blob' }), crmSafeFilePart(bundleName || 'sponsor-files', 'sponsor-files') + '.zip');
-      return;
     }
-    for (var j = 0; j < validFiles.length; j++) {
-      var fallbackFile = validFiles[j];
-      var fallbackResponse = await fetch(fallbackFile.file_url);
-      if (!fallbackResponse.ok) throw new Error('Could not download ' + (fallbackFile.file_name || 'file') + '.');
-      crmSaveBlob(await fallbackResponse.blob(), fallbackFile.download_name || fallbackFile.file_name || ('file-' + (j + 1)));
-      await new Promise(function (resolve) { setTimeout(resolve, 180); });
+    if (!Object.keys(usedNames).length) {
+      throw new Error('None of the ' + validFiles.length + ' file(s) could be downloaded. They may have been removed from storage.');
+    }
+    crmSaveBlob(await zip.generateAsync({ type: 'blob' }), crmSafeFilePart(bundleName || 'sponsor-files', 'sponsor-files') + '.zip');
+    if (failed.length) {
+      alert('Downloaded ' + (validFiles.length - failed.length) + ' of ' + validFiles.length + ' files. These could not be fetched and were skipped:\n\n' + failed.join('\n'));
     }
   }
 
