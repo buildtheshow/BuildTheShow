@@ -1739,7 +1739,7 @@
   // with zero rows changed — see dbUpdate). Those files are invisible to
   // crmCollectBusinessFiles since it only reads DB rows. This lists the
   // storage bucket directly and returns anything not already accounted for,
-  // so "Export Photos" can't silently drop a real, uploaded file.
+  // so "Export Artwork" can't silently drop a real, uploaded file.
   function crmListStorageObjects(prefix) {
     return fetch(SUPABASE_URL + '/storage/v1/object/list/' + STORAGE_BUCKET, {
       method: 'POST',
@@ -1785,7 +1785,7 @@
       var bizFiles = (SpnsState.files || []).filter(function (file) { return file.business_id === biz.id; });
       var collected = crmCollectBusinessFiles(biz, bizAds, bizFiles);
       collected.forEach(function (f) { knownUrls[f.file_url] = true; });
-      allFiles = allFiles.concat(collected.filter(function (f) { return f.is_image; }));
+      allFiles = allFiles.concat(collected);
     });
     var button = buttonEl || null;
     var originalLabel = button ? button.textContent : '';
@@ -1793,10 +1793,10 @@
     crmFindOrphanedStorageFiles(knownUrls)
       .catch(function (err) { console.warn('[BTS CRM] orphaned artwork scan failed', err); return []; })
       .then(function (orphans) {
-        return crmDownloadFiles(allFiles.concat(orphans.filter(function (f) { return f.is_image; })), 'Sponsor Photos');
+        return crmDownloadFiles(allFiles.concat(orphans), 'Sponsor Artwork');
       })
       .catch(function (error) {
-        alert('Could not download photos: ' + error.message);
+        alert('Could not download artwork: ' + error.message);
       })
       .finally(function () {
         if (button) { button.disabled = false; button.textContent = originalLabel; }
@@ -4135,7 +4135,7 @@
             '<span class="spn-toolbar-title" id="spn-crm-count">Businesses</span>' +
             '<div style="display:flex;gap:0.5rem;">' +
               '<button class="spn-btn spn-btn--ghost" id="spn-crm-export-btn" onclick="MarketingSponsorsModule.crmExportReport()">Export</button>' +
-              '<button class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.crmExportAllPhotos(this)">Export Photos</button>' +
+              '<button class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.crmExportAllPhotos(this)">Export Artwork</button>' +
               '<button class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.openBizModal()">+ Add Business (quick, no artwork step)</button>' +
               '<button class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.openPublicBookingModal()">+ Add Business</button>' +
             '</div>' +
