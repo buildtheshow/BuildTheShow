@@ -1265,13 +1265,25 @@
       if (p > planRank) planRank = p;
     });
 
-    var bookingLabel = '';
-    if (bizPkgs.length) bookingLabel = bizPkgs[0].tier_name || 'Sponsor';
-    else if (bizAds.length) bookingLabel = crmAdSizeLabel(bizAds[0]).label || '';
+    // "Booking(s)" sorts by physical size order (Card < 1/4 < 1/2 < Full),
+    // not alphabetically on the label text — matches how ad sizes are
+    // actually configured in Sponsor Settings, smallest to largest.
+    var bookingRank = 999;
+    if (bizPkgs.length) {
+      var tiers = SpnsState.settings.tiers || [];
+      var tierName = bizPkgs[0].tier_name || '';
+      var tIdx = tiers.findIndex(function (t) { return t.label === tierName || t.id === bizPkgs[0].tier_id; });
+      bookingRank = tIdx >= 0 ? tIdx : 999;
+    } else if (bizAds.length) {
+      var szInfo = crmAdSizeLabel(bizAds[0]);
+      var sizes = (SpnsState.settings.adSizes && SpnsState.settings.adSizes.length) ? SpnsState.settings.adSizes : DEFAULT_AD_SIZES;
+      var sIdx = sizes.findIndex(function (s) { return (szInfo.obj && s.id === szInfo.obj.id) || s.label === szInfo.label; });
+      bookingRank = sIdx >= 0 ? sIdx : 999;
+    }
 
     return {
       name: (biz.name || '').toLowerCase(),
-      booking: bookingLabel.toLowerCase(),
+      booking: bookingRank,
       value: totalCents,
       payment: paymentRank,
       artwork: artworkRank,
