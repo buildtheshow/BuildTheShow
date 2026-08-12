@@ -360,8 +360,13 @@
         var url = SUPABASE_URL + '/storage/v1/object/public/' + STORAGE_BUCKET + '/' + path;
         return dbUpdate('programme_ads', adId, { artwork_url: url, artwork_status: 'received' });
       }).then(function () {
+        // The CRM row (Overview + Files tabs) is baked into one static HTML
+        // string at load time and never refetched on tab switch, so a plain
+        // loadAds() (which only redraws the separate Programme Ads grid)
+        // leaves the CRM row's Files tab showing its pre-upload snapshot.
         SpnsState.loaded.ads = false;
         loadAds();
+        if (document.getElementById('spn-crm-biz-list')) loadShowSponsorsCRM();
       }).catch(function (e) { alert('Upload failed: ' + e.message); });
     };
     input.click();
@@ -370,7 +375,11 @@
   function removeArtwork(adId) {
     if (!confirm('Remove the uploaded artwork for this ad?')) return;
     dbUpdate('programme_ads', adId, { artwork_url: null, artwork_status: 'missing' })
-      .then(function () { SpnsState.loaded.ads = false; loadAds(); })
+      .then(function () {
+        SpnsState.loaded.ads = false;
+        loadAds();
+        if (document.getElementById('spn-crm-biz-list')) loadShowSponsorsCRM();
+      })
       .catch(function (e) { alert('Could not remove artwork: ' + e.message); });
   }
 
