@@ -1314,7 +1314,7 @@
     var heroCount = document.getElementById('spn-hero-page-count');
     if (heroCount) heroCount.textContent = businesses.length;
 
-    listEl.innerHTML = '<div class="spn-crm-cols-head"><span></span><span>Business</span><span>Booking(s)</span><span>Booked</span><span>Payment</span><span>Artwork</span><span>Attention</span><span></span></div>' +
+    listEl.innerHTML = '<div class="spn-crm-cols-head"><span></span><span>Business</span><span>Booking(s)</span><span>Booked</span><span>Payment</span><span>Artwork</span><span>Sponsor Says</span><span>Attention</span><span></span></div>' +
       businesses.map(function (biz) {
         return renderCrmBusinessRow(biz, adsMap[biz.id] || [], pkgsMap[biz.id] || [], delivMap[biz.id] || [], filesMap[biz.id] || []);
       }).join('');
@@ -1909,6 +1909,26 @@
       else if (anyArtReceived) { artLabel = 'Received'; artClass = 'spn-crm-art-status--received'; }
     }
 
+    // What the sponsor SAID on their booking form (ready / sending later /
+    // needs design help) — separate from artLabel above, which is whether a
+    // file has actually been received. Surfaced as its own column so a
+    // producer can tell "not received yet" apart from "not received AND no
+    // plan to send one" without opening the row. Most-actionable wins when a
+    // business has more than one ad booking.
+    var artIntentHtml = '';
+    if (bizAds.length) {
+      var intentPriority = { help: 3, later: 2, ready: 1 };
+      var intentBest = null, intentBestP = -1;
+      bizAds.forEach(function (a) {
+        if (a.booking_status === 'declined') return;
+        var ad = a.artwork_data;
+        var st = ad && typeof ad === 'object' ? ad.status : '';
+        var p = intentPriority[st] || 0;
+        if (p > intentBestP) { intentBestP = p; intentBest = a; }
+      });
+      if (intentBest) artIntentHtml = crmArtworkIntentBadge(intentBest);
+    }
+
     var payLabel, payClass, payFraction;
     if (hasTradeBooking && !hasCashBooking) { payLabel = 'In Trade'; payClass = 'spn-crm-pay-badge--trade'; payFraction = ''; }
     else if (totalCents === 0) { payLabel = '--'; payClass = ''; payFraction = ''; }
@@ -2143,6 +2163,7 @@
         '<div class="spn-crm-amount">' + (totalCents ? '$' + (totalCents/100).toLocaleString('en-CA',{minimumFractionDigits:2}) : '--') + '</div>' +
         '<div>' + (payClass ? '<div class="spn-crm-pay-badge ' + payClass + '">' + payLabel + '</div><div class="spn-crm-pay-fraction">' + payFraction + '</div>' : '<span style="color:#c8bad7;">--</span>') + '</div>' +
         '<div class="spn-crm-art-status ' + artClass + '">' + artLabel + '</div>' +
+        '<div class="spn-crm-art-intent-col">' + (artIntentHtml || '<span style="color:#c8bad7;">--</span>') + '</div>' +
         flagHtml +
         (!bizAds.length && !bizPkgs.length
           ? '<button type="button" class="spn-crm-row-delete" title="Remove business" onclick="event.stopPropagation();MarketingSponsorsModule.deleteBiz(\'' + biz.id + '\',\'' + esc(biz.name) + '\')"><svg viewBox="0 0 24 24"><path d="M6.7 5.3 12 10.6l5.3-5.3 1.4 1.4-5.3 5.3 5.3 5.3-1.4 1.4L12 13.4l-5.3 5.3-1.4-1.4 5.3-5.3-5.3-5.3z"/></svg></button>'
