@@ -329,6 +329,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
   <script src="/SHARED/Navigation/production-sidebar-nav.js?v=87-20260805-volunteers-roster"></script>
   <script>
     window.initProductionPage('cast');
@@ -1393,29 +1394,20 @@
       a.click();
     }
 
-    // Opens a print-formatted window and triggers the browser's print dialog,
-    // same pattern as cast-checkin.html's attendance sheet - "Save as PDF" is
-    // a built-in browser print destination, no PDF library needed.
+    // Generates the PDF directly with html2pdf (html2canvas + jsPDF) instead
+    // of opening a blank window and calling window.print() — that route left
+    // the browser's own print-dialog chrome (an "about:blank" URL and a
+    // "1/1" page-count footer) baked into the output with no way to turn it
+    // off from here. A direct download has none of that. Same pattern as
+    // sponsors-crm.js's PDF export.
     function exportPDF() {
+      if (typeof html2pdf === 'undefined') {
+        alert('PDF export isn\'t ready yet — please wait a moment and try again.');
+        return;
+      }
       const byName = (a, b) => (a.name||'').localeCompare(b.name||'');
       const named = _chars.filter(c => !isEnsemble(c)).sort(byName);
       const ensemble = _chars.filter(c => isEnsemble(c)).sort(byName);
-      // Every performer name on a separate line under a multi-cast role (like
-      // the on-screen Ensemble list) counts as its own visual line, so a
-      // one-page fit has to account for those, not just one row per character.
-      function lineCount(chars) {
-        return chars.reduce((sum, c) => {
-          const n = getAssigned(c.id).length;
-          return sum + Math.max(1, n);
-        }, chars.length);
-      }
-      const totalLines = lineCount(named) + lineCount(ensemble);
-      // Tiered shrink so a big cast still lands on one 8.5x11 page instead of
-      // spilling to a second - tuned against real cast lists during testing.
-      let rowPad = '6px 10px', nameFs = '12px', roleFs = '12px';
-      if (totalLines > 70) { rowPad = '2.5px 10px'; nameFs = '9px'; roleFs = '9px'; }
-      else if (totalLines > 50) { rowPad = '3.5px 10px'; nameFs = '10px'; roleFs = '10px'; }
-      else if (totalLines > 32) { rowPad = '4.5px 10px'; nameFs = '11px'; roleFs = '11px'; }
 
       function rowsHtml(chars) {
         return chars.map(c => {
@@ -1426,28 +1418,56 @@
       }
 
       const printTitle = (_prodTitle || 'Cast List') + ' - Cast List - ' + new Date().toISOString().slice(0, 10);
-      const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + esc(printTitle) + '</title>' +
-        '<style>' +
-          '@page{size:letter;margin:0.5in;}' +
-          '*{box-sizing:border-box;}' +
-          'body{font-family:Arial,Helvetica,sans-serif;color:#000;margin:0;padding:0;}' +
-          'h1{margin:0 0 12px;font-size:22px;font-weight:900;text-align:center;}' +
-          '.col-heads{display:flex;font-size:8px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8c8c94;padding:0 0 3px;}' +
-          '.col-heads .role{flex:1;text-align:right;padding-right:14px;}.col-heads .perf{flex:1;text-align:left;padding-left:14px;}' +
-          '.row{display:flex;padding:' + rowPad + ';}' +
-          '.row .role{flex:1;font-weight:800;font-size:' + nameFs + ';color:#000;text-align:right;padding-right:14px;}' +
-          '.row .perf{flex:1;font-size:' + roleFs + ';color:#222;line-height:1.35;text-align:left;padding-left:14px;}' +
-          '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}' +
-        '</style></head><body>' +
-        '<h1>Cast List</h1>' +
-        '<div class="col-heads"><span class="role">Character / Role</span><span class="perf">Performer(s)</span></div>' +
-        rowsHtml([...named, ...ensemble]) +
-        '<script>window.onload=function(){window.print();}<\/script></body></html>';
+      const MARGIN_IN = 0.5, PX_PER_IN = 96;
+      const contentWpx = (8.5 - MARGIN_IN * 2) * PX_PER_IN;
+      const contentHpx = (11 - MARGIN_IN * 2) * PX_PER_IN;
 
-      const win = window.open('', '_blank');
-      if (!win) { alert('Please allow pop-ups to export a PDF.'); return; }
-      win.document.write(html);
-      win.document.close();
+      const container = document.createElement('div');
+      container.style.cssText = 'position:fixed;left:-99999px;top:0;width:' + contentWpx + 'px;background:#fff;font-family:Arial,Helvetica,sans-serif;color:#000;box-sizing:border-box;';
+      container.innerHTML =
+        '<h1 style="margin:0 0 12px;font-size:22px;font-weight:900;text-align:center;">Cast List</h1>' +
+        '<div style="display:flex;font-size:8px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8c8c94;padding:0 0 3px;"><span style="flex:1;text-align:right;padding-right:14px;">Character / Role</span><span style="flex:1;text-align:left;padding-left:14px;">Performer(s)</span></div>' +
+        '<div id="clx-rows">' + rowsHtml([...named, ...ensemble]) + '</div>';
+      const styleTag = document.createElement('style');
+      container.appendChild(styleTag);
+      document.body.appendChild(container);
+
+      // Fill the page every time instead of a handful of preset shrink
+      // tiers: measure how tall the list renders at a normal base size,
+      // then scale font/padding continuously by however much bigger or
+      // smaller it needs to be to land on exactly one page — a cast of 2
+      // grows to fill the sheet, a cast of 50 shrinks to still fit it.
+      const baseNameFs = 12, baseRoleFs = 12, basePadV = 6, basePadH = 10;
+      const setRowStyle = (ratio) => {
+        styleTag.textContent =
+          '#clx-rows .row{display:flex;padding:' + (basePadV * ratio).toFixed(1) + 'px ' + basePadH + 'px;}' +
+          '#clx-rows .row .role{flex:1;font-weight:800;font-size:' + (baseNameFs * ratio).toFixed(1) + 'px;color:#000;text-align:right;padding-right:14px;}' +
+          '#clx-rows .row .perf{flex:1;font-size:' + (baseRoleFs * ratio).toFixed(1) + 'px;color:#222;line-height:1.35;text-align:left;padding-left:14px;}';
+      };
+      setRowStyle(1);
+      const naturalH = container.scrollHeight;
+      const ratio = Math.min(3, Math.max(0.45, contentHpx / naturalH));
+      setRowStyle(ratio);
+
+      const btn = document.querySelector('.btn-export');
+      const originalLabel = btn ? btn.textContent : '';
+      if (btn) { btn.disabled = true; btn.textContent = 'Preparing...'; }
+      function cleanup() {
+        container.remove();
+        if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
+      }
+
+      html2pdf().set({
+        margin: [MARGIN_IN * 25.4, MARGIN_IN * 25.4, MARGIN_IN * 25.4, MARGIN_IN * 25.4],
+        filename: printTitle.replace(/[^a-zA-Z0-9 ._-]/g, '') + '.pdf',
+        image: { type: 'jpeg', quality: 0.95 },
+        html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+        jsPDF: { unit: 'mm', format: 'letter', orientation: 'portrait' },
+        pagebreak: { mode: ['css', 'avoid-all'] },
+      }).from(container).save().then(cleanup).catch(function (e) {
+        cleanup();
+        alert('Could not generate PDF: ' + (e && e.message || 'Unknown error'));
+      });
     }
 
     async function loadCastListData() {
