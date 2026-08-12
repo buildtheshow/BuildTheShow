@@ -1310,7 +1310,9 @@
     var html = '';
     var ad = booking.artwork_data;
     if (ad && typeof ad === 'object') {
-      var artStatus = ad.status === 'ready' ? 'Artwork provided' : (ad.status === 'help' ? 'Needs artwork designed' : (ad.status === 'later' ? 'Will send later' : ''));
+      var artStatus = ad.status === 'ready'
+        ? (booking.artwork_url ? 'Artwork provided' : 'Says artwork is ready (not uploaded yet)')
+        : (ad.status === 'help' ? 'Needs artwork designed' : (ad.status === 'later' ? 'Will send later' : ''));
       if (artStatus) html += '<div class="spn-crm-detail-row"><span class="spn-crm-detail-label">Artwork</span><span>' + esc(artStatus) + '</span></div>';
       if (ad.ad_type) html += '<div class="spn-crm-detail-row"><span class="spn-crm-detail-label">Advertising</span><span>' + esc(ad.ad_type) + '</span></div>';
       if (ad.about) html += '<div class="spn-crm-detail-row"><span class="spn-crm-detail-label">About</span><span>' + esc(ad.about) + '</span></div>';
@@ -1744,6 +1746,10 @@
   function crmArtworkIntentBadge(booking) {
     var ad = booking.artwork_data;
     var status = ad && typeof ad === 'object' ? ad.status : '';
+    // artwork_data.status is the sponsor's stated intent from the booking form,
+    // not proof a file was actually uploaded (that's artwork_url) — badge must
+    // say so when they differ, or it flatly contradicts the "missing" flag.
+    if (status === 'ready' && !booking.artwork_url) return '<div class="spn-crm-artwork-intent spn-crm-artwork-intent--ready-missing">Says Ready &ndash; Not Uploaded</div>';
     if (status === 'ready') return '<div class="spn-crm-artwork-intent spn-crm-artwork-intent--ready">Has Artwork Now</div>';
     if (status === 'later') return '<div class="spn-crm-artwork-intent spn-crm-artwork-intent--later">Sending Artwork Later</div>';
     if (status === 'help') return '<div class="spn-crm-artwork-intent spn-crm-artwork-intent--help">Needs Design Help</div>';
