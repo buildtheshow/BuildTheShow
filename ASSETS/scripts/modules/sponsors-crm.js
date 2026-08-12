@@ -1314,7 +1314,7 @@
     var heroCount = document.getElementById('spn-hero-page-count');
     if (heroCount) heroCount.textContent = businesses.length;
 
-    listEl.innerHTML = '<div class="spn-crm-cols-head"><span></span><span>Business</span><span>Booking(s)</span><span>Booked</span><span>Payment</span><span>Artwork</span><span>Artwork Plan</span><span>Attention</span><span></span></div>' +
+    listEl.innerHTML = '<div class="spn-crm-cols-head"><span></span><span>Business</span><span>Booking(s)</span><span>Booked</span><span>Payment</span><span>Artwork</span><span>Artwork Plan</span><span></span></div>' +
       businesses.map(function (biz) {
         return renderCrmBusinessRow(biz, adsMap[biz.id] || [], pkgsMap[biz.id] || [], delivMap[biz.id] || [], filesMap[biz.id] || []);
       }).join('');
@@ -1936,13 +1936,6 @@
     else if (receivedCents > 0) { payLabel = 'Partial'; payClass = 'spn-crm-pay-badge--partial'; payFraction = '$' + (receivedCents/100).toLocaleString() + ' / $' + (totalCents/100).toLocaleString(); }
     else { payLabel = 'Unpaid'; payClass = 'spn-crm-pay-badge--unpaid'; payFraction = '$0 / $' + (totalCents/100).toLocaleString(); }
 
-    var flags = computeAttentionFlags(bizAds, bizPkgs, bizDelivs);
-    var flagHtml;
-    if (!flags.length) {
-      flagHtml = '<div class="spn-crm-flag spn-crm-flag--good"><img src="/ASSETS/Images/Icons/Checklist.svg" class="spn-crm-flag-icon" alt="" /> All Good</div>';
-    } else {
-      flagHtml = '<div class="spn-crm-flag spn-crm-flag--bad"><img src="/ASSETS/Images/Icons/Notifications.svg" class="spn-crm-flag-icon" alt="" /> Needs Follow Up<ul class="spn-crm-flag-reasons">' + flags.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul></div>';
-    }
 
     var tags = '';
     var ci = 0;
@@ -2158,13 +2151,12 @@
     return '<div class="spn-crm-row' + (isExpanded ? ' spn-crm-row--expanded' : '') + '" id="spn-crm-row-' + biz.id + '">' +
       '<div class="spn-crm-row-header" role="button" tabindex="0" aria-expanded="' + (isExpanded ? 'true' : 'false') + '" onclick="MarketingSponsorsModule.toggleCrmRow(\'' + biz.id + '\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();MarketingSponsorsModule.toggleCrmRow(\'' + biz.id + '\');}">' +
         '<span class="spn-crm-chevron">&#9654;</span>' +
-        '<div><div class="spn-crm-biz-name">' + esc(biz.name) + '</div><div class="spn-crm-biz-contact">' + contactLine + '</div></div>' +
-        '<div class="spn-crm-tags">' + (tags || '<span style="font-size:0.68rem;color:#c8bad7;">No bookings</span>') + '</div>' +
-        '<div class="spn-crm-amount">' + (totalCents ? '$' + (totalCents/100).toLocaleString('en-CA',{minimumFractionDigits:2}) : '--') + '</div>' +
-        '<div>' + (payClass ? '<div class="spn-crm-pay-badge ' + payClass + '">' + payLabel + '</div><div class="spn-crm-pay-fraction">' + payFraction + '</div>' : '<span style="color:#c8bad7;">--</span>') + '</div>' +
-        '<div class="spn-crm-art-status ' + artClass + '">' + artLabel + '</div>' +
-        '<div class="spn-crm-art-intent-col">' + (artIntentHtml || '<span style="color:#c8bad7;">--</span>') + '</div>' +
-        flagHtml +
+        '<div class="spn-crm-cell"><div class="spn-crm-biz-name">' + esc(biz.name) + '</div><div class="spn-crm-biz-contact">' + contactLine + '</div></div>' +
+        '<div class="spn-crm-cell"><span class="spn-crm-cell-label">Booking(s)</span><div class="spn-crm-tags">' + (tags || '<span style="font-size:0.68rem;color:#c8bad7;">No bookings</span>') + '</div></div>' +
+        '<div class="spn-crm-cell"><span class="spn-crm-cell-label">Booked</span><div class="spn-crm-amount">' + (totalCents ? '$' + (totalCents/100).toLocaleString('en-CA',{minimumFractionDigits:2}) : '--') + '</div></div>' +
+        '<div class="spn-crm-cell"><span class="spn-crm-cell-label">Payment</span>' + (payClass ? '<div class="spn-crm-pay-badge ' + payClass + '">' + payLabel + '</div><div class="spn-crm-pay-fraction">' + payFraction + '</div>' : '<span style="color:#c8bad7;">--</span>') + '</div>' +
+        '<div class="spn-crm-cell"><span class="spn-crm-cell-label">Artwork</span><div class="spn-crm-art-status ' + artClass + '">' + artLabel + '</div></div>' +
+        '<div class="spn-crm-cell spn-crm-art-intent-col"><span class="spn-crm-cell-label">Artwork Plan</span>' + (artIntentHtml || '<span style="color:#c8bad7;">--</span>') + '</div>' +
         (!bizAds.length && !bizPkgs.length
           ? '<button type="button" class="spn-crm-row-delete" title="Remove business" onclick="event.stopPropagation();MarketingSponsorsModule.deleteBiz(\'' + biz.id + '\',\'' + esc(biz.name) + '\')"><svg viewBox="0 0 24 24"><path d="M6.7 5.3 12 10.6l5.3-5.3 1.4 1.4-5.3 5.3 5.3 5.3-1.4 1.4L12 13.4l-5.3 5.3-1.4-1.4 5.3-5.3-5.3-5.3z"/></svg></button>'
           : '<span></span>') +
