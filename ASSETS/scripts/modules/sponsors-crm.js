@@ -4279,9 +4279,7 @@
           '<div class="spn-toolbar">' +
             '<span class="spn-toolbar-title" id="spn-crm-count">Businesses</span>' +
             '<div style="display:flex;gap:0.5rem;">' +
-              '<button class="spn-btn spn-btn--ghost" id="spn-crm-export-btn" onclick="MarketingSponsorsModule.crmExportReport()">Export</button>' +
               '<button class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.crmExportAllPhotos(this)">Export Artwork</button>' +
-              '<button class="spn-btn spn-btn--ghost" onclick="MarketingSponsorsModule.openBizModal()">+ Add Business (quick, no artwork step)</button>' +
               '<button class="spn-btn spn-btn--primary" onclick="MarketingSponsorsModule.openPublicBookingModal()">+ Add Business</button>' +
             '</div>' +
           '</div>' +
