@@ -2253,12 +2253,14 @@
     return '<div class="spn-crm-row' + (isExpanded ? ' spn-crm-row--expanded' : '') + '" id="spn-crm-row-' + biz.id + '">' +
       '<div class="spn-crm-row-header" role="button" tabindex="0" aria-expanded="' + (isExpanded ? 'true' : 'false') + '" onclick="MarketingSponsorsModule.toggleCrmRow(\'' + biz.id + '\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();MarketingSponsorsModule.toggleCrmRow(\'' + biz.id + '\');}">' +
         '<span class="spn-crm-chevron">&#9654;</span>' +
-        '<div class="spn-crm-cell"><div class="spn-crm-biz-name">' + esc(biz.name) + '</div><div class="spn-crm-biz-contact">' + contactLine + '</div></div>' +
-        '<div class="spn-crm-cell"><span class="spn-crm-cell-label">Booking(s)</span><div class="spn-crm-tags">' + (tags || '<span style="font-size:0.68rem;color:#c8bad7;">No bookings</span>') + '</div></div>' +
-        '<div class="spn-crm-cell"><span class="spn-crm-cell-label">Booked</span><div class="spn-crm-amount">' + (totalCents ? '$' + (totalCents/100).toLocaleString('en-CA',{minimumFractionDigits:2}) : '--') + '</div></div>' +
-        '<div class="spn-crm-cell"><span class="spn-crm-cell-label">Payment</span>' + (payClass ? '<div class="spn-crm-pay-badge ' + payClass + '">' + payLabel + '</div><div class="spn-crm-pay-fraction">' + payFraction + '</div>' : '<span style="color:#c8bad7;">--</span>') + '</div>' +
-        '<div class="spn-crm-cell"><span class="spn-crm-cell-label">Artwork</span><div class="spn-crm-art-status ' + artClass + '">' + artLabel + '</div></div>' +
-        '<div class="spn-crm-cell spn-crm-art-intent-col"><span class="spn-crm-cell-label">Artwork Plan</span>' + (artIntentHtml || '<span style="color:#c8bad7;">--</span>') + '</div>' +
+        '<div class="spn-crm-cell spn-crm-cell-name"><div class="spn-crm-biz-name">' + esc(biz.name) + '</div><div class="spn-crm-biz-contact">' + contactLine + '</div></div>' +
+        '<div class="spn-crm-row-fields">' +
+          '<div class="spn-crm-cell"><span class="spn-crm-cell-label">Booking(s)</span><div class="spn-crm-tags">' + (tags || '<span style="font-size:0.68rem;color:#c8bad7;">No bookings</span>') + '</div></div>' +
+          '<div class="spn-crm-cell"><span class="spn-crm-cell-label">Booked</span><div class="spn-crm-amount">' + (totalCents ? '$' + (totalCents/100).toLocaleString('en-CA',{minimumFractionDigits:2}) : '--') + '</div></div>' +
+          '<div class="spn-crm-cell"><span class="spn-crm-cell-label">Payment</span>' + (payClass ? '<div class="spn-crm-pay-badge ' + payClass + '">' + payLabel + '</div><div class="spn-crm-pay-fraction">' + payFraction + '</div>' : '<span style="color:#c8bad7;">--</span>') + '</div>' +
+          '<div class="spn-crm-cell"><span class="spn-crm-cell-label">Artwork</span><div class="spn-crm-art-status ' + artClass + '">' + artLabel + '</div></div>' +
+          '<div class="spn-crm-cell spn-crm-art-intent-col"><span class="spn-crm-cell-label">Artwork Plan</span>' + (artIntentHtml || '<span style="color:#c8bad7;">--</span>') + '</div>' +
+        '</div>' +
         (!bizAds.length && !bizPkgs.length
           ? '<button type="button" class="spn-crm-row-delete" title="Remove business" onclick="event.stopPropagation();MarketingSponsorsModule.deleteBiz(\'' + biz.id + '\',\'' + esc(biz.name) + '\')"><svg viewBox="0 0 24 24"><path d="M6.7 5.3 12 10.6l5.3-5.3 1.4 1.4-5.3 5.3 5.3 5.3-1.4 1.4L12 13.4l-5.3 5.3-1.4-1.4 5.3-5.3-5.3-5.3z"/></svg></button>'
           : '<span></span>') +
