@@ -1314,7 +1314,7 @@
     var heroCount = document.getElementById('spn-hero-page-count');
     if (heroCount) heroCount.textContent = businesses.length;
 
-    listEl.innerHTML = '<div class="spn-crm-cols-head"><span></span><span>Business</span><span>Booking(s)</span><span>Booked</span><span>Payment</span><span>Artwork</span><span>Sponsor Says</span><span>Attention</span><span></span></div>' +
+    listEl.innerHTML = '<div class="spn-crm-cols-head"><span></span><span>Business</span><span>Booking(s)</span><span>Booked</span><span>Payment</span><span>Artwork</span><span>Artwork Plan</span><span>Attention</span><span></span></div>' +
       businesses.map(function (biz) {
         return renderCrmBusinessRow(biz, adsMap[biz.id] || [], pkgsMap[biz.id] || [], delivMap[biz.id] || [], filesMap[biz.id] || []);
       }).join('');
