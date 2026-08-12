@@ -191,7 +191,15 @@
       method: 'PATCH',
       headers: sponsorHeaders({ 'Content-Type': 'application/json', Prefer: 'return=representation' }),
       body: JSON.stringify(data),
-    }).then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); return r.json(); });
+    }).then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(t); }); return r.json(); })
+      .then(function (rows) {
+        // A row-level security policy that rejects the write doesn't error —
+        // PostgREST just matches zero rows and returns 200 with an empty
+        // array, so the request "succeeds" while nothing actually saved.
+        // Treat that as a failure so it surfaces instead of silently vanishing.
+        if (!rows || !rows.length) throw new Error('Nothing was saved — your session may need refreshing. Please reload the page and try again.');
+        return rows;
+      });
   }
 
   function dbDelete(table, id) {
