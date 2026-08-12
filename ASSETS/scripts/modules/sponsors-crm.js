@@ -1220,7 +1220,75 @@
   // -- SHOW SPONSORS CRM --------------------------------------------------------
 
   var CRM_TAG_COLORS = ['#572e88', '#476aaa', '#769e7b', '#dd8233', '#d1523d', '#ca7ea7', '#78bbd4'];
-  var CrmUi = { expanded: {}, tab: {} };
+  var CrmUi = { expanded: {}, tab: {}, sort: { col: null, dir: 'asc' } };
+
+  var CRM_SORT_COLS = ['name', 'booking', 'value', 'payment', 'artwork', 'plan'];
+
+  function crmRowSortKeys(biz, bizAds, bizPkgs) {
+    var totalCents = 0, receivedCents = 0, hasCash = false, hasTrade = false;
+    bizPkgs.forEach(function (p) {
+      if (p.booking_status === 'declined') return;
+      if (p.payment_status === 'trade') { hasTrade = true; return; }
+      totalCents += (p.amount_cents || 0); hasCash = true;
+      if (p.payment_status === 'paid') receivedCents += (p.amount_cents || 0);
+      else if (p.payment_amount_cents) receivedCents += p.payment_amount_cents;
+    });
+    bizAds.forEach(function (a) {
+      if (a.booking_status === 'declined') return;
+      if (a.payment_status === 'trade') { hasTrade = true; return; }
+      totalCents += (a.price_cents || 0); hasCash = true;
+      if (a.payment_status === 'paid') receivedCents += (a.price_cents || 0);
+      else if (a.payment_amount_cents) receivedCents += a.payment_amount_cents;
+    });
+    var paymentRank;
+    if (hasTrade && !hasCash) paymentRank = -1;
+    else if (totalCents === 0) paymentRank = -2;
+    else if (receivedCents >= totalCents) paymentRank = 3;
+    else if (receivedCents > 0) paymentRank = 2;
+    else paymentRank = 1;
+
+    var anyArtMissing = false, anyArtReceived = false, allArtApproved = true;
+    bizAds.forEach(function (a) {
+      if (a.artwork_status === 'missing') anyArtMissing = true;
+      else if (a.artwork_status === 'received') anyArtReceived = true;
+      if (a.artwork_status !== 'approved' && a.artwork_status !== 'print_ready') allArtApproved = false;
+    });
+    var artworkRank = !bizAds.length ? 0 : allArtApproved ? 3 : anyArtReceived ? 2 : anyArtMissing ? 1 : 0;
+
+    var intentPriority = { help: 3, later: 2, ready: 1 };
+    var planRank = 0;
+    bizAds.forEach(function (a) {
+      if (a.booking_status === 'declined') return;
+      var ad = a.artwork_data;
+      var st = ad && typeof ad === 'object' ? ad.status : '';
+      var p = intentPriority[st] || 0;
+      if (p > planRank) planRank = p;
+    });
+
+    var bookingLabel = '';
+    if (bizPkgs.length) bookingLabel = bizPkgs[0].tier_name || 'Sponsor';
+    else if (bizAds.length) bookingLabel = crmAdSizeLabel(bizAds[0]).label || '';
+
+    return {
+      name: (biz.name || '').toLowerCase(),
+      booking: bookingLabel.toLowerCase(),
+      value: totalCents,
+      payment: paymentRank,
+      artwork: artworkRank,
+      plan: planRank,
+    };
+  }
+
+  function crmSortBy(col) {
+    if (CRM_SORT_COLS.indexOf(col) === -1) return;
+    if (CrmUi.sort.col === col) {
+      CrmUi.sort.dir = CrmUi.sort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+      CrmUi.sort.col = col;
+      CrmUi.sort.dir = 'asc';
+    }
+    hydrateShowSponsorsCRM();
+  }
 
   function loadShowSponsorsCRM() {
     Promise.all([
@@ -1314,8 +1382,30 @@
     var heroCount = document.getElementById('spn-hero-page-count');
     if (heroCount) heroCount.textContent = businesses.length;
 
-    listEl.innerHTML = '<div class="spn-crm-cols-head"><span></span><span>Business</span><span>Booking(s)</span><span>Booked</span><span>Payment</span><span>Artwork</span><span>Artwork Plan</span><span></span></div>' +
-      businesses.map(function (biz) {
+    var sortedBusinesses = businesses.slice();
+    if (CrmUi.sort.col) {
+      var col = CrmUi.sort.col;
+      var dir = CrmUi.sort.dir === 'desc' ? -1 : 1;
+      sortedBusinesses.sort(function (a, b) {
+        var ka = crmRowSortKeys(a, adsMap[a.id] || [], pkgsMap[a.id] || [])[col];
+        var kb = crmRowSortKeys(b, adsMap[b.id] || [], pkgsMap[b.id] || [])[col];
+        if (ka < kb) return -1 * dir;
+        if (ka > kb) return 1 * dir;
+        return 0;
+      });
+    }
+
+    function sortHeadCell(col, label) {
+      var active = CrmUi.sort.col === col;
+      var arrow = active ? (CrmUi.sort.dir === 'desc' ? ' ↓' : ' ↑') : '';
+      return '<button type="button" class="spn-crm-sort-head' + (active ? ' spn-crm-sort-head--active' : '') + '" onclick="MarketingSponsorsModule.crmSortBy(\'' + col + '\')">' + esc(label) + arrow + '</button>';
+    }
+
+    listEl.innerHTML = '<div class="spn-crm-cols-head"><span></span>' +
+      sortHeadCell('name', 'Business') + sortHeadCell('booking', 'Booking(s)') + sortHeadCell('value', 'Booked') +
+      sortHeadCell('payment', 'Payment') + sortHeadCell('artwork', 'Artwork') + sortHeadCell('plan', 'Artwork Plan') +
+      '<span></span></div>' +
+      sortedBusinesses.map(function (biz) {
         return renderCrmBusinessRow(biz, adsMap[biz.id] || [], pkgsMap[biz.id] || [], delivMap[biz.id] || [], filesMap[biz.id] || []);
       }).join('');
   }
@@ -4647,6 +4737,7 @@
     refreshPublicPreview: schedulePublicPagePreview,
     toggleCrmRow: toggleCrmRow,
     crmSwitchTab: crmSwitchTab,
+    crmSortBy: crmSortBy,
     saveCrmNotes: saveCrmNotes,
     toggleCrmDeliv: toggleCrmDeliv,
     uploadCrmFile: uploadCrmFile,
