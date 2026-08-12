@@ -784,6 +784,18 @@
         .replace(/\b\w/g, char => char.toUpperCase());
     }
 
+    // Performers can request a different name for print (Registration >
+    // Programme Credit > "Exact name as you would like to see it in the
+    // programme"). The cast list — on screen, CSV, and PDF — should show
+    // that instead of their regular name whenever they've set one.
+    function perfDisplayName(perf) {
+      if (!perf) return '';
+      let ca = perf.custom_answers;
+      if (typeof ca === 'string') { try { ca = JSON.parse(ca); } catch (_) { ca = null; } }
+      const credit = ca && String(ca['Exact first and last name *'] || '').trim();
+      return credit || perf.name || '';
+    }
+
     function getAssigned(charId) {
       const char = _chars.find(c => c.id === charId);
       const matchesEnsembleFallback = char && charLooksLikeEnsemble(char);
@@ -824,7 +836,7 @@
       }
       const hasConsidering = _assignments.some(a => a.character_id === charId && a.state === 'considering');
       const items = assigned.map(e => {
-        const name = e.perf.name || 'Unknown';
+        const name = perfDisplayName(e.perf) || 'Unknown';
         return forTable
           ? `<div class="cl-perf-name">${esc(name)}</div>`
           : `<span class="cl-name">${esc(name)}</span>`;
@@ -1382,7 +1394,7 @@
       const rows = [['Character / Role', 'Performer(s)', 'Role Type', 'Status']];
       sorted.forEach(c => {
         const assigned = getAssigned(c.id);
-        const names = assigned.length ? assigned.map(e => e.perf.name || '').join('; ') : 'Open';
+        const names = assigned.length ? assigned.map(e => perfDisplayName(e.perf)).join('; ') : 'Open';
         const status = assigned.length ? assigned[0].state : 'open';
         rows.push([c.name || '', names, c.role_type || '', status]);
       });
@@ -1412,7 +1424,7 @@
       function rowsHtml(chars) {
         return chars.map(c => {
           const assigned = getAssigned(c.id);
-          const names = assigned.length ? assigned.map(e => esc(e.perf.name || 'Unknown')).join('<br>') : '<span style="color:#999;font-style:italic;">Open</span>';
+          const names = assigned.length ? assigned.map(e => esc(perfDisplayName(e.perf) || 'Unknown')).join('<br>') : '<span style="color:#999;font-style:italic;">Open</span>';
           return '<div class="row"><div class="role">' + esc(c.name || '') + '</div><div class="perf">' + names + '</div></div>';
         }).join('');
       }
@@ -1483,8 +1495,8 @@
       const [charRes, assignRes, appRes, bookRes, castRes, prodRes] = await Promise.all([
         sb.from('production_characters').select('id,name,role_type').eq('production_id', prodId).order('sort_order').order('name'),
         sb.from('casting_assignments').select('id,character_id,applicant_id,state').eq('production_id', prodId).eq('dropped_out', false).in('state', ['chosen','offer_accepted','considering']),
-        sb.from('audition_applications').select('id,name,date_conflicts').eq('production_id', prodId),
-        sb.from('audition_bookings').select('id,name').eq('production_id', prodId),
+        sb.from('audition_applications').select('id,name,date_conflicts,custom_answers').eq('production_id', prodId),
+        sb.from('audition_bookings').select('id,name,custom_answers').eq('production_id', prodId),
         sb.from('cast_members').select('*').eq('production_id', prodId).in('state', ['chosen', 'offer_accepted']),
         sb.from('productions').select('title').eq('id', prodId).single(),
       ]);
