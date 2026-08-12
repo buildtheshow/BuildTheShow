@@ -6,6 +6,21 @@
   var SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8';
   var STORAGE_BUCKET = 'programme-ads';
 
+  // sponsorAccessToken() below only ever reads whatever session token is
+  // already sitting in localStorage — it never refreshes it. A Supabase
+  // access token expires after about an hour, so a tab left open longer
+  // than that starts silently sending an expired token on every write,
+  // which RLS just denies outright (looks identical to a permissions bug).
+  // Supabase's client auto-refreshes the token in the background and
+  // writes it back to that same localStorage key on its own; simply having
+  // one instantiated on the page is enough to keep it current, so nothing
+  // else in this file has to change.
+  try {
+    if (window.supabase && window.supabase.createClient) {
+      window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+    }
+  } catch (_) {}
+
   /* Dims stored as "HeightxWidth" (printing convention).
      Programme is 8.5x11 folded in half = 5.5" wide x 8.5" tall (portrait).
      Printable area: 5" wide x 8" tall. */
