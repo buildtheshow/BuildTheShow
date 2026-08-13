@@ -1415,77 +1415,84 @@
     // off from here. A direct download has none of that. Same pattern as
     // sponsors-crm.js's PDF export.
     function exportPDF() {
-      if (typeof html2pdf === 'undefined') {
+      try {
+        exportPDFInner();
+      } catch (e) {
+        console.error('[BTS] exportPDF failed', e);
+        alert('Could not generate PDF: ' + (e && (e.message || e.toString()) || 'Unknown error'));
+      }
+    }
+    // Draws the cast list straight into the PDF with jsPDF's own text/line
+    // APIs instead of rendering HTML through html2canvas — the canvas route
+    // kept producing a blank page (tried fixing the offscreen offset, then
+    // the stylesheet approach; still blank), and a two-column name list has
+    // no real layout complexity that needs a rasterizer in the first place.
+    // Direct text is also crisper and selectable/searchable in the output.
+    function exportPDFInner() {
+      const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+      if (!jsPDFCtor) {
         alert('PDF export isn\'t ready yet — please wait a moment and try again.');
         return;
       }
       const byName = (a, b) => (a.name||'').localeCompare(b.name||'');
       const named = _chars.filter(c => !isEnsemble(c)).sort(byName);
       const ensemble = _chars.filter(c => isEnsemble(c)).sort(byName);
-      const allChars = [...named, ...ensemble];
+      const rows = [...named, ...ensemble].map(c => {
+        const assigned = getAssigned(c.id);
+        const names = assigned.length ? assigned.map(e => perfDisplayName(e.perf) || 'Unknown') : null;
+        return { role: c.name || '', names };
+      });
+      const totalLines = rows.reduce((sum, r) => sum + Math.max(1, r.names ? r.names.length : 1), 0);
 
-      // Rows use inline styles, not a class + injected <style> tag — html2canvas
-      // doesn't reliably pick up a dynamically-created <style> element on the
-      // cloned subtree it renders from, which produced a blank page here.
-      // Same inline-style approach already proven to work in the sponsors CRM
-      // PDF export.
-      const baseNameFs = 12, baseRoleFs = 12, basePadV = 6, basePadH = 10;
-      function rowsHtml(chars, ratio) {
-        const padV = (basePadV * ratio).toFixed(1), roleFs = (baseNameFs * ratio).toFixed(1), perfFs = (baseRoleFs * ratio).toFixed(1);
-        return chars.map(c => {
-          const assigned = getAssigned(c.id);
-          const names = assigned.length ? assigned.map(e => esc(perfDisplayName(e.perf) || 'Unknown')).join('<br>') : '<span style="color:#999;font-style:italic;">Open</span>';
-          return '<div style="display:flex;padding:' + padV + 'px ' + basePadH + 'px;">' +
-            '<div style="flex:1;font-weight:800;font-size:' + roleFs + 'px;color:#000;text-align:right;padding-right:14px;">' + esc(c.name || '') + '</div>' +
-            '<div style="flex:1;font-size:' + perfFs + 'px;color:#222;line-height:1.35;text-align:left;padding-left:14px;">' + names + '</div>' +
-          '</div>';
-        }).join('');
-      }
-
-      const printTitle = (_prodTitle || 'Cast List') + ' - Cast List - ' + new Date().toISOString().slice(0, 10);
-      const MARGIN_IN = 0.5, PX_PER_IN = 96;
-      const contentWpx = (8.5 - MARGIN_IN * 2) * PX_PER_IN;
-      const contentHpx = (11 - MARGIN_IN * 2) * PX_PER_IN;
-
-      const container = document.createElement('div');
-      // -9999px, not further: html2canvas can fail to paint elements parked
-      // extremely far off-screen (compositor tile/coordinate limits), which
-      // produced a blank page here too.
-      container.style.cssText = 'position:fixed;left:-9999px;top:0;width:' + contentWpx + 'px;background:#fff;font-family:Arial,Helvetica,sans-serif;color:#000;box-sizing:border-box;';
-      const headHtml =
-        '<h1 style="margin:0 0 12px;font-size:22px;font-weight:900;text-align:center;">Cast List</h1>' +
-        '<div style="display:flex;font-size:8px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8c8c94;padding:0 0 3px;"><span style="flex:1;text-align:right;padding-right:14px;">Character / Role</span><span style="flex:1;text-align:left;padding-left:14px;">Performer(s)</span></div>';
-      container.innerHTML = headHtml + rowsHtml(allChars, 1);
-      document.body.appendChild(container);
+      const doc = new jsPDFCtor({ unit: 'in', format: 'letter', orientation: 'portrait' });
+      const pageW = 8.5, marginIn = 0.6;
+      const midX = pageW / 2;
+      const headerH = 0.55;
 
       // Fill the page every time instead of a handful of preset shrink
-      // tiers: measure how tall the list renders at a normal base size,
-      // then scale font/padding continuously by however much bigger or
-      // smaller it needs to be to land on exactly one page — a cast of 2
-      // grows to fill the sheet, a cast of 50 shrinks to still fit it.
-      const naturalH = container.scrollHeight;
-      const ratio = Math.min(3, Math.max(0.45, contentHpx / naturalH));
-      container.innerHTML = headHtml + rowsHtml(allChars, ratio);
+      // tiers: pick a font size so the full list, at that size, lands on
+      // exactly one page — a cast of 2 grows to fill the sheet, a cast of
+      // 50 shrinks to still fit it.
+      const usableH = 11 - marginIn * 2 - headerH;
+      let fontPt = 13;
+      const lineHIn = (pt) => (pt / 72) * 1.35;
+      const rowPadIn = (pt) => (pt / 72) * 0.55;
+      const neededH = (pt) => rows.reduce((sum, r) => sum + Math.max(1, r.names ? r.names.length : 1) * lineHIn(pt) + rowPadIn(pt) * 2, 0);
+      const naturalH = neededH(fontPt);
+      const ratio = Math.min(2.5, Math.max(0.4, usableH / naturalH));
+      fontPt = fontPt * ratio;
+      const lineH = lineHIn(fontPt);
+      const padIn = rowPadIn(fontPt);
 
-      const btn = document.querySelector('.btn-export');
-      const originalLabel = btn ? btn.textContent : '';
-      if (btn) { btn.disabled = true; btn.textContent = 'Preparing...'; }
-      function cleanup() {
-        container.remove();
-        if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
-      }
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(20);
+      doc.setTextColor(0, 0, 0);
+      doc.text('Cast List', midX, marginIn + 0.28, { align: 'center' });
 
-      html2pdf().set({
-        margin: [MARGIN_IN * 25.4, MARGIN_IN * 25.4, MARGIN_IN * 25.4, MARGIN_IN * 25.4],
-        filename: printTitle.replace(/[^a-zA-Z0-9 ._-]/g, '') + '.pdf',
-        image: { type: 'jpeg', quality: 0.95 },
-        html2canvas: { scale: 2, useCORS: true, letterRendering: true },
-        jsPDF: { unit: 'mm', format: 'letter', orientation: 'portrait' },
-        pagebreak: { mode: ['css', 'avoid-all'] },
-      }).from(container).save().then(cleanup).catch(function (e) {
-        cleanup();
-        alert('Could not generate PDF: ' + (e && e.message || 'Unknown error'));
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.setTextColor(140, 140, 148);
+      doc.text('CHARACTER / ROLE', midX - 0.15, marginIn + headerH, { align: 'right' });
+      doc.text('PERFORMER(S)', midX + 0.15, marginIn + headerH, { align: 'left' });
+
+      let y = marginIn + headerH + 0.08;
+      rows.forEach(r => {
+        const lines = r.names || ['Open'];
+        y += padIn;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(fontPt);
+        doc.setTextColor(0, 0, 0);
+        doc.text(String(r.role), midX - 0.15, y + lineH * 0.72, { align: 'right', maxWidth: midX - marginIn - 0.15 });
+        doc.setFont('helvetica', r.names ? 'normal' : 'italic');
+        doc.setTextColor(r.names ? 34 : 140);
+        lines.forEach((n, i) => {
+          doc.text(String(n), midX + 0.15, y + lineH * 0.72 + i * lineH, { align: 'left', maxWidth: pageW - marginIn - midX - 0.15 });
+        });
+        y += lines.length * lineH + padIn;
       });
+
+      const printTitle = (_prodTitle || 'Cast List') + ' - Cast List - ' + new Date().toISOString().slice(0, 10);
+      doc.save(printTitle.replace(/[^a-zA-Z0-9 ._-]/g, '') + '.pdf');
     }
 
     async function loadCastListData() {
