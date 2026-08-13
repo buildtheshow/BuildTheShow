@@ -352,6 +352,7 @@
     let _performers = [];
     let _applicationIds = new Set();
     let _castMembers = [];
+    let _programmeCreditByApplicant = {};
     let _performerDirectory = [];
     let _selectedPerformerId = null;
     let _view = 'programme';
@@ -786,13 +787,14 @@
 
     // Performers can request a different name for print (Registration >
     // Programme Credit > "Exact name as you would like to see it in the
-    // programme"). The cast list — on screen, CSV, and PDF — should show
-    // that instead of their regular name whenever they've set one.
+    // programme"). That answer lives on cast_members.registration_answers
+    // (keyed by applicant_id), not on the audition_applications/bookings
+    // record itself — a separate table entirely, populated only after
+    // someone completes registration. The cast list — on screen, CSV, and
+    // PDF — should show it instead of their regular name whenever set.
     function perfDisplayName(perf) {
       if (!perf) return '';
-      let ca = perf.custom_answers;
-      if (typeof ca === 'string') { try { ca = JSON.parse(ca); } catch (_) { ca = null; } }
-      const credit = ca && String(ca['Exact first and last name *'] || '').trim();
+      const credit = _programmeCreditByApplicant[String(perf.id)];
       return credit || perf.name || '';
     }
 
@@ -1495,8 +1497,8 @@
       const [charRes, assignRes, appRes, bookRes, castRes, prodRes] = await Promise.all([
         sb.from('production_characters').select('id,name,role_type').eq('production_id', prodId).order('sort_order').order('name'),
         sb.from('casting_assignments').select('id,character_id,applicant_id,state').eq('production_id', prodId).eq('dropped_out', false).in('state', ['chosen','offer_accepted','considering']),
-        sb.from('audition_applications').select('id,name,date_conflicts,custom_answers').eq('production_id', prodId),
-        sb.from('audition_bookings').select('id,name,custom_answers').eq('production_id', prodId),
+        sb.from('audition_applications').select('id,name,date_conflicts').eq('production_id', prodId),
+        sb.from('audition_bookings').select('id,name').eq('production_id', prodId),
         sb.from('cast_members').select('*').eq('production_id', prodId).in('state', ['chosen', 'offer_accepted']),
         sb.from('productions').select('title').eq('id', prodId).single(),
       ]);
@@ -1510,6 +1512,12 @@
           ...member,
           date_conflicts: member.date_conflicts || app?.date_conflicts || null,
         };
+      });
+      _programmeCreditByApplicant = {};
+      _castMembers.forEach(member => {
+        const ra = member.registration_answers;
+        const credit = ra && String(ra['Exact name as you would like to see it in the programme'] || '').trim();
+        if (credit) _programmeCreditByApplicant[String(member.applicant_id)] = credit;
       });
       const apps = appRes.data || [];
       const bookIds = new Set(apps.map(a => String(a.id)));
