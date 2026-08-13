@@ -1422,12 +1422,23 @@
       const byName = (a, b) => (a.name||'').localeCompare(b.name||'');
       const named = _chars.filter(c => !isEnsemble(c)).sort(byName);
       const ensemble = _chars.filter(c => isEnsemble(c)).sort(byName);
+      const allChars = [...named, ...ensemble];
 
-      function rowsHtml(chars) {
+      // Rows use inline styles, not a class + injected <style> tag — html2canvas
+      // doesn't reliably pick up a dynamically-created <style> element on the
+      // cloned subtree it renders from, which produced a blank page here.
+      // Same inline-style approach already proven to work in the sponsors CRM
+      // PDF export.
+      const baseNameFs = 12, baseRoleFs = 12, basePadV = 6, basePadH = 10;
+      function rowsHtml(chars, ratio) {
+        const padV = (basePadV * ratio).toFixed(1), roleFs = (baseNameFs * ratio).toFixed(1), perfFs = (baseRoleFs * ratio).toFixed(1);
         return chars.map(c => {
           const assigned = getAssigned(c.id);
           const names = assigned.length ? assigned.map(e => esc(perfDisplayName(e.perf) || 'Unknown')).join('<br>') : '<span style="color:#999;font-style:italic;">Open</span>';
-          return '<div class="row"><div class="role">' + esc(c.name || '') + '</div><div class="perf">' + names + '</div></div>';
+          return '<div style="display:flex;padding:' + padV + 'px ' + basePadH + 'px;">' +
+            '<div style="flex:1;font-weight:800;font-size:' + roleFs + 'px;color:#000;text-align:right;padding-right:14px;">' + esc(c.name || '') + '</div>' +
+            '<div style="flex:1;font-size:' + perfFs + 'px;color:#222;line-height:1.35;text-align:left;padding-left:14px;">' + names + '</div>' +
+          '</div>';
         }).join('');
       }
 
@@ -1439,14 +1450,12 @@
       const container = document.createElement('div');
       // -9999px, not further: html2canvas can fail to paint elements parked
       // extremely far off-screen (compositor tile/coordinate limits), which
-      // produced a blank page here.
+      // produced a blank page here too.
       container.style.cssText = 'position:fixed;left:-9999px;top:0;width:' + contentWpx + 'px;background:#fff;font-family:Arial,Helvetica,sans-serif;color:#000;box-sizing:border-box;';
-      container.innerHTML =
+      const headHtml =
         '<h1 style="margin:0 0 12px;font-size:22px;font-weight:900;text-align:center;">Cast List</h1>' +
-        '<div style="display:flex;font-size:8px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8c8c94;padding:0 0 3px;"><span style="flex:1;text-align:right;padding-right:14px;">Character / Role</span><span style="flex:1;text-align:left;padding-left:14px;">Performer(s)</span></div>' +
-        '<div id="clx-rows">' + rowsHtml([...named, ...ensemble]) + '</div>';
-      const styleTag = document.createElement('style');
-      container.appendChild(styleTag);
+        '<div style="display:flex;font-size:8px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8c8c94;padding:0 0 3px;"><span style="flex:1;text-align:right;padding-right:14px;">Character / Role</span><span style="flex:1;text-align:left;padding-left:14px;">Performer(s)</span></div>';
+      container.innerHTML = headHtml + rowsHtml(allChars, 1);
       document.body.appendChild(container);
 
       // Fill the page every time instead of a handful of preset shrink
@@ -1454,17 +1463,9 @@
       // then scale font/padding continuously by however much bigger or
       // smaller it needs to be to land on exactly one page — a cast of 2
       // grows to fill the sheet, a cast of 50 shrinks to still fit it.
-      const baseNameFs = 12, baseRoleFs = 12, basePadV = 6, basePadH = 10;
-      const setRowStyle = (ratio) => {
-        styleTag.textContent =
-          '#clx-rows .row{display:flex;padding:' + (basePadV * ratio).toFixed(1) + 'px ' + basePadH + 'px;}' +
-          '#clx-rows .row .role{flex:1;font-weight:800;font-size:' + (baseNameFs * ratio).toFixed(1) + 'px;color:#000;text-align:right;padding-right:14px;}' +
-          '#clx-rows .row .perf{flex:1;font-size:' + (baseRoleFs * ratio).toFixed(1) + 'px;color:#222;line-height:1.35;text-align:left;padding-left:14px;}';
-      };
-      setRowStyle(1);
       const naturalH = container.scrollHeight;
       const ratio = Math.min(3, Math.max(0.45, contentHpx / naturalH));
-      setRowStyle(ratio);
+      container.innerHTML = headHtml + rowsHtml(allChars, ratio);
 
       const btn = document.querySelector('.btn-export');
       const originalLabel = btn ? btn.textContent : '';
