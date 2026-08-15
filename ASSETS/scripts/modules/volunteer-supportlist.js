@@ -183,14 +183,18 @@
       }
 
       // ── Editor ───────────────────────────────────────────────────────
-      function editorRowHtml(row, index) {
+      let _dragRowId = null;
+
+      function editorRowHtml(row) {
         const chips = row.entries.map((entry, i) => `<span class="spl-chip">${esc(resolveName(entry))}<button type="button" class="spl-chip-x" onclick="VolunteerSupportListModule.removeName('${row.id}',${i})" title="Remove">&times;</button></span>`).join('');
-        const moveBtns = _reordering ? `<span class="spl-move-btns">
-            <button type="button" class="spl-move-btn" ${index === 0 ? 'disabled' : ''} onclick="VolunteerSupportListModule.moveRow('${row.id}',-1)" aria-label="Move role earlier">&#9650;</button>
-            <button type="button" class="spl-move-btn" ${index === rows.length - 1 ? 'disabled' : ''} onclick="VolunteerSupportListModule.moveRow('${row.id}',1)" aria-label="Move role later">&#9660;</button>
-          </span>` : '';
-        return `<div class="spl-row" data-row="${row.id}">
-          ${moveBtns}
+        const dragHandle = _reordering
+          ? `<span class="spl-drag-handle" draggable="true" ondragstart="VolunteerSupportListModule.dragStart(event,'${row.id}')" title="Drag to reorder">&#8942;&#8942;</span>`
+          : '';
+        const dragAttrs = _reordering
+          ? `ondragover="VolunteerSupportListModule.dragOver(event)" ondrop="VolunteerSupportListModule.dropRow(event,'${row.id}')"`
+          : '';
+        return `<div class="spl-row${_reordering ? ' is-reordering' : ''}" data-row="${row.id}" ${dragAttrs}>
+          ${dragHandle}
           <input class="spl-label-input" value="${esc(row.label)}" placeholder="Role label, e.g. Stage Manager" onchange="VolunteerSupportListModule.setLabel('${row.id}',this.value)" />
           <div class="spl-chips">${chips}<button type="button" class="spl-add-name-btn" onclick="VolunteerSupportListModule.openAddName('${row.id}')">+ Add Name</button></div>
           <button type="button" class="spl-remove-row-btn" onclick="VolunteerSupportListModule.removeRow('${row.id}')" title="Remove this role">&times;</button>
@@ -280,11 +284,24 @@
         _reordering = !_reordering;
         render();
       };
-      window.VolunteerSupportListModule.moveRow = function (rowId, delta) {
-        const i = rows.findIndex(r => r.id === rowId);
-        const j = i + delta;
-        if (i === -1 || j < 0 || j >= rows.length) return;
-        [rows[i], rows[j]] = [rows[j], rows[i]];
+      window.VolunteerSupportListModule.dragStart = function (e, rowId) {
+        _dragRowId = rowId;
+        e.dataTransfer.effectAllowed = 'move';
+      };
+      window.VolunteerSupportListModule.dragOver = function (e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+      };
+      window.VolunteerSupportListModule.dropRow = function (e, targetRowId) {
+        e.preventDefault();
+        const draggedId = _dragRowId;
+        _dragRowId = null;
+        if (!draggedId || draggedId === targetRowId) return;
+        const fromIdx = rows.findIndex(r => r.id === draggedId);
+        const toIdx = rows.findIndex(r => r.id === targetRowId);
+        if (fromIdx === -1 || toIdx === -1) return;
+        const [moved] = rows.splice(fromIdx, 1);
+        rows.splice(toIdx, 0, moved);
         render();
         saveRows();
       };
