@@ -13560,6 +13560,7 @@ See you soon!
     bar.addEventListener('audition-status-view', viewAudPage);
     bar.addEventListener('audition-status-copy', copyAudLink);
     bar.addEventListener('audition-status-toggle', toggleAuditions);
+    bar.addEventListener('audition-status-build', () => openAuditionBuilderWizard());
     auditionStatusEventsBound = true;
     return bar;
   }

@@ -113,9 +113,20 @@
       :host([state="hidden"]) .status-action {
         flex: 0 0 auto;
       }
-      :host([state="setup"]) .status-dot,
-      :host([state="setup"]) .status-actions {
+      :host([state="setup"]) .status-dot {
         display: none;
+      }
+      :host([state="setup"]) .action-view,
+      :host([state="setup"]) .action-copy,
+      :host([state="setup"]) .action-toggle,
+      :host([state="setup"]) .copy-confirm {
+        display: none !important;
+      }
+      :host(:not([state="setup"])) .action-build {
+        display: none !important;
+      }
+      :host([state="setup"]) .action-build::before {
+        content: none;
       }
 
       @keyframes audition-status-pulse {
@@ -219,6 +230,7 @@
             <button type="button" class="status-action action-view" part="action action-view">View</button>
             <button type="button" class="status-action action-copy" part="action action-copy">Copy Link</button>
             <button type="button" class="status-action action-toggle" part="action action-toggle"></button>
+            <button type="button" class="status-action action-build" part="action action-build">Build Through Wizard</button>
             <div class="copy-confirm" part="copy-confirm">Copied!</div>
           </div>
         </div>
@@ -279,6 +291,7 @@
       this.shadowRoot.querySelector('.action-view')?.addEventListener('click', () => emit('audition-status-view'));
       this.shadowRoot.querySelector('.action-copy')?.addEventListener('click', () => emit('audition-status-copy'));
       this.shadowRoot.querySelector('.action-toggle')?.addEventListener('click', () => emit('audition-status-toggle'));
+      this.shadowRoot.querySelector('.action-build')?.addEventListener('click', () => emit('audition-status-build'));
     }
 
     _render() {
