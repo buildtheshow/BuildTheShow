@@ -38,7 +38,8 @@
 
     /* Programme view */
     .cl-programme-card { background: #fff; border: 1.5px solid rgba(87,46,136,0.12); border-radius: 14px; padding: 2.5rem 3rem; max-width: 640px; }
-    .cl-programme-title { font-size: 1.6rem; font-weight: 900; text-align: center; margin-bottom: 2rem; color: #000000; }
+    .cl-programme-title { font-size: 1.6rem; font-weight: 900; text-align: center; margin-bottom: 1rem; color: #000000; }
+    .cl-copy-row { display: flex; justify-content: center; gap: 0.5rem; margin-bottom: 1.5rem; }
     /* A real <table>, not a grid of separate row divs, so dragging a
        selection down the Character column doesn't sweep up the Performer
        column too — browsers respect <td> boundaries when selecting inside
@@ -876,8 +877,31 @@
 
       return `<div class="cl-programme-card">
         <div class="cl-programme-title">Cast List</div>
+        <div class="cl-copy-row">
+          <button class="btn-export" style="font-size:0.72rem;padding:0.38rem 0.8rem;" onclick="copyCastColumn('characters', this)">Copy Characters</button>
+          <button class="btn-export" style="font-size:0.72rem;padding:0.38rem 0.8rem;" onclick="copyCastColumn('names', this)">Copy Names</button>
+        </div>
         <table class="cl-table"><tbody>${rows}</tbody></table>
       </div>`;
+    }
+
+    function copyCastColumn(which, btn) {
+      const byName = (a, b) => (a.name||'').localeCompare(b.name||'');
+      const named = _chars.filter(c => !isEnsemble(c)).sort(byName);
+      const ensemble = _chars.filter(c => isEnsemble(c)).sort(byName);
+      const ordered = [...named, ...ensemble];
+      const lines = ordered.map(c => {
+        if (which === 'characters') return c.name || '';
+        const assigned = getAssigned(c.id);
+        if (!assigned.length) return 'Open';
+        return assigned.map(e => perfDisplayName(e.perf) || 'Unknown').join(', ');
+      });
+      navigator.clipboard.writeText(lines.join('\n')).then(() => {
+        if (!btn) return;
+        const original = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = original; }, 1400);
+      }).catch(() => {});
     }
 
     function filteredPerformerDirectory() {
