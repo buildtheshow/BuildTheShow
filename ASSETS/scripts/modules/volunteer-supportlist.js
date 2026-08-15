@@ -257,9 +257,19 @@
         render();
       };
       window.VolunteerSupportListModule.addRow = function () {
-        rows.push({ id: newId(), label: '', entries: [] });
+        const row = { id: newId(), label: '', entries: [] };
+        rows.push(row);
         render();
         saveRows();
+        // A blank new row has no department yet, so the leadership-first /
+        // department sort can push it well down the list — scroll to it and
+        // focus the label field so it doesn't look like the click did nothing.
+        requestAnimationFrame(() => {
+          const el = document.querySelector('.spl-row[data-row="' + row.id + '"]');
+          if (!el) return;
+          el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          el.querySelector('.spl-label-input')?.focus();
+        });
       };
       window.VolunteerSupportListModule.syncNow = async function () {
         await fetchTeamAndVolunteers();
