@@ -30,6 +30,33 @@
       let prodRow = null;
 
       function newId() { return 'spl-' + Date.now() + '-' + Math.floor(Math.random() * 1e6); }
+      function normLabel(s) { return String(s || '').trim().toLowerCase(); }
+
+      // Groups current Team members (by role) and approved Volunteers (by
+      // role_name) into rows, adding anyone not already listed. Non-destructive
+      // — never removes or overwrites a row someone edited by hand.
+      function syncFromTeamAndVolunteers() {
+        let added = 0;
+        function ensureRow(label) {
+          let row = rows.find(r => normLabel(r.label) === normLabel(label));
+          if (!row) { row = { id: newId(), label: label, entries: [] }; rows.push(row); }
+          return row;
+        }
+        function hasEntry(row, type, id) {
+          return row.entries.some(e => e.type === type && String(e.id) === String(id));
+        }
+        teamMembers.forEach(t => {
+          if (!t.role) return;
+          const row = ensureRow(t.role);
+          if (!hasEntry(row, 'team', t.id)) { row.entries.push({ type: 'team', id: t.id, name: t.name }); added++; }
+        });
+        volunteers.forEach(v => {
+          if (!v.role_name) return;
+          const row = ensureRow(v.role_name);
+          if (!hasEntry(row, 'volunteer', v.id)) { row.entries.push({ type: 'volunteer', id: v.id, name: v.name }); added++; }
+        });
+        return added;
+      }
 
       function resolveName(entry) {
         if (entry.type === 'team') {
@@ -43,20 +70,33 @@
         return entry.name || '';
       }
 
+      async function fetchTeamAndVolunteers() {
+        const [teamRes, volRes] = await Promise.all([
+          sb.from('production_team_members').select('id,name,role,department').eq('production_id', prodId).eq('is_active', true).order('name'),
+          sb.from('volunteer_signups').select('id,name,role_name,department').eq('production_id', prodId).eq('status', 'approved').order('name'),
+        ]);
+        teamMembers = teamRes.data || [];
+        volunteers = volRes.data || [];
+      }
+
       async function load() {
         try {
-          const [prodRes, teamRes, volRes] = await Promise.all([
+          const [prodRes] = await Promise.all([
             sb.from('productions').select('production_support_list').eq('id', prodId).single(),
-            sb.from('production_team_members').select('id,name,role,department').eq('production_id', prodId).eq('is_active', true).order('name'),
-            sb.from('volunteer_signups').select('id,name,role_name,department').eq('production_id', prodId).eq('status', 'approved').order('name'),
+            fetchTeamAndVolunteers(),
           ]);
           prodRow = prodRes.data || {};
           rows = Array.isArray(prodRow.production_support_list) ? prodRow.production_support_list : [];
-          teamMembers = teamRes.data || [];
-          volunteers = volRes.data || [];
         } catch (e) {
           console.warn('[BTS] support list load error:', e?.message);
           rows = []; teamMembers = []; volunteers = [];
+        }
+        // First time this page has ever been opened for this production —
+        // auto-fill from whoever's already on Team/Volunteers instead of
+        // starting blank.
+        if (!rows.length && (teamMembers.length || volunteers.length)) {
+          syncFromTeamAndVolunteers();
+          saveRows();
         }
         render();
       }
@@ -104,6 +144,7 @@
         body.innerHTML = `
           <div class="spl-toolbar">
             <button type="button" class="btn-secondary" onclick="VolunteerSupportListModule.addRow()">+ Add Role</button>
+            <button type="button" class="btn-secondary" onclick="VolunteerSupportListModule.syncNow()">Sync Team &amp; Volunteers</button>
             <div style="flex:1;"></div>
             <button type="button" class="btn-secondary" onclick="VolunteerSupportListModule.exportCSV()">Export CSV</button>
             <button type="button" class="btn-primary" onclick="VolunteerSupportListModule.exportPDF()">Export PDF</button>
@@ -149,6 +190,13 @@
         rows.push({ id: newId(), label: '', entries: [] });
         render();
         saveRows();
+      };
+      window.VolunteerSupportListModule.syncNow = async function () {
+        await fetchTeamAndVolunteers();
+        const added = syncFromTeamAndVolunteers();
+        render();
+        saveRows();
+        alert(added ? `Added ${added} name${added === 1 ? '' : 's'} from Team & Volunteers.` : 'Already up to date — nothing new to add.');
       };
       window.VolunteerSupportListModule.removeRow = function (rowId) {
         if (!confirm('Remove this role from the list?')) return;
