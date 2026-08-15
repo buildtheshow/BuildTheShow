@@ -60,7 +60,14 @@
         return entry.name || '';
       }
 
+      // Team/Volunteer entries carry a real department, but plenty of rows
+      // (Director, Costume Design, Programme Layout, anyone typed in
+      // manually) aren't linked to a Team or Volunteer record at all, so
+      // there's nothing for the system to look up. row.department is a
+      // manual override that always wins when set, so every row can be
+      // grouped correctly regardless of where its names came from.
       function rowDepartment(row) {
+        if (row.department) return row.department;
         for (const e of row.entries) {
           if (e.type === 'team') {
             const m = teamMembers.find(t => String(t.id) === String(e.id));
@@ -72,6 +79,14 @@
           }
         }
         return '';
+      }
+
+      function knownDepartments() {
+        const set = new Set();
+        teamMembers.forEach(t => { if (t.department) set.add(t.department); });
+        volunteers.forEach(v => { if (v.department) set.add(v.department); });
+        rows.forEach(r => { if (r.department) set.add(r.department); });
+        return [...set].sort();
       }
 
       // Default/auto-sort order: leadership roles first (Director, Vocal
@@ -128,19 +143,20 @@
       // by hand.
       function syncFromTeamAndVolunteers() {
         let added = 0;
-        function ensureRow(label) {
+        function ensureRow(label, department) {
           let row = rows.find(r => normLabel(r.label) === normLabel(label));
-          if (!row) { row = { id: newId(), label: label, entries: [] }; rows.push(row); }
+          if (!row) { row = { id: newId(), label: label, entries: [], department: department || '' }; rows.push(row); }
+          else if (!row.department && department) { row.department = department; }
           return row;
         }
         teamMembers.forEach(t => {
           if (!t.role) return;
-          const row = ensureRow(t.role);
+          const row = ensureRow(t.role, t.department);
           if (!rowHasName(row, t.name)) { row.entries.push({ type: 'team', id: t.id, name: t.name }); added++; }
         });
         volunteers.forEach(v => {
           if (!v.role_name) return;
-          const row = ensureRow(v.role_name);
+          const row = ensureRow(v.role_name, v.department);
           if (!rowHasName(row, v.name)) { row.entries.push({ type: 'volunteer', id: v.id, name: v.name }); added++; }
         });
         return added;
@@ -176,6 +192,16 @@
           needsSave = true;
         }
         if (dedupeRows()) needsSave = true;
+        // Backfill row.department from linked Team/Volunteer entries for
+        // rows saved before departments lived on the row itself, so it's
+        // no longer re-derived from entries every time — it's real data.
+        rows.forEach(row => {
+          if (row.department === undefined) row.department = '';
+          if (!row.department) {
+            const found = rowDepartment(row);
+            if (found) { row.department = found; needsSave = true; }
+          }
+        });
         // One-time migration into manual ordering — materialize the sensible
         // starting order into storage, then never auto-sort again.
         if (!prodRow.production_support_ordered) {
@@ -210,17 +236,21 @@
           : '';
         return `<div class="spl-row${_reordering ? ' is-reordering' : ''}" data-row="${row.id}" ${dragAttrs}>
           ${dragHandle}
-          <input class="spl-label-input" value="${esc(row.label)}" placeholder="Role label, e.g. Stage Manager" onchange="VolunteerSupportListModule.setLabel('${row.id}',this.value)" />
+          <div class="spl-label-col">
+            <input class="spl-label-input" value="${esc(row.label)}" placeholder="Role label, e.g. Stage Manager" onchange="VolunteerSupportListModule.setLabel('${row.id}',this.value)" />
+            <input class="spl-dept-input" value="${esc(row.department || '')}" placeholder="Department" list="spl-dept-options" onchange="VolunteerSupportListModule.setDepartment('${row.id}',this.value)" />
+          </div>
           <div class="spl-chips">${chips}<button type="button" class="spl-add-name-btn" onclick="VolunteerSupportListModule.openAddName('${row.id}')">+ Add Name</button></div>
           <button type="button" class="spl-remove-row-btn" onclick="VolunteerSupportListModule.removeRow('${row.id}')" title="Remove this role">&times;</button>
         </div>`;
       }
 
       function editorHtml() {
+        const options = `<datalist id="spl-dept-options">${knownDepartments().map(d => `<option value="${esc(d)}"></option>`).join('')}</datalist>`;
         if (!rows.length) {
-          return `<div class="vol-empty-dept">No roles added yet. Add your first one below (Producer, Stage Manager, whatever your programme needs).</div>`;
+          return options + `<div class="vol-empty-dept">No roles added yet. Add your first one below (Producer, Stage Manager, whatever your programme needs).</div>`;
         }
-        return `<div class="spl-editor${_reordering ? ' is-reordering' : ''}">${rows.map(editorRowHtml).join('')}</div>`;
+        return options + `<div class="spl-editor${_reordering ? ' is-reordering' : ''}">${rows.map(editorRowHtml).join('')}</div>`;
       }
 
       // ── Programme preview (matches Katie's real printed programme:
@@ -338,7 +368,7 @@
         saveRows();
       };
       window.VolunteerSupportListModule.addRow = function () {
-        const row = { id: newId(), label: '', entries: [] };
+        const row = { id: newId(), label: '', entries: [], department: '' };
         rows.push(row);
         render();
         saveRows();
@@ -370,6 +400,12 @@
         const row = rows.find(r => r.id === rowId);
         if (!row) return;
         row.label = value;
+        saveRows();
+      };
+      window.VolunteerSupportListModule.setDepartment = function (rowId, value) {
+        const row = rows.find(r => r.id === rowId);
+        if (!row) return;
+        row.department = value.trim();
         saveRows();
       };
       window.VolunteerSupportListModule.removeName = function (rowId, idx) {
