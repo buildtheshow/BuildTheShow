@@ -349,6 +349,10 @@
         }).join('');
         return `<div class="spl-programme-card">
           <div class="spl-programme-title">Production Support</div>
+          <div class="spl-copy-row">
+            <button type="button" class="btn-secondary spl-copy-btn" onclick="VolunteerSupportListModule.copyColumn('roles',this)">Copy Roles</button>
+            <button type="button" class="btn-secondary spl-copy-btn" onclick="VolunteerSupportListModule.copyColumn('names',this)">Copy Names</button>
+          </div>
           <table class="spl-table"><tbody>${trs}</tbody></table>
         </div>`;
       }
@@ -420,6 +424,18 @@
         row.gapAfter = !row.gapAfter;
         render();
         saveRows();
+      };
+      window.VolunteerSupportListModule.copyColumn = function (which, btn) {
+        const list = rows.filter(r => r.label || r.entries.length);
+        const lines = list.map(r => which === 'roles'
+          ? (r.label || '')
+          : (r.entries.length ? r.entries.map(e => resolveName(e)).join(', ') : 'TBD'));
+        navigator.clipboard.writeText(lines.join('\n')).then(() => {
+          if (!btn) return;
+          const original = btn.textContent;
+          btn.textContent = 'Copied!';
+          setTimeout(() => { btn.textContent = original; }, 1400);
+        }).catch(() => {});
       };
       window.VolunteerSupportListModule.autoSort = function () {
         if (!confirm('This resets the list to leadership-first, grouped by department with leads on top. Any manual reordering will be lost. Continue?')) return;
