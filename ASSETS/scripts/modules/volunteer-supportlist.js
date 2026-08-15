@@ -140,24 +140,29 @@
       // Groups current Team members (by role) and approved Volunteers (by
       // role_name) into rows, adding anyone not already listed by name.
       // Non-destructive — never removes or overwrites a row someone edited
-      // by hand.
+      // by hand. row.excludedNames tracks anyone deliberately removed from
+      // that specific row (via the chip's × button) so this doesn't quietly
+      // add them straight back on the next auto-sync.
+      function isExcludedFromRow(row, name) {
+        return (row.excludedNames || []).includes(normLabel(name));
+      }
       function syncFromTeamAndVolunteers() {
         let added = 0;
         function ensureRow(label, department) {
           let row = rows.find(r => normLabel(r.label) === normLabel(label));
-          if (!row) { row = { id: newId(), label: label, entries: [], department: department || '' }; rows.push(row); }
+          if (!row) { row = { id: newId(), label: label, entries: [], department: department || '', excludedNames: [] }; rows.push(row); }
           else if (!row.department && department) { row.department = department; }
           return row;
         }
         teamMembers.forEach(t => {
           if (!t.role) return;
           const row = ensureRow(t.role, t.department);
-          if (!rowHasName(row, t.name)) { row.entries.push({ type: 'team', id: t.id, name: t.name }); added++; }
+          if (!rowHasName(row, t.name) && !isExcludedFromRow(row, t.name)) { row.entries.push({ type: 'team', id: t.id, name: t.name }); added++; }
         });
         volunteers.forEach(v => {
           if (!v.role_name) return;
           const row = ensureRow(v.role_name, v.department);
-          if (!rowHasName(row, v.name)) { row.entries.push({ type: 'volunteer', id: v.id, name: v.name }); added++; }
+          if (!rowHasName(row, v.name) && !isExcludedFromRow(row, v.name)) { row.entries.push({ type: 'volunteer', id: v.id, name: v.name }); added++; }
         });
         return added;
       }
@@ -455,7 +460,7 @@
         saveRows();
       };
       window.VolunteerSupportListModule.addRow = function () {
-        const row = { id: newId(), label: '', entries: [], department: '' };
+        const row = { id: newId(), label: '', entries: [], department: '', excludedNames: [] };
         rows.push(row);
         render();
         saveRows();
@@ -498,7 +503,12 @@
       window.VolunteerSupportListModule.removeName = function (rowId, idx) {
         const row = rows.find(r => r.id === rowId);
         if (!row) return;
+        const removedName = normLabel(resolveName(row.entries[idx]));
         row.entries.splice(idx, 1);
+        if (removedName) {
+          row.excludedNames = row.excludedNames || [];
+          if (!row.excludedNames.includes(removedName)) row.excludedNames.push(removedName);
+        }
         render();
         saveRows();
       };
@@ -543,6 +553,9 @@
           return;
         }
         row.entries.push(entry);
+        if (row.excludedNames?.length) {
+          row.excludedNames = row.excludedNames.filter(n => n !== normLabel(name));
+        }
         window.VolunteerSupportListModule.closeAddName();
         render();
         saveRows();
