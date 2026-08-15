@@ -348,7 +348,6 @@
           return programmeRowHtml(r, gapBefore);
         }).join('');
         return `<div class="spl-programme-card">
-          <div class="spl-programme-kicker">Programme</div>
           <div class="spl-programme-title">Production Support</div>
           <div class="spl-copy-row">
             <button type="button" class="btn-secondary spl-copy-btn" onclick="VolunteerSupportListModule.copyColumn('roles',this)">Copy Roles</button>
