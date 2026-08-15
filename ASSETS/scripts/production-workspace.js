@@ -2773,7 +2773,19 @@
     btsLifecycleLog('bootProductionWorkspace', { reason: 'start', bootToken, bootSignature: workspaceBootSignature, dataStatus: prod ? 'loaded-refetch' : 'loading' });
     setRouteLoading('Loading your production…');
     btsRouteLog('production context start', { prodId, userId: context.user?.id || null, teamAccessMode });
-    const { data, error } = await sb.from('productions').select('*').eq('id', prodId).single();
+    let { data, error } = await sb.from('productions').select('*').eq('id', prodId).single();
+    // A blank network blip or a transient Supabase error on a cold page load
+    // (e.g. right after a manual refresh) used to be treated identically to
+    // "this production doesn't exist," wiping the sidebar/poster/title and
+    // the whole workspace. Retry once before deciding anything is actually
+    // wrong — a genuine "not found" (no matching row) fails the same way
+    // both times, so this doesn't mask real errors.
+    if ((error || !data) && bootToken === workspaceBootToken) {
+      btsRouteLog('production context retrying', { message: error?.message, prodId });
+      await new Promise(resolve => setTimeout(resolve, 900));
+      if (bootToken !== workspaceBootToken) return;
+      ({ data, error } = await sb.from('productions').select('*').eq('id', prodId).single());
+    }
     if (bootToken !== workspaceBootToken) {
       btsLifecycleLog('bootProductionWorkspace', { reason: 'stale-production-response', bootToken, activeBootToken: workspaceBootToken });
       return;
@@ -2786,8 +2798,17 @@
         showToast('Could not refresh production data. Keeping the current workspace open.', true);
         return;
       }
-      if (teamAccessMode) showTeamAccessLogin('Production not found. Check your link.');
-      else showRouteBlocked("Couldn't load this production", 'Try refreshing. If this keeps happening, you may not have access to this production.');
+      // A genuine "not found" comes back as PGRST116 (no row matched .single()).
+      // Anything else (network blip, timeout, transient 5xx) gets a
+      // retry-able message instead of tearing down the whole workspace.
+      const isConfirmedNotFound = error?.code === 'PGRST116';
+      if (teamAccessMode) {
+        showTeamAccessLogin(isConfirmedNotFound ? 'Production not found. Check your link.' : 'Could not load this production. Please try again.');
+      } else if (isConfirmedNotFound) {
+        showRouteBlocked("Couldn't load this production", 'Try refreshing. If this keeps happening, you may not have access to this production.');
+      } else {
+        showRouteBlocked("Couldn't load this production", "That's likely a temporary connection issue, not a missing production. Try refreshing again in a moment.");
+      }
       return;
     }
 
