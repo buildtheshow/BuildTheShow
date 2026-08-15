@@ -28,11 +28,12 @@
       const sb = supabase.createClient(S.SB_URL, S.SB_ANON);
       const esc = S.esc;
 
-      let rows = [];        // [{ id, label, entries: [{type,id,name}] }]
+      let rows = [];        // [{ id, label, entries: [{type,id,name}] }] — array order IS display order
       let teamMembers = []; // production_team_members
       let volunteers = [];  // volunteer_signups, status = approved
       let prodRow = null;
       let _view = 'programme'; // 'programme' | 'edit'
+      let _reordering = false;
 
       function newId() { return 'spl-' + Date.now() + '-' + Math.floor(Math.random() * 1e6); }
       function normLabel(s) { return String(s || '').trim().toLowerCase(); }
@@ -63,10 +64,12 @@
         return '';
       }
 
-      // Priority leadership roles first (Director, Vocal Director, Musical
-      // Director, Producer, in that order), then everything else grouped by
-      // department (rows with no known department last).
-      function sortedRows() {
+      // One-time starting order for a production that has never had a manual
+      // order saved: leadership roles first (Director, Vocal Director,
+      // Musical Director, Producer, in that order), then everything else
+      // grouped by department (rows with no known department last). After
+      // this runs once, row order is entirely manual (drag/move buttons).
+      function computeDefaultOrder() {
         return [...rows].sort((a, b) => {
           const ai = PRIORITY_ORDER.indexOf(normLabel(a.label));
           const bi = PRIORITY_ORDER.indexOf(normLabel(b.label));
@@ -140,7 +143,7 @@
       async function load() {
         try {
           const [prodRes] = await Promise.all([
-            sb.from('productions').select('production_support_list').eq('id', prodId).single(),
+            sb.from('productions').select('production_support_list, production_support_ordered').eq('id', prodId).single(),
             fetchTeamAndVolunteers(),
           ]);
           prodRow = prodRes.data || {};
@@ -158,21 +161,36 @@
           needsSave = true;
         }
         if (dedupeRows()) needsSave = true;
+        // One-time migration into manual ordering — materialize the sensible
+        // starting order into storage, then never auto-sort again.
+        if (!prodRow.production_support_ordered) {
+          rows = computeDefaultOrder();
+          prodRow.production_support_ordered = true;
+          needsSave = true;
+        }
         if (needsSave) saveRows();
         render();
       }
 
       async function saveRows() {
         window.AutoSave?.showSaving?.();
-        const { error } = await sb.from('productions').update({ production_support_list: rows }).eq('id', prodId);
+        const { error } = await sb.from('productions').update({
+          production_support_list: rows,
+          production_support_ordered: true,
+        }).eq('id', prodId);
         if (error) { console.warn('[BTS] support list save error:', error.message); return; }
         window.AutoSave?.showSaved?.();
       }
 
       // ── Editor ───────────────────────────────────────────────────────
-      function editorRowHtml(row) {
+      function editorRowHtml(row, index) {
         const chips = row.entries.map((entry, i) => `<span class="spl-chip">${esc(resolveName(entry))}<button type="button" class="spl-chip-x" onclick="VolunteerSupportListModule.removeName('${row.id}',${i})" title="Remove">&times;</button></span>`).join('');
+        const moveBtns = _reordering ? `<span class="spl-move-btns">
+            <button type="button" class="spl-move-btn" ${index === 0 ? 'disabled' : ''} onclick="VolunteerSupportListModule.moveRow('${row.id}',-1)" aria-label="Move role earlier">&#9650;</button>
+            <button type="button" class="spl-move-btn" ${index === rows.length - 1 ? 'disabled' : ''} onclick="VolunteerSupportListModule.moveRow('${row.id}',1)" aria-label="Move role later">&#9660;</button>
+          </span>` : '';
         return `<div class="spl-row" data-row="${row.id}">
+          ${moveBtns}
           <input class="spl-label-input" value="${esc(row.label)}" placeholder="Role label, e.g. Stage Manager" onchange="VolunteerSupportListModule.setLabel('${row.id}',this.value)" />
           <div class="spl-chips">${chips}<button type="button" class="spl-add-name-btn" onclick="VolunteerSupportListModule.openAddName('${row.id}')">+ Add Name</button></div>
           <button type="button" class="spl-remove-row-btn" onclick="VolunteerSupportListModule.removeRow('${row.id}')" title="Remove this role">&times;</button>
@@ -183,7 +201,7 @@
         if (!rows.length) {
           return `<div class="vol-empty-dept">No roles added yet. Add your first one below (Producer, Stage Manager, whatever your programme needs).</div>`;
         }
-        return `<div class="spl-editor">${sortedRows().map(editorRowHtml).join('')}</div>`;
+        return `<div class="spl-editor${_reordering ? ' is-reordering' : ''}">${rows.map(editorRowHtml).join('')}</div>`;
       }
 
       // ── Programme preview (same visual pattern as Cast List) ──────────
@@ -196,7 +214,7 @@
 
       function programmeHtml() {
         if (!rows.length) return '';
-        const trs = sortedRows().filter(r => r.label || r.entries.length).map(programmeRowHtml).join('');
+        const trs = rows.filter(r => r.label || r.entries.length).map(programmeRowHtml).join('');
         return `<div class="spl-programme-card">
           <div class="spl-programme-title">Production Support</div>
           <table class="spl-table"><tbody>${trs}</tbody></table>
@@ -215,6 +233,7 @@
             ${_view === 'edit' ? `
               <button type="button" class="btn-secondary" onclick="VolunteerSupportListModule.addRow()">+ Add Role</button>
               <button type="button" class="btn-secondary" onclick="VolunteerSupportListModule.syncNow()">Sync Team &amp; Volunteers</button>
+              <button type="button" class="btn-secondary spl-reorder-toggle${_reordering ? ' is-active' : ''}" onclick="VolunteerSupportListModule.toggleReorder()">${_reordering ? 'Done Reordering' : 'Reorder'}</button>
             ` : ''}
             <div style="flex:1;"></div>
             <button type="button" class="btn-secondary" onclick="VolunteerSupportListModule.exportCSV()">Export CSV</button>
@@ -252,9 +271,22 @@
 
       window.VolunteerSupportListModule.switchView = function (v, btn) {
         _view = v;
+        _reordering = false;
         document.querySelectorAll('#spl-body .view-btn').forEach(b => b.classList.remove('active'));
         btn?.classList.add('active');
         render();
+      };
+      window.VolunteerSupportListModule.toggleReorder = function () {
+        _reordering = !_reordering;
+        render();
+      };
+      window.VolunteerSupportListModule.moveRow = function (rowId, delta) {
+        const i = rows.findIndex(r => r.id === rowId);
+        const j = i + delta;
+        if (i === -1 || j < 0 || j >= rows.length) return;
+        [rows[i], rows[j]] = [rows[j], rows[i]];
+        render();
+        saveRows();
       };
       window.VolunteerSupportListModule.addRow = function () {
         const row = { id: newId(), label: '', entries: [] };
@@ -346,7 +378,7 @@
 
       // ── Exports ─────────────────────────────────────────────────────
       window.VolunteerSupportListModule.exportCSV = function () {
-        const csvRows = sortedRows().map(r => [r.label || '', r.entries.map(e => resolveName(e)).join('; ')]);
+        const csvRows = rows.map(r => [r.label || '', r.entries.map(e => resolveName(e)).join('; ')]);
         const csv = csvRows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
         const a = document.createElement('a');
@@ -358,7 +390,7 @@
       window.VolunteerSupportListModule.exportPDF = function () {
         const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
         if (!jsPDFCtor) { alert('PDF export isn\'t ready yet — please wait a moment and try again.'); return; }
-        const items = sortedRows().filter(r => r.label || r.entries.length).map(r => ({ role: r.label || '', names: r.entries.length ? r.entries.map(e => resolveName(e)) : ['TBD'] }));
+        const items = rows.filter(r => r.label || r.entries.length).map(r => ({ role: r.label || '', names: r.entries.length ? r.entries.map(e => resolveName(e)) : ['TBD'] }));
 
         const doc = new jsPDFCtor({ unit: 'in', format: 'letter', orientation: 'portrait' });
         const pageW = 8.5, marginIn = 0.6, midX = pageW / 2, headerH = 0.45;
