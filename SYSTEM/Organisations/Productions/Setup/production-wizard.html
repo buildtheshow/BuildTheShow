@@ -1407,10 +1407,37 @@
     .step3-event-row {
       display: flex;
       align-items: center;
+      flex-wrap: wrap;
       gap: 0.75rem;
       padding: 0.7rem 1rem;
       position: relative;
     }
+    .step3-type-select {
+      border: 1.5px solid rgba(87,46,136,0.15); border-radius: 8px;
+      padding: 0.38rem 0.55rem; background: #fff;
+      font-size: 0.78rem; font-weight: 700; font-family: var(--bts-font); color: #000000;
+      min-width: 118px;
+    }
+    .step3-time-mode-btns {
+      display: flex; gap: 0.3rem;
+    }
+    .step3-time-mode-btn {
+      border: 1.5px solid rgba(87,46,136,0.15); border-radius: 8px; background: #fff;
+      font-size: 0.68rem; font-weight: 700; color: rgba(0,0,0,0.55);
+      padding: 0.4rem 0.55rem; cursor: pointer; white-space: nowrap;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .step3-time-mode-btn:hover { border-color: rgba(87,46,136,0.35); }
+    .step3-time-mode-btn--active {
+      background: #572e88; border-color: #572e88; color: #ffffff;
+    }
+    .step3-mandatory-btn {
+      border: 1.5px solid rgba(209,82,61,0.3); border-radius: 8px; background: #fff;
+      font-size: 0.68rem; font-weight: 800; color: #d1523d;
+      padding: 0.4rem 0.6rem; cursor: pointer; white-space: nowrap;
+      transition: background 0.15s, color 0.15s;
+    }
+    .step3-mandatory-btn--active { background: #d1523d; color: #ffffff; }
     .step3-event-row + .step3-event-row {
       border-top: 1px solid rgba(87,46,136,0.08);
     }
@@ -2760,7 +2787,13 @@ Return ONLY the JSON object, no explanation.`
       sponsors: 'Sponsors', sponsors_confirmation: 'Sponsors', sponsors_assets: 'Sponsors',
     };
 
-    let step3Events = []; // [{ _id, db_id, title, event_type, date, start_time, end_time }]
+    // Curated subset of the full EVENT_TYPE_LABELS taxonomy — enough to cover
+    // "performances, rehearsals, tech week, and any other key events" per
+    // this step's own intro copy, without dumping the entire Zeus type list
+    // (programme ads, sponsors, etc.) into a wizard step about dates.
+    const STEP3_TYPE_OPTIONS = ['performance', 'rehearsal', 'music_rehearsal', 'choreography', 'tech', 'dress', 'strike', 'cast_party', 'other'];
+
+    let step3Events = []; // [{ _id, db_id, title, event_type, date, start_time, end_time, time_mode, mandatory }]
     let _step3NextId = 1;
 
     function _s3id() { return 's3_' + (_step3NextId++); }
@@ -2826,7 +2859,7 @@ Return ONLY the JSON object, no explanation.`
       if (!step3Events.length) {
         return `<div class="step3-empty">
           <div class="step3-empty-icon"><img src="/ASSETS/Images/Icons/calendar-date.svg" alt="" /></div>
-          No performances added yet. Add your first one below, or skip and fill these in from the calendar after setup.
+          No events added yet. Add your first one below, or skip and fill these in from the calendar after setup.
         </div>`;
       }
       const sorted = [...step3Events].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
@@ -2834,7 +2867,7 @@ Return ONLY the JSON object, no explanation.`
       const clockIcon = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="flex-shrink:0;opacity:0.45;"><circle cx="8" cy="8" r="6.5"/><polyline points="8,4.5 8,8 10.5,9.5"/></svg>`;
 
       const header = `<div class="step3-events-header">
-        <span class="step3-events-header-count">Performances</span>
+        <span class="step3-events-header-count">Schedule</span>
         <span class="step3-events-header-label">
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="3" width="12" height="11" rx="2"/><line x1="5" y1="1.5" x2="5" y2="4.5"/><line x1="11" y1="1.5" x2="11" y2="4.5"/><line x1="2" y1="6.5" x2="14" y2="6.5"/></svg>
           Opens in your production calendar
@@ -2842,16 +2875,19 @@ Return ONLY the JSON object, no explanation.`
         </span>
       </div>`;
 
+      const typeOptionsHtml = ev => STEP3_TYPE_OPTIONS.map(t =>
+        `<option value="${t}"${ev.event_type === t ? ' selected' : ''}>${EVENT_TYPE_LABELS[t] || t}</option>`
+      ).join('');
+
       const rows = sorted.map(ev => {
         const badgeHtml = ev.date ? calBadgeHtml(ev.date) : `<div style="width:42px;height:52px;border-radius:5px;background:#efefef;flex-shrink:0;"></div>`;
-        return `<div class="step3-event-row" data-eid="${ev._id}" style="position:relative;">
-          ${badgeHtml}
-          <div class="step3-time-group" style="flex:2;min-width:120px;">
-            <span class="step3-time-label">Performance</span>
-            <div class="step3-time-wrap">
-              <input type="date" class="step3-time-input" style="width:100%;" value="${ev.date || ''}" onchange="step3UpdateField('${ev._id}','date',this.value);this.blur()" />
-            </div>
-          </div>
+        const timeMode = ev.time_mode || 'set';
+        const timeModeBtns = `<div class="step3-time-mode-btns">
+          <button type="button" class="step3-time-mode-btn${timeMode === 'set' ? ' step3-time-mode-btn--active' : ''}" onclick="step3UpdateField('${ev._id}','time_mode','set')">Set Time</button>
+          <button type="button" class="step3-time-mode-btn${timeMode === 'tbd' ? ' step3-time-mode-btn--active' : ''}" onclick="step3UpdateField('${ev._id}','time_mode','tbd')">TBD</button>
+          <button type="button" class="step3-time-mode-btn${timeMode === 'full_day' ? ' step3-time-mode-btn--active' : ''}" onclick="step3UpdateField('${ev._id}','time_mode','full_day')">Full Day</button>
+        </div>`;
+        const timeInputsHtml = timeMode === 'set' ? `
           <div class="step3-time-group">
             <span class="step3-time-label">Start Time</span>
             <div class="step3-time-wrap">
@@ -2865,7 +2901,25 @@ Return ONLY the JSON object, no explanation.`
               ${clockIcon}
               <input type="time" class="step3-time-input" value="${ev.end_time || ''}" onchange="step3UpdateField('${ev._id}','end_time',this.value)" />
             </div>
+          </div>` : '';
+        return `<div class="step3-event-row" data-eid="${ev._id}" style="position:relative;">
+          ${badgeHtml}
+          <div class="step3-time-group">
+            <span class="step3-time-label">Type</span>
+            <select class="step3-type-select" onchange="step3UpdateField('${ev._id}','event_type',this.value)">${typeOptionsHtml(ev)}</select>
           </div>
+          <div class="step3-time-group" style="flex:1;min-width:120px;">
+            <span class="step3-time-label">Date</span>
+            <div class="step3-time-wrap">
+              <input type="date" class="step3-time-input" style="width:100%;" value="${ev.date || ''}" onchange="step3UpdateField('${ev._id}','date',this.value);this.blur()" />
+            </div>
+          </div>
+          <div class="step3-time-group">
+            <span class="step3-time-label">Time</span>
+            ${timeModeBtns}
+          </div>
+          ${timeInputsHtml}
+          <button type="button" class="step3-mandatory-btn${ev.mandatory ? ' step3-mandatory-btn--active' : ''}" onclick="step3UpdateField('${ev._id}','mandatory',${ev.mandatory ? 'false' : 'true'})" title="Toggle mandatory attendance">${ev.mandatory ? '✓ Mandatory' : 'Mandatory'}</button>
           <button class="step3-menu-btn" onclick="step3ToggleMenu('${ev._id}',event)">&#8942;</button>
           <div class="step3-menu-popup" id="step3-menu-${ev._id}">
             <button onclick="step3RemoveEvent('${ev._id}')">Remove</button>
@@ -2906,6 +2960,8 @@ Return ONLY the JSON object, no explanation.`
         date:       nextDate,
         start_time: last?.start_time || '19:00',
         end_time:   last?.end_time   || '22:00',
+        time_mode:  last?.time_mode  || 'set',
+        mandatory:  false,
       });
       _refreshStep3List();
     }
@@ -2941,6 +2997,11 @@ Return ONLY the JSON object, no explanation.`
           const badgePlaceholder = row?.querySelector('[style*="background:#efefef"]');
           if (!badgePlaceholder) _refreshStep3List();
         }
+      } else if (field === 'time_mode' || field === 'mandatory') {
+        // These change which controls show (time inputs) or how the toggle
+        // renders (active state), so the row needs a full rebuild — a plain
+        // value swap on the DOM element isn't enough here.
+        _refreshStep3List();
       }
     }
 
@@ -2970,7 +3031,7 @@ Return ONLY the JSON object, no explanation.`
 
           <button class="btn-add-event" onclick="step3AddEvent()">
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
-            Add Performance
+            Add Event
           </button>
 
           <div class="form-error" id="step3Error"></div>
@@ -3001,13 +3062,23 @@ Return ONLY the JSON object, no explanation.`
           await sb.from('production_events').delete().eq('production_id', prodId);
           const rows = step3Events
             .filter(e => e.date)
-            .map(e => ({
-              production_id: prodId,
-              title:      e.title || EVENT_TYPE_LABELS[e.event_type] || 'Event',
-              event_type: e.event_type,
-              start_time: localDTStr(e.date, e.start_time || '00:00'),
-              end_time:   localDTStr(e.date, e.end_time   || '23:59'),
-            }));
+            .map(e => {
+              const mode = e.time_mode || 'set';
+              return {
+                production_id: prodId,
+                title:      e.title || EVENT_TYPE_LABELS[e.event_type] || 'Event',
+                event_type: e.event_type,
+                // TBD: no time known yet, leave both null rather than
+                // guessing 00:00/23:59. Full Day: spans the whole date, same
+                // as the old blank-defaults, but flagged so the calendar can
+                // show "All Day" instead of "12:00am - 11:59pm".
+                start_time: mode === 'tbd' ? null : localDTStr(e.date, e.start_time || '00:00'),
+                end_time:   mode === 'tbd' ? null : localDTStr(e.date, e.end_time   || '23:59'),
+                all_day:    mode === 'full_day',
+                time_tbd:   mode === 'tbd',
+                mandatory:  !!e.mandatory,
+              };
+            });
           if (rows.length) {
             const { error } = await sb.from('production_events').insert(rows);
             if (error) throw error;
