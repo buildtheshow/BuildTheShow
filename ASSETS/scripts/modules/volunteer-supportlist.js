@@ -224,25 +224,63 @@
       }
 
       // ── Editor ───────────────────────────────────────────────────────
-      let _dragRowId = null;
-
       function editorRowHtml(row) {
         const chips = row.entries.map((entry, i) => `<span class="spl-chip">${esc(resolveName(entry))}<button type="button" class="spl-chip-x" onclick="VolunteerSupportListModule.removeName('${row.id}',${i})" title="Remove">&times;</button></span>`).join('');
         const dragHandle = _reordering
-          ? `<span class="spl-drag-handle" draggable="true" ondragstart="VolunteerSupportListModule.dragStart(event,'${row.id}')" title="Drag to reorder">&#8942;&#8942;</span>`
+          ? `<span class="spl-drag-handle" data-drag-handle title="Drag to reorder">&#9776;</span>`
           : '';
-        const dragAttrs = _reordering
-          ? `ondragover="VolunteerSupportListModule.dragOver(event)" ondrop="VolunteerSupportListModule.dropRow(event,'${row.id}')"`
-          : '';
-        return `<div class="spl-row${_reordering ? ' is-reordering' : ''}" data-row="${row.id}" ${dragAttrs}>
+        return `<div class="spl-row${_reordering ? ' is-reordering' : ''}" data-row="${row.id}">
           ${dragHandle}
           <div class="spl-label-col">
             <input class="spl-label-input" value="${esc(row.label)}" placeholder="Role label, e.g. Stage Manager" onchange="VolunteerSupportListModule.setLabel('${row.id}',this.value)" />
-            <input class="spl-dept-input" value="${esc(row.department || '')}" placeholder="Department" list="spl-dept-options" onchange="VolunteerSupportListModule.setDepartment('${row.id}',this.value)" />
+            <input class="spl-dept-input" value="${esc(row.department || '')}" placeholder="Department (e.g. Front of House)" list="spl-dept-options" onchange="VolunteerSupportListModule.setDepartment('${row.id}',this.value)" />
           </div>
           <div class="spl-chips">${chips}<button type="button" class="spl-add-name-btn" onclick="VolunteerSupportListModule.openAddName('${row.id}')">+ Add Name</button></div>
           <button type="button" class="spl-remove-row-btn" onclick="VolunteerSupportListModule.removeRow('${row.id}')" title="Remove this role">&times;</button>
         </div>`;
+      }
+
+      // Pointer-based drag reorder (not native HTML5 drag-and-drop, which is
+      // unreliable once the list is rebuilt via innerHTML on every render).
+      // Bound imperatively after each render, only while Reorder mode is on.
+      function bindRowDragHandles() {
+        if (!_reordering) return;
+        document.querySelectorAll('#spl-body .spl-drag-handle').forEach(handle => {
+          handle.addEventListener('pointerdown', e => {
+            e.preventDefault();
+            const rowEl = handle.closest('.spl-row');
+            const rowId = rowEl?.dataset.row;
+            if (!rowId) return;
+            document.body.classList.add('spl-drag-active');
+            rowEl.classList.add('spl-drag-source');
+
+            const onMove = ev => {
+              const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.spl-row');
+              document.querySelectorAll('.spl-row.spl-drag-target').forEach(r => r.classList.remove('spl-drag-target'));
+              if (under && under.dataset.row !== rowId) under.classList.add('spl-drag-target');
+            };
+            const onUp = ev => {
+              document.removeEventListener('pointermove', onMove);
+              document.removeEventListener('pointerup', onUp);
+              document.body.classList.remove('spl-drag-active');
+              const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.spl-row');
+              document.querySelectorAll('.spl-row.spl-drag-target, .spl-row.spl-drag-source').forEach(r => r.classList.remove('spl-drag-target', 'spl-drag-source'));
+              const targetId = under?.dataset.row;
+              if (targetId && targetId !== rowId) {
+                const fromIdx = rows.findIndex(r => r.id === rowId);
+                const toIdx = rows.findIndex(r => r.id === targetId);
+                if (fromIdx !== -1 && toIdx !== -1) {
+                  const [moved] = rows.splice(fromIdx, 1);
+                  rows.splice(toIdx, 0, moved);
+                  render();
+                  saveRows();
+                }
+              }
+            };
+            document.addEventListener('pointermove', onMove);
+            document.addEventListener('pointerup', onUp);
+          });
+        });
       }
 
       function editorHtml() {
@@ -325,6 +363,7 @@
             </div>
           </div>
         `;
+        bindRowDragHandles();
       }
 
       let _addNameRowId = null;
@@ -343,27 +382,6 @@
       window.VolunteerSupportListModule.autoSort = function () {
         if (!confirm('This resets the list to leadership-first, grouped by department with leads on top. Any manual reordering will be lost. Continue?')) return;
         rows = computeDefaultOrder();
-        render();
-        saveRows();
-      };
-      window.VolunteerSupportListModule.dragStart = function (e, rowId) {
-        _dragRowId = rowId;
-        e.dataTransfer.effectAllowed = 'move';
-      };
-      window.VolunteerSupportListModule.dragOver = function (e) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-      };
-      window.VolunteerSupportListModule.dropRow = function (e, targetRowId) {
-        e.preventDefault();
-        const draggedId = _dragRowId;
-        _dragRowId = null;
-        if (!draggedId || draggedId === targetRowId) return;
-        const fromIdx = rows.findIndex(r => r.id === draggedId);
-        const toIdx = rows.findIndex(r => r.id === targetRowId);
-        if (fromIdx === -1 || toIdx === -1) return;
-        const [moved] = rows.splice(fromIdx, 1);
-        rows.splice(toIdx, 0, moved);
         render();
         saveRows();
       };
