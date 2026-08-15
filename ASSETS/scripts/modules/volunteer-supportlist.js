@@ -223,17 +223,27 @@
         return `<div class="spl-editor${_reordering ? ' is-reordering' : ''}">${rows.map(editorRowHtml).join('')}</div>`;
       }
 
-      // ── Programme preview (same visual pattern as Cast List) ──────────
-      function programmeRowHtml(r) {
-        return `<tr>
+      // ── Programme preview (matches Katie's real printed programme:
+      // right-aligned bold role / left-aligned name, names comma-separated
+      // and wrapping naturally rather than one per line, with a blank-space
+      // gap between department clusters — no visible section headers) ──
+      function programmeRowHtml(r, gapBefore) {
+        return `<tr${gapBefore ? ' class="spl-gap-before"' : ''}>
             <td class="spl-role">${esc(r.label || '')}</td>
-            <td>${r.entries.length ? r.entries.map(e => esc(resolveName(e))).join('<br>') : '<span class="spl-open">TBD</span>'}</td>
+            <td>${r.entries.length ? esc(r.entries.map(e => resolveName(e)).join(', ')) : '<span class="spl-open">TBD</span>'}</td>
           </tr>`;
       }
 
       function programmeHtml() {
         if (!rows.length) return '';
-        const trs = rows.filter(r => r.label || r.entries.length).map(programmeRowHtml).join('');
+        const list = rows.filter(r => r.label || r.entries.length);
+        let lastDept = null;
+        const trs = list.map((r, i) => {
+          const dept = rowDepartment(r) || '';
+          const gapBefore = i > 0 && dept !== lastDept;
+          lastDept = dept;
+          return programmeRowHtml(r, gapBefore);
+        }).join('');
         return `<div class="spl-programme-card">
           <div class="spl-programme-title">Production Support</div>
           <table class="spl-table"><tbody>${trs}</tbody></table>
@@ -429,18 +439,47 @@
       window.VolunteerSupportListModule.exportPDF = function () {
         const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
         if (!jsPDFCtor) { alert('PDF export isn\'t ready yet — please wait a moment and try again.'); return; }
-        const items = rows.filter(r => r.label || r.entries.length).map(r => ({ role: r.label || '', names: r.entries.length ? r.entries.map(e => resolveName(e)) : ['TBD'] }));
+        // Matches Katie's printed programme convention: role right-aligned,
+        // names comma-separated and wrapping naturally (not one per line),
+        // with a blank gap between department clusters instead of headers.
+        let lastDept = null;
+        const items = rows.filter(r => r.label || r.entries.length).map((r, i) => {
+          const dept = rowDepartment(r) || '';
+          const gapBefore = i > 0 && dept !== lastDept;
+          lastDept = dept;
+          return {
+            role: r.label || '',
+            namesText: r.entries.length ? r.entries.map(e => resolveName(e)).join(', ') : 'TBD',
+            gapBefore,
+          };
+        });
 
         const doc = new jsPDFCtor({ unit: 'in', format: 'letter', orientation: 'portrait' });
         const pageW = 8.5, marginIn = 0.6, midX = pageW / 2, headerH = 0.45;
         const usableH = 11 - marginIn * 2 - headerH;
-        let fontPt = 12;
+        const nameColW = pageW - marginIn - midX - 0.15;
         const lineHIn = pt => (pt / 72) * 1.35;
-        const padIn = pt => (pt / 72) * 0.5;
-        const neededH = pt => items.reduce((sum, r) => sum + Math.max(1, r.names.length) * lineHIn(pt) + padIn(pt) * 2, 0);
-        const ratio = Math.min(2, Math.max(0.4, usableH / neededH(fontPt)));
+        const padIn = pt => (pt / 72) * 0.45;
+        const gapIn = pt => (pt / 72) * 1.1;
+
+        function layout(fontPt) {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(fontPt);
+          const pad = padIn(fontPt), lineH = lineHIn(fontPt), gap = gapIn(fontPt);
+          let h = 0;
+          const lined = items.map(item => {
+            const lines = doc.splitTextToSize(item.namesText, nameColW);
+            h += (item.gapBefore ? gap : 0) + Math.max(1, lines.length) * lineH + pad * 2;
+            return { ...item, lines };
+          });
+          return { lined, h, pad, lineH, gap };
+        }
+
+        let fontPt = 12;
+        const trial = layout(fontPt);
+        const ratio = Math.min(2, Math.max(0.4, usableH / trial.h));
         fontPt = fontPt * ratio;
-        const lineH = lineHIn(fontPt), pad = padIn(fontPt);
+        const { lined, pad, lineH, gap } = layout(fontPt);
 
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(18);
@@ -448,7 +487,8 @@
         doc.text('Production Support', midX, marginIn + 0.25, { align: 'center' });
 
         let y = marginIn + headerH;
-        items.forEach(item => {
+        lined.forEach(item => {
+          if (item.gapBefore) y += gap;
           y += pad;
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(fontPt);
@@ -456,10 +496,10 @@
           doc.text(item.role, midX - 0.15, y + lineH * 0.72, { align: 'right', maxWidth: midX - marginIn - 0.15 });
           doc.setFont('helvetica', 'normal');
           doc.setTextColor(34);
-          item.names.forEach((n, i) => {
-            doc.text(n, midX + 0.15, y + lineH * 0.72 + i * lineH, { align: 'left', maxWidth: pageW - marginIn - midX - 0.15 });
+          item.lines.forEach((line, i) => {
+            doc.text(line, midX + 0.15, y + lineH * 0.72 + i * lineH, { align: 'left' });
           });
-          y += item.names.length * lineH + pad;
+          y += Math.max(1, item.lines.length) * lineH + pad;
         });
 
         doc.save('Production Support List - ' + new Date().toISOString().slice(0, 10) + '.pdf');
