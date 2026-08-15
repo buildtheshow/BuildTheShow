@@ -491,9 +491,9 @@
         });
 
         const doc = new jsPDFCtor({ unit: 'in', format: 'letter', orientation: 'portrait' });
-        const pageW = 8.5, marginIn = 0.6, midX = pageW / 2, headerH = 0.45;
+        const pageW = 8.5, marginIn = 0.6, midX = pageW / 2, headerH = 0.45, gutterIn = 0.22;
         const usableH = 11 - marginIn * 2 - headerH;
-        const nameColW = pageW - marginIn - midX - 0.15;
+        const nameColW = pageW - marginIn - midX - gutterIn;
         const lineHIn = pt => (pt / 72) * 1.35;
         const padIn = pt => (pt / 72) * 0.45;
         const gapIn = pt => (pt / 72) * 1.1;
@@ -529,11 +529,11 @@
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(fontPt);
           doc.setTextColor(0, 0, 0);
-          doc.text(item.role, midX - 0.15, y + lineH * 0.72, { align: 'right', maxWidth: midX - marginIn - 0.15 });
+          doc.text(item.role, midX - gutterIn, y + lineH * 0.72, { align: 'right', maxWidth: midX - marginIn - gutterIn });
           doc.setFont('helvetica', 'normal');
           doc.setTextColor(34);
           item.lines.forEach((line, i) => {
-            doc.text(line, midX + 0.15, y + lineH * 0.72 + i * lineH, { align: 'left' });
+            doc.text(line, midX + gutterIn, y + lineH * 0.72 + i * lineH, { align: 'left' });
           });
           y += Math.max(1, item.lines.length) * lineH + pad;
         });
