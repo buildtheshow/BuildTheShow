@@ -32,7 +32,7 @@
       let teamMembers = []; // production_team_members
       let volunteers = [];  // volunteer_signups, status = approved
       let prodRow = null;
-      let _view = 'edit'; // 'edit' | 'programme'
+      let _view = 'programme'; // 'programme' | 'edit'
 
       function newId() { return 'spl-' + Date.now() + '-' + Math.floor(Math.random() * 1e6); }
       function normLabel(s) { return String(s || '').trim().toLowerCase(); }
@@ -208,8 +208,8 @@
         if (!body) return;
         body.innerHTML = `
           <div class="view-toggle">
-            <button type="button" class="view-btn${_view === 'edit' ? ' active' : ''}" onclick="VolunteerSupportListModule.switchView('edit',this)">Edit</button>
             <button type="button" class="view-btn${_view === 'programme' ? ' active' : ''}" onclick="VolunteerSupportListModule.switchView('programme',this)">Programme</button>
+            <button type="button" class="view-btn${_view === 'edit' ? ' active' : ''}" onclick="VolunteerSupportListModule.switchView('edit',this)">Edit</button>
           </div>
           <div class="spl-toolbar">
             ${_view === 'edit' ? `
