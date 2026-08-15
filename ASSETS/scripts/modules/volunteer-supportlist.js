@@ -137,27 +137,10 @@
         return row.entries.some(e => normLabel(resolveName(e)) === key);
       }
 
-      // Maps a calendar date (YYYY-MM-DD) to the Zeus event type that falls
-      // on it, so a volunteer shift can be classified as Rehearsal vs
-      // Performance work even though volunteer_signups itself has no
-      // event-type field, only a shift_date.
-      let _eventTypeByDate = {};
-      const REHEARSAL_EVENT_TYPES = new Set(['rehearsal', 'tech', 'dress', 'music_rehearsal', 'choreography']);
-
-      function shiftBucket(v) {
-        if (!v.shift_date) return '';
-        const et = _eventTypeByDate[v.shift_date];
-        if (!et) return '';
-        if (et === 'performance') return 'Performance';
-        if (REHEARSAL_EVENT_TYPES.has(et)) return 'Rehearsal';
-        return '';
-      }
-
       // Groups current Team members (by role) and approved Volunteers (by
-      // role_name, split into "<Role> — Rehearsal" / "<Role> — Performance"
-      // when the shift date resolves to one of those) into rows, adding
-      // anyone not already listed by name. Non-destructive — never removes
-      // or overwrites a row someone edited by hand.
+      // role_name) into rows, adding anyone not already listed by name.
+      // Non-destructive — never removes or overwrites a row someone edited
+      // by hand.
       function syncFromTeamAndVolunteers() {
         let added = 0;
         function ensureRow(label, department) {
@@ -173,65 +156,43 @@
         });
         volunteers.forEach(v => {
           if (!v.role_name) return;
-          const bucket = shiftBucket(v);
-          const label = bucket ? `${v.role_name} — ${bucket}` : v.role_name;
-          const row = ensureRow(label, v.department);
+          const row = ensureRow(v.role_name, v.department);
           if (!rowHasName(row, v.name)) { row.entries.push({ type: 'volunteer', id: v.id, name: v.name }); added++; }
         });
         return added;
       }
 
-      // Splits an already-merged row (e.g. one "Child Wrangler" row holding
-      // both rehearsal and performance volunteers from before this feature
-      // existed) into separate Rehearsal/Performance rows. Only touches a
-      // row when its volunteer entries actually span more than one bucket —
-      // team members, manual names, and single-bucket rows are left alone.
-      function splitRowsByShiftBucket() {
+      // One-time cleanup: merges rows previously split into
+      // "<Role> — Rehearsal" / "<Role> — Performance" back into a single
+      // "<Role>" row, combining their entries (deduped by name).
+      function mergeRehearsalPerformanceSplits() {
         let changed = false;
-        const newRows = [];
         const emptiedIds = new Set();
         rows.forEach(row => {
-          const buckets = {};
-          const keep = [];
-          row.entries.forEach(e => {
-            const v = e.type === 'volunteer' ? volunteers.find(vv => String(vv.id) === String(e.id)) : null;
-            const bucket = v ? shiftBucket(v) : '';
-            if (bucket) { (buckets[bucket] = buckets[bucket] || []).push(e); }
-            else { keep.push(e); }
-          });
-          if (Object.keys(buckets).length < 2) return;
+          const m = row.label.match(/^(.*) — (Rehearsal|Performance)$/);
+          if (!m) return;
+          const baseLabel = m[1];
+          let target = rows.find(r => r.id !== row.id && normLabel(r.label) === normLabel(baseLabel));
+          if (!target) {
+            row.label = baseLabel;
+            changed = true;
+            return;
+          }
+          row.entries.forEach(e => { if (!rowHasName(target, resolveName(e))) target.entries.push(e); });
+          emptiedIds.add(row.id);
           changed = true;
-          row.entries = keep;
-          if (!keep.length) emptiedIds.add(row.id);
-          Object.keys(buckets).forEach(bucket => {
-            const label = `${row.label} — ${bucket}`;
-            let target = rows.find(r => normLabel(r.label) === normLabel(label)) || newRows.find(r => normLabel(r.label) === normLabel(label));
-            if (!target) {
-              target = { id: newId(), label, entries: [], department: row.department || '' };
-              newRows.push(target);
-            }
-            buckets[bucket].forEach(e => { if (!rowHasName(target, resolveName(e))) target.entries.push(e); });
-          });
         });
-        if (newRows.length) rows.push(...newRows);
         if (emptiedIds.size) rows = rows.filter(r => !emptiedIds.has(r.id));
         return changed;
       }
 
       async function fetchTeamAndVolunteers() {
-        const [teamRes, volRes, eventsRes] = await Promise.all([
+        const [teamRes, volRes] = await Promise.all([
           sb.from('production_team_members').select('id,name,role,department').eq('production_id', prodId).eq('is_active', true).order('name'),
-          sb.from('volunteer_signups').select('id,name,role_name,department,shift_date').eq('production_id', prodId).eq('status', 'approved').order('name'),
-          sb.from('production_events').select('event_type,start_time').eq('production_id', prodId),
+          sb.from('volunteer_signups').select('id,name,role_name,department').eq('production_id', prodId).eq('status', 'approved').order('name'),
         ]);
         teamMembers = teamRes.data || [];
         volunteers = volRes.data || [];
-        _eventTypeByDate = {};
-        (eventsRes.data || []).forEach(ev => {
-          if (!ev.start_time) return;
-          const d = ev.start_time.slice(0, 10);
-          if (!_eventTypeByDate[d] || ev.event_type === 'performance') _eventTypeByDate[d] = ev.event_type;
-        });
       }
 
       async function load() {
@@ -254,7 +215,7 @@
         if (teamMembers.length || volunteers.length) {
           if (syncFromTeamAndVolunteers() > 0) needsSave = true;
         }
-        if (splitRowsByShiftBucket()) needsSave = true;
+        if (mergeRehearsalPerformanceSplits()) needsSave = true;
         if (dedupeRows()) needsSave = true;
         // Backfill row.department from linked Team/Volunteer entries for
         // rows saved before departments lived on the row itself, so it's
@@ -484,11 +445,10 @@
       window.VolunteerSupportListModule.syncNow = async function () {
         await fetchTeamAndVolunteers();
         const added = syncFromTeamAndVolunteers();
-        const split = splitRowsByShiftBucket();
         dedupeRows();
         render();
         saveRows();
-        alert(added ? `Added ${added} name${added === 1 ? '' : 's'} from Team & Volunteers.` : split ? 'Split some roles into Rehearsal/Performance.' : 'Already up to date — nothing new to add.');
+        alert(added ? `Added ${added} name${added === 1 ? '' : 's'} from Team & Volunteers.` : 'Already up to date — nothing new to add.');
       };
       window.VolunteerSupportListModule.removeRow = function (rowId) {
         if (!confirm('Remove this role from the list?')) return;
