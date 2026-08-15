@@ -304,6 +304,14 @@
         </div>`;
       }
 
+      // Only shown in Reorder mode, between every pair of rows — lets Katie
+      // manually mark where the printed programme should leave a blank-space
+      // break, instead of that being auto-computed from department text.
+      function gapToggleHtml(row) {
+        const on = !!row.gapAfter;
+        return `<button type="button" class="spl-gap-toggle${on ? ' is-on' : ''}" onclick="VolunteerSupportListModule.toggleGapAfter('${row.id}')">${on ? '&#10005; Remove gap' : '+ Add gap here'}</button>`;
+      }
+
       // Pointer-based drag reorder (not native HTML5 drag-and-drop, which is
       // unreliable once the list is rebuilt via innerHTML on every render).
       // Bound imperatively after each render, only while Reorder mode is on.
@@ -352,13 +360,17 @@
         if (!rows.length) {
           return options + `<div class="vol-empty-dept">No roles added yet. Add your first one below (Producer, Stage Manager, whatever your programme needs).</div>`;
         }
-        return options + `<div class="spl-editor${_reordering ? ' is-reordering' : ''}">${rows.map(editorRowHtml).join('')}</div>`;
+        const body = rows.map((row, i) => editorRowHtml(row) + (_reordering && i < rows.length - 1 ? gapToggleHtml(row) : '')).join('');
+        return options + `<div class="spl-editor${_reordering ? ' is-reordering' : ''}">${body}</div>`;
       }
 
       // ── Programme preview (matches Katie's real printed programme:
       // right-aligned bold role / left-aligned name, names comma-separated
-      // and wrapping naturally rather than one per line, with a blank-space
-      // gap between department clusters — no visible section headers) ──
+      // and wrapping naturally rather than one per line). Blank-space gaps
+      // between clusters are entirely manual — set per row via the gap
+      // toggle in Reorder mode — not auto-computed from department text,
+      // since two rows meaning the same department don't always agree on
+      // the exact wording.
       function programmeRowHtml(r, gapBefore) {
         return `<tr${gapBefore ? ' class="spl-gap-before"' : ''}>
             <td class="spl-role">${esc(r.label || '')}</td>
@@ -369,11 +381,9 @@
       function programmeHtml() {
         if (!rows.length) return '';
         const list = rows.filter(r => r.label || r.entries.length);
-        let lastDept = null;
         const trs = list.map((r, i) => {
-          const dept = rowDepartment(r) || '';
-          const gapBefore = i > 0 && dept !== lastDept;
-          lastDept = dept;
+          const prev = list[i - 1];
+          const gapBefore = i > 0 && !!prev?.gapAfter;
           return programmeRowHtml(r, gapBefore);
         }).join('');
         return `<div class="spl-programme-card">
@@ -442,6 +452,13 @@
       window.VolunteerSupportListModule.toggleReorder = function () {
         _reordering = !_reordering;
         render();
+      };
+      window.VolunteerSupportListModule.toggleGapAfter = function (rowId) {
+        const row = rows.find(r => r.id === rowId);
+        if (!row) return;
+        row.gapAfter = !row.gapAfter;
+        render();
+        saveRows();
       };
       window.VolunteerSupportListModule.autoSort = function () {
         if (!confirm('This resets the list to leadership-first, grouped by department with leads on top. Any manual reordering will be lost. Continue?')) return;
@@ -560,18 +577,14 @@
         if (!jsPDFCtor) { alert('PDF export isn\'t ready yet — please wait a moment and try again.'); return; }
         // Matches Katie's printed programme convention: role right-aligned,
         // names comma-separated and wrapping naturally (not one per line),
-        // with a blank gap between department clusters instead of headers.
-        let lastDept = null;
-        const items = rows.filter(r => r.label || r.entries.length).map((r, i) => {
-          const dept = rowDepartment(r) || '';
-          const gapBefore = i > 0 && dept !== lastDept;
-          lastDept = dept;
-          return {
-            role: r.label || '',
-            namesText: r.entries.length ? r.entries.map(e => resolveName(e)).join(', ') : 'TBD',
-            gapBefore,
-          };
-        });
+        // with a blank gap wherever the row before it has gapAfter set
+        // (manual, via the gap toggle in Reorder mode — not auto-computed).
+        const list = rows.filter(r => r.label || r.entries.length);
+        const items = list.map((r, i) => ({
+          role: r.label || '',
+          namesText: r.entries.length ? r.entries.map(e => resolveName(e)).join(', ') : 'TBD',
+          gapBefore: i > 0 && !!list[i - 1]?.gapAfter,
+        }));
 
         const doc = new jsPDFCtor({ unit: 'in', format: 'letter', orientation: 'portrait' });
         const pageW = 8.5, marginIn = 0.6, midX = pageW / 2, headerH = 0.45, gutterIn = 0.22;
