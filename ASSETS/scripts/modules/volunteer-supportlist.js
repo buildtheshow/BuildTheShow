@@ -179,32 +179,11 @@
         </div>`;
       }
 
-      // Renders a sorted row list with department subheadings, sharing the
-      // same grouping logic between the Edit and Programme views (each
-      // passes its own header markup, since one is a plain <div> list and
-      // the other is a real <table> — a header row there must be a <tr>).
-      function groupedHtml(list, rowRenderer, headerRenderer) {
-        let html = '';
-        let lastGroupKey = '__none__';
-        list.forEach(row => {
-          const isPriority = PRIORITY_ORDER.indexOf(normLabel(row.label)) !== -1;
-          const groupKey = isPriority ? '__priority__' : (rowDepartment(row) || '__other__');
-          if (groupKey !== lastGroupKey && !isPriority) {
-            const label = groupKey === '__other__' ? 'Other' : groupKey;
-            html += headerRenderer(label);
-          }
-          lastGroupKey = groupKey;
-          html += rowRenderer(row);
-        });
-        return html;
-      }
-
       function editorHtml() {
         if (!rows.length) {
           return `<div class="vol-empty-dept">No roles added yet. Add your first one below (Producer, Stage Manager, whatever your programme needs).</div>`;
         }
-        const headerHtml = label => `<div class="spl-dept-header">${esc(label)}</div>`;
-        return `<div class="spl-editor">${groupedHtml(sortedRows(), editorRowHtml, headerHtml)}</div>`;
+        return `<div class="spl-editor">${sortedRows().map(editorRowHtml).join('')}</div>`;
       }
 
       // ── Programme preview (same visual pattern as Cast List) ──────────
@@ -217,9 +196,7 @@
 
       function programmeHtml() {
         if (!rows.length) return '';
-        const list = sortedRows().filter(r => r.label || r.entries.length);
-        const headerHtml = label => `<tr class="spl-dept-header-row"><td colspan="2">${esc(label)}</td></tr>`;
-        const trs = groupedHtml(list, programmeRowHtml, headerHtml);
+        const trs = sortedRows().filter(r => r.label || r.entries.length).map(programmeRowHtml).join('');
         return `<div class="spl-programme-card">
           <div class="spl-programme-title">Production Support</div>
           <table class="spl-table"><tbody>${trs}</tbody></table>
