@@ -89,26 +89,6 @@
         return [...set].sort();
       }
 
-      // A single stray word (usually "Crew") typed into one row's department
-      // and not another's is enough to split what should be one cluster into
-      // two, with a gap between them. If "X Crew" and plain "X" are both in
-      // use as departments, they're almost certainly meant to be the same
-      // department — collapse the "Crew" variant onto the shorter one.
-      function normalizeDepartmentVariants() {
-        let changed = false;
-        const present = new Set(rows.map(r => normLabel(r.department || '')).filter(Boolean));
-        rows.forEach(row => {
-          const dep = (row.department || '').trim();
-          if (!dep || !dep.toLowerCase().endsWith(' crew')) return;
-          const base = dep.slice(0, -5).trim();
-          if (base && present.has(normLabel(base)) && normLabel(base) !== normLabel(dep)) {
-            row.department = base;
-            changed = true;
-          }
-        });
-        return changed;
-      }
-
       // Default/auto-sort order: leadership roles first (Director, Vocal
       // Director, Musical Director, Producer, in that order), then everything
       // else grouped by department (rows with no known department last), and
@@ -286,7 +266,6 @@
             if (found) { row.department = found; needsSave = true; }
           }
         });
-        if (normalizeDepartmentVariants()) needsSave = true;
         // One-time migration into manual ordering — materialize the sensible
         // starting order into storage, then never auto-sort again.
         if (!prodRow.production_support_ordered) {
