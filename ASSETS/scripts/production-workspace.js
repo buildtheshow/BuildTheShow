@@ -13922,6 +13922,10 @@ See you soon!
   }
 
   function navigateToVolunteers(section) {
+    if (section === 'supportlist') {
+      location.href = '/SYSTEM/Organisations/Productions/Workspace/volunteer-supportlist.html?id=' + encodeURIComponent(prodId || '');
+      return;
+    }
     switchProdTab('volunteers', { sub: section || 'calendar' });
   }
 
