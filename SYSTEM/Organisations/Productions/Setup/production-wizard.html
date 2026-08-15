@@ -1404,14 +1404,27 @@
       overflow: hidden;
       margin-bottom: 0.75rem;
     }
+    /* Explicit grid areas instead of organic flex-wrap: at narrower widths
+       flex-wrap left a single orphaned field (End Time) stranded on its own
+       line next to Mandatory with nothing lining up above it. A named grid
+       lets each breakpoint below decide exactly what shares a row. */
     .step3-event-row {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 0.75rem;
-      padding: 0.7rem 1rem;
+      display: grid;
+      grid-template-columns: auto auto minmax(130px,1fr) auto auto auto auto;
+      grid-template-areas: "badge type date timemode start end mand";
+      align-items: end;
+      column-gap: 0.6rem;
+      row-gap: 0.6rem;
+      padding: 0.9rem 2.6rem 0.9rem 1rem;
       position: relative;
     }
+    .s3-area-badge { grid-area: badge; }
+    .s3-area-type  { grid-area: type; }
+    .s3-area-date  { grid-area: date; }
+    .s3-area-timemode { grid-area: timemode; }
+    .s3-area-start { grid-area: start; }
+    .s3-area-end   { grid-area: end; }
+    .s3-area-mand  { grid-area: mand; display: flex; align-items: end; }
     .step3-type-select {
       border: 1.5px solid rgba(87,46,136,0.15); border-radius: 8px;
       padding: 0.38rem 0.55rem; background: #fff;
@@ -1471,6 +1484,7 @@
       color: #b0a0cc; font-size: 1.1rem; font-weight: 700;
       padding: 0.25rem 0.4rem; border-radius: 6px; flex-shrink: 0;
       transition: color 0.15s, background 0.15s; line-height: 1;
+      position: absolute; top: 0.8rem; right: 0.8rem;
     }
     .step3-menu-btn:hover { color: #572e88; background: rgba(87,46,136,0.07); }
     .step3-menu-popup {
@@ -1506,6 +1520,32 @@
     @media (max-width: 600px) {
       .step3-event-bottom { gap: 0.5rem; }
       .step3-field-group { min-width: 0; width: calc(50% - 0.25rem); }
+    }
+    /* Step 3 event row: three tiers so Type/TBD/Full Day/Mandatory never
+       spill into a single stranded field on its own line. */
+    @media (max-width: 1180px) {
+      .step3-event-row {
+        grid-template-columns: auto auto 1fr auto;
+        grid-template-areas:
+          "badge type date timemode"
+          "badge start end mand";
+      }
+    }
+    @media (max-width: 620px) {
+      .step3-event-row {
+        grid-template-columns: auto 1fr;
+        grid-template-areas:
+          "badge type"
+          "badge date"
+          "badge timemode"
+          "badge start"
+          "badge end"
+          "badge mand";
+        row-gap: 0.5rem;
+      }
+      .step3-time-group, .s3-area-mand { width: 100%; }
+      .step3-type-select { width: 100%; }
+      .step3-time-mode-btns { flex-wrap: wrap; }
     }
 
     /* ── Step 10: Production + Timeline review ── */
@@ -2888,38 +2928,40 @@ Return ONLY the JSON object, no explanation.`
           <button type="button" class="step3-time-mode-btn${timeMode === 'full_day' ? ' step3-time-mode-btn--active' : ''}" onclick="step3UpdateField('${ev._id}','time_mode','full_day')">Full Day</button>
         </div>`;
         const timeInputsHtml = timeMode === 'set' ? `
-          <div class="step3-time-group">
+          <div class="step3-time-group s3-area-start">
             <span class="step3-time-label">Start Time</span>
             <div class="step3-time-wrap">
               ${clockIcon}
               <input type="time" class="step3-time-input" value="${ev.start_time || ''}" onchange="step3UpdateField('${ev._id}','start_time',this.value)" />
             </div>
           </div>
-          <div class="step3-time-group">
+          <div class="step3-time-group s3-area-end">
             <span class="step3-time-label">End Time</span>
             <div class="step3-time-wrap">
               ${clockIcon}
               <input type="time" class="step3-time-input" value="${ev.end_time || ''}" onchange="step3UpdateField('${ev._id}','end_time',this.value)" />
             </div>
-          </div>` : '';
-        return `<div class="step3-event-row" data-eid="${ev._id}" style="position:relative;">
-          ${badgeHtml}
-          <div class="step3-time-group">
+          </div>` : '<div class="s3-area-start"></div><div class="s3-area-end"></div>';
+        return `<div class="step3-event-row" data-eid="${ev._id}">
+          <div class="s3-area-badge">${badgeHtml}</div>
+          <div class="step3-time-group s3-area-type">
             <span class="step3-time-label">Type</span>
             <select class="step3-type-select" onchange="step3UpdateField('${ev._id}','event_type',this.value)">${typeOptionsHtml(ev)}</select>
           </div>
-          <div class="step3-time-group" style="flex:1;min-width:120px;">
+          <div class="step3-time-group s3-area-date">
             <span class="step3-time-label">Date</span>
             <div class="step3-time-wrap">
               <input type="date" class="step3-time-input" style="width:100%;" value="${ev.date || ''}" onchange="step3UpdateField('${ev._id}','date',this.value);this.blur()" />
             </div>
           </div>
-          <div class="step3-time-group">
+          <div class="step3-time-group s3-area-timemode">
             <span class="step3-time-label">Time</span>
             ${timeModeBtns}
           </div>
           ${timeInputsHtml}
-          <button type="button" class="step3-mandatory-btn${ev.mandatory ? ' step3-mandatory-btn--active' : ''}" onclick="step3UpdateField('${ev._id}','mandatory',${ev.mandatory ? 'false' : 'true'})" title="Toggle mandatory attendance">${ev.mandatory ? '✓ Mandatory' : 'Mandatory'}</button>
+          <div class="s3-area-mand">
+            <button type="button" class="step3-mandatory-btn${ev.mandatory ? ' step3-mandatory-btn--active' : ''}" onclick="step3UpdateField('${ev._id}','mandatory',${ev.mandatory ? 'false' : 'true'})" title="Toggle mandatory attendance">${ev.mandatory ? '✓ Mandatory' : 'Mandatory'}</button>
+          </div>
           <button class="step3-menu-btn" onclick="step3ToggleMenu('${ev._id}',event)">&#8942;</button>
           <div class="step3-menu-popup" id="step3-menu-${ev._id}">
             <button onclick="step3RemoveEvent('${ev._id}')">Remove</button>
