@@ -11,6 +11,16 @@
   // else follows, grouped by department.
   const PRIORITY_ORDER = ['director', 'vocal director', 'musical director', 'producer'];
 
+  // Department lead role names (same list the Volunteer staffing plan uses
+  // for PLAN_ROLE_MAP.dept_leads) — within a department group, these sort
+  // to the top ahead of their own crew.
+  const LEAD_ROLE_NAMES = new Set([
+    'stage manager', 'front of house manager', 'concession manager',
+    'lighting designer / technician', 'lighting designer', 'lead builder',
+    'lead set painter', 'lead prop person', 'costume designer',
+    'marketing director', 'cast party coordinator',
+  ]);
+
   window.VolunteerSupportListModule = {
     async init(prodId, container) {
       const S = window.BTSVolShared;
@@ -64,11 +74,13 @@
         return '';
       }
 
-      // One-time starting order for a production that has never had a manual
-      // order saved: leadership roles first (Director, Vocal Director,
-      // Musical Director, Producer, in that order), then everything else
-      // grouped by department (rows with no known department last). After
-      // this runs once, row order is entirely manual (drag/move buttons).
+      // Default/auto-sort order: leadership roles first (Director, Vocal
+      // Director, Musical Director, Producer, in that order), then everything
+      // else grouped by department (rows with no known department last), and
+      // within each department the lead role(s) sort ahead of their own crew.
+      // Runs once automatically for a production that's never had a manual
+      // order saved; also runnable on demand via the Auto-Sort button, which
+      // resets whatever manual order was in place.
       function computeDefaultOrder() {
         return [...rows].sort((a, b) => {
           const ai = PRIORITY_ORDER.indexOf(normLabel(a.label));
@@ -80,6 +92,9 @@
           const aDept = rowDepartment(a), bDept = rowDepartment(b);
           if (!!aDept !== !!bDept) return aDept ? -1 : 1;
           if (aDept !== bDept) return aDept.localeCompare(bDept);
+          const aLead = LEAD_ROLE_NAMES.has(normLabel(a.label));
+          const bLead = LEAD_ROLE_NAMES.has(normLabel(b.label));
+          if (aLead !== bLead) return aLead ? -1 : 1;
           return 0;
         });
       }
@@ -237,6 +252,7 @@
             ${_view === 'edit' ? `
               <button type="button" class="btn-secondary" onclick="VolunteerSupportListModule.addRow()">+ Add Role</button>
               <button type="button" class="btn-secondary" onclick="VolunteerSupportListModule.syncNow()">Sync Team &amp; Volunteers</button>
+              <button type="button" class="btn-secondary" onclick="VolunteerSupportListModule.autoSort()" title="Leadership first, then grouped by department with leads on top">Auto-Sort</button>
               <button type="button" class="btn-secondary spl-reorder-toggle${_reordering ? ' is-active' : ''}" onclick="VolunteerSupportListModule.toggleReorder()">${_reordering ? 'Done Reordering' : 'Reorder'}</button>
             ` : ''}
             <div style="flex:1;"></div>
@@ -283,6 +299,12 @@
       window.VolunteerSupportListModule.toggleReorder = function () {
         _reordering = !_reordering;
         render();
+      };
+      window.VolunteerSupportListModule.autoSort = function () {
+        if (!confirm('This resets the list to leadership-first, grouped by department with leads on top. Any manual reordering will be lost. Continue?')) return;
+        rows = computeDefaultOrder();
+        render();
+        saveRows();
       };
       window.VolunteerSupportListModule.dragStart = function (e, rowId) {
         _dragRowId = rowId;
