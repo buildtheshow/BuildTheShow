@@ -231,6 +231,7 @@
       roles:       'volunteer-roles.html',
       requests:    'volunteer-applicants.html',
       settings:    'volunteer-settings.html',
+      supportlist: 'volunteer-supportlist.html',
     };
     location.href = '/SYSTEM/Organisations/Productions/Workspace/' + (pages[sub] || 'volunteers.html') + suffix;
   };
@@ -576,6 +577,7 @@
         roles:       'volunteer-roles.html',
         requests:    'volunteer-applicants.html',
         settings:    'volunteer-settings.html',
+        supportlist: 'volunteer-supportlist.html',
       };
       location.href = pageUrl(pages[sub] || 'volunteer-calendar.html');
     };
@@ -593,7 +595,7 @@
   };
 
   window.loadProductionSidebar = function (activeGroup, activePage) {
-    const key = 'bts-prod-sidebar-v75';
+    const key = 'bts-prod-sidebar-v76';
     const cached = sessionStorage.getItem(key);
     const host = document.getElementById('prod-sidebar-host');
     if (!host) return;
