@@ -666,11 +666,40 @@
 
     const { data: prod } = await sb
       .from('productions')
-      .select('id, title, subtitle, season_year, status, venue, poster_url, organization_id, registration_settings, enabled_modules, organizations(slug)')
+      .select('id, title, subtitle, season_year, status, venue, poster_url, organization_id, registration_settings, enabled_modules, wizard_data, organizations(slug)')
       .eq('id', idParam)
       .single();
 
     if (!prod) return;
+
+    // Self-heal: some productions (created before Settings > Features existed,
+    // or finalized straight from the wizard) have an enabled_modules blob that
+    // is missing keys entirely — e.g. no 'auditions' or 'registration' key at
+    // all. isDisabled() below only hides a group when its key is explicitly
+    // false, so a MISSING key defaults to visible, which silently un-hides
+    // Volunteers/Registration-only UI for productions that never turned them
+    // on. Recompute the full module set from wizard_data.features (the same
+    // formula Settings > Features uses) whenever that data is available, so
+    // every key is always present and gating is never left to a default.
+    var feat = (prod.wizard_data && prod.wizard_data.features) || null;
+    if (feat) {
+      var normalizedModules = {
+        cast:              !!(feat.auditions || feat.registration),
+        auditions:         !!feat.auditions,
+        registration:      !!feat.registration,
+        departments:       !!(feat.registration || feat.volunteers),
+        promote:           !!(feat.marketing || feat.sponsors),
+        ticketing:         !!feat.tickets,
+        volunteers:        !!feat.volunteers,
+        financials:        !!feat.budget,
+        wrapup:            !!feat.budget,
+        producer_timeline: !!(feat.producer_timeline || feat.checklists),
+      };
+      if (JSON.stringify(normalizedModules) !== JSON.stringify(prod.enabled_modules || {})) {
+        prod.enabled_modules = normalizedModules;
+        sb.from('productions').update({ enabled_modules: normalizedModules }).eq('id', idParam).then(function(){});
+      }
+    }
 
     // Set currency-specific financials nav icon
     _finCurrency = prod.registration_settings?.payment_settings?.currency || 'CAD';
