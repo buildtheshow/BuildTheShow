@@ -350,6 +350,7 @@
         return `<div class="spl-programme-card">
           <div class="spl-programme-title">Production Support</div>
           <div class="spl-copy-row">
+            <button type="button" class="btn-primary spl-copy-btn" onclick="VolunteerSupportListModule.copyColumn('table',this)" title="Paste into a table (Canva table tool, Sheets, Excel, a Docs/Word table) — stays row-aligned even when text wraps">Copy as Table</button>
             <button type="button" class="btn-secondary spl-copy-btn" onclick="VolunteerSupportListModule.copyColumn('roles',this)">Copy Roles</button>
             <button type="button" class="btn-secondary spl-copy-btn" onclick="VolunteerSupportListModule.copyColumn('names',this)">Copy Names</button>
           </div>
@@ -427,9 +428,19 @@
       };
       window.VolunteerSupportListModule.copyColumn = function (which, btn) {
         const list = rows.filter(r => r.label || r.entries.length);
-        const lines = list.map(r => which === 'roles'
-          ? (r.label || '')
-          : (r.entries.length ? r.entries.map(e => resolveName(e)).join(', ') : 'TBD'));
+        let lines;
+        if (which === 'table') {
+          // Tab-separated — pastes into an actual table (Canva table tool,
+          // Google Sheets, Excel, a Word/Docs table) as two aligned columns.
+          // Two separate plain-text copies can't stay row-aligned once
+          // either side wraps to a different number of lines, which is why
+          // Copy Roles + Copy Names drift apart in a Canva text box.
+          lines = list.map(r => `${r.label || ''}\t${r.entries.length ? r.entries.map(e => resolveName(e)).join(', ') : 'TBD'}`);
+        } else {
+          lines = list.map(r => which === 'roles'
+            ? (r.label || '')
+            : (r.entries.length ? r.entries.map(e => resolveName(e)).join(', ') : 'TBD'));
+        }
         navigator.clipboard.writeText(lines.join('\n')).then(() => {
           if (!btn) return;
           const original = btn.textContent;
