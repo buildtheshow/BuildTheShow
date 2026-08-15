@@ -62,7 +62,7 @@
 
   // ── Group state ──────────────────────────────────────────────────────────
 
-  const ALL_GROUPS = ['overview', 'plan', 'proposals', 'cast', 'departments', 'promote', 'ticketing', 'volunteers', 'financials', 'wrapup', 'portals', 'settings', 'build'];
+  const ALL_GROUPS = ['overview', 'plan', 'cast', 'departments', 'promote', 'ticketing', 'volunteers', 'financials', 'wrapup', 'portals', 'settings', 'build'];
 
   window.openSidebarGroup = function (groupId) {
     ALL_GROUPS.forEach(function (id) {
@@ -595,7 +595,7 @@
   };
 
   window.loadProductionSidebar = function (activeGroup, activePage) {
-    const key = 'bts-prod-sidebar-v76';
+    const key = 'bts-prod-sidebar-v77';
     const cached = sessionStorage.getItem(key);
     const host = document.getElementById('prod-sidebar-host');
     if (!host) return;
@@ -626,7 +626,7 @@
 
     if (cached) applyAndInit(cached);
 
-    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v75-20260805')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v77-20260815')
       .then(function (res) { return res.text(); })
       .then(function (html) {
         sessionStorage.setItem(key, html);
