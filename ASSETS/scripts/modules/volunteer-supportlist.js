@@ -7,6 +7,10 @@
 (function () {
   'use strict';
 
+  // Leadership roles always lead the list, in this exact order. Everything
+  // else follows, grouped by department.
+  const PRIORITY_ORDER = ['director', 'vocal director', 'musical director', 'producer'];
+
   window.VolunteerSupportListModule = {
     async init(prodId, container) {
       const S = window.BTSVolShared;
@@ -28,35 +32,10 @@
       let teamMembers = []; // production_team_members
       let volunteers = [];  // volunteer_signups, status = approved
       let prodRow = null;
+      let _view = 'edit'; // 'edit' | 'programme'
 
       function newId() { return 'spl-' + Date.now() + '-' + Math.floor(Math.random() * 1e6); }
       function normLabel(s) { return String(s || '').trim().toLowerCase(); }
-
-      // Groups current Team members (by role) and approved Volunteers (by
-      // role_name) into rows, adding anyone not already listed. Non-destructive
-      // — never removes or overwrites a row someone edited by hand.
-      function syncFromTeamAndVolunteers() {
-        let added = 0;
-        function ensureRow(label) {
-          let row = rows.find(r => normLabel(r.label) === normLabel(label));
-          if (!row) { row = { id: newId(), label: label, entries: [] }; rows.push(row); }
-          return row;
-        }
-        function hasEntry(row, type, id) {
-          return row.entries.some(e => e.type === type && String(e.id) === String(id));
-        }
-        teamMembers.forEach(t => {
-          if (!t.role) return;
-          const row = ensureRow(t.role);
-          if (!hasEntry(row, 'team', t.id)) { row.entries.push({ type: 'team', id: t.id, name: t.name }); added++; }
-        });
-        volunteers.forEach(v => {
-          if (!v.role_name) return;
-          const row = ensureRow(v.role_name);
-          if (!hasEntry(row, 'volunteer', v.id)) { row.entries.push({ type: 'volunteer', id: v.id, name: v.name }); added++; }
-        });
-        return added;
-      }
 
       function resolveName(entry) {
         if (entry.type === 'team') {
@@ -68,6 +47,85 @@
           return (v && v.name) || entry.name || 'Unknown';
         }
         return entry.name || '';
+      }
+
+      function rowDepartment(row) {
+        for (const e of row.entries) {
+          if (e.type === 'team') {
+            const m = teamMembers.find(t => String(t.id) === String(e.id));
+            if (m && m.department) return m.department;
+          }
+          if (e.type === 'volunteer') {
+            const v = volunteers.find(v => String(v.id) === String(e.id));
+            if (v && v.department) return v.department;
+          }
+        }
+        return '';
+      }
+
+      // Priority leadership roles first (Director, Vocal Director, Musical
+      // Director, Producer, in that order), then everything else grouped by
+      // department (rows with no known department last).
+      function sortedRows() {
+        return [...rows].sort((a, b) => {
+          const ai = PRIORITY_ORDER.indexOf(normLabel(a.label));
+          const bi = PRIORITY_ORDER.indexOf(normLabel(b.label));
+          const aRank = ai === -1 ? PRIORITY_ORDER.length : ai;
+          const bRank = bi === -1 ? PRIORITY_ORDER.length : bi;
+          if (aRank !== bRank) return aRank - bRank;
+          if (aRank < PRIORITY_ORDER.length) return 0;
+          const aDept = rowDepartment(a), bDept = rowDepartment(b);
+          if (!!aDept !== !!bDept) return aDept ? -1 : 1;
+          if (aDept !== bDept) return aDept.localeCompare(bDept);
+          return 0;
+        });
+      }
+
+      // Removes duplicate names within a row (same resolved display name,
+      // case-insensitive). Returns true if anything changed.
+      function dedupeRows() {
+        let changed = false;
+        rows.forEach(row => {
+          const seen = new Set();
+          const kept = [];
+          row.entries.forEach(e => {
+            const key = normLabel(resolveName(e));
+            if (key && seen.has(key)) { changed = true; return; }
+            if (key) seen.add(key);
+            kept.push(e);
+          });
+          row.entries = kept;
+        });
+        return changed;
+      }
+
+      function rowHasName(row, name) {
+        const key = normLabel(name);
+        return row.entries.some(e => normLabel(resolveName(e)) === key);
+      }
+
+      // Groups current Team members (by role) and approved Volunteers (by
+      // role_name) into rows, adding anyone not already listed by name.
+      // Non-destructive — never removes or overwrites a row someone edited
+      // by hand.
+      function syncFromTeamAndVolunteers() {
+        let added = 0;
+        function ensureRow(label) {
+          let row = rows.find(r => normLabel(r.label) === normLabel(label));
+          if (!row) { row = { id: newId(), label: label, entries: [] }; rows.push(row); }
+          return row;
+        }
+        teamMembers.forEach(t => {
+          if (!t.role) return;
+          const row = ensureRow(t.role);
+          if (!rowHasName(row, t.name)) { row.entries.push({ type: 'team', id: t.id, name: t.name }); added++; }
+        });
+        volunteers.forEach(v => {
+          if (!v.role_name) return;
+          const row = ensureRow(v.role_name);
+          if (!rowHasName(row, v.name)) { row.entries.push({ type: 'volunteer', id: v.id, name: v.name }); added++; }
+        });
+        return added;
       }
 
       async function fetchTeamAndVolunteers() {
@@ -91,13 +149,16 @@
           console.warn('[BTS] support list load error:', e?.message);
           rows = []; teamMembers = []; volunteers = [];
         }
+        let needsSave = false;
         // First time this page has ever been opened for this production —
         // auto-fill from whoever's already on Team/Volunteers instead of
         // starting blank.
         if (!rows.length && (teamMembers.length || volunteers.length)) {
           syncFromTeamAndVolunteers();
-          saveRows();
+          needsSave = true;
         }
+        if (dedupeRows()) needsSave = true;
+        if (needsSave) saveRows();
         render();
       }
 
@@ -118,20 +179,47 @@
         </div>`;
       }
 
+      // Renders a sorted row list with department subheadings, sharing the
+      // same grouping logic between the Edit and Programme views (each
+      // passes its own header markup, since one is a plain <div> list and
+      // the other is a real <table> — a header row there must be a <tr>).
+      function groupedHtml(list, rowRenderer, headerRenderer) {
+        let html = '';
+        let lastGroupKey = '__none__';
+        list.forEach(row => {
+          const isPriority = PRIORITY_ORDER.indexOf(normLabel(row.label)) !== -1;
+          const groupKey = isPriority ? '__priority__' : (rowDepartment(row) || '__other__');
+          if (groupKey !== lastGroupKey && !isPriority) {
+            const label = groupKey === '__other__' ? 'Other' : groupKey;
+            html += headerRenderer(label);
+          }
+          lastGroupKey = groupKey;
+          html += rowRenderer(row);
+        });
+        return html;
+      }
+
       function editorHtml() {
         if (!rows.length) {
           return `<div class="vol-empty-dept">No roles added yet. Add your first one below (Producer, Stage Manager, whatever your programme needs).</div>`;
         }
-        return `<div class="spl-editor">${rows.map(editorRowHtml).join('')}</div>`;
+        const headerHtml = label => `<div class="spl-dept-header">${esc(label)}</div>`;
+        return `<div class="spl-editor">${groupedHtml(sortedRows(), editorRowHtml, headerHtml)}</div>`;
       }
 
       // ── Programme preview (same visual pattern as Cast List) ──────────
-      function programmeHtml() {
-        if (!rows.length) return '';
-        const trs = rows.filter(r => r.label || r.entries.length).map(r => `<tr>
+      function programmeRowHtml(r) {
+        return `<tr>
             <td class="spl-role">${esc(r.label || '')}</td>
             <td>${r.entries.length ? r.entries.map(e => esc(resolveName(e))).join('<br>') : '<span class="spl-open">TBD</span>'}</td>
-          </tr>`).join('');
+          </tr>`;
+      }
+
+      function programmeHtml() {
+        if (!rows.length) return '';
+        const list = sortedRows().filter(r => r.label || r.entries.length);
+        const headerHtml = label => `<tr class="spl-dept-header-row"><td colspan="2">${esc(label)}</td></tr>`;
+        const trs = groupedHtml(list, programmeRowHtml, headerHtml);
         return `<div class="spl-programme-card">
           <div class="spl-programme-title">Production Support</div>
           <table class="spl-table"><tbody>${trs}</tbody></table>
@@ -142,23 +230,22 @@
         const body = document.getElementById('spl-body');
         if (!body) return;
         body.innerHTML = `
+          <div class="view-toggle">
+            <button type="button" class="view-btn${_view === 'edit' ? ' active' : ''}" onclick="VolunteerSupportListModule.switchView('edit',this)">Edit</button>
+            <button type="button" class="view-btn${_view === 'programme' ? ' active' : ''}" onclick="VolunteerSupportListModule.switchView('programme',this)">Programme</button>
+          </div>
           <div class="spl-toolbar">
-            <button type="button" class="btn-secondary" onclick="VolunteerSupportListModule.addRow()">+ Add Role</button>
-            <button type="button" class="btn-secondary" onclick="VolunteerSupportListModule.syncNow()">Sync Team &amp; Volunteers</button>
+            ${_view === 'edit' ? `
+              <button type="button" class="btn-secondary" onclick="VolunteerSupportListModule.addRow()">+ Add Role</button>
+              <button type="button" class="btn-secondary" onclick="VolunteerSupportListModule.syncNow()">Sync Team &amp; Volunteers</button>
+            ` : ''}
             <div style="flex:1;"></div>
             <button type="button" class="btn-secondary" onclick="VolunteerSupportListModule.exportCSV()">Export CSV</button>
             <button type="button" class="btn-primary" onclick="VolunteerSupportListModule.exportPDF()">Export PDF</button>
           </div>
-          <div class="spl-columns">
-            <div class="spl-col">
-              <div class="spl-col-title">Edit</div>
-              ${editorHtml()}
-            </div>
-            <div class="spl-col">
-              <div class="spl-col-title">Programme preview</div>
-              ${programmeHtml() || '<div class="vol-empty-dept">Add a role to see the preview.</div>'}
-            </div>
-          </div>
+          ${_view === 'edit'
+            ? `<div class="spl-col">${editorHtml()}</div>`
+            : `<div class="spl-col">${programmeHtml() || '<div class="vol-empty-dept">Add a role to see the preview.</div>'}</div>`}
           <div class="modal-overlay" id="spl-add-name-modal">
             <div class="modal">
               <div class="modal-header">
@@ -186,6 +273,12 @@
 
       let _addNameRowId = null;
 
+      window.VolunteerSupportListModule.switchView = function (v, btn) {
+        _view = v;
+        document.querySelectorAll('#spl-body .view-btn').forEach(b => b.classList.remove('active'));
+        btn?.classList.add('active');
+        render();
+      };
       window.VolunteerSupportListModule.addRow = function () {
         rows.push({ id: newId(), label: '', entries: [] });
         render();
@@ -194,6 +287,7 @@
       window.VolunteerSupportListModule.syncNow = async function () {
         await fetchTeamAndVolunteers();
         const added = syncFromTeamAndVolunteers();
+        dedupeRows();
         render();
         saveRows();
         alert(added ? `Added ${added} name${added === 1 ? '' : 's'} from Team & Volunteers.` : 'Already up to date — nothing new to add.');
@@ -236,18 +330,28 @@
         if (!row) return;
         const selectVal = document.getElementById('spl-picker-select').value;
         const manualVal = document.getElementById('spl-picker-manual').value.trim();
+        let name = '';
+        let entry = null;
         if (selectVal) {
           const [type, id] = selectVal.split(':');
           const source = type === 'team' ? teamMembers : volunteers;
           const match = source.find(x => String(x.id) === id);
-          row.entries.push({ type, id, name: match ? match.name : '' });
+          name = match ? match.name : '';
+          entry = { type, id, name };
         } else if (manualVal) {
-          row.entries.push({ type: 'manual', name: manualVal });
+          name = manualVal;
+          entry = { type: 'manual', name: manualVal };
         } else {
           document.getElementById('spl-picker-error').textContent = 'Pick someone from the list or type a name.';
           document.getElementById('spl-picker-error').classList.add('visible');
           return;
         }
+        if (rowHasName(row, name)) {
+          document.getElementById('spl-picker-error').textContent = name + ' is already on this role.';
+          document.getElementById('spl-picker-error').classList.add('visible');
+          return;
+        }
+        row.entries.push(entry);
         window.VolunteerSupportListModule.closeAddName();
         render();
         saveRows();
@@ -255,7 +359,7 @@
 
       // ── Exports ─────────────────────────────────────────────────────
       window.VolunteerSupportListModule.exportCSV = function () {
-        const csvRows = rows.map(r => [r.label || '', r.entries.map(e => resolveName(e)).join('; ')]);
+        const csvRows = sortedRows().map(r => [r.label || '', r.entries.map(e => resolveName(e)).join('; ')]);
         const csv = csvRows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
         const a = document.createElement('a');
@@ -267,8 +371,7 @@
       window.VolunteerSupportListModule.exportPDF = function () {
         const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
         if (!jsPDFCtor) { alert('PDF export isn\'t ready yet — please wait a moment and try again.'); return; }
-        const items = rows.filter(r => r.label || r.entries.length).map(r => ({ role: r.label || '', names: r.entries.length ? r.entries.map(e => resolveName(e)) : ['TBD'] }));
-        const totalLines = items.reduce((sum, r) => sum + Math.max(1, r.names.length), 0);
+        const items = sortedRows().filter(r => r.label || r.entries.length).map(r => ({ role: r.label || '', names: r.entries.length ? r.entries.map(e => resolveName(e)) : ['TBD'] }));
 
         const doc = new jsPDFCtor({ unit: 'in', format: 'letter', orientation: 'portrait' });
         const pageW = 8.5, marginIn = 0.6, midX = pageW / 2, headerH = 0.45;
