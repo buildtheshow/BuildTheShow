@@ -1435,9 +1435,9 @@
         return Math.round(c * 100) === a.price_cents || Math.round(b * 100) === a.price_cents;
       });
     }
-    if (sizeObj) return { label: sizeObj.label, dims: sizeObj.dims ? sizeObj.dims.replace(/x/i, '" x ') + '"' : '', obj: sizeObj };
+    if (sizeObj) return { label: sizeObj.label, dims: sizeObj.dims ? sizeObj.dims.replace(/x/i, '" x ') + '"' : '', obj: sizeObj, index: sizes.indexOf(sizeObj) };
     var label = raw ? raw.replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); }) : 'Ad';
-    return { label: label, dims: '', obj: null };
+    return { label: label, dims: '', obj: null, index: -1 };
   }
 
   function crmBookingDetails(booking) {
@@ -1703,14 +1703,19 @@
     return String(name || '').replace(/\.[^.]+$/, '').trim();
   }
 
+  // Prefixed with a zero-padded size rank so files sort into physical-size
+  // order (Card, 1/4, 1/2, Full) in a file browser instead of alphabetical
+  // order, then Colour/Black & White, then the business name.
   function crmDownloadNameForFile(bizName, file, linkedAd, index) {
     var ext = crmFileExtension(file);
     if (linkedAd) {
       var size = crmAdSizeLabel(linkedAd);
       var type = crmAdTypeLabel(linkedAd, size);
-      return crmSafeFilePart(bizName, 'Business') + ' - ' +
+      var rank = size.index >= 0 ? String(size.index + 1) + ' - ' : '';
+      return rank +
         crmSafeFilePart(size.label, 'Ad') + ' - ' +
-        crmSafeFilePart(type, 'Artwork') + '.' + ext;
+        crmSafeFilePart(type, 'Artwork') + ' - ' +
+        crmSafeFilePart(bizName, 'Business') + '.' + ext;
     }
     var base = crmFileBaseName(file && file.file_name);
     return crmSafeFilePart(bizName, 'Business') + ' - ' +
