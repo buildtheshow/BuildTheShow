@@ -1543,8 +1543,15 @@
       } catch(err) { console.warn('[sponsors] Could not load performance dates:', err); }
     }
 
+    // Returns { sponsor, booking, artwork } ISO dates (YYYY-MM-DD) derived
+    // from the same Zeus calendar "deadline" events shown in Key Dates, so
+    // those dates can also close the booking forms below — otherwise the
+    // Key Dates panel and the actual sponsor_settings.deadlines used to
+    // gate submissions are two disconnected sources, and a producer who
+    // only ever sets deadlines on the calendar (not in a separate settings
+    // field) sees a passed deadline displayed while the forms stay open.
     async function loadCalendarDeadlines(prodId) {
-      if (!prodId) return;
+      if (!prodId) return null;
       const SPONSOR_AREAS = new Set(['sponsors','sponsors_confirmation','sponsors_assets']);
       const ADS_AREAS = new Set(['programme_ads','programme_ads_booking','programme_ads_artwork','programme_ads_assets']);
       try {
@@ -1553,13 +1560,13 @@
           .eq('production_id', prodId)
           .eq('event_type', 'deadline')
           .order('start_time', { ascending: true });
-        if (!data || !data.length) return;
+        if (!data || !data.length) return null;
         const areaRe = /\[bts:deadline_area:([^\]]+)\]/;
         const fmtDate = s => {
           const d = new Date((s || '').slice(0, 19));
           return new Intl.DateTimeFormat('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }).format(d);
         };
-        const allItems = data.map(ev => ({ title: ev.title || 'Deadline', date: fmtDate(ev.start_time), area: (areaRe.exec(ev.notes || '') || [])[1] || '' }));
+        const allItems = data.map(ev => ({ title: ev.title || 'Deadline', date: fmtDate(ev.start_time), isoDate: (ev.start_time || '').slice(0, 10), area: (areaRe.exec(ev.notes || '') || [])[1] || '' }));
         const artworkDeadline = allItems.find(ev => ev.area === 'programme_ads_artwork');
         if (artworkDeadline) {
           const el = document.getElementById('spp-step-deadline');
@@ -1584,7 +1591,14 @@
         const adsEl = document.getElementById('spp-deadlines-ads');
         if (sponsorEl && sponsorItems.length) { sponsorEl.innerHTML = buildHtml(sponsorItems, 'Sponsorship'); sponsorEl.hidden = false; }
         if (adsEl && adsItems.length) { adsEl.innerHTML = buildHtml(adsItems, 'Programme Ads'); adsEl.hidden = false; }
-      } catch(err) { console.warn('[sponsors] Could not load calendar deadlines:', err); }
+
+        const findIso = area => (allItems.find(ev => ev.area === area) || {}).isoDate || null;
+        return {
+          sponsor: findIso('sponsors_confirmation') || findIso('sponsors') || (sponsorItems[0] && sponsorItems[0].isoDate) || null,
+          booking: findIso('programme_ads_booking') || (adsItems[0] && adsItems[0].isoDate) || null,
+          artwork: findIso('programme_ads_artwork') || null,
+        };
+      } catch(err) { console.warn('[sponsors] Could not load calendar deadlines:', err); return null; }
     }
 
     function mergePublicStats(manualStats, derivedStats) {
@@ -2448,7 +2462,7 @@
           loadDerivedPublicStats(production.id),
         ]);
         loadPerformanceDates(production.id);
-        loadCalendarDeadlines(production.id);
+        const calendarDeadlinesPromise = loadCalendarDeadlines(production.id);
         organization = orgRes.data || {};
         const s = settingsRes.data || {};
         if (!settingsRes.data && new URLSearchParams(location.search).get('preview') !== '1') {
@@ -2459,6 +2473,14 @@
         settings.adSizes     = Array.isArray(s.adSizes)     ? s.adSizes     : [];
         settings.tiers       = normalizeSponsorTiers(s.tiers);
         settings.deadlines   = s.deadlines   || {};
+        // Calendar deadlines only fill in whatever wasn't explicitly set in
+        // sponsor settings — an explicit setting always wins.
+        const calendarDeadlines = await calendarDeadlinesPromise;
+        if (calendarDeadlines) {
+          settings.deadlines.sponsor = settings.deadlines.sponsor || calendarDeadlines.sponsor;
+          settings.deadlines.booking = settings.deadlines.booking || calendarDeadlines.booking;
+          settings.deadlines.artwork = settings.deadlines.artwork || calendarDeadlines.artwork;
+        }
         settings.publicStats = mergePublicStats(s.publicStats, derivedStats);
         settings.notifyEmails = Array.isArray(s.notifyEmails) ? s.notifyEmails : [];
         if (!settings.notifyEmails.length) {
