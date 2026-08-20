@@ -19784,8 +19784,36 @@ See you soon!
     return key ? String(ca[key]).trim() : '';
   }
 
-  function rptCopyAllBios() {
+  // A performer can hold more than one accepted assignment (a principal role
+  // plus an ensemble/group track). The registration record only keeps whichever
+  // assignment was created first, which is often the ensemble one — so resolve
+  // the role the same way the Cast List page does: pick the performer's
+  // lowest-rank (most principal) accepted character, not just any assignment.
+  async function rptCastListRoleMap() {
+    if (!characters.length) await loadCharacters().catch(() => {});
+    const map = new Map();
+    try {
+      const { data, error } = await sb.from('casting_assignments')
+        .select('applicant_id, character_id')
+        .eq('production_id', prodId)
+        .eq('state', 'offer_accepted');
+      if (error) throw error;
+      (data || []).forEach(row => {
+        const appId = String(row?.applicant_id || '');
+        if (!appId) return;
+        const char = row.character_id ? (characters || []).find(c => String(c.id) === String(row.character_id)) : null;
+        const rank = char ? castListCharacterSortRank(char) : 2;
+        const name = char ? (char.name || 'Ensemble') : 'Ensemble';
+        const existing = map.get(appId);
+        if (!existing || rank < existing.rank) map.set(appId, { rank, name });
+      });
+    } catch (_) {}
+    return map;
+  }
+
+  async function rptCopyAllBios() {
     const items = (_rptCastItems || []).filter(item => !item.assignment?.dropped_out);
+    const roleMap = await rptCastListRoleMap();
     const sorted = [...items].sort((a, b) => String(a.app?.name || '').localeCompare(String(b.app?.name || '')));
     const blocks = [];
     let missing = 0;
@@ -19793,7 +19821,7 @@ See you soon!
       const bio = rptPerformerBio(item.app);
       if (!bio) { missing++; return; }
       const name = String(item.app?.name || '').trim() || 'Unnamed performer';
-      const role = registrationAssignmentRoleName(item.assignment || {});
+      const role = roleMap.get(String(item.app?.id || ''))?.name || registrationAssignmentRoleName(item.assignment || {});
       blocks.push(`${name}${role ? ` (${role})` : ''}\n${bio}`);
     });
     if (!blocks.length) { showToast('No bios submitted yet.', true); return; }
