@@ -19739,6 +19739,9 @@ See you soon!
         <button type="button" class="rpt-fee-settings-btn" onclick="rptCopyAllEmails()">
           <span class="rpt-fee-settings-main"><span aria-hidden="true">&#9993;</span><span>Copy All Emails</span></span>
         </button>
+        <button type="button" class="rpt-fee-settings-btn" onclick="rptCopyAllBios()">
+          <span class="rpt-fee-settings-main"><span aria-hidden="true">&#9776;</span><span>Copy All Bios</span></span>
+        </button>
       </div>
     </div>`;
   }
@@ -19757,6 +19760,49 @@ See you soon!
       showToast(`${emails.size} email${emails.size === 1 ? '' : 's'} copied to clipboard.`);
     }).catch(() => {
       prompt('Copy these emails:', list);
+    });
+  }
+
+  // Programme bios come straight from each performer's own registration answers.
+  // The Cast Bio field label is editable per production, so match the default
+  // label first, then fall back to any answer whose label reads like a bio.
+  const RPT_BIO_KEYS = [
+    'Programme bio (50 words or less)',
+    'Program bio (50 words or less)',
+    'Programme bio',
+    'Program bio',
+    'Cast bio',
+    'Performer bio',
+    'Bio',
+  ];
+
+  function rptPerformerBio(app) {
+    const direct = registrationAnswerValue(app, RPT_BIO_KEYS);
+    if (direct) return direct;
+    const ca = applicantCustomAnswers(app) || {};
+    const key = Object.keys(ca).find(k => !/^__bts/.test(k) && /\bbios?\b|\bbiograph/i.test(k) && String(ca[k] || '').trim());
+    return key ? String(ca[key]).trim() : '';
+  }
+
+  function rptCopyAllBios() {
+    const items = (_rptCastItems || []).filter(item => !item.assignment?.dropped_out);
+    const sorted = [...items].sort((a, b) => String(a.app?.name || '').localeCompare(String(b.app?.name || '')));
+    const blocks = [];
+    let missing = 0;
+    sorted.forEach(item => {
+      const bio = rptPerformerBio(item.app);
+      if (!bio) { missing++; return; }
+      const name = String(item.app?.name || '').trim() || 'Unnamed performer';
+      const role = registrationAssignmentRoleName(item.assignment || {});
+      blocks.push(`${name}${role ? ` (${role})` : ''}\n${bio}`);
+    });
+    if (!blocks.length) { showToast('No bios submitted yet.', true); return; }
+    const text = blocks.join('\n\n');
+    const note = missing ? ` ${missing} still to come.` : '';
+    navigator.clipboard.writeText(text).then(() => {
+      showToast(`${blocks.length} bio${blocks.length === 1 ? '' : 's'} copied to clipboard.${note}`);
+    }).catch(() => {
+      prompt('Copy these bios:', text);
     });
   }
 
