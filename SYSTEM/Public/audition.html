@@ -154,6 +154,8 @@
     .legal-footer-copy { font-size: 0.78rem; color: #c8bad7; }
     .legal-footer-tagline { font-size: 0.72rem; color: #b8b0cc; }
   </style>
+<script src="/SHARED/Components/account-security.js?v=20261115-team-sessions"></script>
+<script src="/SHARED/Components/audition-access.js?v=20261115-owned-auditions"></script>
 </head>
 <body>
 
@@ -205,7 +207,7 @@
       <div class="aud-card">
         <!-- Purpose statement (legally required by PIPEDA) -->
         <div class="purpose-banner" id="aud-purpose-banner">
-          <strong>About this form:</strong> The information you provide will be used by the production team to process your audition application. It will only be seen by the production team and will not be shared with third parties. Your data will be retained for 12 months after casting is complete.
+          <strong>About this form:</strong> An adult account holder completes this application for themselves or a child they manage as a parent or legal guardian. Provide only information needed for the audition. Our <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a> explains data use, retention and your rights.
         </div>
 
         <div id="aud-instructions-box" style="display:none;" class="instructions-box"></div>
@@ -243,7 +245,8 @@
         <!-- Guardian fields - shown for under-18 -->
         <div class="guardian-fields" id="guardian-fields">
           <div class="guardian-fields-title">Parent / Guardian Information Required</div>
-          <p style="font-size:0.84rem;color:#6a4a00;margin-bottom:0.75rem;line-height:1.55;">As you are under 18, we require a parent or guardian's contact information for this submission.</p>
+          <label><input type="checkbox" id="app-guardian-confirm" /> I am this performer's parent or legal guardian and agree to share this application with the production team.</label>
+          <p style="font-size:0.84rem;color:#6a4a00;margin-bottom:0.75rem;line-height:1.55;">The performer is under 18. The adult account holder must be their parent or legal guardian.</p>
           <div class="form-group">
             <label class="form-label">Guardian Name <span class="req">*</span></label>
             <input class="form-input" id="app-guardian-name" type="text" placeholder="Parent or guardian's full name" />
@@ -492,7 +495,7 @@
     async function refreshPublicSlotAvailability() {
       const [{ data: slots }, { data: bookings }] = await Promise.all([
         sb.from('audition_slots').select('*').eq('production_id', currentProdId).order('date').order('start_time'),
-        sb.from('audition_applications').select('status,session_id,slot_id,time_slot_id,slot_assignments').eq('production_id', currentProdId),
+        BTSAuditionAccess.availability(sb, currentProdId),
       ]);
 
       if (!slots || !slots.length) {
@@ -501,14 +504,7 @@
         return;
       }
 
-      const bookedCounts = {};
-      (bookings || []).forEach(app => {
-        if (String(app.status || '').toLowerCase().includes('cancel')) return;
-        canonicalApplicationAssignments(app).forEach(({ slot_id }) => {
-          if (slot_id) bookedCounts[slot_id] = (bookedCounts[slot_id] || 0) + 1;
-        });
-      });
-
+      const bookedCounts = BTSAuditionAccess.counts(bookings);
       availableSlots = slots.map(s => ({ ...s, booked: bookedCounts[s.id] || 0, full: (bookedCounts[s.id] || 0) >= s.capacity }));
       if (selectedSlotId && availableSlots.find(slot => slot.id === selectedSlotId)?.full) selectedSlotId = null;
       renderSlotPicker();
@@ -544,7 +540,7 @@
       const [{ data: cfg }, { data: slots }, { data: bookings }, { data: chars }, { data: cqs }, { data: zeusAudEvents }] = await Promise.all([
         sb.from('audition_configs').select('*').eq('production_id', resolvedProdId).single(),
         sb.from('audition_slots').select('*').eq('production_id', resolvedProdId).order('date').order('start_time'),
-        sb.from('audition_applications').select('status,session_id,slot_id,time_slot_id,slot_assignments').eq('production_id', resolvedProdId),
+        BTSAuditionAccess.availability(sb, resolvedProdId),
         sb.from('production_characters').select('*').eq('production_id', resolvedProdId).eq('show_on_form', true).order('sort_order'),
         sb.from('audition_custom_questions').select('*').eq('production_id', resolvedProdId).order('sort_order'),
         // Zeus is source of truth for audition dates
@@ -560,14 +556,8 @@
 
       // Build available slots (not full)
       if (slots && slots.length) {
-        const bookedCounts = {};
-        (bookings || []).forEach(app => {
-          if (String(app.status || '').toLowerCase().includes('cancel')) return;
-          canonicalApplicationAssignments(app).forEach(({ slot_id }) => {
-            if (slot_id) bookedCounts[slot_id] = (bookedCounts[slot_id] || 0) + 1;
-          });
-        });
-        availableSlots = slots.map(s => ({ ...s, booked: bookedCounts[s.id] || 0, full: (bookedCounts[s.id] || 0) >= s.capacity }));
+        const bookedCounts = BTSAuditionAccess.counts(bookings);
+      availableSlots = slots.map(s => ({ ...s, booked: bookedCounts[s.id] || 0, full: (bookedCounts[s.id] || 0) >= s.capacity }));
         renderSlotPicker();
         document.getElementById('slot-picker-section').style.display = 'block';
       } else {
@@ -772,43 +762,13 @@
       renderSlotPicker();
     }
 
-    async function insertApplicationWithFallbacks(payload) {
-      let attempt = { ...payload };
-      let lastError = null;
-      while (attempt && Object.keys(attempt).length) {
-        try {
-          const { error } = await sb.from('audition_applications').insert(attempt);
-          if (!error && payload.headshot_url && attempt.headshot_url !== payload.headshot_url) {
-            return new Error('Headshot URL was not included in the saved application.');
-          }
-          if (!error) return null;
-          lastError = error;
-          const slotFkError = /audition_applications_(time_slot_id|slot_id)_fkey|time_slot_id_fkey|slot_id_fkey|foreign key constraint/i.test(String(error?.message || ''));
-          if (slotFkError && 'time_slot_id' in attempt) {
-            delete attempt.time_slot_id;
-            continue;
-          }
-          const missingColumn = String(error?.message || '').match(/Could not find the '([^']+)' column/i)?.[1];
-          if (missingColumn === 'headshot_url') break;
-          if (!missingColumn || !(missingColumn in attempt)) break;
-          delete attempt[missingColumn];
-        } catch (err) {
-          lastError = err || null;
-          const slotFkError = /audition_applications_(time_slot_id|slot_id)_fkey|time_slot_id_fkey|slot_id_fkey|foreign key constraint/i.test(String(err?.message || ''));
-          if (slotFkError && 'time_slot_id' in attempt) {
-            delete attempt.time_slot_id;
-            continue;
-          }
-          const missingColumn = String(err?.message || '').match(/Could not find the '([^']+)' column/i)?.[1];
-          if (missingColumn === 'headshot_url') break;
-          if (!missingColumn || !(missingColumn in attempt)) break;
-          delete attempt[missingColumn];
-        }
-      }
-      return lastError;
+    async function insertOwnedApplication(payload) {
+      const { error } = await sb.from('bts_participant_applications').insert(BTSAuditionAccess.applicationPayload(payload));
+      return error;
     }
 
     async function submitApplication() {
+      if (!await BTSAccountSecurity.requireAdultLogin(sb)) return;
       const name          = document.getElementById('app-name').value.trim();
       const preferredName = document.getElementById('app-preferred-name').value.trim();
       const pronouns      = document.getElementById('app-pronouns').value.trim();
@@ -832,6 +792,8 @@
       const conflicts  = document.getElementById('app-conflicts').value.trim();
       const skills     = document.getElementById('app-skills').value.trim();
       const notes      = document.getElementById('app-notes')?.value.trim() || '';
+      if (!await BTSAccountSecurity.requireAdultLogin(sb)) return;
+      const { data: { user: actor } } = await sb.auth.getUser();
       // Custom question answers - prepend system fields so they appear first in the dashboard
       const customAnswers = {};
       if (preferredName) customAnswers['Preferred Name'] = preferredName;
@@ -859,10 +821,6 @@
       if (!dobVal) { errEl.textContent = 'Please enter your date of birth.'; errEl.classList.add('visible'); return; }
 
       const age = getAge(dobVal);
-      if (age < 13) {
-        errEl.textContent = 'Performers under 13 require a parent or guardian to submit this form. Please contact the organisation directly.';
-        errEl.classList.add('visible'); return;
-      }
       if (age < 18) {
         const guardianName    = document.getElementById('app-guardian-name').value.trim();
         const guardianContact = (window.BTSPhone?.format(document.getElementById('app-guardian-contact').value) || document.getElementById('app-guardian-contact').value).trim();
@@ -870,6 +828,8 @@
           errEl.textContent = 'As you are under 18, please provide your parent or guardian\'s name and contact information.';
           errEl.classList.add('visible'); return;
         }
+        if (!document.getElementById('app-guardian-confirm')?.checked) { errEl.textContent = 'Confirm you are the performer\'s parent or legal guardian.'; errEl.classList.add('visible'); return; }
+        customAnswers.__bts_guardian_confirmed = true;
         customAnswers['Guardian Name']    = guardianName;
         customAnswers['Guardian Contact'] = guardianContact;
       }
@@ -907,7 +867,7 @@
         try {
           photo = await resizeImage(photo, { maxSize: 400, quality: 0.8 });
           const ext  = 'jpg';
-          const path = `auditions/${currentProdId}/${Date.now()}.${ext}`;
+          const path = `${actor.id}/auditions/${currentProdId}/${Date.now()}.${ext}`;
           const { error: upErr } = await sb.storage.from('profile-headshots').upload(path, photo, { upsert: true, contentType: 'image/jpeg' });
           if (!upErr) {
             const { data: urlData } = sb.storage.from('profile-headshots').getPublicUrl(path);
@@ -925,7 +885,7 @@
       if (file) {
         try {
           const ext  = file.name.split('.').pop();
-          const path = `audition-files/${currentProdId}/${Date.now()}.${ext}`;
+          const path = `${actor.id}/audition-files/${currentProdId}/${Date.now()}.${ext}`;
           const { error: upErr } = await sb.storage.from('profile-headshots').upload(path, file, { upsert: true });
           if (!upErr) {
             const { data: urlData } = sb.storage.from('profile-headshots').getPublicUrl(path);
@@ -982,12 +942,13 @@
       if (session) {
         payload.user_id = session.user.id;
         try {
-          const { data: prof } = await sb.from('profiles').select('id').eq('user_id', session.user.id).maybeSingle();
+          const { data: ownProfiles } = await sb.from('profiles').select('id,legal_first_name,legal_last_name,date_of_birth').eq('user_id', session.user.id).eq('date_of_birth', dobVal);
+          const prof = (ownProfiles || []).find(item => [item.legal_first_name,item.legal_last_name].filter(Boolean).join(' ').trim().toLowerCase() === name.toLowerCase());
           if (prof) payload.profile_id = prof.id;
         } catch {}
       }
 
-      const error = await insertApplicationWithFallbacks(payload);
+      const error = await insertOwnedApplication(payload);
       if (error) {
         errEl.textContent = error.message; errEl.classList.add('visible');
         btn.disabled = false; btn.textContent = 'Submit Audition Form'; return;

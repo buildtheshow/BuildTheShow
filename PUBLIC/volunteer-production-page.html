@@ -3802,14 +3802,14 @@
     async function _upgradeBookingToApplication(booking) {
       // Try booking_id first (exact link), then email ordered by updated_at so we get the most-recently-saved row
       try {
-        const { data: byBookingId } = await sb.from('audition_applications')
+        const { data: byBookingId } = await sb.from('bts_participant_applications')
           .select('*').eq('production_id', prod.id).eq('booking_id', booking.id).order('updated_at', { ascending: false }).limit(1);
         if (byBookingId?.[0]) return byBookingId[0];
       } catch (_) {}
       const bookingEmail = String(booking.email || '').toLowerCase().trim();
       if (bookingEmail) {
         try {
-          const { data: byEmail } = await sb.from('audition_applications')
+          const { data: byEmail } = await sb.from('bts_participant_applications')
             .select('*').eq('production_id', prod.id).eq('email', bookingEmail).order('updated_at', { ascending: false }).limit(1);
           if (byEmail?.[0]) return byEmail[0];
         } catch (_) {}
@@ -3823,7 +3823,7 @@
 
       // Primary: audition_applications — this is where headshot updates, role data, and registration live
       try {
-        const { data } = await sb.from('audition_applications')
+        const { data } = await sb.from('bts_participant_applications')
           .select('*')
           .eq('production_id', prod.id)
           .contains('custom_answers', { '__bts_portal_code': enteredCode })
@@ -3836,7 +3836,7 @@
       // Secondary: audition_bookings portal_code column — upgrade to audition_applications row
       if (!found.size) {
         try {
-          const { data } = await sb.from('audition_bookings')
+          const { data } = await sb.from('bts_participant_bookings')
             .select('*')
             .eq('production_id', prod.id)
             .eq('portal_code', enteredCode)
@@ -3852,7 +3852,7 @@
       // Fallback: custom_answers keys on audition_bookings — same upgrade
       if (!found.size) {
         for (const key of PORTAL_PERFORMER_CODE_KEYS) {
-          const { data, error } = await sb.from('audition_bookings')
+          const { data, error } = await sb.from('bts_participant_bookings')
             .select('*')
             .eq('production_id', prod.id)
             .contains('custom_answers', { [key]: enteredCode })
@@ -3885,7 +3885,7 @@
       // 1. booking_id column on audition_applications (search all known IDs in case any are booking IDs)
       const bookingSearchIds = [...new Set([...appIds, ...linkedBookingIds])];
       try {
-        const { data } = await sb.from('audition_applications')
+        const { data } = await sb.from('bts_participant_applications')
           .select('id,booking_id')
           .eq('production_id', prod.id)
           .in('booking_id', bookingSearchIds);
@@ -3902,7 +3902,7 @@
       }))];
       for (const code of portalCodes) {
         try {
-          const { data } = await sb.from('audition_applications')
+          const { data } = await sb.from('bts_participant_applications')
             .select('id')
             .eq('production_id', prod.id)
             .contains('custom_answers', { '__bts_portal_code': code });
@@ -3920,7 +3920,7 @@
       if (emails.length) {
         // audition_applications — primary source for performers who completed registration
         try {
-          const { data } = await sb.from('audition_applications')
+          const { data } = await sb.from('bts_participant_applications')
             .select('id,name,email,dob,custom_answers,headshot_url,booking_id,portal_code')
             .eq('production_id', prod.id)
             .in('email', emails);
@@ -3934,7 +3934,7 @@
         } catch (_) {}
         // audition_bookings — catches siblings who are booking-only (no application record)
         try {
-          const { data } = await sb.from('audition_bookings')
+          const { data } = await sb.from('bts_participant_bookings')
             .select('id,name,email,dob,custom_answers')
             .eq('production_id', prod.id)
             .in('email', emails);
@@ -4018,13 +4018,13 @@
         const stillMissing = sibApplicantIds.filter(id => !sibAppMap.has(id));
         if (stillMissing.length) {
           try {
-            const { data } = await sb.from('audition_applications').select('id,name,email,dob,custom_answers,headshot_url,booking_id,portal_code').eq('production_id', prod.id).in('id', stillMissing);
+            const { data } = await sb.from('bts_participant_applications').select('id,name,email,dob,custom_answers,headshot_url,booking_id,portal_code').eq('production_id', prod.id).in('id', stillMissing);
             (data || []).forEach(a => sibAppMap.set(String(a.id), a));
           } catch (_) {}
           const bookingMissing = stillMissing.filter(id => !sibAppMap.has(id));
           if (bookingMissing.length) {
             try {
-              const { data } = await sb.from('audition_bookings').select('id,name,email,dob,custom_answers').eq('production_id', prod.id).in('id', bookingMissing);
+              const { data } = await sb.from('bts_participant_bookings').select('id,name,email,dob,custom_answers').eq('production_id', prod.id).in('id', bookingMissing);
               (data || []).forEach(b => sibAppMap.set(String(b.id), b));
             } catch (_) {}
           }
@@ -4104,13 +4104,13 @@
             const missingIds = sibApplicantIds.filter(id => !sibAppMap.has(String(id)));
             if (missingIds.length) {
               try {
-                const { data: sibApps } = await sb.from('audition_applications').select('id,name,email,dob,custom_answers,headshot_url,booking_id,portal_code').eq('production_id', prod.id).in('id', missingIds);
+                const { data: sibApps } = await sb.from('bts_participant_applications').select('id,name,email,dob,custom_answers,headshot_url,booking_id,portal_code').eq('production_id', prod.id).in('id', missingIds);
                 (sibApps || []).forEach(a => { sibAppMap.set(String(a.id), a); if (a.booking_id) sibAppMap.set(String(a.booking_id), a); });
               } catch (_) {}
               const stillMissingIds = missingIds.filter(id => !sibAppMap.has(String(id)));
               if (stillMissingIds.length) {
                 try {
-                  const { data: sibBooks } = await sb.from('audition_bookings').select('id,name,email,dob,custom_answers').eq('production_id', prod.id).in('id', stillMissingIds);
+                  const { data: sibBooks } = await sb.from('bts_participant_bookings').select('id,name,email,dob,custom_answers').eq('production_id', prod.id).in('id', stillMissingIds);
                   (sibBooks || []).forEach(b => sibAppMap.set(String(b.id), b));
                 } catch (_) {}
               }
@@ -4170,7 +4170,7 @@
       let charMap = new Map();
       if (appIds.length) {
         try {
-          const { data } = await sb.from('audition_applications').select('*').in('id', appIds);
+          const { data } = await sb.from('bts_participant_applications').select('*').in('id', appIds);
           appMap = new Map((data || []).map(app => [String(app.id), app]));
         } catch (error) {
           console.warn('[BTS production portal] linked performer app lookup failed', error);

@@ -1177,6 +1177,7 @@
       .info-cards { grid-template-columns: 1fr; }
     }
   </style>
+<script src="/SHARED/Components/account-security.js?v=20261115-team-sessions"></script>
 </head>
 <body>
   <main class="shell">
@@ -2249,8 +2250,8 @@
         if (!candidateIds.length) return null;
 
         const [{ data: apps }, { data: bookings }] = await Promise.all([
-          sb.from('audition_applications').select('*').in('id', candidateIds),
-          sb.from('audition_bookings').select('*').in('id', candidateIds),
+          sb.from('bts_participant_applications').select('*').in('id', candidateIds),
+          sb.from('bts_participant_bookings').select('*').in('id', candidateIds),
         ]);
         const all = [
           ...(apps || []).map(r => ({ ...r, _table: 'audition_applications' })),
@@ -2281,8 +2282,8 @@
         const nextHex = (prefixNum + 1).toString(16).padStart(3, '0');
         const idLow = `${idPrefix}00000-0000-0000-0000-000000000000`;
         const idHigh = `${nextHex}00000-0000-0000-0000-000000000000`;
-        let bkQ = sb.from('audition_bookings').select('*').gte('id', idLow);
-        let appQ = sb.from('audition_applications').select('*').gte('id', idLow);
+        let bkQ = sb.from('bts_participant_bookings').select('*').gte('id', idLow);
+        let appQ = sb.from('bts_participant_applications').select('*').gte('id', idLow);
         if (nextHex.length === 3) { bkQ = bkQ.lt('id', idHigh); appQ = appQ.lt('id', idHigh); }
         if (prodId) { bkQ = bkQ.eq('production_id', prodId); appQ = appQ.eq('production_id', prodId); }
         const [{ data: bookings }, { data: apps }] = await Promise.all([bkQ, appQ]);
@@ -2306,8 +2307,8 @@
       // Fallback: if code is a plain number (e.g. 552661 from an older send), scan all production apps
       if (prodId && /^\d+$/.test(wantedCode)) {
         const [{ data: apps }, { data: bookings }] = await Promise.all([
-          sb.from('audition_applications').select('*').eq('production_id', prodId),
-          sb.from('audition_bookings').select('*').eq('production_id', prodId),
+          sb.from('bts_participant_applications').select('*').eq('production_id', prodId),
+          sb.from('bts_participant_bookings').select('*').eq('production_id', prodId),
         ]);
         const all = [
           ...((apps || []).map(r => ({ ...r, _table: 'audition_applications' }))),
@@ -2320,10 +2321,11 @@
     }
 
     async function loadOffer() {
+    if (!await BTSAccountSecurity.requireAdultLogin(sb)) return;
       await resolveProductionFromPrettyPath();
       if (!token && !offerCode) throw new Error('This cast offer link is missing information.');
       app = await findOfferApplication();
-      if (!app) throw new Error('We could not find this cast offer.');
+      if (!app) throw new Error('Sign in with the adult account managing this performer, or ask the production owner to help link an older record.');
       if (!prodId && app.production_id) prodId = app.production_id;
       if (!prodId) throw new Error('This cast offer is not attached to a production.');
 
@@ -2387,8 +2389,8 @@
         )];
         if (candidateIds.length) {
           const [{ data: candidateApps }, { data: candidateBookings }] = await Promise.all([
-            sb.from('audition_applications').select('id,name,preferred_name').in('id', candidateIds),
-            sb.from('audition_bookings').select('id,name,preferred_name').in('id', candidateIds),
+            sb.from('bts_participant_applications').select('id,name,preferred_name').in('id', candidateIds),
+            sb.from('bts_participant_bookings').select('id,name,preferred_name').in('id', candidateIds),
           ]);
           const candidates = [...(candidateApps || []), ...(candidateBookings || [])];
           const appFirstName = String(app.preferred_name || app.name || '').trim()

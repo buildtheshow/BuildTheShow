@@ -5,6 +5,7 @@ const path = require('node:path');
 const context = { window: {location: {origin:'https://buildtheshow.com',pathname:'/member',search:'',replace: value=>context.redirect=value}}, URL };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(path.join(__dirname,'../../SHARED/Components/account-security.js'),'utf8'),context);
+vm.runInContext(fs.readFileSync(path.join(__dirname,'../../SHARED/Components/audition-access.js'),'utf8'),context);
 const { validAdultBirthDate, safeReturnPath, ensureAdultAccount } = context.window.BTSAccountSecurity;
 const { requireAdultLogin, teamDefaultPageAccess } = context.window.BTSAccountSecurity;
 assert.equal(teamDefaultPageAccess({role:'Owner',access_level:'view_only'},'auditions.general'),'view');
@@ -23,6 +24,9 @@ assert.equal(safeReturnPath('//example.com'),'/member');
 assert.equal(safeReturnPath('/\\example.com'),'/member');
 assert.equal(safeReturnPath('/member/profile/create?edit=123'),'/member/profile/create?edit=123');
 (async () => {
+  const availability=context.window.BTSAuditionAccess;
+  assert.equal(availability.counts([{slot_id:'synthetic',booked_count:'3'}]).synthetic,3);
+  await assert.rejects(availability.availability({rpc:async()=>({error:{message:'offline'}})},'synthetic'),/could not check/);
   assert.equal(await requireAdultLogin({auth:{getUser:async()=>({data:{user:null}})}},'/show/team?id=123&pvw_passcode=123456&pvw_email=secret'),false);
   assert.equal(context.redirect,'/login?return=%2Fshow%2Fteam%3Fid%3D123');
   assert.equal(await requireAdultLogin({auth:{getUser:async()=>({data:{user:{id:'synthetic'}}})},rpc:async()=>({data:{active:true}})}),true);

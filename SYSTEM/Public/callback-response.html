@@ -131,6 +131,7 @@
     .status.error { background: #fff1f2; color: #be123c; }
     .hidden { display: none !important; }
   </style>
+<script src="/SHARED/Components/account-security.js?v=20261115-team-sessions"></script>
 </head>
 <body>
   <main class="shell">
@@ -251,15 +252,16 @@
     }
 
     async function loadInvite() {
+    if (!await BTSAccountSecurity.requireAdultLogin(sb)) return;
       if (!token || !prodId) throw new Error('This callback link is missing information.');
-      const { data: apps, error } = await sb.from('audition_applications')
+      const { data: apps, error } = await sb.from('bts_participant_applications')
         .select('id,production_id,name,email,custom_answers,slot_assignments')
         .eq('production_id', prodId)
         .contains('custom_answers', { [KEYS.token]: token })
         .limit(1);
       if (error) throw error;
       app = apps?.[0] || null;
-      if (!app) throw new Error('We could not find this callback invitation.');
+      if (!app) throw new Error('Sign in with the adult account managing this performer, or ask the production owner to help link an older record.');
       const ca = answers(app);
       invite = currentState();
       const [{ data: prodData }, { data: sessionData }, { data: slotData }] = await Promise.all([
@@ -287,7 +289,7 @@
     async function updateSlotAvailability(slotId) {
       if (!slotId) return;
       const { data: slotRow } = await sb.from('audition_time_slots').select('id,capacity').eq('id', slotId).maybeSingle();
-      const { data: apps } = await sb.from('audition_applications')
+      const { data: apps } = await sb.from('bts_participant_applications')
         .select('slot_assignments,status')
         .eq('production_id', prodId);
       const count = (apps || []).filter(row => !String(row.status || '').toLowerCase().includes('cancel'))
@@ -310,7 +312,7 @@
       const slotAssignments = status === 'declined'
         ? withoutCallback
         : [...withoutCallback, { session_id: nextSessionId, slot_id: nextSlotId }];
-      const { error } = await sb.from('audition_applications')
+      const { error } = await sb.from('bts_participant_applications')
         .update({ custom_answers: ca, slot_assignments: slotAssignments })
         .eq('id', app.id);
       if (error) throw error;
@@ -332,7 +334,7 @@
         sessionIds.length
           ? sb.from('audition_time_slots').select('*').in('session_id', sessionIds).order('slot_time')
           : Promise.resolve({ data: [] }),
-        sb.from('audition_applications').select('id,status,slot_assignments').eq('production_id', prodId),
+        sb.from('bts_participant_applications').select('id,status,slot_assignments').eq('production_id', prodId),
       ]);
       const occupancy = {};
       (apps || []).forEach(row => {

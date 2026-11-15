@@ -625,6 +625,7 @@
       .rpf-mr-sig-row { grid-template-columns: 1fr; }
     }
   </style>
+<script src="/SHARED/Components/account-security.js?v=20261115-team-sessions"></script>
 </head>
 <body>
 
@@ -2683,7 +2684,7 @@
         if (!_upErr && _upData) {
           const { data: _urlData } = sb.storage.from('production-files').getPublicUrl(_pdfPath);
           if (_urlData?.publicUrl) {
-            await sb.from('audition_applications').update({
+            await sb.from('bts_participant_applications').update({
               custom_answers: Object.assign({}, _applicant.custom_answers, { __bts_registration_pdf_url: _urlData.publicUrl })
             }).eq('id', _appId);
             if (_applicant.custom_answers) _applicant.custom_answers.__bts_registration_pdf_url = _urlData.publicUrl;
@@ -2834,12 +2835,12 @@
     const nextApplicantAnswers = { ...applicantAnswers, '__bts_portal_code': code };
     _applicant.custom_answers = nextApplicantAnswers;
     try {
-      await sb.from('audition_applications').update({ custom_answers: nextApplicantAnswers }).eq('id', _applicant.id);
+      await sb.from('bts_participant_applications').update({ custom_answers: nextApplicantAnswers }).eq('id', _applicant.id);
     } catch (_) {}
     if (booking?.id) {
       try {
         const nextBookingAnswers = { ...bookingAnswers, '__bts_portal_code': code };
-        await sb.from('audition_bookings').update({ custom_answers: nextBookingAnswers, portal_code: code }).eq('id', booking.id);
+        await sb.from('bts_participant_bookings').update({ custom_answers: nextBookingAnswers, portal_code: code }).eq('id', booking.id);
         _booking = { ...booking, custom_answers: nextBookingAnswers };
       } catch (_) {}
     }
@@ -2858,7 +2859,7 @@
       __bts_registration_confirmation_error: '',
     };
     try {
-      await sb.from('audition_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
+      await sb.from('bts_participant_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
       _applicant.custom_answers = merged;
     } catch (error) {
       console.warn('[BTS] could not mark registration confirmation sent', error);
@@ -2872,7 +2873,7 @@
       __bts_registration_confirmation_error: String(error?.message || error || 'Could not send confirmation email'),
     };
     try {
-      await sb.from('audition_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
+      await sb.from('bts_participant_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
       _applicant.custom_answers = merged;
     } catch (_) {}
   }
@@ -3073,7 +3074,7 @@
     try {
       const collected = collectFormAnswers();
       const merged = Object.assign({}, _applicant.custom_answers || {}, collected);
-      const { error } = await sb.from('audition_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
+      const { error } = await sb.from('bts_participant_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
       if (error) throw error;
       _applicant.custom_answers = merged;
       syncCastMemberRegistration(merged);
@@ -3139,7 +3140,7 @@
         }
       } catch (_pdfUpErr) { console.warn('[BTS] registration PDF upload failed', _pdfUpErr); }
 
-      const { error } = await sb.from('audition_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
+      const { error } = await sb.from('bts_participant_applications').update({ custom_answers: merged }).eq('id', _applicant.id);
       if (error) throw error;
       _applicant.custom_answers = merged;
       syncCastMemberRegistration(merged);
@@ -3413,7 +3414,7 @@
   async function loadLinkedRegistrationBooking(applicant) {
     if (!applicant?.id && !applicant?.email) return null;
     try {
-      let query = sb.from('audition_bookings')
+      let query = sb.from('bts_participant_bookings')
         .select('*')
         .eq('production_id', applicant.production_id || _resolvedProductionId || _offer?.production_id || '');
       if (applicant.id) query = query.eq('applicant_id', applicant.id);
@@ -3481,7 +3482,7 @@
       const nextHex = (prefixNum + 1).toString(16).padStart(3, '0');
       const idLow = `${idPrefix}00000-0000-0000-0000-000000000000`;
       const idHigh = `${nextHex}00000-0000-0000-0000-000000000000`;
-      let q = sb.from('audition_applications').select(applicantSelect).gte('id', idLow);
+      let q = sb.from('bts_participant_applications').select(applicantSelect).gte('id', idLow);
       if (nextHex.length === 3) q = q.lt('id', idHigh);
       if (_resolvedProductionId) q = q.eq('production_id', _resolvedProductionId);
       const { data, error } = await q;
@@ -3497,7 +3498,7 @@
 
     async function findApplicantByOfferKey(key) {
       const { data, error } = await sb
-        .from('audition_applications')
+        .from('bts_participant_applications')
         .select(applicantSelect)
         .contains('custom_answers', { [key]: code })
         .limit(1);
@@ -3510,6 +3511,7 @@
 
   async function boot() {
     await ensureSupabaseClient();
+    if (!_sampleMode && !await BTSAccountSecurity.requireAdultLogin(sb)) return;
     if (!_regCode && !_applicantId && !_productionId && !_sampleMode) {
       showError('No registration code', 'This link is missing a registration code. Please use the link from your invitation email.');
       return;
@@ -3521,7 +3523,7 @@
     const applicantSelect = '*';
     let applicant = null;
     if (_applicantId) {
-      let byId = sb.from('audition_applications').select(applicantSelect).eq('id', _applicantId);
+      let byId = sb.from('bts_participant_applications').select(applicantSelect).eq('id', _applicantId);
       if (_resolvedProductionId) byId = byId.eq('production_id', _resolvedProductionId);
       const { data, error } = await byId.maybeSingle();
       if (error) throw error;
@@ -3598,7 +3600,7 @@
       _registrationRoleNames = ['Glinda'];
     } else if (_offer.applicant_id) {
       const { data: applicantMatch } = await sb
-        .from('audition_applications')
+        .from('bts_participant_applications')
         .select(applicantSelect)
         .eq('id', _offer.applicant_id)
         .maybeSingle();
@@ -3618,7 +3620,7 @@
     // Mark first open (fire-and-forget — never blocks the form)
     if (_applicant?.id && !_sampleMode && !(_applicant?.custom_answers?.['__bts_reg_portal_opened_at'])) {
       const _openedAt = new Date().toISOString();
-      sb.from('audition_applications').update({
+      sb.from('bts_participant_applications').update({
         custom_answers: { ...(_applicant.custom_answers || {}), __bts_reg_portal_opened_at: _openedAt }
       }).eq('id', _applicant.id).then(() => {
         if (_applicant) _applicant = { ..._applicant, custom_answers: { ...(_applicant.custom_answers || {}), __bts_reg_portal_opened_at: _openedAt } };

@@ -2,6 +2,16 @@
 
 The live schema was inspected on 2026-11-15 without reading personal records.
 
+## Audition account ownership and availability
+
+Migration: `supabase/migrations/20261115133000_audition_account_ownership.sql`.
+
+Adds adult-account ownership to bookings, server-recorded guardian declarations, immutable ownership fields, restrictions on casting/assessment/check-in/schedule edits, and a public count-only availability RPC. Anonymous base-record reads and writes are revoked. Participant projections expose only the active adult account's records or records within an authorised staff scope; staff assessment and internal consent fields are excluded. Existing unowned records cannot be adopted through name, birth date or email matching; linking needs an operator-reviewed process. No legacy records are automatically assigned to a family.
+
+Both audition entry forms now require an adult login to submit, use account-scoped duplicate checks, and upload new photos into the adult's private profile-file folder. Related public/member application lookups use the participant projections, and invitation/registration/self-tape entry pages require adult sign-in. Public slot pickers use counts rather than applicant-list queries. The browser-side slot hold and multi-write booking flow have NOT yet been replaced with an atomic server booking operation.
+
+Local tests and live-schema rehearsals passed and rolled back synthetic records. The rehearsal also passed anonymous/base-table read denial, cross-family projection isolation, and omission of private assessment fields. This closes direct application/booking table exposure; it does not finish volunteer/casting-assignment/self-tape table or storage permissions, transactional booking, old-record linking or the full account project. Deployment pending.
+
 ## Account-bound team access
 
 Follow-up migration: `supabase/migrations/20261115124500_require_team_session_for_staff_helpers.sql`. Requires a currently active, account-bound team session for staff access through the profile-file and service-only email helpers. An email-address match alone cannot grant this access. Tests cover both a denied email-only identity and successful code-authenticated producer access, including denial for an unsubmitted sibling photo. The Edge Function sender itself remains undeployed pending the public confirmation workflow.

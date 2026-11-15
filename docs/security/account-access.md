@@ -53,6 +53,12 @@ Official guidance checked 2026-11-15:
 
 ## Remaining rollout checks
 
+### Audition account ownership and public availability
+
+The `20261115133000` stage binds new public audition writes to active adult accounts, records guardian declarations for new child submissions, protects account/production/profile links and staff decision fields, and replaces the slot pickers' applicant-list reads with a count-only RPC. Matching name and birth date only deduplicates records within the same adult account; it is never evidence of ownership across families. New photos use the private profile-file bucket with account-scoped paths.
+
+The same cutover removes anonymous base-table reads, restricts base records to scoped staff access, and gives participants filtered, updatable projections for their own account. These projections omit staff assessment and server consent fields. Triggers still enforce ownership and allowed changes when writes pass through a view; synthetic tests verify that the view owner cannot bypass those checks. Legacy linking, transactional booking/holds, other participant tables and their storage remain unfinished.
+
 ### Account-bound production team sessions
 
 Migration `20261115123000_account_bound_team_access.sql` requires an active adult Auth account before a team code can create a session. The entered email must match that account. Sessions are bound to the Auth user ID and production, expire after eight hours and are checked against current membership/permissions on each RPC. Historical bearer-only sessions are revoked rather than assigned to accounts by an unverified email match. Team login allows at most 20 requests per production/email target in a fixed 15-minute window; counters contain hashes rather than email addresses and expire after two days.
