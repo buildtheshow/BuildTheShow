@@ -2241,6 +2241,8 @@
     .toast.toast--success { background:#efab45; border-color:#efab45; color:#000000; font-weight:900; box-shadow:0 14px 34px rgba(87,46,136,0.22); }
     .toast.toast--error { background:rgba(220,60,60,0.12); border-color:rgba(220,60,60,0.35); color:#f08080; }
   </style>
+  <script src="/SHARED/Components/account-security.js?v=20261115-accounts"></script>
+<script src="/SHARED/Components/organisation-ownership.js?v=20261115-accounts"></script>
 </head>
 <body>
   <div class="toast" id="toast"></div>
@@ -2952,7 +2954,16 @@
 
       <div class="settings-panel" id="panel-permissions" hidden>
         <div class="section-card">
-          <div class="coming-soon"><h3>Permissions</h3><p>Role-based access controls coming soon.</p></div>
+          <div class="section-card-title">Organisation ownership</div>
+          <p>Job titles describe what people do. Workspace access controls what they can open. The organisation owner is the person responsible for the account; changing a job title does not transfer ownership.</p>
+          <p id="ownership-transfer-message" role="status" aria-live="polite">Open this panel to check ownership.</p>
+          <form id="ownership-transfer-form" hidden>
+            <div class="form-group"><label class="form-label" for="ownership-recipient">Next organisation owner</label><select class="form-select" id="ownership-recipient" required></select></div>
+            <label style="display:flex;gap:0.6rem;margin:1rem 0;align-items:flex-start;"><input type="checkbox" required /><span>I want to invite this member to take ownership. I will remain owner until they accept.</span></label>
+            <button class="btn-primary" id="ownership-create-link" type="submit">Create ownership invitation</button>
+            <input class="form-input" id="ownership-transfer-link" type="text" readonly hidden aria-label="Private ownership invitation link" style="margin-top:1rem;" />
+            <button class="btn-secondary" id="ownership-copy-link" type="button" hidden>Copy link</button>
+          </form>
         </div>
       </div>
 
@@ -4039,6 +4050,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
       window.location.href = '/login';
       return;
     }
+    if (!await BTSAccountSecurity.ensureAdultAccount(sb)) return;
     currentUser = auth.user;
     document.getElementById('sb-email').textContent = currentUser.email;
 
@@ -4632,7 +4644,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     // Load accepted members
     try {
       const { data: members } = await sb.from('org_members')
-        .select('*, profiles:user_id(display_name, custom_id)')
+        .select('*')
         .eq('org_id', currentOrg.id);
       orgMembers = members || [];
     } catch(e) {}
@@ -5010,6 +5022,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
 
   // ── Settings sub-tabs ─────────────────────────────────
   function switchSettingsPanel(panelKey) {
+    if (panelKey === 'permissions' && currentOrg && currentUser) window.BTSOrganisationOwnership.load(sb, currentOrg, currentUser);
     document.querySelectorAll('.settings-tab').forEach(t => t.classList.toggle('active', t.dataset.panel === panelKey));
     document.querySelectorAll('.settings-panel').forEach(p => {
       const isActive = p.id === 'panel-' + panelKey;
@@ -8560,5 +8573,6 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     if (e.target === this || e.target === this.firstElementChild) closeSetupWizard();
   });
 </script>
+<script type="module" src="/SHARED/Components/private-profile-media.js?v=20261115-accounts"></script>
 </body>
 </html>

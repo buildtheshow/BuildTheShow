@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Confirm Your Account - Build The Show</title>
+  <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=20260815-focus-fix" />
+  <style>
+    body { margin:0; background:#fff; color:#000; font-family:var(--bts-font); }
+    main { max-width:520px; margin:3rem auto; padding:1.5rem; }
+    .form-group { margin:1.25rem 0; }
+    .form-label { display:block; font-weight:700; margin-bottom:.5rem; }
+    .form-input { box-sizing:border-box; width:100%; padding:.8rem; border:1px solid #572e88; border-radius:8px; font:inherit; }
+    .consent-label { display:flex; align-items:flex-start; gap:.7rem; margin:1rem 0; line-height:1.6; }
+    .btn-primary { border:0; border-radius:8px; padding:.9rem 1.25rem; background:#572e88; color:#fff; font:inherit; font-weight:700; cursor:pointer; }
+    button:disabled { opacity:.5; cursor:wait; } a { color:#572e88; } p { line-height:1.6; }
+    #account-message { padding:1rem 0; } .error { color:#d1523d; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/SYSTEM/config.js"></script>
+  <script src="/SHARED/Components/account-security.js?v=20261115-accounts"></script>
+</head>
+<body>
+<main>
+  <a href="/">Build The Show</a>
+  <h1>Confirm your account</h1>
+  <p>Logins are for people aged 18 or over. A parent or legal guardian uses their own account to manage a child’s profile. Children do not need their own login.</p>
+  <p>Your account birth date is private. It helps us check who can manage an account; it is separate from a performer’s profile birth date.</p>
+  <div id="account-message" role="status" aria-live="polite">Checking your account…</div>
+  <form id="confirm-form" hidden>
+    <div class="form-group">
+      <label class="form-label" for="account-dob">Your own date of birth</label>
+      <input class="form-input" id="account-dob" type="date" required />
+    </div>
+    <label class="consent-label"><input id="confirm-privacy" type="checkbox" required /><span>I have read the <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
+    <label class="consent-label"><input id="confirm-terms" type="checkbox" required /><span>I agree to the <a href="/terms" target="_blank" rel="noopener">Terms of Service</a>.</span></label>
+    <button class="btn-primary" id="confirm-submit" type="submit">Confirm and continue</button>
+  </form>
+  <p><a href="mailto:privacy@buildtheshow.com">Get help with an account or guardian request</a></p>
+  <button id="sign-out" type="button">Sign out</button>
+</main>
+<script>
+  const client = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+  const message = document.getElementById('account-message');
+  const form = document.getElementById('confirm-form');
+  const next = BTSAccountSecurity.safeReturnPath(new URLSearchParams(location.search).get('return'));
+  async function init() {
+    const { data: { user }, error } = await client.auth.getUser();
+    if (error || !user) { location.replace('/login'); return; }
+    const { data, error: statusError } = await client.rpc('bts_get_account_status');
+    if (statusError || !data) { message.textContent = 'We could not check your account. Please try again or contact us.'; return; }
+    if (!data.email_verified) { message.textContent = 'Please verify your email using the link in your inbox, then sign in again.'; return; }
+    if (data.active) { location.replace(next); return; }
+    if (data.status === 'underage' || data.status === 'closed') {
+      message.textContent = 'This account needs help from our privacy team. A parent or legal guardian must use their own adult account. Contact us to arrange safe access to existing profiles.';
+      return;
+    }
+    message.textContent = 'Please confirm your own details before continuing.';
+    form.hidden = false;
+  }
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const birthDate = document.getElementById('account-dob').value;
+    if (!BTSAccountSecurity.validAdultBirthDate(birthDate)) { message.textContent = 'Please enter your own valid birth date. Account holders must be 18 or over.'; return; }
+    const button = document.getElementById('confirm-submit'); button.disabled = true;
+    try {
+      const { error } = await client.rpc('bts_confirm_adult_account', {
+        p_birth_date: birthDate,
+        p_privacy_accepted: document.getElementById('confirm-privacy').checked,
+        p_terms_accepted: document.getElementById('confirm-terms').checked,
+      });
+      if (error) throw error;
+      location.replace(next);
+    } catch (error) { message.textContent = error.message || 'We could not save your confirmation. Please try again.'; }
+    finally { button.disabled = false; }
+  });
+  document.getElementById('sign-out').addEventListener('click', async () => { await client.auth.signOut(); location.replace('/'); });
+  init().catch(() => { message.textContent = 'We could not check your account. Please try again.'; });
+</script>
+<script defer src="/SHARED/Components/legal-footer.js"></script>
+</body>
+</html>

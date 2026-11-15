@@ -244,6 +244,7 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/SHARED/Components/account-security.js?v=20261115-accounts"></script>
   <script>
     const { createClient } = supabase;
     const sb = createClient(
@@ -287,10 +288,18 @@
         return;
       }
 
+      try {
+        const requestedNext = new URLSearchParams(window.location.search).get('return');
+        const pendingInvite = new URLSearchParams(window.location.search).get('invite');
+        if (!await BTSAccountSecurity.ensureAdultAccount(sb, requestedNext || (pendingInvite ? '/invite?token=' + encodeURIComponent(pendingInvite) : '/member'))) return;
+      } catch (error) {
+        showError(error.message); submitBtn.disabled = false; submitBtn.textContent = 'Log In'; return;
+      }
+
       // If an invite token is in the URL, accept it first
       const inviteToken = new URLSearchParams(window.location.search).get('invite');
       if (inviteToken) {
-        window.location.href = `/invite?token=${inviteToken}`;
+        window.location.href = `/invite?token=${encodeURIComponent(inviteToken)}`;
         return;
       }
 
@@ -298,9 +307,9 @@
       const returnParam = new URLSearchParams(window.location.search).get('return');
       const returnStored = sessionStorage.getItem('bts_return_after_auth');
       const returnUrl = returnParam || returnStored;
-      if (returnUrl && returnUrl.startsWith('/opportunity')) {
+      if (returnUrl && (returnUrl.startsWith('/opportunity') || returnUrl.startsWith('/member/account/transfer'))) {
         sessionStorage.removeItem('bts_return_after_auth');
-        window.location.href = returnUrl;
+        window.location.href = BTSAccountSecurity.safeReturnPath(returnUrl);
         return;
       }
 
@@ -400,5 +409,6 @@
 
   <script defer src="/SHARED/Components/text-fit.js"></script>
   <script src="/SHARED/Components/auto-save.js?v=brand-sweep-20260728"></script>
+<script type="module" src="/SHARED/Components/private-profile-media.js?v=20261115-accounts"></script>
 </body>
 </html>

@@ -1,0 +1,25 @@
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const { pathToFileURL } = require('node:url');
+(async () => {
+  const file = path.resolve(__dirname,'../../BACKEND/SupaBase/functions/send-email/authorization.ts');
+  const {authorizeEmailRequest} = await import(pathToFileURL(file));
+  const production='11111111-1111-4111-8111-111111111111';
+  const makeRequest=token=>new Request('https://example.invalid/email',{headers: token ? {authorization:'Bearer '+token} : {}});
+  let permission=false; let reason='forbidden'; let record=true; let authCalls=0;
+  const service={auth:{getUser:async token=>{authCalls++;return token==='valid' ? {data:{user:{id:'actor',email:'owner@example.invalid',email_confirmed_at:'2026-01-01'}}} : {error:{message:'invalid'}};}},rpc:async()=>({data:{allowed:permission,reason}}),from:()=>({select(){return this;},eq(){return this;},maybeSingle:async()=>({data:record ? {id:'record'} : null})})};
+  assert.equal((await authorizeEmailRequest(makeRequest(''),{},service,'server-secret')).status,401);
+  assert.equal((await authorizeEmailRequest(makeRequest('anonymous'),{production_id:production},service,'server-secret')).status,401);
+  assert.equal((await authorizeEmailRequest(makeRequest('valid'),{production_id:production},service,'server-secret')).status,403);
+  permission=true;
+  assert.equal((await authorizeEmailRequest(makeRequest('valid'),{production_id:production,test_email:'someone-else@example.invalid'},service,'server-secret')).status,403);
+  assert.equal((await authorizeEmailRequest(makeRequest('valid'),{production_id:production,test_email:'owner@example.invalid'},service,'server-secret')).allowed,true);
+  record=false;
+  assert.equal((await authorizeEmailRequest(makeRequest('valid'),{production_id:production,applicant_id:'other-production-record'},service,'server-secret')).status,403);
+  permission=false;reason='rate_limited';
+  assert.equal((await authorizeEmailRequest(makeRequest('valid'),{production_id:production},service,'server-secret')).status,429);
+  const before=authCalls;
+  assert.equal((await authorizeEmailRequest(makeRequest('server-secret'),{},service,'server-secret')).internal,true);
+  assert.equal(authCalls,before);
+  console.log('PASS: anonymous and unauthorised email calls, recipient restrictions, cross-production records and rate limits. No emails sent.');
+})().catch(error=>{console.error(error);process.exitCode=1;});

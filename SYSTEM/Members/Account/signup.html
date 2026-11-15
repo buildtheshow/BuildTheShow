@@ -556,22 +556,20 @@
 
           <div class="form-group">
             <label class="form-label" for="password">Password</label>
-            <input class="form-input" type="password" id="password" name="password" placeholder="Min. 8 characters" autocomplete="new-password" required />
+            <input class="form-input" type="password" id="password" name="password" placeholder="Min. 12 characters" autocomplete="new-password" required />
           </div>
 
           <!-- Age notices (shown by JS) -->
           <div class="guardian-notice" id="guardian-notice">
-            <strong>Parental consent required.</strong> Users under 13 cannot create their own account. A parent or guardian must create and manage the account on their behalf. Please contact <a href="mailto:privacy@buildtheshow.com" style="color:#7a5a00;font-weight:700;">privacy@buildtheshow.com</a> for a guardian-managed account.
+            <strong>Parental consent required.</strong> Account holders must be 18 or over. A parent or legal guardian uses their own account to manage a child’s profile. For help, contact <a href="mailto:privacy@buildtheshow.com" style="color:#7a5a00;font-weight:700;">privacy@buildtheshow.com</a> for a guardian-managed account.
           </div>
-          <div class="teen-notice" id="teen-notice">
-            It looks like you're under 18. Here's what we collect and why: we store your name, email, date of birth, and any profile or audition information you add. This is used only to run the platform and connect you with theatre productions. Your parent or guardian can review your account at any time by contacting us.
-          </div>
+          <div class="teen-notice" id="teen-notice" hidden></div>
 
           <!-- Consent checkboxes -->
           <div class="consent-section">
             <label class="consent-label">
               <input type="checkbox" id="consent-privacy" />
-              <span>I have read and agree to the <a href="/privacy" target="_blank">Privacy Policy</a></span>
+              <span>I have read the <a href="/privacy" target="_blank">Privacy Policy</a></span>
             </label>
             <label class="consent-label">
               <input type="checkbox" id="consent-terms" />
@@ -607,33 +605,13 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/SHARED/Components/account-security.js?v=20261115-accounts"></script>
   <script>
     const { createClient } = supabase;
     const sb = createClient(
       'https://tkmaiktxpwqfbgeojbnf.supabase.co',
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8'
     );
-
-    // ── ID generation ────────────────────────────────────────────
-    const ID_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 32 readable chars (no 0/O/1/I)
-
-    function randomCode(length) {
-      let code = '';
-      for (let i = 0; i < length; i++) code += ID_CHARS[Math.floor(Math.random() * 32)];
-      return code;
-    }
-
-    // Generates a unique BTS-XXXXX ID and stores it permanently in member_ids
-    async function generateAndStoreMemberId(userId) {
-      for (let attempt = 0; attempt < 10; attempt++) {
-        const displayId = 'BTS-' + randomCode(5);
-        const { error } = await sb.from('member_ids').insert({ display_id: displayId, user_id: userId });
-        if (!error) return displayId;
-        // If it's not a uniqueness collision, stop retrying
-        if (!error.message.includes('unique') && !error.message.includes('duplicate')) return null;
-      }
-      return null;
-    }
 
     // ── Age helpers ─────────────────────────────────────
     function getAge(dobString) {
@@ -650,8 +628,8 @@
       const age = getAge(document.getElementById('dob').value);
       const guardianNotice = document.getElementById('guardian-notice');
       const teenNotice    = document.getElementById('teen-notice');
-      guardianNotice.style.display = (age !== null && age < 13) ? 'block' : 'none';
-      teenNotice.style.display    = (age !== null && age >= 13 && age < 18) ? 'block' : 'none';
+      guardianNotice.style.display = (age !== null && age < 18) ? 'block' : 'none';
+      teenNotice.style.display = 'none';
     });
 
     let selectedType = null;
@@ -733,16 +711,16 @@
         return;
       }
       const age = getAge(dobValue);
-      if (age < 13) {
-        showError('Users under 13 cannot create their own account. A parent or guardian must create and manage the account. Please contact privacy@buildtheshow.com.');
+      if (!BTSAccountSecurity.validAdultBirthDate(dobValue)) {
+        showError('Account holders must be 18 or over. Enter your own birth date; a parent or legal guardian manages children through their own account.');
         return;
       }
       if (!email) {
         showError('Please enter your email address.');
         return;
       }
-      if (password.length < 8) {
-        showError('Password must be at least 8 characters.');
+      if (password.length < 12) {
+        showError('Password must be at least 12 characters.');
         return;
       }
       if (!document.getElementById('consent-privacy').checked) {
@@ -761,12 +739,17 @@
         email,
         password,
         options: {
+          emailRedirectTo: window.location.origin + '/login',
           data: {
             account_type: selectedType,
             first_name: firstName,
             last_name: lastName,
             date_of_birth: dobValue,
             marketing_consent: document.getElementById('consent-marketing').checked,
+            privacy_accepted: true,
+            terms_accepted: true,
+            privacy_version: '2026-11-15',
+            terms_version: '2026-11-15',
             consent_timestamp: new Date().toISOString(),
           }
         }
@@ -784,9 +767,10 @@
         return;
       }
 
-      // Generate and permanently store a unique Member ID
-      if (data.user) {
-        await generateAndStoreMemberId(data.user.id);
+      if (!data.session) {
+        showError('Account created. Check your inbox to verify your email, then sign in.');
+        submitBtn.disabled = false; submitBtn.textContent = 'Create Account';
+        return;
       }
 
       const inviteToken = new URLSearchParams(window.location.search).get('invite');
@@ -812,5 +796,6 @@
 
   <script defer src="/SHARED/Components/text-fit.js"></script>
   <script src="/SHARED/Components/auto-save.js?v=brand-sweep-20260728"></script>
+<script type="module" src="/SHARED/Components/private-profile-media.js?v=20261115-accounts"></script>
 </body>
 </html>

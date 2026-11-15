@@ -642,6 +642,7 @@
       .form-row { grid-template-columns: 1fr; }
     }
   </style>
+  <script src="/SHARED/Components/account-security.js?v=20261115-accounts"></script>
 </head>
 <body>
 
@@ -780,7 +781,7 @@
 
           <div class="consent-row">
             <input type="checkbox" id="guardian-consent" name="guardian-consent" />
-            <label for="guardian-consent">I confirm that the parent or guardian named above is aware of and has consented to this profile being created on Build The Show.</label>
+            <label for="guardian-consent">I am this child’s parent or legal guardian. I have read the Privacy Policy and agree to this private profile being created and managed through my account. Information is shared with a production when I apply on the child’s behalf.</label>
           </div>
 
           <div class="form-divider"></div>
@@ -1031,7 +1032,7 @@
       document.getElementById('pronouns').value    = p.pronouns    || '';
       document.getElementById('bio').value         = p.bio         || '';
       if (p.guardian_name)  document.getElementById('guardian-name').value  = p.guardian_name;
-      if (p.guardian_email) document.getElementById('guardian-email').value = p.guardian_email;
+
       if (p.guardian_phone) document.getElementById('guardian-phone').value = window.BTSPhone?.format(p.guardian_phone) || p.guardian_phone;
       // Populate headshot slots from saved URLs
       const savedUrls = p.headshot_urls?.length ? p.headshot_urls : (p.headshot_url ? [p.headshot_url] : []);
@@ -1063,8 +1064,11 @@
     async function init() {
       const { data: { session } } = await sb.auth.getSession();
       if (!session) { window.location.href = '/login'; return; }
+      if (!await BTSAccountSecurity.ensureAdultAccount(sb)) return;
 
       const user = session.user;
+      document.getElementById('guardian-email').value = user.email || '';
+      document.getElementById('guardian-email').readOnly = true;
 
       // Populate sidebar email
       document.getElementById('sidebar-email').textContent = user.email;
@@ -1204,7 +1208,7 @@
         }
       }
       if (photoUploadFailed) {
-        showError('One or more photos could not be saved. Make sure the "profile-headshots" storage bucket exists in your Supabase project (Storage → New bucket → "profile-headshots", set to Public).');
+        showError('One or more photos could not be saved. Make sure the "profile-headshots" storage bucket exists in your Supabase project (Storage → New bucket → "profile-headshots", set to Private).');
         setTimeout(() => errorMsg.classList.remove('visible'), 10000);
       }
       const headshotUrl = uploadedUrls[0] || null;
@@ -1243,21 +1247,11 @@
         guardian_phone:     guardianPhone,
       };
 
-      let error, newProfileId;
-      if (editProfileId) {
-        ({ error } = await sb.from('profiles').update(profileData).eq('id', editProfileId));
-        newProfileId = editProfileId;
-      } else {
-        const { data: inserted, error: insertError } = await sb.from('profiles').insert({
-          ...profileData,
-          user_id:            user.id,
-          email:              user.email || null,
-          member_display_id:  memberDisplayId,
-          profile_display_id: profileDisplayId,
-        }).select('id').single();
-        error = insertError;
-        newProfileId = inserted?.id;
-      }
+      const { data: newProfileId, error } = await sb.rpc('bts_save_profile', {
+        p_profile: { ...profileData, member_display_id: memberDisplayId, profile_display_id: profileDisplayId },
+        p_profile_id: editProfileId || null,
+        p_guardian_confirmed: isMinor && document.getElementById('guardian-consent').checked,
+      });
 
       if (error) {
         showError(error.message);
@@ -1278,5 +1272,6 @@
 
   <script defer src="/SHARED/Components/text-fit.js"></script>
   <script src="/SHARED/Components/auto-save.js?v=brand-sweep-20260728"></script>
+<script type="module" src="/SHARED/Components/private-profile-media.js?v=20261115-accounts"></script>
 </body>
 </html>

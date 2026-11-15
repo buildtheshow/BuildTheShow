@@ -5,6 +5,7 @@
   <link rel="preconnect" href="https://tkmaiktxpwqfbgeojbnf.supabase.co" />
   <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
   <meta charset="UTF-8" />
+  <meta name="referrer" content="no-referrer" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Accept Invitation - Build The Show</title>
   <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=20260815-focus-fix" />
@@ -320,6 +321,7 @@
       .auth-card-title { font-size: 2rem; }
     }
   </style>
+  <script src="/SHARED/Components/account-security.js?v=20261115-accounts"></script>
 </head>
 <body>
 
@@ -434,13 +436,8 @@
       const { data: { session } } = await sb.auth.getSession();
       currentUser = session?.user || null;
 
-      // Load invitation
-      const { data: inv, error } = await sb.from('org_invitations')
-        .select('*, organizations(name, custom_id, logo_url)')
-        .eq('token', token)
-        .is('used_at', null)
-        .gt('expires_at', new Date().toISOString())
-        .single();
+      // A token-scoped preview does not expose the invitation directory.
+      const { data: inv, error } = await sb.rpc('bts_preview_org_invitation', { p_token: token });
 
       if (error || !inv) { show('state-invalid'); return; }
       invitation = inv;
@@ -460,15 +457,15 @@
       document.getElementById('invite-heading').textContent = `Join ${org.name}`;
       const roleLabel = inv.title || (inv.access_level === 'viewer' ? 'Viewer' : 'Editor');
       document.getElementById('invite-role-pill').textContent = roleLabel;
-      document.getElementById('invite-subheading').innerHTML = `You've been invited to join as <span class="role-pill">${roleLabel}</span>`;
+      document.getElementById('invite-subheading').textContent = 'You have been invited to join as ' + roleLabel;
 
       if (currentUser) {
         document.getElementById('accept-logged-in').style.display = 'block';
         document.getElementById('accept-logged-out').style.display = 'none';
       } else {
         // Pass token through to login/signup
-        document.getElementById('accept-login-btn').href = `/login?invite=${token}`;
-        document.getElementById('accept-signup-btn').href = `/signup?invite=${token}`;
+        document.getElementById('accept-login-btn').href = `/login?invite=${encodeURIComponent(token)}`;
+        document.getElementById('accept-signup-btn').href = `/signup?invite=${encodeURIComponent(token)}`;
       }
 
       show('state-accept');
@@ -480,43 +477,21 @@
       errEl.classList.remove('visible');
       btn.disabled = true; btn.textContent = 'Accepting...';
 
-      // Add to org_members
-      const memberPayload = {
-        org_id: invitation.org_id,
-        user_id: currentUser.id,
-        access_level: invitation.access_level || 'editor',
-        title: invitation.title || null,
-        display_name: invitation.invitee_name || null,
-        email: invitation.email || currentUser.email || null,
-        phone: invitation.phone || null,
-        bio: invitation.bio || null,
-        headshot_url: invitation.headshot_url || null,
-        note_color: invitation.note_color || null,
-      };
-      let { data: memberRows, error: memErr } = await sb.from('org_members').insert(memberPayload).select('id');
-      if (memErr && String(memErr.message || '').toLowerCase().includes('schema cache')) {
-        const legacyPayload = { ...memberPayload };
-        delete legacyPayload.display_name;
-        delete legacyPayload.email;
-        delete legacyPayload.phone;
-        delete legacyPayload.bio;
-        delete legacyPayload.headshot_url;
-        delete legacyPayload.note_color;
-        ({ data: memberRows, error: memErr } = await sb.from('org_members').insert(legacyPayload).select('id'));
+      let result;
+      try {
+        if (!await BTSAccountSecurity.ensureAdultAccount(sb)) return;
+        const { data, error } = await sb.rpc('bts_accept_org_invitation', { p_token: token });
+        if (error) throw error;
+        result = data;
+      } catch (error) {
+        errEl.textContent = error.message || 'We could not accept this invitation.';
+        errEl.classList.add('visible'); btn.disabled = false; btn.textContent = 'Accept Invitation'; return;
       }
-
-      if (memErr && !memErr.message.includes('duplicate')) {
-        errEl.textContent = memErr.message; errEl.classList.add('visible');
-        btn.disabled = false; btn.textContent = 'Accept Invitation'; return;
-      }
-
-      // Mark invitation as used
-      await sb.from('org_invitations').update({ used_at: new Date().toISOString() }).eq('token', token);
 
       document.getElementById('accepted-msg').textContent = `You've joined ${invitation.organizations.name}.`;
 
       const inviteProfilePrefill = {
-        org_member_id: memberRows?.[0]?.id || null,
+        org_member_id: result?.member_id || null,
         name: invitation.invitee_name || null,
         email: invitation.email || currentUser.email || null,
         phone: invitation.phone || null,
@@ -544,5 +519,6 @@
 
   <script defer src="/SHARED/Components/text-fit.js"></script>
   <script src="/SHARED/Components/auto-save.js?v=brand-sweep-20260728"></script>
+<script type="module" src="/SHARED/Components/private-profile-media.js?v=20261115-accounts"></script>
 </body>
 </html>

@@ -1,0 +1,25 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const path = require('node:path');
+const context = { window: {location: {origin:'https://buildtheshow.com',pathname:'/member',search:'',replace: value=>context.redirect=value}}, URL };
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(path.join(__dirname,'../../SHARED/Components/account-security.js'),'utf8'),context);
+const { validAdultBirthDate, safeReturnPath, ensureAdultAccount } = context.window.BTSAccountSecurity;
+const today = new Date(2026,10,15);
+assert.equal(validAdultBirthDate('2008-11-15',today),true);
+assert.equal(validAdultBirthDate('2008-11-16',today),false);
+assert.equal(validAdultBirthDate('2014-01-01',today),false);
+assert.equal(validAdultBirthDate('2000-02-30',today),false);
+assert.equal(validAdultBirthDate('not-a-date',today),false);
+assert.equal(validAdultBirthDate('2027-01-01',today),false);
+assert.equal(safeReturnPath('//example.com'),'/member');
+assert.equal(safeReturnPath('/\\example.com'),'/member');
+assert.equal(safeReturnPath('/member/profile/create?edit=123'),'/member/profile/create?edit=123');
+(async () => {
+  assert.equal(await ensureAdultAccount({rpc:async()=>({data:{active:true}})}),true);
+  assert.equal(await ensureAdultAccount({rpc:async()=>({data:{active:false}})}),false);
+  assert.equal(context.redirect,'/member/account/confirm?return=%2Fmember');
+  await assert.rejects(ensureAdultAccount({rpc:async()=>({error:{message:'offline'}})}),/could not check/);
+  console.log('PASS: adult age boundaries, safe return paths, eligibility checks and fail-closed network errors.');
+})().catch(error=>{console.error(error);process.exitCode=1;});

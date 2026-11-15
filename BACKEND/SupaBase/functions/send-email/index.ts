@@ -25,6 +25,8 @@
  * ─────────────────────────────────────────────────────────────
  */
 
+import { authorizeEmailRequest } from './authorization.ts';
+
 import { serve }        from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -93,6 +95,8 @@ serve(async (req) => {
   catch { return json({ error: 'Invalid JSON body' }, 400); }
 
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+  const caller = await authorizeEmailRequest(req, body, sb, SERVICE_ROLE_KEY);
+  if (!caller.allowed) return json({ ok: false, error: caller.error }, caller.status);
 
   // ── Test email mode ───────────────────────────────────────────
   // Substitutes all tokens with real production/session data + sample
