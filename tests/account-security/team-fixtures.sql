@@ -12,7 +12,9 @@ INSERT INTO public.audition_applications(id,production_id,name) VALUES
 ('026b55aa-ac34-4a41-b88e-555db487fe64','8efb6463-9c50-444f-9305-be2c83d12ce4','Different synthetic applicant');
 INSERT INTO public.production_team_members(id,production_id,name,email,role,access_level,passcode,note_color) VALUES
 ('e8f51d99-0106-4dc4-832d-251bb2f13b1f','fdb2ec7b-a107-41e6-b960-7e6b89e8ca96','Creative fixture','team-creative@example.invalid','Producer','creative','123456','#572e88'),
-('df6bce8f-30a1-4e2d-a415-ea0663ddf006','fdb2ec7b-a107-41e6-b960-7e6b89e8ca96','Viewer fixture','team-viewer@example.invalid','Owner','view_only','654321','#769e7b');
+('df6bce8f-30a1-4e2d-a415-ea0663ddf006','fdb2ec7b-a107-41e6-b960-7e6b89e8ca96','Viewer fixture','team-viewer@example.invalid','Owner','view_only','654321','#769e7b'),
+('ed99688d-9559-42d3-8a15-042e7c4b06cf','fdb2ec7b-a107-41e6-b960-7e6b89e8ca96','Unverified staff identity','team-outsider@example.invalid','Producer','producer','112233','#476aaa');
+UPDATE public.audition_applications SET headshot_url='https://tkmaiktxpwqfbgeojbnf.supabase.co/storage/v1/object/public/profile-headshots/1f7c169f-c707-48d2-97bb-749c5ca382a0/child.jpg' WHERE id='956836bf-755b-4d1e-996d-741238b5cdda';
 CREATE TEMP TABLE team_test_tokens(creative text,viewer text,note_id uuid);
 INSERT INTO team_test_tokens DEFAULT VALUES;
 GRANT ALL ON team_test_tokens TO authenticated;
@@ -55,6 +57,9 @@ DO $$ DECLARE token text; new_note_id uuid; BEGIN
 END $$;
 SELECT set_config('request.jwt.claims','{"sub":"131ad1e8-23b0-4756-81ce-bf59302e4b4f","role":"authenticated"}',true);
 DO $$ BEGIN
+  IF public.bts_can_read_profile_file('1f7c169f-c707-48d2-97bb-749c5ca382a0/child.jpg') THEN
+    RAISE EXCEPTION 'TEST FAILED: staff email match without bound session reads private media';
+  END IF;
   BEGIN
     PERFORM public.team_member_resume_session('fdb2ec7b-a107-41e6-b960-7e6b89e8ca96',(SELECT creative FROM team_test_tokens));
     RAISE EXCEPTION 'TEST FAILED: copied token works in different account';
@@ -85,6 +90,30 @@ DO $$ DECLARE token text; attempt integer; BEGIN
   IF EXISTS(SELECT 1 FROM public.team_member_start_session('fdb2ec7b-a107-41e6-b960-7e6b89e8ca96','team-viewer@example.invalid','654321')) THEN
     RAISE EXCEPTION 'TEST FAILED: login attempt limit bypassed';
   END IF;
+END $$;
+RESET ROLE;
+SET LOCAL ROLE service_role;
+DO $$ DECLARE result jsonb; BEGIN
+  result:=public.bts_authorize_email_send('131ad1e8-23b0-4756-81ce-bf59302e4b4f','fdb2ec7b-a107-41e6-b960-7e6b89e8ca96',true);
+  IF (result->>'allowed')::boolean THEN RAISE EXCEPTION 'TEST FAILED: staff email match without bound session sends email'; END IF;
+END $$;
+RESET ROLE;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"131ad1e8-23b0-4756-81ce-bf59302e4b4f","role":"authenticated"}',true);
+DO $$ BEGIN
+  PERFORM public.team_member_start_session('fdb2ec7b-a107-41e6-b960-7e6b89e8ca96','team-outsider@example.invalid','112233');
+  IF NOT public.bts_can_read_profile_file('1f7c169f-c707-48d2-97bb-749c5ca382a0/child.jpg') THEN
+    RAISE EXCEPTION 'TEST FAILED: bound producer cannot read submitted profile media';
+  END IF;
+  IF public.bts_can_read_profile_file('1f7c169f-c707-48d2-97bb-749c5ca382a0/sibling.jpg') THEN
+    RAISE EXCEPTION 'TEST FAILED: staff access includes unsubmitted sibling media';
+  END IF;
+END $$;
+RESET ROLE;
+SET LOCAL ROLE service_role;
+DO $$ DECLARE result jsonb; BEGIN
+  result:=public.bts_authorize_email_send('131ad1e8-23b0-4756-81ce-bf59302e4b4f','fdb2ec7b-a107-41e6-b960-7e6b89e8ca96',true);
+  IF NOT (result->>'allowed')::boolean THEN RAISE EXCEPTION 'TEST FAILED: bound producer cannot authorise email'; END IF;
 END $$;
 RESET ROLE;
 -- Explicit denial overrides access-level defaults, immediately for active sessions.

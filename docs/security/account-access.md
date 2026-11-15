@@ -72,6 +72,8 @@ The six audition note/observation/live-state tables now deny anonymous access. D
 
 This does not complete the public application/booking/volunteer migration, fix historical email confirmation, or grant organisation admins/editors access to every workspace. A team code remains a supplementary credential, not legal identity or guardianship verification.
 
+The follow-up `20261115124500_require_team_session_for_staff_helpers.sql` closes the email-match-only branch in private photo access and service-only email authorisation. A staff account must have an active bound session for that exact team member and production. An authorised staff member may access a submitted profile image, not every file in the guardian's family folder. The owner's and organisation admin's existing Auth-user-ID-based checks remain separate.
+
 Do not describe the whole product as locked down until public audition/volunteer portals, email endpoints, consent, storage and production team access have passed the same backend boundary tests. The schema review found broader public-record permissions that require a coordinated portal migration. Ticketing remains explicitly out of scope.
 
 ## Local verification
