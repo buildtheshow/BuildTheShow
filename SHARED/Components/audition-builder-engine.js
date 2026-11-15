@@ -157,7 +157,6 @@
   ];
 
   const CHARACTER_SETUP_OPTIONS = [
-    { value: 'ai_import', label: 'Import with AI', desc: 'Paste your character list and the AI will build the cards. One card per character and group, exactly as they appear in the script.' },
     { value: 'manual_now', label: 'Set up manually', desc: 'Build the character cards yourself. We will give you a simple starter structure to work from.' },
     { value: 'sort_out_later', label: 'Sort it out later', desc: 'Skip for now and set up characters from the workspace when you are ready.' },
   ];
@@ -826,7 +825,7 @@
   function starterCharacters(state) {
     const prepText = stripHtml(buildPrepText(state));
     const callbackText = activeRounds(state).callback ? 'We will share callback material after invitations go out.' : null;
-    if (state.characterSetup === 'sort_out_later' || state.characterSetup === 'ai_import') return [];
+    if (state.characterSetup !== 'manual_now') return [];
     if (state.characterSetup === 'manual_now' && state.characterWhen === 'later') return [];
     // manual_now + now: give a simple starter structure they can build on
     return [

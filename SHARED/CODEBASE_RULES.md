@@ -174,6 +174,10 @@ export async function onRequest(context) {
 9. Debug the flow, not just the symptom.
 10. Treat code quality as part of the product.
 
+## Website Features
+
+The website must not use AI models, AI services, generated-content features, or neural OCR. Keep data entry manual and document parsing deterministic. Do not add AI integrations or send user content to AI providers.
+
 ## AI Development Rules
 
 AI-assisted development must protect the shared architecture. The biggest failure mode is rebuilding instead of understanding.

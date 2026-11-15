@@ -2852,9 +2852,6 @@
     applyModuleVisibility();
     await loadProductionAccessPermissions({ force: true });
     if (teamAccessMode) applyTeamAccessMode();
-    if (params.get('openAiImport') === 'true') {
-      setTimeout(() => openImportWithAIModal(), 800);
-    }
     // Calendar initialises lazily when the Calendar tab is opened (see switchProdTab)
     // Checklists load on tab open
     const bootRouteNav = getWorkspaceNavStateFromRoute();
@@ -7053,7 +7050,6 @@ Questions about payments or payment arrangements? Please get in touch.
 Just a quick update from the team at {{show_name}}.
 
 
-
 If you have any questions, don't hesitate to reach out.
 
 {{producer_name}}
@@ -11022,7 +11018,6 @@ See you soon!
   });
   document.getElementById('add-character-modal').addEventListener('click', e => { if(e.target===e.currentTarget) closeAddCharacterModal(); });
   document.getElementById('import-chars-modal').addEventListener('click', e => { if(e.target===e.currentTarget) closeImportCharactersModal(); });
-  document.getElementById('import-ai-info-modal').addEventListener('click', e => { if(e.target===e.currentTarget) closeImportWithAIModal(); });
   document.getElementById('char-material-modal').addEventListener('click', e => { if(e.target===e.currentTarget) closeCharMaterialModal(); });
   document.getElementById('add-question-modal').addEventListener('click', e => { if(e.target===e.currentTarget) closeAddQuestionModal(); });
 
@@ -27618,7 +27613,6 @@ See you soon!
     if (subEl) subEl.textContent = subtitles[_audWiz.step - 1];
 
 
-
     const stepsEl = document.getElementById('add-wiz-steps');
     if (stepsEl) {
       stepsEl.innerHTML = _WIZ_STEPS.map(function(s, i) {
@@ -30887,7 +30881,6 @@ See you soon!
   // ── Characters ────────────────────────────────────────
   let characters = [];
   let editingCharId = null;
-  let aiImportCharacters = [];
   let charFilterRole  = '';
   let charFilterVocal = '';
   let charBulkMode    = false;
@@ -31049,7 +31042,7 @@ See you soon!
     const el = document.getElementById('characters-list');
     if (!el) return;
     if (!characters.length) {
-      el.innerHTML = '<div style="text-align:center;padding:3rem;color:rgba(87,46,136,0.5);font-size:0.875rem;">No characters yet. Click "+ Add Character" or "Import with AI" to get started.</div>';
+      el.innerHTML = '<div style="text-align:center;padding:3rem;color:rgba(87,46,136,0.5);font-size:0.875rem;">No characters yet. Click "+ Add Character" or import a list of names to get started.</div>';
       return;
     }
     const sort = (document.getElementById('char-sort') || {}).value || 'manual';
@@ -32122,31 +32115,6 @@ See you soon!
     document.getElementById('import-chars-modal').classList.add('open');
   }
   function closeImportCharactersModal() { document.getElementById('import-chars-modal').classList.remove('open'); }
-  function openImportWithAIModal() { document.getElementById('import-ai-info-modal').classList.add('open'); }
-  let importAIFiles = [];
-  function handleImportAIFileSelect(input) {
-    const files = Array.from(input.files);
-    if (!files.length) return;
-    importAIFiles = [...importAIFiles, ...files];
-    renderImportAIFileList();
-    input.value = '';
-  }
-  function renderImportAIFileList() {
-    const listEl = document.getElementById('import-ai-files-list');
-    if (!importAIFiles.length) {
-      listEl.style.display = 'none';
-      return;
-    }
-    listEl.style.display = 'block';
-    listEl.innerHTML = importAIFiles.map((f, i) => `
-      <div style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0.6rem;background:rgba(87,46,136,0.06);border-radius:6px;margin-bottom:0.35rem;font-size:0.8rem;">
-        <span style="color:#572e88;">📄</span>
-        <span style="flex:1;color:#000000;">${f.name}</span>
-        <button type="button" onclick="importAIFiles.splice(${i},1);renderImportAIFileList();" style="background:none;border:none;color:#9a7aa0;cursor:pointer;font-size:0.9rem;padding:0;">✕</button>
-      </div>`).join('') + '<div style="font-size:0.72rem;color:#8a7aa0;">' + importAIFiles.length + ' file(s) selected</div>';
-  }
-  function closeImportWithAIModal() { document.getElementById('import-ai-info-modal').classList.remove('open'); document.getElementById('import-ai-text').value = ''; importAIFiles = []; renderImportAIFileList(); }
-
   async function submitImportCharacters() {
     const raw   = document.getElementById('import-chars-text').value.trim();
     const errEl = document.getElementById('import-chars-error');
@@ -32160,36 +32128,6 @@ See you soon!
     if (data) characters.push(...data);
     closeImportCharactersModal();
     renderCharacters(); renderMaterialsList();
-  }
-
-  function _charImporterConfig() {
-    return {
-      productionId: prodId,
-      productionTitle: prod?.title || 'this production',
-      supabase: sb,
-      existingCount: characters.length,
-      onSuccess(saved) {
-        characters.push(...saved);
-        renderCharacters();
-        renderMaterialsList();
-        updateCharInnerCount();
-      },
-    };
-  }
-
-  async function processImportAIText() {
-    const text = document.getElementById('import-ai-text').value.trim();
-    const files = importAIFiles;
-    if (!text && !files.length) { alert('Paste some text or upload files first.'); return; }
-    closeImportWithAIModal();
-    await AICharacterImporter.process({ files, text, ..._charImporterConfig() });
-  }
-
-  async function importCharactersWithAI(input) {
-    const file = input.files[0];
-    if (!file) return;
-    input.value = '';
-    await AICharacterImporter.process({ files: [file], ..._charImporterConfig() });
   }
 
   function toggleCharDisplaySettings() {
@@ -44815,53 +44753,6 @@ See you soon!
     return () => clearInterval(t);
   }
 
-  const MSGS_AI_SCAN = [
-    'Reading the script...',
-    'Studying the characters...',
-    'Checking the cast list...',
-    'Running through the libretto...',
-    'Consulting the director...',
-    'Reviewing the programme...',
-    'Counting the roles...',
-    'Checking the dramatis personae...',
-  ];
-
-  const MSGS_CHAR_IMPORT = [
-    'Building your cast',
-    'Sorting your characters',
-    'Shaping your roles',
-    'Reading your script',
-    'Pulling out character details',
-    'Matching roles and types',
-    'Finding ages and ranges',
-    'Identifying voice types',
-    'Checking movement needs',
-    'Organising your cast list',
-    'Laying out your roles',
-    'Structuring your characters',
-    'Filling in the details',
-    'Connecting the pieces',
-    'Making sense of it all',
-    'Tidying your character list',
-    'Getting everything ready',
-    'Building your audition list',
-    'Setting up your roles',
-    'Almost there',
-    'Just a moment',
-    'Working the magic',
-    'Making the magic happen',
-  ];
-
-  const MSGS_AI_BUILD = [
-    'Setting the stage...',
-    'Blocking the scenes...',
-    'Checking the rehearsal schedule...',
-    'Talking to the director...',
-    'Running the numbers...',
-    'Reading the call sheet...',
-    'Prepping the green room...',
-    'Getting everyone in position...',
-  ];
 
   const MSGS_PAGE_LOAD = [
     'Setting the stage...',
@@ -47381,7 +47272,6 @@ See you soon!
       });
     } catch (e) { console.warn('[BTS] volSendStatusEmail:', e?.message); }
   }
-
 
 
 	  let _staffingPlan = {};

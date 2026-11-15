@@ -5538,7 +5538,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/SHARED/Navigation/production-sidebar-nav.js?v=90-20260815-module-selfheal"></script>
   <script>
@@ -6880,20 +6879,6 @@
         .trim();
       if (!text || text.length < 20) throw new Error('No selectable PDF text found.');
       return { text, richLines: allRichLines, pageCount: pdf.numPages, pageTexts: textPages };
-    }
-
-    async function extractImageText(file) {
-      if (!window.Tesseract?.recognize) throw new Error('OCR reader did not load.');
-      const status = document.getElementById('pdf-import-status');
-      const result = await window.Tesseract.recognize(file, 'eng', {
-        logger: function (message) {
-          if (!message?.status || typeof message.progress !== 'number') return;
-          status.textContent = `Reading photo: ${message.status} (${Math.round(message.progress * 100)}%)...`;
-        },
-      });
-      const text = String(result?.data?.text || '').replace(/\u00a0/g, ' ').trim();
-      if (!text || text.length < 20) throw new Error('No readable image text found.');
-      return text;
     }
 
     function textItemsToLines(items) {
@@ -9180,11 +9165,10 @@
       ensurePendingImportFromSaved();
       const typeAndName = `${file.type || ''} ${file.name || ''}`;
       const isPdf = /pdf/i.test(typeAndName);
-      const isImage = /^image\//i.test(file.type || '') || /\.(png|jpe?g|webp)$/i.test(file.name || '');
       const isText = /^text\//i.test(file.type || '') || /\.txt$/i.test(file.name || '');
       const isDocx = /officedocument\.wordprocessingml\.document/i.test(file.type || '') || /\.docx$/i.test(file.name || '');
-      if (!isPdf && !isImage && !isText && !isDocx) {
-        alert('Please upload a PDF, DOCX, TXT, or image file.');
+      if (!isPdf && !isText && !isDocx) {
+        alert('Please upload a digital PDF, DOCX, or TXT file. For photos or scans, paste the text instead.');
         return;
       }
       const status = document.getElementById('pdf-import-status');
@@ -9198,16 +9182,14 @@
             }
             extracted = isText
               ? { text: await file.text(), richLines: [], pageCount: null, pageTexts: [] }
-              : isImage
-                ? { text: await extractImageText(file), richLines: [], pageCount: null, pageTexts: [] }
-                : await file.arrayBuffer().then(extractPdfText);
+              : await file.arrayBuffer().then(extractPdfText);
             if (!extracted.text || extracted.text.trim().length < 20) {
-              throw new Error(isImage ? 'No readable image text found.' : 'No selectable script text found.');
+              throw new Error('No selectable script text found.');
             }
           }
           pendingPdfImport.listUploads.script = file.name;
           pendingPdfImport.listUploadMeta.script = {
-            fileType: isPdf ? 'PDF' : isDocx ? 'DOCX' : isText ? 'TXT' : 'Image',
+            fileType: isPdf ? 'PDF' : isDocx ? 'DOCX' : 'TXT',
             pageCount: extracted?.pageCount || null,
             scannedAt: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
           };
@@ -9245,7 +9227,7 @@
         if (!['props', 'characters', 'songs', 'scenes'].includes(kind)) {
           pendingPdfImport.listUploads[kind] = file.name;
           pendingPdfImport.listUploadMeta[kind] = {
-            fileType: isPdf ? 'PDF' : isText ? 'TXT' : 'Image',
+            fileType: isPdf ? 'PDF' : 'TXT',
             pageCount: null,
             scannedAt: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
           };
@@ -9259,15 +9241,15 @@
         if (window.pdfjsLib?.GlobalWorkerOptions) {
           window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
         }
-        const extracted = isText ? { text: await file.text(), richLines: [], pageCount: null } : isImage ? { text: await extractImageText(file), richLines: [] } : await file.arrayBuffer().then(extractPdfText);
+        const extracted = isText ? { text: await file.text(), richLines: [], pageCount: null } : await file.arrayBuffer().then(extractPdfText);
         if (!extracted.text || extracted.text.trim().length < 20) {
-          throw new Error(isImage ? 'No readable image text found.' : 'No selectable PDF text found.');
+          throw new Error('No selectable PDF text found.');
         }
         const before = getStepCatalogueCount(kind);
         mergeStepCatalogue(kind, extracted.text);
         pendingPdfImport.listUploads[kind] = file.name;
         pendingPdfImport.listUploadMeta[kind] = {
-          fileType: isPdf ? 'PDF' : isText ? 'TXT' : 'Image',
+          fileType: isPdf ? 'PDF' : 'TXT',
           pageCount: extracted.pageCount || null,
           scannedAt: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
         };
@@ -9287,9 +9269,7 @@
           ? `${file.name} is marked in this session, but could not be saved yet. Try again in a moment.`
           : isDocx
           ? 'DOCX reading is not wired yet. Please export as PDF/TXT or paste the list text below.'
-          : isImage
-            ? 'Could not read text from this photo. Try a clearer straight-on image, or paste the list text.'
-            : 'Could not read this file. If it is scanned, paste the list text or try a digital PDF/TXT.';
+          : 'Could not read this file. If it is scanned, paste the list text or try a digital PDF/TXT.';
       }
     }
 

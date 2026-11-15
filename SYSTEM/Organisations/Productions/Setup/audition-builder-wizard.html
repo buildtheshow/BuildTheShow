@@ -1241,8 +1241,7 @@
   <div class="toast" id="toast"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script defer src="/SHARED/Components/audition-builder-engine.js"></script>
-  <script defer src="/SHARED/Components/ai-character-importer.js?v=brand-sweep-20260728"></script>
+  <script defer src="/SHARED/Components/audition-builder-engine.js?v=20261115-manual-tools"></script>
   <script>
     const { createClient } = supabase;
     const sb = createClient(
@@ -1348,9 +1347,6 @@
     let draftStatusText = 'Saves on Next';
     let toastTimer = null;
     let zeusRoundDates = {}; // keyed by round type: main, dance, callback
-    let aiImportCharacters = [];
-    let wizardImportedCharCount = 0;
-    let characters = []; // tracks characters saved via AI import in this session
 
     function esc(value) {
       return String(value ?? '')
@@ -1616,19 +1612,6 @@
       if (value !== 'manual_now') wizardState.characterWhen = null;
       scheduleDraftSave();
       renderStep();
-      if (value === 'ai_import') {
-        AICharacterImporter.open({
-          productionId: prodId,
-          productionTitle: prod?.title || 'this production',
-          supabase: sb,
-          existingCount: characters.length,
-          onSuccess(saved) {
-            characters.push(...saved);
-            wizardImportedCharCount = saved.length;
-            renderStep();
-          },
-        });
-      }
     }
 
     function updateField(path, value) {
@@ -2135,9 +2118,6 @@
     }
 
     function renderStepEight() {
-      const isManual = wizardState.characterSetup === 'manual_now';
-      const isAI = wizardState.characterSetup === 'ai_import';
-      const alreadyImported = wizardImportedCharCount > 0;
 
       return `
         <div class="step-kicker">Step 8</div>
@@ -2165,15 +2145,6 @@
             <h3 class="section-title">How do you want to set up characters?</h3>
             ${choiceCards(CHARACTER_SETUP_OPTIONS, wizardState.characterSetup, 'setCharacterSetup')}
           </div>
-          ${isAI && alreadyImported ? `
-            <div class="section-card" style="margin-top:1rem;">
-              <h3 class="section-title">Characters imported</h3>
-              <p class="section-copy" style="color:#7c6fa0;">
-                ${wizardImportedCharCount} character${wizardImportedCharCount !== 1 ? 's' : ''} imported successfully. You can import more, or continue to the next step.
-              </p>
-              <button type="button" class="wizard-btn wizard-btn-soft" style="margin-top:0.75rem;" onclick="setCharacterSetup('ai_import')">Import more characters</button>
-            </div>
-          ` : ''}
         </div>
         <div class="step-actions">
           <button type="button" class="wizard-btn wizard-btn-soft" onclick="prevStep()">Back</button>
@@ -2313,8 +2284,7 @@
         'Question toggles',
         'Public page copy',
       ];
-      if (wizardState.characterSetup === 'ai_import') buildItems.push('Character area ready for AI import');
-      else if (wizardState.characterSetup !== 'sort_out_later') buildItems.push('Starter characters');
+      if (wizardState.characterSetup !== 'sort_out_later') buildItems.push('Starter characters');
       if (wizardState.collect.extra_notes) buildItems.push('A custom notes question');
 
       return `
@@ -2404,8 +2374,8 @@
             <div class="success-item">
               <div class="success-item-dot"></div>
               <div>
-                <div class="success-item-title">${wizardState.characterSetup === 'ai_import' ? 'Character import is ready' : 'Questions and prep are filled in'}</div>
-                <div class="success-item-copy">${wizardState.characterSetup === 'ai_import' ? 'Your audition setup is ready, and the character area is left clean for AI import from your script or licensing materials.' : 'Your form defaults and public prep copy are already set.'}</div>
+                <div class="success-item-title">Questions and prep are filled in</div>
+                <div class="success-item-copy">Your form defaults and public prep copy are already set.</div>
               </div>
             </div>
             <div class="success-item">
@@ -2484,6 +2454,9 @@
           callback: { ...baseState.rounds.callback, ...(wizardState.rounds?.callback || {}), ...(nextState.rounds?.callback || {}) },
         },
       };
+      if (wizardState.characterSetup && !CHARACTER_SETUP_OPTIONS.some(option => option.value === wizardState.characterSetup)) {
+        wizardState.characterSetup = 'sort_out_later';
+      }
       if (wizardState.mainFormat === 'hybrid') {
         wizardState.mainFormat = 'video_live';
       }
@@ -2718,35 +2691,9 @@
       renderStep();
     }
 
-    // ── AI character import (exact copy of workspace importer) ──────────────
-
-    // cycleMsg(el, msgs, ms): cycles el.textContent through msgs every ms.
-  // Returns a stop function. Call stop() when the operation completes.
-  function cycleMsg(el, msgs, ms) {
-    if (!el || !msgs.length) return () => {};
-    el.textContent = msgs[0];
-    let i = 0;
-    const t = setInterval(() => { el.textContent = msgs[++i % msgs.length]; }, ms || 1800);
-    return () => clearInterval(t);
-  }
-
-  const MSGS_CHAR_IMPORT = ['Building your cast', 'Sorting your characters', 'Shaping your roles', 'Reading your script', 'Pulling out character details', 'Matching roles and types', 'Finding ages and ranges', 'Identifying voice types', 'Checking movement needs', 'Organising your cast list', 'Laying out your roles', 'Structuring your characters', 'Filling in the details', 'Connecting the pieces', 'Making sense of it all', 'Tidying your character list', 'Getting everything ready', 'Building your audition list', 'Setting up your roles', 'Almost there', 'Just a moment', 'Working the magic', 'Making the magic happen'];
-  const MSGS_AI_SCAN = [
-    'Reading the script...',
-    'Studying the characters...',
-    'Checking the cast list...',
-    'Running through the libretto...',
-    'Consulting the director...',
-    'Reviewing the programme...',
-    'Counting the roles...',
-    'Checking the dramatis personae...',
-  ];
-
-
     init();
   </script>
 
-<!-- AI character review modal is injected by ai-character-importer.js -->
 
   <script defer src="/SHARED/Components/text-fit.js"></script>
   <script src="/SHARED/Components/auto-save.js?v=brand-sweep-20260728"></script>
