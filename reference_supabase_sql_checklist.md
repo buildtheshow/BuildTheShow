@@ -16,4 +16,16 @@ Do not run a blanket rollback that restores public access to personal records. A
 
 Deployment status must be recorded here after verification.
 
-2026-11-15: CLI authenticated. Local tests and a live-schema rehearsal with synthetic accounts pass; the rehearsal ended in ROLLBACK. Schema-only policy/grant/constraint backup saved locally in `/tmp/bts-account-rollout/schema-before-compact.json`. The rehearsal identified an existing slug-check helper lookup issue; the migration fixes its search path, and the local model now includes that dependency. Production application and website release are next. The email function is not yet deployed. This is not a full-product security or legal sign-off.
+2026-11-15: migration applied successfully through the authenticated Supabase CLI and recorded as version `20261115103000` in `supabase_migrations.schema_migrations`. Matching website release `35c7b8a3` was pushed to main and verified over HTTPS. Local tests and the live-schema rehearsal with synthetic accounts passed; that rehearsal ended in ROLLBACK, and no synthetic users remain. Schema-only policy/grant/constraint backup: `/tmp/bts-account-rollout/schema-before-compact.json`.
+
+Post-deployment checks confirmed the profile bucket is private; anonymous profile and invitation reads are revoked; browsers cannot insert member IDs or call the service-only email authoriser; both signup triggers exist. The existing slug-check helper now has a fixed lookup path, and the local model includes that dependency.
+
+The email function has NOT been deployed. Public booking/response email workflows, wider portal access policies, server-side Auth settings and the privacy operating procedures remain outstanding. This release is the account foundation, not a full-product security or legal sign-off.
+
+## Authentication configuration finding
+
+The public Auth settings endpoint reports `mailer_autoconfirm: true`, with anonymous sign-ins and social providers disabled. This is a release-blocking issue for claims that email-based staff access proves inbox ownership. The settings Management API returned HTTP 401; no Auth configuration was changed. Database CLI access is working separately.
+
+Before changing the switch, confirm production Custom SMTP is configured and that confirmation/recovery redirect URLs are restricted to the production website. Then disable automatic confirmation and enforce the 12-character password minimum in Supabase itself. Do not use a full config push with defaults that could overwrite unrelated settings.
+
+Turning confirmation on does not retrospectively prove ownership of historical automatically confirmed addresses. Existing accounts need a real inbox-verification workflow before relying on email matches for sensitive staff access. An age/notice acknowledgement alone is not inbox verification. SMTP status is awaiting Katie's confirmation; no test emails were sent.

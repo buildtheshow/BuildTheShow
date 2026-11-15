@@ -59,6 +59,8 @@ Do not describe the whole product as locked down until public audition/volunteer
 
 Run `npm ci --prefix tests/account-security` then `npm test --prefix tests/account-security`. The tests run a schema-only model of the relevant production tables in PostgreSQL (PGlite), with synthetic accounts. They exercise ownership boundaries, guardian consent, invitation recipient binding and replay, adult account eligibility, metadata privilege forgery and ownership transfer, then roll back the migration and fixture changes. A passing model is not a substitute for the production schema preflight or a legal review.
 
+The 2026-11-15 live check found automatic email confirmation enabled. This remains unresolved: a non-null Auth confirmation timestamp from that configuration does not prove inbox ownership. Enabling real confirmation later will not retroactively verify existing accounts. Complete a reviewed inbox-verification flow before treating email-matched staff as verified.
+
 Before rollout, verify Supabase email confirmation, an appropriate server-side password minimum, recovery redirect allowlists, signup/login rate limits and operator MFA. The website password-length check alone is not a server-side password policy.
 
 ## Privacy request operating procedure
