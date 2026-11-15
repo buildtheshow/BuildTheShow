@@ -6,6 +6,12 @@ const context = { window: {location: {origin:'https://buildtheshow.com',pathname
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(path.join(__dirname,'../../SHARED/Components/account-security.js'),'utf8'),context);
 const { validAdultBirthDate, safeReturnPath, ensureAdultAccount } = context.window.BTSAccountSecurity;
+const { requireAdultLogin, teamDefaultPageAccess } = context.window.BTSAccountSecurity;
+assert.equal(teamDefaultPageAccess({role:'Owner',access_level:'view_only'},'auditions.general'),'view');
+assert.equal(teamDefaultPageAccess({role:'Producer'},'auditions.general'),'none');
+assert.equal(teamDefaultPageAccess({access_level:'creative'},'auditions.general'),'edit');
+assert.equal(teamDefaultPageAccess({access_level:'creative'},'auditions.callback'),'none');
+assert.equal(teamDefaultPageAccess({access_level:'admin'},'auditions.callback'),'manage');
 const today = new Date(2026,10,15);
 assert.equal(validAdultBirthDate('2008-11-15',today),true);
 assert.equal(validAdultBirthDate('2008-11-16',today),false);
@@ -17,6 +23,9 @@ assert.equal(safeReturnPath('//example.com'),'/member');
 assert.equal(safeReturnPath('/\\example.com'),'/member');
 assert.equal(safeReturnPath('/member/profile/create?edit=123'),'/member/profile/create?edit=123');
 (async () => {
+  assert.equal(await requireAdultLogin({auth:{getUser:async()=>({data:{user:null}})}},'/show/team?id=123&pvw_passcode=123456&pvw_email=secret'),false);
+  assert.equal(context.redirect,'/login?return=%2Fshow%2Fteam%3Fid%3D123');
+  assert.equal(await requireAdultLogin({auth:{getUser:async()=>({data:{user:{id:'synthetic'}}})},rpc:async()=>({data:{active:true}})}),true);
   assert.equal(await ensureAdultAccount({rpc:async()=>({data:{active:true}})}),true);
   assert.equal(await ensureAdultAccount({rpc:async()=>({data:{active:false}})}),false);
   assert.equal(context.redirect,'/member/account/confirm?return=%2Fmember');

@@ -198,6 +198,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/SHARED/Components/account-security.js?v=20261115-team-sessions"></script>
   <script>
     (async function () {
       'use strict';
@@ -215,6 +216,9 @@
       if (!prodId) { showError('No production specified.'); return; }
 
       const sb = supabase.createClient(SB_URL, SB_ANON);
+      try {
+        if (!await BTSAccountSecurity.requireAdultLogin(sb)) return;
+      } catch (error) { showError(error.message); return; }
 
       // ── Load production info ──
       const { data: prod } = await sb
@@ -414,7 +418,6 @@
 
       function buildMenuKeys(member) {
         const role = String(member.role || '').trim().toLowerCase();
-        if (CREATIVE_LEADERSHIP_ROLES.has(role)) return [...CREATIVE_MENU_KEYS];
         const raw = Array.isArray(member.menu_access) && member.menu_access.length ? member.menu_access : null;
         const norm = normalizeRole(role);
         return raw || ROLE_MENU_DEFAULTS[norm] || ROLE_MENU_DEFAULTS.creative;
@@ -482,15 +485,16 @@
           p_user_agent: navigator.userAgent,
         });
 
-        if (error || !data || !data.team_member) {
+        const result = Array.isArray(data) ? data[0] : data;
+        if (error || !result?.team_member) {
           if (btn) btn.disabled = false;
           const msg = (data && data.error) ? data.error : (error?.message || 'Access denied. Check your email and code.');
           if (errEl) { errEl.textContent = msg; } else { showError(msg, true); }
           return;
         }
 
-        const member = data.team_member;
-        const token  = data.session_token || '';
+        const member = result.team_member;
+        const token  = result.session_token || '';
         clearPortalSession();
         saveSession(cleanEmail, token);
         await storePortalSession(member, token);
@@ -517,7 +521,7 @@
       }
 
       async function storePortalSession(member, token) {
-        const role = String(member.role || member.access_level || '').trim().toLowerCase();
+        const role = String(member.access_level || '').trim().toLowerCase();
         let menuKeys = buildMenuKeys(member);
         const roleLabel = getRoleLabel(normalizeRole(role));
 

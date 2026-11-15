@@ -53,6 +53,25 @@ Official guidance checked 2026-11-15:
 
 ## Remaining rollout checks
 
+### Account-bound production team sessions
+
+Migration `20261115123000_account_bound_team_access.sql` requires an active adult Auth account before a team code can create a session. The entered email must match that account. Sessions are bound to the Auth user ID and production, expire after eight hours and are checked against current membership/permissions on each RPC. Historical bearer-only sessions are revoked rather than assigned to accounts by an unverified email match. Team login allows at most 20 requests per production/email target in a fixed 15-minute window; counters contain hashes rather than email addresses and expire after two days.
+
+All historical `team_*` implementations move to the non-exposed private schema, with execution revoked from browser roles. Public session RPCs retain their existing signatures behind a common guard. Passcode-only overloads are retired. New team operations are denied until explicitly added to the guard's allowlist. Stored page permissions override access-level defaults; a job title or browser menu cannot grant permissions. Updates also validate referenced productions, performers, sessions, characters and the ownership of notes/observations.
+
+| Stored team access level | Default audition access |
+| --- | --- |
+| Producer/admin/owner | Manage production pages |
+| Creative/room | Edit general audition notes; view dashboard/schedule |
+| Check-in | Edit dashboard/check-in; view general/schedule |
+| Schedule | Edit schedule; view general/dashboard |
+| View only | View general/dashboard/schedule; cannot write |
+| Missing/unrecognised | None |
+
+The six audition note/observation/live-state tables now deny anonymous access. Direct table access remains restricted to the active organisation owner; team members use checked RPCs. This closes both the permissive anonymous note policies and a faulty cross-organisation observation policy without broadening delegated workspace access.
+
+This does not complete the public application/booking/volunteer migration, fix historical email confirmation, or grant organisation admins/editors access to every workspace. A team code remains a supplementary credential, not legal identity or guardianship verification.
+
 Do not describe the whole product as locked down until public audition/volunteer portals, email endpoints, consent, storage and production team access have passed the same backend boundary tests. The schema review found broader public-record permissions that require a coordinated portal migration. Ticketing remains explicitly out of scope.
 
 ## Local verification

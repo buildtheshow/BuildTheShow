@@ -2,6 +2,16 @@
 
 The live schema was inspected on 2026-11-15 without reading personal records.
 
+## Account-bound team access
+
+Migration: `supabase/migrations/20261115123000_account_bound_team_access.sql`
+
+Requires adult Auth login plus team code, binds sessions to the Auth user ID, revokes historical unbound sessions, retires passcode-only RPC overloads and adds a shared operation/page/reference guard around every session RPC. Removes anonymous direct access to audition notes/observations/live state and restricts direct table access to the active production owner. Team login is limited to 20 requests per target per 15 minutes; sessions expire after eight hours.
+
+Matching login/portal/workspace changes preserve safe return paths and stop treating a job title as a permission. Team previews no longer put another person's code in the URL. Existing explicit page grants are preserved. Team members must sign in again after deployment.
+
+Local boundary tests and the production-schema rehearsal pass, including direct table bypass, copied-session/account mismatch, cross-production references, viewer writes, job-title forgery, rate limiting, explicit page denial and revocation. The rehearsal ended in ROLLBACK. Schema-only originals are saved locally under `/tmp/bts-account-rollout/team-functions-*.json` and the checked-in synthetic baseline. Deployment pending.
+
 ## Account security foundation
 
 Migration: `supabase/migrations/20261115103000_account_security_foundation.sql`

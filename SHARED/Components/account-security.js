@@ -26,5 +26,29 @@
     }
     return true;
   }
-  window.BTSAccountSecurity = { validAdultBirthDate, safeReturnPath, ensureAdultAccount };
+  async function requireAdultLogin(client, returnPath) {
+    const next = new URL(safeReturnPath(returnPath || window.location.pathname + window.location.search), window.location.origin);
+    // Preview codes must not be forwarded through login URLs or copied links.
+    next.searchParams.delete('pvw_passcode');
+    next.searchParams.delete('pvw_email');
+    const destination = next.pathname + next.search;
+    const { data, error } = await client.auth.getUser();
+    if (error && data?.user) throw new Error('We could not verify your sign-in. Please try again.');
+    if (!data?.user) {
+      window.location.replace('/login?return=' + encodeURIComponent(destination));
+      return false;
+    }
+    return ensureAdultAccount(client, destination);
+  }
+  function teamDefaultPageAccess(member, page) {
+    const level = String(member?.access_level || '').trim().toLowerCase();
+    if (['producer','admin','administrator','owner'].includes(level)) return 'manage';
+    if (['creative','room'].includes(level) && page === 'auditions.general') return 'edit';
+    if (level === 'check_in' && page === 'auditions.dashboard') return 'edit';
+    if (level === 'schedule' && page === 'auditions.schedule') return 'edit';
+    if (['creative','room','check_in','schedule','view_only'].includes(level)
+      && ['auditions.general','auditions.dashboard','auditions.schedule'].includes(page)) return 'view';
+    return 'none';
+  }
+  window.BTSAccountSecurity = { validAdultBirthDate, safeReturnPath, ensureAdultAccount, requireAdultLogin, teamDefaultPageAccess };
 }());
