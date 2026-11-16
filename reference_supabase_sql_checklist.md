@@ -62,3 +62,16 @@ Adds Auth-owned volunteer requests and private guardian declaration fields to th
 Apply with the matching volunteer page and legacy financial portal account gates. Rehearse with synthetic fixtures ending in ROLLBACK first. Capacity reservation, attendance-derived hours, historical linking and the wider finance/participant audit remain outstanding. Guardian declarations require inclusion in the privacy request and retention procedure. Deployment verification will be recorded below.
 
 2026-11-16 deployment verified: applied and recorded as version `20261116100000`; matching website release `b1683e6c` pushed to main. Local boundary suite and hosted synthetic rehearsal passed; the rehearsal rolled back. Postflight confirmed anonymous volunteer SELECT/INSERT/UPDATE are revoked, guardian audit fields are absent from the participant projection, and zero synthetic accounts remain. HTTPS checks returned 401 for base records, 200 for the zero-row safe projection, 400 for a private guardian field, and 200 with matching release markers on the volunteer page and both gated legacy financial portals. These checks did not send email or retrieve personal records. Full browser account journeys remain outstanding.
+
+
+## Step 1: remaining private-record routes (2026-11-16)
+
+Migration: `supabase/migrations/20261116120000_private_record_routes.sql`. Coverage inventory: `docs/security/private-route-coverage.md`.
+
+Adds a submitter Auth ID to `sponsor_businesses`; uses the existing proposal submitter field; introduces filtered public/participant views, scope/ownership helpers and protected offer-response/submission RPCs. Replaces remaining non-ticket public record policies and wraps historical staff/sponsor/proposal security-definer routines. Private buckets: organisation files, production files, audition headshots, receipts, proposal attachments, profile headshots, programme artwork and venue photos. Public material/artwork exceptions are explicitly filtered. No files or family records are deleted, and no historical records are assigned to accounts by email or code.
+
+Supabase's default grants include writes on newly created views. The migration explicitly revokes all browser grants on each projection, then grants its intended SELECT/INSERT/UPDATE operations; DELETE is not inherited. Matching website pages use those projections and an authorised five-minute file-link resolver. Raw slot-hold mutations are denied; transactional booking/hold replacement remains checklist step 5. Existing signed links/cached copies are subject to their expiry, not instant revocation.
+
+Local synthetic tests include hosted-style default ACLs, family/staff separation, private fields, offers, registration contacts, self-tapes, mixed households, finance edits, revocation, cross-production links and private file paths. The production-schema rehearsal must end in ROLLBACK before application. Ticket/seating tables remain excluded. This is not legal certification or completion of checklist steps 2–10.
+
+Deployment verification will be recorded below.

@@ -1687,7 +1687,7 @@
     },
     openPrintLayout: function () {
       var plan = exportPlan(buildProgrammePages());
-      var win = window.open('', '_blank', 'noopener,noreferrer');
+      var win = window.BTSPrivateMedia.open('', '_blank', 'noopener,noreferrer');
       if (!win) {
         alert('Could not open the print layout window. Please allow pop-ups for Build The Show and try again.');
         return;

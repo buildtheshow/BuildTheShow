@@ -31,7 +31,7 @@ window.SeatMapBuilder = (function() {
   // ── Load from DB ──
   async function loadLayout() {
     try {
-      const { data: prodRow } = await _sb.from('productions').select('registration_settings,ticketing_setup').eq('id', _prodId).single();
+      const { data: prodRow } = await _sb.from('bts_visible_productions').select('registration_settings,ticketing_setup').eq('id', _prodId).single();
       const tkt = prodRow?.registration_settings?.ticketing || {};
       const existingLayout = tkt.venue_layout;
       if (existingLayout && existingLayout.sections && existingLayout.sections.length) {
@@ -48,7 +48,7 @@ window.SeatMapBuilder = (function() {
   async function saveLayout() {
     if (!smLayout || !_sb || !_prodId) return;
     try {
-      const { data: prodRow } = await _sb.from('productions').select('registration_settings').eq('id', _prodId).single();
+      const { data: prodRow } = await _sb.from('bts_visible_productions').select('registration_settings').eq('id', _prodId).single();
       const settings = prodRow?.registration_settings || {};
       if (!settings.ticketing) settings.ticketing = {};
       settings.ticketing.venue_layout = smLayout;
@@ -62,7 +62,7 @@ window.SeatMapBuilder = (function() {
   async function saveToNormalizedTables() {
     if (!smLayout || !_sb || !_prodId) return;
     try {
-      const { data: prod } = await _sb.from('productions').select('organization_id').eq('id', _prodId).single();
+      const { data: prod } = await _sb.from('bts_visible_productions').select('organization_id').eq('id', _prodId).single();
       const orgId = prod?.organization_id;
       if (!orgId) return;
 
@@ -103,7 +103,7 @@ window.SeatMapBuilder = (function() {
         }
       }
 
-      const { data: prodRow } = await _sb.from('productions').select('ticketing_setup').eq('id', _prodId).single();
+      const { data: prodRow } = await _sb.from('bts_visible_productions').select('ticketing_setup').eq('id', _prodId).single();
       const setup = prodRow?.ticketing_setup || {};
       setup._venue_id = _venueId;
       setup._layout_id = _layoutId;

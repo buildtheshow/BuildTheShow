@@ -494,7 +494,7 @@
 
     async function refreshPublicSlotAvailability() {
       const [{ data: slots }, { data: bookings }] = await Promise.all([
-        sb.from('audition_slots').select('*').eq('production_id', currentProdId).order('date').order('start_time'),
+        sb.from('bts_visible_audition_slots').select('*').eq('production_id', currentProdId).order('date').order('start_time'),
         BTSAuditionAccess.availability(sb, currentProdId),
       ]);
 
@@ -517,19 +517,19 @@
         let scopedOrgId = null;
         if (orgPathKey) {
           const { data: orgMatch } = await sb
-            .from('organizations')
+            .from('bts_visible_organizations')
             .select('id')
             .or(`slug.eq.${orgPathKey},abbreviation.eq.${orgPathKey},abbreviation.eq.${String(orgPathKey).toUpperCase()},abbreviation.eq.${String(orgPathKey).toLowerCase()}`)
             .maybeSingle();
           scopedOrgId = orgMatch?.id || null;
         }
 
-        let prodQuery = sb.from('productions').select('id, title, subtitle, description, venue, venue_id, audition_location, audition_locations, rehearsal_locations, performance_locations, age_min, age_max, start_date, custom_id, organization_id, slug, poster_url, page_status, wizard_data').ilike('slug', prodSlug);
+        let prodQuery = sb.from('bts_visible_productions').select('id, title, subtitle, description, venue, venue_id, audition_location, audition_locations, rehearsal_locations, performance_locations, age_min, age_max, start_date, custom_id, organization_id, slug, poster_url, page_status, wizard_data').ilike('slug', prodSlug);
         if (scopedOrgId) prodQuery = prodQuery.eq('organization_id', scopedOrgId);
         const { data } = await prodQuery.maybeSingle();
         prod = data || null;
       } else if (prodId) {
-        const { data } = await sb.from('productions').select('id, title, subtitle, description, venue, venue_id, audition_location, audition_locations, rehearsal_locations, performance_locations, age_min, age_max, start_date, custom_id, organization_id, slug, poster_url, page_status, wizard_data').eq('id', prodId).maybeSingle();
+        const { data } = await sb.from('bts_visible_productions').select('id, title, subtitle, description, venue, venue_id, audition_location, audition_locations, rehearsal_locations, performance_locations, age_min, age_max, start_date, custom_id, organization_id, slug, poster_url, page_status, wizard_data').eq('id', prodId).maybeSingle();
         prod = data || null;
       }
       if (!prod) { show('screen-closed'); return false; }
@@ -538,13 +538,13 @@
       currentProd = prod;
 
       const [{ data: cfg }, { data: slots }, { data: bookings }, { data: chars }, { data: cqs }, { data: zeusAudEvents }] = await Promise.all([
-        sb.from('audition_configs').select('*').eq('production_id', resolvedProdId).single(),
-        sb.from('audition_slots').select('*').eq('production_id', resolvedProdId).order('date').order('start_time'),
+        sb.from('bts_visible_audition_configs').select('*').eq('production_id', resolvedProdId).single(),
+        sb.from('bts_visible_audition_slots').select('*').eq('production_id', resolvedProdId).order('date').order('start_time'),
         BTSAuditionAccess.availability(sb, resolvedProdId),
-        sb.from('production_characters').select('*').eq('production_id', resolvedProdId).eq('show_on_form', true).order('sort_order'),
-        sb.from('audition_custom_questions').select('*').eq('production_id', resolvedProdId).order('sort_order'),
+        sb.from('bts_visible_characters').select('*').eq('production_id', resolvedProdId).eq('show_on_form', true).order('sort_order'),
+        sb.from('bts_visible_audition_custom_questions').select('*').eq('production_id', resolvedProdId).order('sort_order'),
         // Zeus is source of truth for audition dates
-        sb.from('production_events').select('start_time').eq('production_id', resolvedProdId)
+        sb.from('bts_visible_production_events').select('start_time').eq('production_id', resolvedProdId)
           .in('event_type', ['audition', 'dance_call', 'callback', 'other_audition'])
           .order('start_time').limit(1),
       ]);
@@ -568,7 +568,7 @@
       // If this form was opened from a session card, show which session it's for
       if (sessionId) {
         try {
-          const { data: sess } = await sb.from('audition_sessions').select('name, date, start_time, end_time, location').eq('id', sessionId).single();
+          const { data: sess } = await sb.from('bts_visible_audition_sessions').select('name, date, start_time, end_time, location').eq('id', sessionId).single();
           if (sess) {
             const chips = [];
             if (sess.name)       chips.push(`<strong>${sess.name}</strong>`);
@@ -587,7 +587,7 @@
 
             // Show the pre-selected slot
             if (preselectedTimeSlotId) {
-              const { data: slot } = await sb.from('audition_time_slots').select('slot_time').eq('id', preselectedTimeSlotId).single();
+              const { data: slot } = await sb.from('bts_visible_audition_time_slots').select('slot_time').eq('id', preselectedTimeSlotId).single();
               if (slot) {
                 let slotBar = document.getElementById('preselected-slot-bar');
                 if (!slotBar) {
@@ -606,7 +606,7 @@
 
       if (prod) {
         const { data: org } = prod.organization_id
-          ? await sb.from('organizations').select('name').eq('id', prod.organization_id).maybeSingle()
+          ? await sb.from('bts_visible_organizations').select('name').eq('id', prod.organization_id).maybeSingle()
           : { data: null };
         if (org?.name) document.getElementById('aud-org-badge').textContent = org.name;
         document.getElementById('aud-prod-title').textContent = prod.title + ' - Auditions';
@@ -898,7 +898,7 @@
       const timeSlotId = preselectedTimeSlotId || null;
       if (timeSlotId) {
         const { data: slotCheck } = await sb
-          .from('audition_time_slots')
+          .from('bts_visible_audition_time_slots')
           .select('is_available,label')
           .eq('id', timeSlotId)
           .single();
@@ -981,6 +981,6 @@
 
   <script defer src="/SHARED/Components/text-fit.js"></script>
   <script src="/SHARED/Components/auto-save.js?v=brand-sweep-20260728"></script>
-<script type="module" src="/SHARED/Components/private-profile-media.js?v=20261115-accounts"></script>
+<script type="module" src="/SHARED/Components/private-profile-media.js?v=20261116-private-routes"></script>
 </body>
 </html>

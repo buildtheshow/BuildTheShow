@@ -24573,7 +24573,7 @@
 <script src="/SHARED/Components/page-loader.js?v=brand-sweep-20260728"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/ASSETS/scripts/image-resize.js"></script>
-<script src="/ASSETS/scripts/venue-picker.js?v=brand-sweep-20260728"></script>
+<script src="/ASSETS/scripts/venue-picker.js?v=20261116-private-routes"></script>
 <script src="/ASSETS/scripts/phone-format.js?v=nanp-smart-20260424"></script>
 <script src="/ASSETS/scripts/casting-card.js?v=in-show-card-20260514"></script>
 <script src="/ASSETS/scripts/production-team-card.js?v=volunteer-modal-template-20260511"></script>
@@ -25018,7 +25018,7 @@
     const currentDate = fcCalendar?.getDate?.() || new Date();
     const dateParam = formatOrgCalendarDate(currentDate);
     if (dateParam) targetUrl.searchParams.set('date', dateParam);
-    window.open(targetUrl.toString(), '_blank', 'noopener');
+    window.BTSPrivateMedia.open(targetUrl.toString(), '_blank', 'noopener');
     return false;
   }
   let teamAccessMode = false;
@@ -25158,7 +25158,7 @@
       const org = await findOrganizationForPath(parts.org);
       if (!org?.id) return '';
       const { data, error } = await sb
-        .from('productions')
+        .from('bts_visible_productions')
         .select('id,slug,title')
         .eq('organization_id', org.id)
         .order('created_at', { ascending: false });
@@ -25186,10 +25186,10 @@
     const value = String(slug || '').trim();
     if (!value) return null;
     try {
-      let result = await sb.from('organizations').select('id,name,slug,abbreviation').ilike('slug', value).maybeSingle();
+      let result = await sb.from('bts_visible_organizations').select('id,name,slug,abbreviation').ilike('slug', value).maybeSingle();
       if (result.error) throw result.error;
       if (result.data) return result.data;
-      result = await sb.from('organizations').select('id,name,slug,abbreviation').ilike('abbreviation', value).maybeSingle();
+      result = await sb.from('bts_visible_organizations').select('id,name,slug,abbreviation').ilike('abbreviation', value).maybeSingle();
       if (result.error) throw result.error;
       return result.data || null;
     } catch (error) {
@@ -27267,7 +27267,7 @@
     const force = options.force === true;
     if (_rehearsalStartDateLoaded && !force) return _rehearsalStartDateCache || rehearsalStartDateFallback();
     if (_rehearsalStartDatePromise && !force) return _rehearsalStartDatePromise;
-    _rehearsalStartDatePromise = sb.from('production_events')
+    _rehearsalStartDatePromise = sb.from('bts_visible_production_events')
       .select('start_time,event_type')
       .eq('production_id', prodId)
       .in('event_type', ['rehearsal', 'music_rehearsal', 'choreography'])
@@ -27406,7 +27406,7 @@
   async function bootProductionWorkspace(params, context = {}) {
     setRouteLoading('Loading your production…');
     btsRouteLog('production context start', { prodId, userId: context.user?.id || null, teamAccessMode });
-    const { data, error } = await sb.from('productions').select('*').eq('id', prodId).single();
+    const { data, error } = await sb.from('bts_visible_productions').select('*').eq('id', prodId).single();
     if (error || !data) {
       btsRouteLog('production context failed', { message: error?.message, prodId });
       if (teamAccessMode) showTeamAccessLogin('Production not found. Check your link.');
@@ -27419,7 +27419,7 @@
     if (!teamAccessMode && prod.organization_id) {
       btsRouteLog('permission check start', { organizationId: prod.organization_id });
       const { data: orgAccess, error: orgAccessError } = await sb
-        .from('organizations')
+        .from('bts_visible_organizations')
         .select('id,admin_id')
         .eq('id', prod.organization_id)
         .eq('admin_id', context.user?.id || '')
@@ -27440,7 +27440,7 @@
       .catch(error => console.warn('[BTS] production slug check failed', error));
     setupRoomReadyBroadcast();
     // Check if is_public column exists — non-blocking, safe to run in background
-    sb.from('production_events').select('is_public').eq('production_id', prodId).limit(1)
+    sb.from('bts_visible_production_events').select('is_public').eq('production_id', prodId).limit(1)
       .then(({ error }) => { if (!error) _hasIsPublicColumn = true; });
     renderProdHeader();
     prefillSettings();
@@ -27480,7 +27480,7 @@
     queueWorkspaceWarmupForNav(bootNav);
     // Load org name for auto-fill + init venue picker
     if (prod.organization_id) {
-      sb.from('organizations').select('name,email,slug,abbreviation,logo_url,logo_white_url,etransfer_email').eq('id', prod.organization_id).single()
+      sb.from('bts_visible_organizations').select('name,email,slug,abbreviation,logo_url,logo_white_url,etransfer_email').eq('id', prod.organization_id).single()
         .then(({ data }) => {
           if (data) {
             orgName    = data.name  || '';
@@ -29374,7 +29374,7 @@
     }
     try {
       const [{ data: prodRow }, { data: members }] = await Promise.all([
-        sb.from('productions').select('wizard_data, producer_name, producer, producer_role, producer_email, director, org_name, org_email').eq('id', prodId).single(),
+        sb.from('bts_visible_productions').select('wizard_data, producer_name, producer, producer_role, producer_email, director, org_name, org_email').eq('id', prodId).single(),
         sb.from('production_team_members').select('*').eq('production_id', prodId).eq('is_active', true),
       ]);
       const wdata = prodRow?.wizard_data || {};
@@ -30241,7 +30241,7 @@
     if (!prodId) return performanceScheduleSummaryCache || '';
     if (performanceScheduleSummaryLoaded) return performanceScheduleSummaryCache || '';
     try {
-      const { data, error } = await sb.from('production_events')
+      const { data, error } = await sb.from('bts_visible_production_events')
         .select('title,start_time,end_time,venue,event_type')
         .eq('production_id', prodId)
         .eq('event_type', 'performance')
@@ -32105,7 +32105,7 @@ See you soon!
   async function checkAutoStageTransition() {
     if (!prodId || !prod) return;
     const now = new Date().toISOString();
-    const { data: evs } = await sb.from('production_events')
+    const { data: evs } = await sb.from('bts_visible_production_events')
       .select('event_type, start_time, end_time')
       .eq('production_id', prodId);
     if (!evs || !evs.length) return;
@@ -32151,7 +32151,7 @@ See you soon!
     if (!body) return;
     const _n = new Date(), _p = n => String(n).padStart(2,'0');
     const now = `${_n.getFullYear()}-${_p(_n.getMonth()+1)}-${_p(_n.getDate())}T${_p(_n.getHours())}:${_p(_n.getMinutes())}:${_p(_n.getSeconds())}`;
-    const { data } = await sb.from('production_events')
+    const { data } = await sb.from('bts_visible_production_events')
       .select('title, start_time, end_time, venue, event_type')
       .eq('production_id', prodId)
       .gt('start_time', now)
@@ -32458,7 +32458,7 @@ See you soon!
         _renderHolidayDots();
       },
       events(fetchInfo, successCb, failureCb) {
-        sb.from('production_events')
+        sb.from('bts_visible_production_events')
           .select('*')
           .eq('production_id', prodId)
           .gte('start_time', fetchInfo.startStr)
@@ -32525,14 +32525,14 @@ See you soon!
 
   async function loadVenueSuggestions() {
     if (!prod || !prod.organization_id) return;
-    const { data } = await sb.from('venues').select('name').eq('org_id', prod.organization_id);
+    const { data } = await sb.from('bts_visible_venues').select('name').eq('org_id', prod.organization_id);
     const dl = document.getElementById('venue-suggestions');
     if (dl && data) dl.innerHTML = data.map(v => `<option value="${esc(v.name)}">`).join('');
   }
 
   async function loadEvents() {
     // Events are loaded by FullCalendar's events callback; just update count here
-    const { data } = await sb.from('production_events').select('id').eq('production_id', prodId);
+    const { data } = await sb.from('bts_visible_production_events').select('id').eq('production_id', prodId);
     document.getElementById('ov-event-count').textContent = data ? data.length : 0;
   }
 
@@ -32786,7 +32786,7 @@ See you soon!
       );
     } else {
       // Duplicate — insert new row with same data at new position
-      const { data: orig } = await sb.from('production_events')
+      const { data: orig } = await sb.from('bts_visible_production_events')
         .select('*').eq('id', _moveDupOld.id).single();
       if (orig) {
         const { id, created_at, ...rest } = orig;
@@ -32835,14 +32835,14 @@ See you soon!
     // 1. Find session already linked to this Zeus event
     let session = null;
     if (zeusEventId) {
-      const { data } = await sb.from('audition_sessions')
+      const { data } = await sb.from('bts_visible_audition_sessions')
         .select('*').eq('production_id', prodId).eq('linked_event_id', zeusEventId).maybeSingle();
       session = data;
     }
 
     // 2. No linked session — find an unlinked session of the same type
     if (!session) {
-      const { data } = await sb.from('audition_sessions')
+      const { data } = await sb.from('bts_visible_audition_sessions')
         .select('*')
         .eq('production_id', prodId)
         .eq('type', sessionType)
@@ -32854,7 +32854,7 @@ See you soon!
     }
 
     if (!session) {
-      const { data } = await sb.from('audition_sessions')
+      const { data } = await sb.from('bts_visible_audition_sessions')
         .select('*').eq('production_id', prodId).eq('type', sessionType)
         .is('linked_event_id', null).limit(1).maybeSingle();
       session = data;
@@ -34587,7 +34587,7 @@ See you soon!
     const container = document.getElementById('tm-container');
     if (!container) return;
 
-    const { data: prodRow } = await sb.from('productions').select('wizard_data').eq('id', prodId).single();
+    const { data: prodRow } = await sb.from('bts_visible_productions').select('wizard_data').eq('id', prodId).single();
     const wdata = prodRow?.wizard_data || {};
     teamConfig = wdata.team_config || null;
 
@@ -35608,7 +35608,7 @@ See you soon!
 
   async function saveTeamConfig() {
     if (!prodId) return;
-    const { data: existing } = await sb.from('productions').select('wizard_data').eq('id', prodId).single();
+    const { data: existing } = await sb.from('bts_visible_productions').select('wizard_data').eq('id', prodId).single();
     const wdata = existing?.wizard_data || {};
     wdata.team_config = teamConfig;
     await sb.from('productions').update({ wizard_data: wdata }).eq('id', prodId);
@@ -38968,7 +38968,7 @@ See you soon!
         anchorBodyHtml: `<div class="template-brand-tile-body">${esc(REGISTRATION_FORM_GROUP_SUMMARIES[group] || '')}</div>`,
         anchorFooterHtml: `<div class="template-brand-tile-actions">
           <div class="template-brand-tile-button reg-form-group-count">${on} of ${total} on</div>
-          <button type="button" class="template-brand-tile-button" data-rpf-group="${esc(group)}" onclick="event.stopPropagation();window.open(location.href.replace(/#.*/,'')+'#rpf-group:'+encodeURIComponent(this.dataset.rpfGroup),'_blank')">View</button>
+          <button type="button" class="template-brand-tile-button" data-rpf-group="${esc(group)}" onclick="event.stopPropagation();window.BTSPrivateMedia.open(location.href.replace(/#.*/,'')+'#rpf-group:'+encodeURIComponent(this.dataset.rpfGroup),'_blank')">View</button>
         </div>`,
         cardsHtml: `<div class="registration-settings-tiles">${sectionsHtml}</div>`
       });
@@ -39898,10 +39898,10 @@ See you soon!
     const anchor = document.getElementById('registration-public-url-link');
     const existing = anchor?.dataset.realUrl === '1' ? anchor.href : '';
     if (existing) {
-      window.open(existing, '_blank', 'noopener');
+      window.BTSPrivateMedia.open(existing, '_blank', 'noopener');
       return;
     }
-    const pendingWindow = window.open('', '_blank');
+    const pendingWindow = window.BTSPrivateMedia.open('', '_blank');
     if (!pendingWindow) {
       showToast('Allow pop-ups to open the public registration preview.', true);
       return;
@@ -39931,7 +39931,7 @@ See you soon!
   }
 
   function openRegistrationPublicPreviewTab(existingWindow = null) {
-    const previewWindow = existingWindow || window.open('', '_blank');
+    const previewWindow = existingWindow || window.BTSPrivateMedia.open('', '_blank');
     if (!previewWindow) {
       showToast('Allow pop-ups to open the public registration preview.', true);
       return;
@@ -45008,7 +45008,7 @@ See you soon!
 
   function openCurrentPublicUrl(event) {
     if (event?.target?.closest?.('input,button,a,textarea,select')) return;
-    window.open(currentPublicOpenLink(), '_blank');
+    window.BTSPrivateMedia.open(currentPublicOpenLink(), '_blank');
   }
 
   function renderPublicUrlSectionLabels() {
@@ -45034,7 +45034,7 @@ See you soon!
   }
 
   async function isProductionSlugAvailable(slug) {
-    let query = sb.from('productions').select('id').ilike('slug', slug).neq('id', prodId).limit(1);
+    let query = sb.from('bts_visible_productions').select('id').ilike('slug', slug).neq('id', prodId).limit(1);
     if (prod?.organization_id) query = query.eq('organization_id', prod.organization_id);
     const { data, error } = await query;
     if (error) throw error;
@@ -45461,7 +45461,7 @@ See you soon!
   // ── Auditions ─────────────────────────────────────────
   async function loadAuditionConfig() {
     try {
-      const { data } = await sb.from('audition_configs').select('*').eq('production_id', prodId).single();
+      const { data } = await sb.from('bts_visible_audition_configs').select('*').eq('production_id', prodId).single();
       auditionConfig = data || null;
     } catch { auditionConfig = null; }
     renderAuditionConfig();
@@ -46377,7 +46377,7 @@ See you soon!
   async function loadAudSessions(options = {}) {
     const { maxAge = 0, skipMaintenance = false } = options;
     if (maxAge && audSessionsLoadedAt && Date.now() - audSessionsLoadedAt < maxAge) return audSessions;
-    const { data: sessions, error: sessionsError } = await sb.from('audition_sessions')
+    const { data: sessions, error: sessionsError } = await sb.from('bts_visible_audition_sessions')
       .select('*').eq('production_id', prodId).order('sort_order', { ascending: true });
     if (sessionsError) throw sessionsError;
 
@@ -46408,7 +46408,7 @@ See you soon!
 
     if (audSessions.length) {
       const sessionIds = audSessions.map(s => s.id);
-      const { data: slots } = await sb.from('audition_time_slots')
+      const { data: slots } = await sb.from('bts_visible_audition_time_slots')
         .select('*').in('session_id', sessionIds).order('slot_time', { ascending: true });
       const newAudSlots = {};
       (slots || []).forEach(slot => {
@@ -46725,7 +46725,7 @@ See you soon!
   }
 
   function viewAudPage() {
-    window.open(currentPublicOpenLink(), '_blank');
+    window.BTSPrivateMedia.open(currentPublicOpenLink(), '_blank');
   }
 
   async function saveAuditionConfig() {
@@ -46756,7 +46756,7 @@ See you soon!
       if (!t) return null;
       return t.split(':').length >= 3 ? t : t + ':00';
     };
-    const { data: existingEvents } = await sb.from('production_events')
+    const { data: existingEvents } = await sb.from('bts_visible_production_events')
       .select('id,event_type')
       .eq('production_id', prodId)
       .in('event_type', trackedTypes);
@@ -46998,7 +46998,7 @@ See you soon!
     const { maxAge = 0 } = options;
     if (maxAge && allSlotsLoadedAt && Date.now() - allSlotsLoadedAt < maxAge) return allSlots;
     try {
-      const { data } = await sb.from('audition_slots')
+      const { data } = await sb.from('bts_visible_audition_slots')
         .select('*').eq('production_id', prodId).order('date').order('start_time');
       allSlots = data || [];
       allSlotsLoadedAt = Date.now();
@@ -48856,7 +48856,7 @@ See you soon!
 
   async function loadCharacters() {
     try {
-      const { data } = await sb.from('production_characters')
+      const { data } = await sb.from('bts_visible_characters')
         .select('*').eq('production_id', prodId).order('sort_order').order('created_at');
       characters = data || [];
       await ensureStarterEnsembleCharacter();
@@ -49274,7 +49274,7 @@ See you soon!
         frame.contentWindow?.focus();
         frame.contentWindow?.print();
       } catch {
-        window.open(url, '_blank', 'noopener');
+        window.BTSPrivateMedia.open(url, '_blank', 'noopener');
       }
       setTimeout(() => frame.remove(), 3000);
     };
@@ -49999,7 +49999,7 @@ See you soon!
 
   async function loadCustomQuestions() {
     try {
-      const { data } = await sb.from('audition_custom_questions')
+      const { data } = await sb.from('bts_visible_audition_custom_questions')
         .select('*').eq('production_id', prodId).order('sort_order').order('created_at');
       customQuestions = data || [];
     } catch { customQuestions = []; }
@@ -50940,7 +50940,7 @@ See you soon!
       return `<tr>${cols.map(col => `<td>${esc(applicantColumnValue(app, col.key))}</td>`).join('')}</tr>`;
     }).join('');
 
-    const popup = window.open('', '_blank', 'width=1400,height=900');
+    const popup = window.BTSPrivateMedia.open('', '_blank', 'width=1400,height=900');
     if (!popup) {
       showToast('Please allow pop-ups to export the PDF.', true);
       return;
@@ -51123,7 +51123,7 @@ See you soon!
         </div>`;
     }).join('');
 
-    const popup = window.open('', '_blank', 'width=1100,height=900');
+    const popup = window.BTSPrivateMedia.open('', '_blank', 'width=1100,height=900');
     if (!popup) {
       showToast('Please allow pop-ups to export the PDF.', true);
       return;
@@ -52079,7 +52079,7 @@ See you soon!
     try {
       const sessionIdToUse = activeRescheduleSessionId || app.session_id || '';
       if (sessionIdToUse) {
-        const { data } = await sb.from('audition_time_slots')
+        const { data } = await sb.from('bts_visible_audition_time_slots')
           .select('*')
           .eq('session_id', sessionIdToUse)
           .order('slot_date')
@@ -52089,7 +52089,7 @@ See you soon!
       if (!candidates.length) {
         const sessionIds = (audSessions || []).map(s => s.id);
         if (sessionIds.length) {
-          const { data } = await sb.from('audition_time_slots')
+          const { data } = await sb.from('bts_visible_audition_time_slots')
             .select('*')
             .in('session_id', sessionIds)
             .order('slot_date')
@@ -52435,7 +52435,7 @@ See you soon!
     const cleanSlotIds = [...new Set((slotIds || []).filter(Boolean))];
     if (!cleanSlotIds.length) return;
     try {
-      const { data: slotRows } = await sb.from('audition_time_slots').select('*').in('id', cleanSlotIds);
+      const { data: slotRows } = await sb.from('bts_visible_audition_time_slots').select('*').in('id', cleanSlotIds);
       const slots = slotRows || [];
       if (!slots.length) return;
 
@@ -61612,7 +61612,7 @@ See you soon!
   // ── Opportunities ─────────────────────────────────────
   async function loadOpportunities() {
     try {
-      const { data } = await sb.from('opportunities')
+      const { data } = await sb.from('bts_visible_opportunities')
         .select('*').eq('production_id', prodId)
         .order('created_at', { ascending: false });
       opportunities = data || [];
@@ -62007,6 +62007,6 @@ See you soon!
       <button class="perf-close-btn" onclick="closePerfLightbox()">✕</button>
     </div>
   </div>
-<script type="module" src="/SHARED/Components/private-profile-media.js?v=20261115-accounts"></script>
+<script type="module" src="/SHARED/Components/private-profile-media.js?v=20261116-private-routes"></script>
 </body>
 </html>

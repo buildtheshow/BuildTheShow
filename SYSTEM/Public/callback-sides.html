@@ -386,6 +386,7 @@
       .files-list { grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); }
     }
   </style>
+<script src="/SHARED/Components/account-security.js?v=20261116-routes"></script>
 </head>
 <body>
   <main class="page-shell">
@@ -724,11 +725,12 @@
     }
 
     async function loadPage() {
+      if (!await BTSAccountSecurity.requireAdultLogin(sb)) return;
       if (!prodId && (!orgPathKey || !prodSlug)) throw new Error('This callback sides link is missing its organisation or production.');
       let org = null;
       if (orgPathKey) {
         const { data, error } = await sb
-          .from('organizations')
+          .from('bts_visible_organizations')
           .select('id,name,slug,abbreviation,logo_url,logo_white_url')
           .or(`slug.eq.${orgPathKey},abbreviation.eq.${orgPathKey},abbreviation.eq.${String(orgPathKey).toUpperCase()},abbreviation.eq.${String(orgPathKey).toLowerCase()}`)
           .maybeSingle();
@@ -738,7 +740,7 @@
       }
 
       let prodQuery = sb
-        .from('productions')
+        .from('bts_visible_productions')
         .select('id,title,slug,organization_id,wizard_data,page_status,poster_url');
       prodQuery = prodId
         ? prodQuery.eq('id', prodId)
@@ -749,7 +751,7 @@
 
       if (!org?.id && prod.organization_id) {
         const { data, error } = await sb
-          .from('organizations')
+          .from('bts_visible_organizations')
           .select('id,name,slug,abbreviation,logo_url,logo_white_url')
           .eq('id', prod.organization_id)
           .maybeSingle();
@@ -768,15 +770,15 @@
       }
 
       const [charsResult, filesResult, sessionsResult] = await Promise.all([
-        sb.from('production_characters')
+        sb.from('bts_visible_characters')
           .select('id,name,show_on_public_page,callback_side_url,callback_side_path,callback_side_name,callback_songcut_url,callback_songcut_path,callback_songcut_name,callback_other_url,callback_other_path,callback_other_name')
           .eq('production_id', prod.id)
           .order('sort_order', { ascending: true }),
-        sb.from('production_files')
+        sb.from('bts_callback_files')
           .select('*')
           .eq('production_id', prod.id)
           .order('created_at', { ascending: false }),
-        sb.from('audition_sessions')
+        sb.from('bts_visible_audition_sessions')
           .select('*')
           .eq('production_id', prod.id)
           .eq('type', 'callback')
@@ -807,6 +809,6 @@
       if (button) button.disabled = true;
     });
   </script>
-<script type="module" src="/SHARED/Components/private-profile-media.js?v=20261115-accounts"></script>
+<script type="module" src="/SHARED/Components/private-profile-media.js?v=20261116-private-routes"></script>
 </body>
 </html>

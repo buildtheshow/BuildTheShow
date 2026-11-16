@@ -29,7 +29,7 @@
 
   async function reload() {
     if (!_sb || !_orgId) return;
-    const { data } = await _sb.from('venues')
+    const { data } = await _sb.from('bts_visible_venues')
       .select('id, name, nickname, address, lat, lng')
       .eq('org_id', _orgId)
       .order('name', { ascending: true });

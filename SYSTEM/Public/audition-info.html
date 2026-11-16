@@ -2432,19 +2432,19 @@
         let scopedOrgId = null;
         if (orgPathKey) {
           const { data: orgMatch } = await sb
-            .from('organizations')
+            .from('bts_visible_organizations')
             .select('id')
             .or(`slug.eq.${orgPathKey},abbreviation.eq.${orgPathKey},abbreviation.eq.${String(orgPathKey).toUpperCase()},abbreviation.eq.${String(orgPathKey).toLowerCase()}`)
             .maybeSingle();
           scopedOrgId = orgMatch?.id || null;
         }
 
-        let q = sb.from('productions').select('*').ilike('slug', prodSlug);
+        let q = sb.from('bts_visible_productions').select('*').ilike('slug', prodSlug);
         if (scopedOrgId) q = q.eq('organization_id', scopedOrgId);
         const { data } = await q.maybeSingle();
         prod = data || null;
       } else if (prodId) {
-        const { data } = await sb.from('productions').select('*').eq('id', prodId).maybeSingle();
+        const { data } = await sb.from('bts_visible_productions').select('*').eq('id', prodId).maybeSingle();
         prod = data || null;
       }
       if (!prod) { showNotFound(); return; }
@@ -2462,16 +2462,16 @@
         { data: characters },
         { data: { session: userSession } },
       ] = await Promise.all([
-        sb.from('organizations').select('id,name,logo_url,email,website,location').eq('id', prod.organization_id).maybeSingle(),
-        sb.from('audition_configs').select('*').eq('production_id', resolvedId).maybeSingle(),
-        sb.from('production_events').select('id,event_type,title,start_time,end_time,all_day,venue,notes,is_public').eq('production_id', resolvedId).order('start_time'),
-        sb.from('production_characters').select('*').eq('production_id', resolvedId).eq('show_on_public_page', true).order('created_at'),
+        sb.from('bts_visible_organizations').select('id,name,logo_url,email,website,location').eq('id', prod.organization_id).maybeSingle(),
+        sb.from('bts_visible_audition_configs').select('*').eq('production_id', resolvedId).maybeSingle(),
+        sb.from('bts_visible_production_events').select('id,event_type,title,start_time,end_time,all_day,venue,notes,is_public').eq('production_id', resolvedId).order('start_time'),
+        sb.from('bts_visible_characters').select('*').eq('production_id', resolvedId).eq('show_on_public_page', true).order('created_at'),
         sb.auth.getSession(),
       ]);
 
       // Audition sessions (enabled and shown to applicants)
       const { data: sessions } = await sb
-        .from('audition_sessions')
+        .from('bts_visible_audition_sessions')
         .select('*')
         .eq('production_id', resolvedId)
         .eq('enabled', true)
@@ -2484,7 +2484,7 @@
       if (sessions && sessions.length) {
         try {
           const [{ data: allSlots }, { data: infoApps }] = await Promise.all([
-            sb.from('audition_time_slots')
+            sb.from('bts_visible_audition_time_slots')
               .select('id,session_id,slot_time,slot_date,label,capacity')
               .in('session_id', sessions.map(s => s.id))
               .order('slot_time'),
@@ -2547,7 +2547,7 @@
       let venueCity = '';
       try {
         if (prod.venue_id) {
-          const { data: venue } = await sb.from('venues').select('address,name').eq('id', prod.venue_id).maybeSingle();
+          const { data: venue } = await sb.from('bts_visible_venues').select('address,name').eq('id', prod.venue_id).maybeSingle();
           if (venue?.address) {
             venueCity = extractCity(venue.address);
           }
@@ -2564,7 +2564,7 @@
       let venueMap = {}, venueLabel = {}, venueNameMap = {};
       try {
         if (org?.id) {
-          const { data: venueRows } = await sb.from('venues').select('name,nickname,address').eq('org_id', org.id);
+          const { data: venueRows } = await sb.from('bts_visible_venues').select('name,nickname,address').eq('org_id', org.id);
           (venueRows || []).forEach(v => {
             const addr  = v.address || '';
             const shortLabel = v.nickname || v.name;
@@ -2587,7 +2587,7 @@
       document.title = prod.title + ' - Auditions · Build The Show';
 
       // Custom questions for booking wizard
-      const { data: cqs } = await sb.from('audition_custom_questions')
+      const { data: cqs } = await sb.from('bts_visible_audition_custom_questions')
         .select('*').eq('production_id', resolvedId).eq('enabled', true).order('sort_order');
       _allCQ = cqs || [];
 
@@ -3462,14 +3462,14 @@
       try {
         // Fetch sessions, slots, and current applicant assignments in parallel
         const [{ data: sessions }, { data: allSlots }, { data: applicants }] = await Promise.all([
-          sb.from('audition_sessions')
+          sb.from('bts_visible_audition_sessions')
             .select('*')
             .eq('production_id', _bkProd.id)
             .eq('enabled', true)
             .eq('show_to_applicants', true)
             .neq('type', 'callback')
             .order('sort_order'),
-          sb.from('audition_time_slots')
+          sb.from('bts_visible_audition_time_slots')
             .select('id,session_id,slot_time,label,capacity')
             .in('session_id', (_allSessions || []).map(s => s.id).filter(Boolean))
             .order('slot_time'),
@@ -4988,7 +4988,7 @@
         // Re-validate slot: check hold still ours AND live booking count hasn't hit capacity
         if (_bkState.slot_id) {
           const [{ data: slotCheck }, { count: liveCount }] = await Promise.all([
-            sb.from('audition_time_slots')
+            sb.from('bts_visible_audition_time_slots')
               .select('hold_session_id,hold_expires_at,is_available,label,capacity')
               .eq('id', _bkState.slot_id).single(),
             BTSAuditionAccess.availability(sb, _bkProd?.id).then(result => ({count: BTSAuditionAccess.counts(result.data)[_bkState.slot_id] || 0})),
@@ -6195,17 +6195,17 @@
         if (prodSlug) {
           let scopedOrgId = null;
           if (orgPathKey) {
-            const { data: orgMatch } = await sb.from('organizations').select('id')
+            const { data: orgMatch } = await sb.from('bts_visible_organizations').select('id')
               .or(`slug.eq.${orgPathKey},abbreviation.eq.${orgPathKey},abbreviation.eq.${String(orgPathKey).toUpperCase()},abbreviation.eq.${String(orgPathKey).toLowerCase()}`)
               .maybeSingle();
             scopedOrgId = orgMatch?.id || null;
           }
-          let q = sb.from('productions').select('id,title,wizard_data').ilike('slug', prodSlug);
+          let q = sb.from('bts_visible_productions').select('id,title,wizard_data').ilike('slug', prodSlug);
           if (scopedOrgId) q = q.eq('organization_id', scopedOrgId);
           const { data } = await q.maybeSingle();
           prod = data || null;
         } else if (prodId) {
-          const { data } = await sb.from('productions').select('id,title,wizard_data').eq('id', prodId).maybeSingle();
+          const { data } = await sb.from('bts_visible_productions').select('id,title,wizard_data').eq('id', prodId).maybeSingle();
           prod = data || null;
         }
         // DOM is fully parsed by the time the first await resolves — safe to access overlay now
@@ -6214,8 +6214,8 @@
         document.body.style.overflow = 'hidden';
         if (!prod) { document.getElementById('char-list-body').textContent = 'Could not load character list.'; return; }
         const [{ data: audConfig }, { data: chars }] = await Promise.all([
-          sb.from('audition_configs').select('*').eq('production_id', prod.id).maybeSingle(),
-          sb.from('production_characters').select('*').eq('production_id', prod.id).eq('show_on_public_page', true).order('sort_order'),
+          sb.from('bts_visible_audition_configs').select('*').eq('production_id', prod.id).maybeSingle(),
+          sb.from('bts_visible_characters').select('*').eq('production_id', prod.id).eq('show_on_public_page', true).order('sort_order'),
         ]);
         const titleEl = document.getElementById('char-list-title');
         if (titleEl && prod.title) titleEl.textContent = prod.title;
@@ -6448,7 +6448,7 @@
 
           <div id="bk-char-area" style="display:none;">
             <div class="bk-pref-section-title" style="margin-top:1rem;">Characters</div>
-            <div class="bk-pref-section-sub">Tap the character(s) the performer would like to be considered for. Unsure? <a href="#" onclick="event.preventDefault();(function(){var s=window.location.search;window.open(window.location.origin+window.location.pathname+s+(s?'&':'?')+'view=characters','_blank');})()" style="color:#572e88;font-weight:700;text-decoration:underline;">View the full character list</a></div>
+            <div class="bk-pref-section-sub">Tap the character(s) the performer would like to be considered for. Unsure? <a href="#" onclick="event.preventDefault();(function(){var s=window.location.search;window.BTSPrivateMedia.open(window.location.origin+window.location.pathname+s+(s?'&':'?')+'view=characters','_blank');})()" style="color:#572e88;font-weight:700;text-decoration:underline;">View the full character list</a></div>
             <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin:0.5rem 0;">
               <select class="bk-char-sort-sel" id="bk-char-sort" onchange="_bkRenderCharTiles()">
                 <option value="manual">Sort: Default</option>
@@ -6527,6 +6527,6 @@
 
   <script defer src="/SHARED/Components/text-fit.js"></script>
   <script src="/SHARED/Components/auto-save.js?v=brand-sweep-20260728"></script>
-<script type="module" src="/SHARED/Components/private-profile-media.js?v=20261115-accounts"></script>
+<script type="module" src="/SHARED/Components/private-profile-media.js?v=20261116-private-routes"></script>
 </body>
 </html>

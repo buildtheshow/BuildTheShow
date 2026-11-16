@@ -203,7 +203,7 @@
       async function load() {
         try {
           const [prodRes] = await Promise.all([
-            sb.from('productions').select('production_support_list, production_support_ordered').eq('id', prodId).single(),
+            sb.from('bts_visible_productions').select('production_support_list, production_support_ordered').eq('id', prodId).single(),
             fetchTeamAndVolunteers(),
           ]);
           prodRow = prodRes.data || {};

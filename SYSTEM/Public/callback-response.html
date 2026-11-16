@@ -265,9 +265,9 @@
       const ca = answers(app);
       invite = currentState();
       const [{ data: prodData }, { data: sessionData }, { data: slotData }] = await Promise.all([
-        sb.from('productions').select('id,title,subtitle,venue,director,organization_id,start_date,end_date,wizard_data').eq('id', prodId).maybeSingle(),
-        ca[KEYS.sessionId] ? sb.from('audition_sessions').select('*').eq('id', ca[KEYS.sessionId]).maybeSingle() : Promise.resolve({ data: null }),
-        ca[KEYS.slotId] ? sb.from('audition_time_slots').select('*').eq('id', ca[KEYS.slotId]).maybeSingle() : Promise.resolve({ data: null }),
+        sb.from('bts_visible_productions').select('id,title,subtitle,venue,director,organization_id,start_date,end_date,wizard_data').eq('id', prodId).maybeSingle(),
+        ca[KEYS.sessionId] ? sb.from('bts_visible_audition_sessions').select('*').eq('id', ca[KEYS.sessionId]).maybeSingle() : Promise.resolve({ data: null }),
+        ca[KEYS.slotId] ? sb.from('bts_visible_audition_time_slots').select('*').eq('id', ca[KEYS.slotId]).maybeSingle() : Promise.resolve({ data: null }),
       ]);
       prod = prodData || {};
       session = sessionData || null;
@@ -288,7 +288,7 @@
 
     async function updateSlotAvailability(slotId) {
       if (!slotId) return;
-      const { data: slotRow } = await sb.from('audition_time_slots').select('id,capacity').eq('id', slotId).maybeSingle();
+      const { data: slotRow } = await sb.from('bts_visible_audition_time_slots').select('id,capacity').eq('id', slotId).maybeSingle();
       const { data: apps } = await sb.from('bts_participant_applications')
         .select('slot_assignments,status')
         .eq('production_id', prodId);
@@ -324,7 +324,7 @@
     }
 
     async function loadOpenSlots() {
-      const { data: sessions } = await sb.from('audition_sessions')
+      const { data: sessions } = await sb.from('bts_visible_audition_sessions')
         .select('*')
         .eq('production_id', prodId)
         .eq('enabled', true)
@@ -332,7 +332,7 @@
       const sessionIds = (sessions || []).map(s => s.id).filter(Boolean);
       const [{ data: slotRows }, { data: apps }] = await Promise.all([
         sessionIds.length
-          ? sb.from('audition_time_slots').select('*').in('session_id', sessionIds).order('slot_time')
+          ? sb.from('bts_visible_audition_time_slots').select('*').in('session_id', sessionIds).order('slot_time')
           : Promise.resolve({ data: [] }),
         sb.from('bts_participant_applications').select('id,status,slot_assignments').eq('production_id', prodId),
       ]);
@@ -387,7 +387,7 @@
     async function callbackMaterialsHtml() {
       try {
         const roleNames = String(invite.roleNames || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-        const { data: chars } = await sb.from('production_characters')
+        const { data: chars } = await sb.from('bts_visible_characters')
           .select('name,callback_material,callback_file_url,callback_file_name,callback_side_url,callback_side_name,callback_side_notes,callback_songcut_url,callback_songcut_name,callback_songcut_notes,callback_other_url,callback_other_name,callback_other_notes')
           .eq('production_id', prodId);
         const matched = (chars || []).filter(char => !roleNames.length || roleNames.some(role => String(char.name || '').toLowerCase() === role));
@@ -567,6 +567,6 @@
       setStatus(err.message || 'Please contact the production team.', true);
     });
   </script>
-<script type="module" src="/SHARED/Components/private-profile-media.js?v=20261115-accounts"></script>
+<script type="module" src="/SHARED/Components/private-profile-media.js?v=20261116-private-routes"></script>
 </body>
 </html>

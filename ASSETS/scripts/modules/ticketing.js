@@ -165,14 +165,14 @@
   async function loadTicketingData(subTab) {
     try {
       const [setupRes, eventsRes] = await Promise.all([
-        sb.from('productions').select('ticketing_setup').eq('id', prodId).single(),
-        sb.from('production_events').select('id,title,event_type,start_time,end_time,venue,notes').eq('production_id', prodId).in('event_type', ['performance', 'dress']).order('start_time', { ascending: true }),
+        sb.from('bts_visible_productions').select('ticketing_setup').eq('id', prodId).single(),
+        sb.from('bts_visible_production_events').select('id,title,event_type,start_time,end_time,venue,notes').eq('production_id', prodId).in('event_type', ['performance', 'dress']).order('start_time', { ascending: true }),
       ]);
       _tixSetup = setupRes.data?.ticketing_setup || {};
       _tixEvents = eventsRes.data || [];
       _tixVenue = null;
       if (_tixSetup.venue_id) {
-        const { data: venueRow } = await sb.from('venues').select('id,name,address,capacity').eq('id', _tixSetup.venue_id).single();
+        const { data: venueRow } = await sb.from('bts_visible_venues').select('id,name,address,capacity').eq('id', _tixSetup.venue_id).single();
         _tixVenue = venueRow || null;
       }
     } catch (e) {
@@ -210,7 +210,7 @@
         _tixSetup.status = isLive ? 'draft' : 'live';
         await saveTicketingSetup();
         try {
-          const { data: prodRow } = await sb.from('productions').select('registration_settings').eq('id', prodId).single();
+          const { data: prodRow } = await sb.from('bts_visible_productions').select('registration_settings').eq('id', prodId).single();
           const settings = prodRow?.registration_settings || {};
           settings.ticketing_published = _tixSetup.status === 'live';
           await sb.from('productions').update({ registration_settings: settings }).eq('id', prodId);
@@ -770,7 +770,7 @@
     _tixSetup.status = 'live';
     await saveTicketingSetup();
     try {
-      const { data: prodRow } = await sb.from('productions').select('registration_settings').eq('id', prodId).single();
+      const { data: prodRow } = await sb.from('bts_visible_productions').select('registration_settings').eq('id', prodId).single();
       const settings = prodRow?.registration_settings || {};
       settings.ticketing_published = true;
       await sb.from('productions').update({ registration_settings: settings }).eq('id', prodId);
@@ -810,7 +810,7 @@
     const capacity = parseInt(document.getElementById('tix-venue-capacity')?.value, 10) || 0;
     if (!name) { showToast('Add a venue name first.'); return; }
     try {
-      const { data: prodRow } = await sb.from('productions').select('organization_id').eq('id', prodId).single();
+      const { data: prodRow } = await sb.from('bts_visible_productions').select('organization_id').eq('id', prodId).single();
       const payload = { organization_id: prodRow?.organization_id, name, address, capacity };
       let venueRow;
       if (_tixSetup.venue_id) {
@@ -945,7 +945,7 @@
 
   async function tixRefreshPerformances() {
     try {
-      const { data } = await sb.from('production_events').select('id,title,event_type,start_time,end_time,venue,notes').eq('production_id', prodId).in('event_type', ['performance', 'dress']).order('start_time', { ascending: true });
+      const { data } = await sb.from('bts_visible_production_events').select('id,title,event_type,start_time,end_time,venue,notes').eq('production_id', prodId).in('event_type', ['performance', 'dress']).order('start_time', { ascending: true });
       _tixEvents = data || [];
     } catch (_) {}
     if (!_tixSetup.completed_steps) _tixSetup.completed_steps = [];

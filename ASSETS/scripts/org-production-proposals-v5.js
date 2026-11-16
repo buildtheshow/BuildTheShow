@@ -1513,7 +1513,7 @@
 
   async function openProposalIntakeShareTab(intakeId) {
     const intake = selectedIntakeOrThrow(intakeId);
-    const draftTab = window.open('', '_blank');
+    const draftTab = window.BTSPrivateMedia.open('', '_blank');
     if (draftTab) draftTab.opener = null;
     try {
       const url = buildProposalShareUrl(intake);
@@ -1521,7 +1521,7 @@
       if (draftTab) {
         draftTab.location.href = url;
       } else {
-        window.open(url, '_blank', 'noopener');
+        window.BTSPrivateMedia.open(url, '_blank', 'noopener');
       }
     } catch (error) {
       if (draftTab) draftTab.close();
@@ -1749,7 +1749,7 @@
         <h2>Internal Notes</h2><div class="box">${esc(proposal.internal_notes || '—')}</div>
         <h2>Attachments</h2><div class="box">${attachments.map(file => esc(file.name)).join('<br>') || 'None'}</div>
       </body></html>`;
-    const w = window.open('', '_blank', 'noopener');
+    const w = window.BTSPrivateMedia.open('', '_blank', 'noopener');
     if (!w) return;
     w.document.open();
     w.document.write(html);
@@ -1759,7 +1759,7 @@
   }
 
   async function getNextProductionNumber() {
-    const { data, error } = await sb().from('productions').select('id').eq('organization_id', currentOrg().id);
+    const { data, error } = await sb().from('bts_visible_productions').select('id').eq('organization_id', currentOrg().id);
     return error ? 1 : (data?.length || 0) + 1;
   }
 
@@ -1768,7 +1768,7 @@
     let candidate = base;
     let attempt = 1;
     while (attempt < 100) {
-      const { data } = await sb().from('productions').select('id').eq('organization_id', currentOrg().id).eq('slug', candidate).limit(1);
+      const { data } = await sb().from('bts_visible_productions').select('id').eq('organization_id', currentOrg().id).eq('slug', candidate).limit(1);
       if (!data?.length) return candidate;
       attempt += 1;
       candidate = `${base}-${attempt}`;

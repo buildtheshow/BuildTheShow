@@ -72,7 +72,7 @@
     var el = strip();
     if (el) { el.style.pointerEvents = 'none'; el.style.opacity = '0.72'; }
 
-    var res = await client.from('productions').select('registration_settings').eq('id', _prodId).single();
+    var res = await client.from('bts_visible_productions').select('registration_settings').eq('id', _prodId).single();
     var settings = (res.data && res.data.registration_settings) || {};
     var next = !_published;
     settings.ticketing_published = next;
@@ -88,7 +88,7 @@
     if (!_prodId) return;
     var client = sb();
     if (!client) return;
-    var res = await client.from('productions').select('registration_settings').eq('id', _prodId).single();
+    var res = await client.from('bts_visible_productions').select('registration_settings').eq('id', _prodId).single();
     var settings = (res.data && res.data.registration_settings) || {};
     renderStrip(settings.ticketing_published === true);
   };

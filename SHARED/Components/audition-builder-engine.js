@@ -837,10 +837,10 @@
 
   async function buildAuditionSystem(options) {
     const { sb, prodId, prod, wizardState } = options;
-    const { data: existingConfig } = await sb.from('audition_configs').select('*').eq('production_id', prodId).maybeSingle();
-    const { data: existingSessions } = await sb.from('audition_sessions').select('*').eq('production_id', prodId).in('type', ['audition', 'dance_call', 'callback']);
+    const { data: existingConfig } = await sb.from('bts_visible_audition_configs').select('*').eq('production_id', prodId).maybeSingle();
+    const { data: existingSessions } = await sb.from('bts_visible_audition_sessions').select('*').eq('production_id', prodId).in('type', ['audition', 'dance_call', 'callback']);
 
-    const { data: prodRow } = await sb.from('productions').select('wizard_data').eq('id', prodId).single();
+    const { data: prodRow } = await sb.from('bts_visible_productions').select('wizard_data').eq('id', prodId).single();
     const wizardData = prodRow?.wizard_data || {};
     wizardData.audition_builder = {
       ...wizardState,
@@ -949,7 +949,7 @@
       if (slotsError) throw slotsError;
     }
 
-    const { data: existingCharacters } = await sb.from('production_characters').select('id').eq('production_id', prodId);
+    const { data: existingCharacters } = await sb.from('bts_visible_characters').select('id').eq('production_id', prodId);
     if (!(existingCharacters || []).length) {
       const starter = starterCharacters(wizardState);
       if (starter.length) {
@@ -972,7 +972,7 @@
     }
 
     if (wizardState.collect.extra_notes) {
-      const { data: existingQuestions } = await sb.from('audition_custom_questions').select('id, question_text').eq('production_id', prodId);
+      const { data: existingQuestions } = await sb.from('bts_visible_audition_custom_questions').select('id, question_text').eq('production_id', prodId);
       const hasExtraNotes = (existingQuestions || []).some(question => String(question.question_text || '').toLowerCase().includes('anything else'));
       if (!hasExtraNotes) {
         const { error: questionError } = await sb.from('audition_custom_questions').insert({
@@ -1022,7 +1022,7 @@
 
   async function saveAuditionBuilderDraft(options) {
     const { sb, prodId, prod, wizardState, currentStep } = options;
-    const { data: prodRow } = await sb.from('productions').select('wizard_data').eq('id', prodId).single();
+    const { data: prodRow } = await sb.from('bts_visible_productions').select('wizard_data').eq('id', prodId).single();
     const wizardData = prodRow?.wizard_data || {};
     wizardData.audition_builder = {
       ...wizardState,
@@ -1044,7 +1044,7 @@
 
   async function deleteAuditionBuilderDraft(options) {
     const { sb, prodId } = options;
-    const { data: prodRow } = await sb.from('productions').select('wizard_data').eq('id', prodId).single();
+    const { data: prodRow } = await sb.from('bts_visible_productions').select('wizard_data').eq('id', prodId).single();
     const wizardData = { ...(prodRow?.wizard_data || {}) };
     delete wizardData.audition_builder;
     await sb.from('productions').update({ wizard_data: wizardData }).eq('id', prodId);

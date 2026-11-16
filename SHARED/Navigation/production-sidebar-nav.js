@@ -665,8 +665,8 @@
     );
 
     const { data: prod } = await sb
-      .from('productions')
-      .select('id, title, subtitle, season_year, status, venue, poster_url, organization_id, registration_settings, enabled_modules, wizard_data, organizations(slug)')
+      .from('bts_visible_productions')
+      .select('id, title, subtitle, season_year, status, venue, poster_url, organization_id, registration_settings, enabled_modules, wizard_data, organizations:bts_visible_organizations(slug)')
       .eq('id', idParam)
       .single();
 

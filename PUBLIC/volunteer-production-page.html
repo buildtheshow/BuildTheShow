@@ -3913,8 +3913,8 @@
 
       let assignments = [];
       try {
-        const { data, error } = await sb.from('casting_assignments')
-          .select('id,applicant_id,character_id,state,created_at,volunteer_discount_approved,volunteer_hours_completed,volunteer_role_notes,volunteer_signup_ids,volunteer_signup_name,scholarship_status,scholarship_amount,reg_payment_notes')
+        const { data, error } = await sb.from('bts_participant_casting')
+          .select('id,applicant_id,character_id,state,created_at,volunteer_discount_approved,volunteer_hours_completed,scholarship_status,scholarship_amount')
           .eq('production_id', prod.id)
           .in('applicant_id', promotedIds)
           .in('state', ['chosen', 'ensemble_manual', 'offer_accepted', 'offer_declined']);
@@ -3927,7 +3927,7 @@
       let charMap = new Map();
       if (charIds.length) {
         try {
-          const { data } = await sb.from('production_characters').select('id,name').in('id', charIds);
+          const { data } = await sb.from('bts_visible_characters').select('id,name').in('id', charIds);
           charMap = new Map((data || []).map(char => [String(char.id), char.name]));
         } catch (error) {
           console.warn('[BTS production portal] character lookup failed', error);
@@ -3938,7 +3938,7 @@
       let paymentMap = new Map();
       if (assignmentIds.length) {
         try {
-          const { data } = await sb.from('registration_payment_records')
+          const { data } = await sb.from('bts_participant_payment_records')
             .select('*')
             .in('casting_assignment_id', assignmentIds)
             .order('installment_index', { ascending: true });
@@ -4036,11 +4036,11 @@
         const uniqueSibMemberIds = [...new Set(siblingMemberIds)];
         if (uniqueSibMemberIds.length && prod?.id) {
           const states = ['chosen', 'ensemble_manual', 'offer_accepted', 'offer_declined'];
-          const sel = 'id,applicant_id,character_id,state,volunteer_discount_approved,volunteer_hours_completed,volunteer_role_notes,volunteer_signup_ids,volunteer_signup_name,scholarship_status,scholarship_amount,reg_payment_notes';
+          const sel = 'id,applicant_id,character_id,state,volunteer_discount_approved,volunteer_hours_completed,scholarship_status,scholarship_amount';
           // Query by both id and applicant_id — works regardless of which type member_ids stores
           const [byId, byApplicant] = await Promise.all([
-            sb.from('casting_assignments').select(sel).eq('production_id', prod.id).in('id', uniqueSibMemberIds).in('state', states),
-            sb.from('casting_assignments').select(sel).eq('production_id', prod.id).in('applicant_id', uniqueSibMemberIds).in('state', states),
+            sb.from('bts_participant_casting').select(sel).eq('production_id', prod.id).in('id', uniqueSibMemberIds).in('state', states),
+            sb.from('bts_participant_casting').select(sel).eq('production_id', prod.id).in('applicant_id', uniqueSibMemberIds).in('state', states),
           ]);
           const seen = new Set();
           const sibAssign = [...(byId.data || []), ...(byApplicant.data || [])].filter(r => { if (seen.has(r.id)) return false; seen.add(r.id); return true; });
@@ -4049,7 +4049,7 @@
             const sibAssignIds = sibAssign.map(a => String(a.id)).filter(Boolean);
             const sibPayMap = new Map();
             try {
-              const { data: sibPay } = await sb.from('registration_payment_records')
+              const { data: sibPay } = await sb.from('bts_participant_payment_records')
                 .select('*').in('casting_assignment_id', sibAssignIds).order('installment_index', { ascending: true });
               (sibPay || []).forEach(r => { const k = String(r.casting_assignment_id); if (!sibPayMap.has(k)) sibPayMap.set(k, []); sibPayMap.get(k).push(r); });
             } catch (_) {}
@@ -4084,7 +4084,7 @@
             const sibCharIds = [...new Set(sibAssign.map(a => a.character_id).filter(Boolean))];
             if (sibCharIds.length) {
               try {
-                const { data: sibChars } = await sb.from('production_characters').select('id,name').in('id', sibCharIds);
+                const { data: sibChars } = await sb.from('bts_visible_characters').select('id,name').in('id', sibCharIds);
                 (sibChars || []).forEach(c => charMap.set(String(c.id), c.name));
               } catch (_) {}
             }
@@ -4119,8 +4119,8 @@
       if (!signupIds.length) return [];
       let assignments = [];
       try {
-        const { data, error } = await sb.from('casting_assignments')
-          .select('id,applicant_id,character_id,state,volunteer_signup_ids,volunteer_signup_name,volunteer_hours_completed,volunteer_role_notes')
+        const { data, error } = await sb.from('bts_participant_casting')
+          .select('id,applicant_id,character_id,state,volunteer_hours_completed')
           .eq('production_id', prod.id)
           .overlaps('volunteer_signup_ids', signupIds);
         if (error) throw error;
@@ -4144,7 +4144,7 @@
       }
       if (charIds.length) {
         try {
-          const { data } = await sb.from('production_characters').select('id,name').in('id', charIds);
+          const { data } = await sb.from('bts_visible_characters').select('id,name').in('id', charIds);
           charMap = new Map((data || []).map(char => [String(char.id), char.name]));
         } catch (error) {
           console.warn('[BTS production portal] linked performer role lookup failed', error);
@@ -4154,7 +4154,7 @@
       let paymentMap = new Map();
       if (assignmentIds.length) {
         try {
-          const { data } = await sb.from('registration_payment_records')
+          const { data } = await sb.from('bts_participant_payment_records')
             .select('*')
             .in('casting_assignment_id', assignmentIds)
             .order('installment_index', { ascending: true });
@@ -4195,7 +4195,7 @@
         });
         const hhIds = [...new Set(matchedHh.map(hh => String(hh.id)).filter(Boolean))];
         if (!hhIds.length) return [];
-        const { data: hhLogs } = await sb.from('household_payment_logs')
+        const { data: hhLogs } = await sb.from('bts_participant_household_payments')
           .select('*').in('household_id', hhIds).order('paid_at', { ascending: true });
         return hhLogs || [];
       } catch (_) {
@@ -5490,7 +5490,7 @@
         setTimeout(() => URL.revokeObjectURL(url), 30000);
         return;
       } catch (err) {
-        const win = window.open('', '_blank');
+        const win = window.BTSPrivateMedia.open('', '_blank');
         if (!win) return;
         win.document.open();
         win.document.write(html);
@@ -7253,17 +7253,17 @@
         const params = new URLSearchParams(window.location.search);
         const directProdId = params.get('id') || params.get('prod') || '';
         if (directProdId) {
-          const directResult = await sb.from('productions').select('id,title,slug,poster_url,organization_id,registration_settings,registration_households').eq('id', directProdId).maybeSingle();
+          const directResult = await sb.from('bts_visible_productions').select('id,title,slug,poster_url,organization_id,registration_settings,registration_households').eq('id', directProdId).maybeSingle();
           if (directResult.error) throw directResult.error;
           prodData = directResult.data;
         }
         if (!prodData && showSlug) {
-          const slugResult = await sb.from('productions').select('id,title,slug,poster_url,organization_id,registration_settings,registration_households').eq('slug', showSlug).maybeSingle();
+          const slugResult = await sb.from('bts_visible_productions').select('id,title,slug,poster_url,organization_id,registration_settings,registration_households').eq('slug', showSlug).maybeSingle();
           if (slugResult.error) throw slugResult.error;
           prodData = slugResult.data;
         }
         if (!prodData && showSlug) {
-          const titleResult = await sb.from('productions').select('id,title,slug,poster_url,organization_id,registration_settings,registration_households').ilike('title', showSlug.replace(/-/g,' ')).maybeSingle();
+          const titleResult = await sb.from('bts_visible_productions').select('id,title,slug,poster_url,organization_id,registration_settings,registration_households').ilike('title', showSlug.replace(/-/g,' ')).maybeSingle();
           if (!titleResult.error) prodData = titleResult.data;
         }
         if (!prodData) { showOnly('vp-notfound'); return; }
@@ -7271,12 +7271,12 @@
         paymentSettings = Object.assign({}, prod.registration_settings?.payment_settings || {});
 
         org = { id: prod.organization_id, name: orgSlug, email: null };
-        const orgResult = await sb.from('organizations').select('id,name,email,slug,abbreviation,logo_url,logo_white_url,etransfer_email').eq('id', prod.organization_id).maybeSingle();
+        const orgResult = await sb.from('bts_visible_organizations').select('id,name,email,slug,abbreviation,logo_url,logo_white_url,etransfer_email').eq('id', prod.organization_id).maybeSingle();
         if (!orgResult.error && orgResult.data) org = orgResult.data;
 
         const [planResult, eventResult, signupResult, contactResult] = await Promise.all([
-          sb.from('productions').select('volunteer_staffing_plan').eq('id', prod.id).single(),
-          sb.from('production_events').select('*').eq('production_id', prod.id).order('start_time', { ascending: true }),
+          sb.from('bts_visible_productions').select('volunteer_staffing_plan').eq('id', prod.id).single(),
+          sb.from('bts_visible_production_events').select('*').eq('production_id', prod.id).order('start_time', { ascending: true }),
           sb.rpc('bts_public_volunteer_availability', { p_production_id: prod.id }),
           sb.rpc('public_production_contact', { p_production_id: prod.id })
         ]);
@@ -9028,7 +9028,7 @@
         const [rRes, cRes, prodRes] = await Promise.all([
           this.sb.from('budget_receipts').select('*').eq('production_id', this.prodId).order('receipt_date', { ascending: false }),
           this.sb.from('budget_categories').select('*').eq('production_id', this.prodId).eq('type', 'expense'),
-          this.sb.from('productions').select('organization_id').eq('id', this.prodId).single(),
+          this.sb.from('bts_visible_productions').select('organization_id').eq('id', this.prodId).single(),
         ]);
         this.receipts   = rRes.data || [];
         this.categories = cRes.data || [];
@@ -9243,6 +9243,6 @@
     },
   };
   </script>
-<script type="module" src="/SHARED/Components/private-profile-media.js?v=20261115-accounts"></script>
+<script type="module" src="/SHARED/Components/private-profile-media.js?v=20261116-private-routes"></script>
 </body>
 </html>

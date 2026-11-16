@@ -20,10 +20,10 @@
         '<div id="vsh-body">Loading...</div>';
 
       const sb = supabase.createClient(S.SB_URL, S.SB_ANON);
-      const { data: prod } = await sb.from('productions').select('id, title, slug, organization_id').eq('id', prodId).single();
+      const { data: prod } = await sb.from('bts_visible_productions').select('id, title, slug, organization_id').eq('id', prodId).single();
       let orgSlug = '';
       if (prod?.organization_id) {
-        const { data: org } = await sb.from('organizations').select('slug').eq('id', prod.organization_id).single();
+        const { data: org } = await sb.from('bts_visible_organizations').select('slug').eq('id', prod.organization_id).single();
         orgSlug = org?.slug || '';
       }
 

@@ -51,13 +51,19 @@ Official guidance checked 2026-11-15:
 - https://www.priv.gc.ca/en/privacy-topics/privacy-for-businesses/appropriate-handling-of-personal-information/collecting-personal-information-and-consent/consent/gl_omc_201805/
 - https://www.oaic.gov.au/privacy/your-privacy-rights/more-privacy-rights/children-and-young-people
 
+## Step 1 private-data route completion
+
+The current non-ticket table, function, alternate-page and file-route inventory is documented in [private-route-coverage.md](private-route-coverage.md). Migration `20261116120000_private_record_routes.sql` completes this access-control cutover: private base tables are scoped, public/participant read models omit private fields, historical privileged RPCs check the caller, and private file buckets use path-aware permission checks. Every read model explicitly removes inherited write/delete grants before allowing its intended operations.
+
+This finishes the access-route checkpoint only. Auth settings, recovery verification, historical linking, transactional capacity, attendance-derived hours, email workflow completion, legal/privacy procedures, full browser journeys and operational drills remain the later checklist steps. In particular, an email confirmation timestamp from automatic confirmation is still not proof of inbox ownership.
+
 ## Remaining rollout checks
 
 ### Audition account ownership and public availability
 
 The `20261115133000` stage binds new public audition writes to active adult accounts, records guardian declarations for new child submissions, protects account/production/profile links and staff decision fields, and replaces the slot pickers' applicant-list reads with a count-only RPC. Matching name and birth date only deduplicates records within the same adult account; it is never evidence of ownership across families. New photos use the private profile-file bucket with account-scoped paths.
 
-The same cutover removes anonymous base-table reads, restricts base records to scoped staff access, and gives participants filtered, updatable projections for their own account. These projections omit staff assessment and server consent fields. Triggers still enforce ownership and allowed changes when writes pass through a view; synthetic tests verify that the view owner cannot bypass those checks. Legacy linking, transactional booking/holds, other participant tables and their storage remain unfinished.
+The same cutover removes anonymous base-table reads, restricts base records to scoped staff access, and gives participants filtered, updatable projections for their own account. These projections omit staff assessment and server consent fields. Triggers still enforce ownership and allowed changes when writes pass through a view; synthetic tests verify that the view owner cannot bypass those checks. Legacy linking and transactional booking/holds remain unfinished. The remaining participant-table and file access cutover is covered by step 1 above.
 
 ### Volunteer account ownership
 
@@ -90,7 +96,7 @@ This does not complete the public application/booking/volunteer migration, fix h
 
 The follow-up `20261115124500_require_team_session_for_staff_helpers.sql` closes the email-match-only branch in private photo access and service-only email authorisation. A staff account must have an active bound session for that exact team member and production. An authorised staff member may access a submitted profile image, not every file in the guardian's family folder. The owner's and organisation admin's existing Auth-user-ID-based checks remain separate.
 
-Do not describe the whole product as locked down until public audition/volunteer portals, email endpoints, consent, storage and production team access have passed the same backend boundary tests. The schema review found broader public-record permissions that require a coordinated portal migration. Ticketing remains explicitly out of scope.
+Do not describe the whole product as locked down: passing current record/file access boundaries does not complete email delivery, identity verification, consent operations, capacity or full end-to-end journeys. Ticketing remains explicitly out of scope.
 
 ## Local verification
 

@@ -237,7 +237,7 @@
 
       async load() {
         try {
-          const { data, error } = await sb.from('opportunities').select('*')
+          const { data, error } = await sb.from('bts_visible_opportunities').select('*')
             .eq('production_id', prodId)
             .in('opportunity_type', ['volunteer', 'creative_team'])
             .order('created_at', { ascending: false });

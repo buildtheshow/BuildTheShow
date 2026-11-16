@@ -822,7 +822,7 @@
     const productionId = rpfCurrentProductionId();
     if (!productionId) return '';
     try {
-      const { data, error } = await sb.from('production_events')
+      const { data, error } = await sb.from('bts_visible_production_events')
         .select('start_time,event_type')
         .eq('production_id', productionId)
         .or('event_type.ilike.rehearsal,event_type.ilike.music_rehearsal,event_type.ilike.choreography')
@@ -898,7 +898,7 @@
     const productionId = rpfCurrentProductionId();
     if (!productionId) return { performance_schedule: '', event_schedule: '', production_schedule: '' };
     try {
-      const { data, error } = await sb.from('production_events')
+      const { data, error } = await sb.from('bts_visible_production_events')
         .select('title,start_time,end_time,venue,event_type,is_public,show_in_cast_schedule')
         .eq('production_id', productionId)
         .order('start_time', { ascending: true });
@@ -931,7 +931,7 @@
     if (!productionId) return fallback;
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const { data, error } = await sb.from('opportunities')
+      const { data, error } = await sb.from('bts_visible_opportunities')
         .select('id,close_date,opportunity_type,status')
         .eq('production_id', productionId)
         .eq('status', 'published')
@@ -3087,7 +3087,7 @@
   function syncCastMemberRegistration(answers) {
     if (!_applicant?.id || !rpfCurrentProductionId()) return;
     const ca = answers || {};
-    sb.from('cast_members')
+    sb.from('bts_participant_cast_members')
       .update({
         registration_answers: answers,
         phone: _applicant.phone || ca['Phone'] || ca['phone'] || null,
@@ -3431,7 +3431,7 @@
   async function loadRegistrationRoleNames(applicant) {
     if (!applicant?.id || !applicant?.production_id) return [];
     try {
-      const { data: assignments, error } = await sb.from('casting_assignments')
+      const { data: assignments, error } = await sb.from('bts_participant_casting')
         .select('id,character_id,state')
         .eq('production_id', applicant.production_id)
         .eq('applicant_id', applicant.id)
@@ -3440,7 +3440,7 @@
       const rows = assignments || [];
       const charIds = rows.map(row => row.character_id).filter(Boolean);
       const { data: chars } = charIds.length
-        ? await sb.from('production_characters').select('id,name').in('id', charIds)
+        ? await sb.from('bts_visible_characters').select('id,name').in('id', charIds)
         : { data: [] };
       const charMap = new Map((chars || []).map(char => [String(char.id), char.name]));
       const names = rows.map(row => row.character_id ? (charMap.get(String(row.character_id)) || '') : 'Ensemble').filter(Boolean);
@@ -3455,12 +3455,12 @@
     if (_resolvedProductionId || !_orgSlug || !_showSlug || /^system$/i.test(_orgSlug)) return;
     try {
       const orgKey = _orgSlug;
-      const { data: orgMatch } = await sb.from('organizations').select('id,name,logo_url,logo_white_url,abbreviation,slug')
+      const { data: orgMatch } = await sb.from('bts_visible_organizations').select('id,name,logo_url,logo_white_url,abbreviation,slug')
         .or(`slug.eq.${orgKey},abbreviation.eq.${orgKey},abbreviation.eq.${orgKey.toUpperCase()},abbreviation.eq.${orgKey.toLowerCase()}`)
         .maybeSingle();
       const orgId = orgMatch?.id || '';
       if (orgMatch) _org = orgMatch;
-      let q = sb.from('productions').select('id').ilike('slug', _showSlug);
+      let q = sb.from('bts_visible_productions').select('id').ilike('slug', _showSlug);
       if (orgId) q = q.eq('organization_id', orgId);
       const { data: prodMatch } = await q.maybeSingle();
       _resolvedProductionId = prodMatch?.id || '';
@@ -3562,7 +3562,7 @@
 
     // 2. Production
     const { data: prod, error: prodErr } = await sb
-      .from('productions')
+      .from('bts_visible_productions')
       .select('id, title, slug, registration_settings, poster_url, start_date, end_date, venue, organization_id')
       .eq('id', _offer.production_id)
       .maybeSingle();
@@ -3581,7 +3581,7 @@
     // 3. Organisation
     if (prod.organization_id) {
       const { data: org } = await sb
-        .from('organizations')
+        .from('bts_visible_organizations')
         .select('name, email, logo_url, logo_white_url, abbreviation, slug')
         .eq('id', prod.organization_id)
         .maybeSingle();
@@ -3652,6 +3652,6 @@
   });
 
   </script>
-<script type="module" src="/SHARED/Components/private-profile-media.js?v=20261115-accounts"></script>
+<script type="module" src="/SHARED/Components/private-profile-media.js?v=20261116-private-routes"></script>
 </body>
 </html>

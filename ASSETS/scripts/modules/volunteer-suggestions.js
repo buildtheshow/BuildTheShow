@@ -22,13 +22,13 @@
       const scopeDeptKey = S.scopeDeptKeyForSession(session);
 
       const [prodRes, eventsRes] = await Promise.all([
-        sb.from('productions').select('id, title, organization_id').eq('id', prodId).single(),
-        sb.from('production_events').select('id,title,event_type,start_time,end_time,is_deadline').eq('production_id', prodId).order('start_time'),
+        sb.from('bts_visible_productions').select('id, title, organization_id').eq('id', prodId).single(),
+        sb.from('bts_visible_production_events').select('id,title,event_type,start_time,end_time,is_deadline').eq('production_id', prodId).order('start_time'),
       ]);
       const prod = prodRes.data || {};
       let orgName = '';
       if (prod.organization_id) {
-        const { data: org } = await sb.from('organizations').select('name').eq('id', prod.organization_id).single();
+        const { data: org } = await sb.from('bts_visible_organizations').select('name').eq('id', prod.organization_id).single();
         orgName = org?.name || '';
       }
       const events = eventsRes.data || [];

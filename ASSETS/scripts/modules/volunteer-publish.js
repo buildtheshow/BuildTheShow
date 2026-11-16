@@ -21,10 +21,10 @@
         '<div id="vp-body">Loading roles...</div>';
 
       const sb = supabase.createClient(S.SB_URL, S.SB_ANON);
-      const { data: prod } = await sb.from('productions').select('id, title, organization_id').eq('id', prodId).single();
+      const { data: prod } = await sb.from('bts_visible_productions').select('id, title, organization_id').eq('id', prodId).single();
       let orgName = '';
       if (prod?.organization_id) {
-        const { data: org } = await sb.from('organizations').select('name').eq('id', prod.organization_id).single();
+        const { data: org } = await sb.from('bts_visible_organizations').select('name').eq('id', prod.organization_id).single();
         orgName = org?.name || '';
       }
 

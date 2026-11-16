@@ -1526,10 +1526,11 @@
       let headshotUrl = null;
       if (_headshotFile) {
         _headshotFile = await resizeImage(_headshotFile, { maxSize: 400, quality: 0.8 });
-        const path = `${prodId || 'prod'}-${Date.now()}.jpg`;
-        const { data: upData, error: upErr } = await sb.storage.from('audition-headshots').upload(path, _headshotFile, { upsert: true, contentType: 'image/jpeg' });
+        const photoUser = (await sb.auth.getUser()).data.user;
+        const path = `${photoUser.id}/${crypto.randomUUID()}.jpg`;
+        const { data: upData, error: upErr } = await sb.storage.from('profile-headshots').upload(path, _headshotFile, { upsert: true, contentType: 'image/jpeg' });
         if (upErr) throw upErr;
-        const { data: urlData } = sb.storage.from('audition-headshots').getPublicUrl(upData.path);
+        const { data: urlData } = sb.storage.from('profile-headshots').getPublicUrl(upData.path);
         headshotUrl = urlData?.publicUrl || null;
       }
       if (!headshotUrl) {
@@ -1715,11 +1716,11 @@
   async function stResolveProductionId() {
     if (prodId || !_orgKey || !_showSlug) return;
     try {
-      const { data: orgMatch } = await sb.from('organizations').select('id')
+      const { data: orgMatch } = await sb.from('bts_visible_organizations').select('id')
         .or(`slug.eq.${_orgKey},abbreviation.eq.${_orgKey},abbreviation.eq.${_orgKey.toUpperCase()},abbreviation.eq.${_orgKey.toLowerCase()}`)
         .maybeSingle();
       const orgId = orgMatch?.id || null;
-      let q = sb.from('productions').select('id').ilike('slug', _showSlug);
+      let q = sb.from('bts_visible_productions').select('id').ilike('slug', _showSlug);
       if (orgId) q = q.eq('organization_id', orgId);
       const { data: prodMatch } = await q.maybeSingle();
       prodId = prodMatch?.id || null;
@@ -1734,11 +1735,11 @@
     }
     try {
       const [prodRes, cfgRes, eventsRes, charRes, qRes] = await Promise.all([
-        sb.from('productions').select('*').eq('id', prodId).maybeSingle(),
-        sb.from('audition_configs').select('*').eq('production_id', prodId).maybeSingle(),
-        sb.from('production_events').select('id,event_type,title,start_time,end_time,all_day,venue,notes,is_public').eq('production_id', prodId).order('start_time'),
-        sb.from('production_characters').select('*').eq('production_id', prodId).eq('show_on_public_page', true).order('sort_order'),
-        sb.from('audition_custom_questions').select('*').eq('production_id', prodId).eq('enabled', true).order('sort_order'),
+        sb.from('bts_visible_productions').select('*').eq('id', prodId).maybeSingle(),
+        sb.from('bts_visible_audition_configs').select('*').eq('production_id', prodId).maybeSingle(),
+        sb.from('bts_visible_production_events').select('id,event_type,title,start_time,end_time,all_day,venue,notes,is_public').eq('production_id', prodId).order('start_time'),
+        sb.from('bts_visible_characters').select('*').eq('production_id', prodId).eq('show_on_public_page', true).order('sort_order'),
+        sb.from('bts_visible_audition_custom_questions').select('*').eq('production_id', prodId).eq('enabled', true).order('sort_order'),
       ]);
       if (!prodRes.data) {
         document.getElementById('page-content').innerHTML = '<div class="state-error"><h2>Production not found</h2><p>This self tape link does not match a production. Check with the team for the correct URL.</p></div>';
@@ -1762,7 +1763,7 @@
       }
 
       if (_prod.organization_id) {
-        const { data: org } = await sb.from('organizations').select('name').eq('id', _prod.organization_id).maybeSingle();
+        const { data: org } = await sb.from('bts_visible_organizations').select('name').eq('id', _prod.organization_id).maybeSingle();
         _org = org || null;
       }
       document.title = `Self Tape: ${_prod.title || 'Audition'}`;
@@ -1782,6 +1783,6 @@
 
   document.addEventListener('DOMContentLoaded', stInit);
 </script>
-<script type="module" src="/SHARED/Components/private-profile-media.js?v=20261115-accounts"></script>
+<script type="module" src="/SHARED/Components/private-profile-media.js?v=20261116-private-routes"></script>
 </body>
 </html>
