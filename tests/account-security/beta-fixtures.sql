@@ -1,0 +1,23 @@
+DO $$ DECLARE invitation jsonb; code text; meta jsonb:='{"date_of_birth":"1990-01-01","privacy_accepted":true,"terms_accepted":true}'; user_id uuid:='b7b7070a-c9ef-4a74-a320-ab2ec6a5c329'; v_invitation_id uuid; BEGIN
+ IF has_table_privilege('anon','bts_private.beta_invitations','SELECT') OR has_function_privilege('authenticated','public.bts_issue_beta_code(text,integer,integer)','EXECUTE') THEN RAISE EXCEPTION 'TEST FAILED: beta secrets exposed';END IF;
+ invitation:=public.bts_issue_beta_code('Synthetic rollback-only beta code',2,1);code:=invitation->>'code';v_invitation_id:=(invitation->>'id')::uuid;
+ IF NOT public.bts_check_beta_code(lower(replace(code,'-',' '))) OR public.bts_check_beta_code('invalid-code') THEN RAISE EXCEPTION 'TEST FAILED: beta validation';END IF;
+ BEGIN INSERT INTO auth.users(id,email,raw_user_meta_data) VALUES(user_id,'beta-fixture@example.invalid',meta);RAISE EXCEPTION 'TEST FAILED: missing code bypass';EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'TEST FAILED:%' THEN RAISE;END IF;END;
+ BEGIN INSERT INTO auth.users(id,email,raw_user_meta_data) VALUES(user_id,'beta-fixture@example.invalid',meta||jsonb_build_object('beta_code','invalid-code'));RAISE EXCEPTION 'TEST FAILED: wrong code bypass';EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'TEST FAILED:%' THEN RAISE;END IF;END;
+ BEGIN INSERT INTO auth.users(id,email,raw_user_meta_data) VALUES(user_id,'beta-fixture@example.invalid',meta||jsonb_build_object('beta_code',code,'date_of_birth','2015-01-01'));RAISE EXCEPTION 'TEST FAILED: minor beta login';EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'TEST FAILED:%' THEN RAISE;END IF;END;
+ INSERT INTO auth.users(id,email,raw_user_meta_data) VALUES(user_id,'beta-fixture@example.invalid',meta||jsonb_build_object('beta_code',code));
+ IF EXISTS(SELECT 1 FROM auth.users WHERE auth.users.id=user_id AND (raw_user_meta_data?'beta_code' OR raw_user_meta_data?'date_of_birth')) THEN RAISE EXCEPTION 'TEST FAILED: secret retained in auth metadata';END IF;
+ IF NOT EXISTS(SELECT 1 FROM bts_private.account_controls c WHERE c.user_id='b7b7070a-c9ef-4a74-a320-ab2ec6a5c329' AND c.beta_invitation_id=(invitation->>'id')::uuid) THEN RAISE EXCEPTION 'TEST FAILED: admission evidence missing';END IF;
+ IF (SELECT used_count FROM bts_private.beta_invitations WHERE beta_invitations.id=v_invitation_id)<>1 THEN RAISE EXCEPTION 'TEST FAILED: failed admission consumed code';END IF;
+ BEGIN INSERT INTO auth.users(id,email,raw_user_meta_data) VALUES(user_id,'beta-fixture@example.invalid',meta||jsonb_build_object('beta_code',code));EXCEPTION WHEN unique_violation THEN NULL;END;
+ IF (SELECT used_count FROM bts_private.beta_invitations WHERE beta_invitations.id=v_invitation_id)<>1 THEN RAISE EXCEPTION 'TEST FAILED: duplicate signup consumed code';END IF;
+ UPDATE bts_private.beta_invitations SET max_uses=1 WHERE beta_invitations.id=v_invitation_id;
+ IF public.bts_check_beta_code(code) THEN RAISE EXCEPTION 'TEST FAILED: fully used code';END IF;
+ BEGIN INSERT INTO auth.users(id,email,raw_user_meta_data) VALUES('d50a872a-6546-4b22-88d2-6d7be1ef76b9','beta-other@example.invalid',meta||jsonb_build_object('beta_code',code));RAISE EXCEPTION 'TEST FAILED: exhausted code signup';EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'TEST FAILED:%' THEN RAISE;END IF;END;
+ UPDATE bts_private.beta_invitations SET max_uses=2,expires_at=now()-interval '1 second' WHERE beta_invitations.id=v_invitation_id;
+ IF public.bts_check_beta_code(code) THEN RAISE EXCEPTION 'TEST FAILED: expired code';END IF;
+ UPDATE bts_private.beta_invitations SET expires_at=now()+interval '1 day',revoked_at=now() WHERE beta_invitations.id=v_invitation_id;
+ IF public.bts_check_beta_code(code) THEN RAISE EXCEPTION 'TEST FAILED: revoked code';END IF;
+END $$;
+SELECT 'PASS: beta signup admission and secret handling.' AS result;
+ROLLBACK;

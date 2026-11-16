@@ -8,6 +8,7 @@ async function route(file) {
 (async () => {
   const settings = await route('functions/member/settings.js');
   const login = await route('functions/login.js');
+  const signup = await route('functions/signup.js');
   const legacy = await route('functions/SYSTEM/[[path]].js');
   const original = 'https://bts.test/member/settings?panel=profile&return=%2Factivities';
   let fetched;
@@ -35,6 +36,14 @@ async function route(file) {
   assert.equal(loginResponse.headers.get('Cache-Control'), 'no-store');
   const extensionlessLogin = await legacy.onRequest({request: new Request('https://bts.test/SYSTEM/Members/Account/login?return=%2Factivities'), params: {path: ['Members','Account','login']}});
   assert.equal(extensionlessLogin.status, 302); assert.equal(extensionlessLogin.headers.get('Location'), 'https://bts.test/login?return=%2Factivities');
+  const signupResponse = await signup.onRequest({request: new Request('https://bts.test/signup?invite=synthetic'), env: {ASSETS: {fetch: async input => {
+    assert.ok(input instanceof URL); assert.equal(input.pathname, '/SYSTEM/Members/Account/signup.html'); return new Response('Signup fixture');
+  }}}});
+  assert.equal(signupResponse.status, 200); assert.equal(signupResponse.headers.get('Location'), null);
+  for (const suffix of ['signup', 'signup.html']) {
+    const oldSignup = await legacy.onRequest({request: new Request('https://bts.test/SYSTEM/Members/Account/' + suffix + '?invite=synthetic'), params: {path: ['Members', 'Account', suffix]}});
+    assert.equal(oldSignup.status, 302); assert.equal(oldSignup.headers.get('Location'), 'https://bts.test/signup?invite=synthetic');
+  }
   const existing = await legacy.onRequest({request: new Request('https://bts.test/SYSTEM/Members/Account/login.html?return=%2Factivities'), params: {path: ['Members','Account','login.html']}});
   assert.equal(existing.status, 302); assert.equal(existing.headers.get('Location'), 'https://bts.test/login?return=%2Factivities');
   console.log('PASS: clean Settings serves HTML directly; both internal URL forms return to /member/settings, preserve query parameters and avoid cached redirects; login also serves directly and both old login forms retain their return destination.');

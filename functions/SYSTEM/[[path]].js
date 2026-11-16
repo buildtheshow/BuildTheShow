@@ -4,6 +4,7 @@
 const SYSTEM_REDIRECTS = new Map([
   ['members/account/login', '/login'],
   ['members/account/login.html', '/login'],
+  ['members/account/signup', '/signup'],
   ['members/account/signup.html', '/signup'],
   ['members/account/forgot-password.html', '/forgot-password'],
   ['members/account/reset-password.html', '/reset-password'],
@@ -36,7 +37,7 @@ export async function onRequest(context) {
     const next = new URL(target, url.origin);
     next.search = url.search;
     next.hash = url.hash;
-    if (target === '/member/settings' || target === '/login') {
+    if (target === '/member/settings' || target === '/login' || target === '/signup') {
       return new Response(null, {status: 302, headers: {'Location': next.toString(), 'Cache-Control': 'no-store'}});
     }
     return Response.redirect(next.toString(), 308);

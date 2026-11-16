@@ -156,6 +156,10 @@
         <div class="auth-error" id="error-msg" role="alert" aria-live="assertive"></div>
 
         <form id="signup-form" novalidate>
+          <div class="form-group">
+            <label class="form-label" for="beta-code">Beta invitation code</label>
+            <input class="form-input" type="text" id="beta-code" maxlength="100" autocomplete="off" spellcheck="false" required />
+          </div>
 
           <div class="form-row">
             <div class="form-group">
@@ -273,6 +277,7 @@
     for(const link of document.querySelectorAll('a[href="/login"]'))link.href='/login?'+loginQuery;
 
     // ── Form submit ─────────────────────────────────────
+    document.getElementById('beta-code').value = sessionStorage.getItem('bts_beta_code') || '';
     document.getElementById('signup-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       clearError();
@@ -282,6 +287,7 @@
       const dobValue  = document.getElementById('dob').value;
       const email     = document.getElementById('email').value.trim();
       const password  = document.getElementById('password').value;
+      const betaCode = document.getElementById('beta-code').value.trim();
 
       if (!firstName || !lastName) {
         showError('Please enter your first and last name.');
@@ -316,6 +322,13 @@
       submitBtn.disabled = true;
       submitBtn.textContent = 'Creating account...';
 
+      try {
+        const {data: validCode, error: codeError} = await sb.rpc('bts_check_beta_code', {p_code: betaCode});
+        if (codeError) throw new Error('We could not check your beta code. Please try again.');
+        if (validCode !== true) throw new Error('Enter a valid beta invitation code to sign up.');
+      } catch (error) {
+        showError(error.message); submitBtn.disabled = false; submitBtn.textContent = 'Create Account'; return;
+      }
       const signupQuery=new URLSearchParams(location.search);
       const confirmationDestination=new URL('/login',window.location.origin);
       confirmationDestination.searchParams.set('return',BTSAccountSecurity.safeReturnPath(signupQuery.get('return')||'/home'));
@@ -326,6 +339,7 @@
         options: {
           emailRedirectTo: confirmationDestination.href,
           data: {
+            beta_code: betaCode,
             first_name: firstName,
             last_name: lastName,
             date_of_birth: dobValue,
@@ -351,6 +365,8 @@
         return;
       }
 
+      sessionStorage.removeItem('bts_beta_code');
+      document.getElementById('beta-code').value = '';
       if (!data.session) {
         showError('Account created. Check your inbox to verify your email, then sign in.');
         submitBtn.disabled = false; submitBtn.textContent = 'Create Account';
