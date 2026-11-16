@@ -12,14 +12,14 @@ User metadata is not an authorisation source. Existing records are not claimed b
 
 | Checkpoint | Acceptance condition | Status |
 | --- | --- | --- |
-| 1. Inventory | Every known entrance has a replacement or deliberate retained purpose | Implemented; release verification below |
-| 2. Signup/login | No account-type choice; safe return destinations; one adult identity | Implemented; release verification below |
-| 3. My Home | Participation and management available from the same account | Implemented; release verification below |
-| 4. My Activities | Profiles, productions, schedules, payments and volunteering are connected | Implemented; release verification below |
-| 5. Volunteer permissions | Actual profile keys govern requests; confirmed hours and staff approvals protected | Implemented; release verification below |
-| 6. Management | Accepted account-bound memberships replace repeated codes | Implemented; release verification below |
-| 7. Cleanup | Old routes remain compatible; replaced gates and misleading code messages removed | Implemented; release verification below |
-| 8. Verification/release | Boundary and browser journeys pass; hosted migration and publication verified | Implemented; release verification below |
+| 1. Inventory | Every known entrance has a replacement or deliberate retained purpose | Complete; evidence below |
+| 2. Signup/login | No account-type choice; safe return destinations; one adult identity | Complete; evidence below |
+| 3. My Home | Participation and management available from the same account | Complete; evidence below |
+| 4. My Activities | Profiles, productions, schedules, payments and volunteering are connected | Complete; evidence below |
+| 5. Volunteer permissions | Actual profile keys govern requests; confirmed hours and staff approvals protected | Complete; evidence below |
+| 6. Management | Accepted account-bound memberships replace repeated codes | Complete; evidence below |
+| 7. Cleanup | Old routes remain compatible; replaced gates and misleading code messages removed | Complete; evidence below |
+| 8. Verification/release | Boundary and browser journeys pass; hosted migration and publication verified | Complete; evidence below |
 
 ## Entrance map
 
@@ -80,4 +80,20 @@ The local database suites include account age/eligibility, cross-family isolatio
 
 An exact hosted-schema rehearsal must pass and roll back before applying the migration. Publication requires matching website files and all three email functions, then live permission/schema/route/source checks. Deployment outcomes are recorded below.
 
-**Separate launch checks:** a real receiving adult must complete an invitation and password-recovery journey in their own inbox. The known text-only recovery email is not certified fixed by a local HTML template or by successful SMTP sending. Supabase's hosted email HTML needs the supplied recovery template installed and a fresh real reset email checked. The CLI sparse configuration corrected only the production site/redirect URLs and preserved SMTP/MFA settings. International legal/privacy review, retention decisions and operating procedures remain launch work; this code change cannot certify compliance in every English-speaking jurisdiction. Existing volunteer opportunity capacity/attendance workflows are separate from account ownership and must be tested before opening a real show.
+**Separate launch checks:** a real receiving adult must complete an invitation and password-recovery journey in their own inbox. The known text-only recovery email is not certified fixed by a local HTML template or by successful SMTP sending. Supabase's hosted recovery HTML is now installed and was verified after reloading the dashboard; a fresh real reset email still needs to be checked by its recipient. Reviewed CLI sparse configuration corrected the production site/redirect URLs, raised the server password minimum from six to twelve and enabled confirmed-email signup. Double confirmation for email changes was already enabled. SMTP and MFA settings were preserved. International legal/privacy review, retention decisions and operating procedures remain launch work; this code change cannot certify compliance in every English-speaking jurisdiction. Existing volunteer opportunity capacity/attendance workflows are separate from account ownership and must be tested before opening a real show.
+
+
+## Published release, 2026-11-16
+
+- Implementation commit `fb496b69` pushed to `main`; a final follow-up preserves organisation invitations through signup verification and records these outcomes.
+- Database migration `20261116170000` committed with its exact source in migration history after the hosted rollback rehearsal passed. Exact-source checksum verified.
+- Active edge functions: `send-email` v35, `send-invite` v20 (retired endpoint returns 410), `household-mail` v2.
+- All twelve local account-security suites passed; isolated household and unified-account browser journeys passed at mobile/tablet/desktop widths. The final signup journey verifies the recipient invitation and requested return survive email confirmation. 338 website script blocks parse without errors; diff whitespace checks pass.
+- Thirteen live API checks pass: anonymous private actions, operator/mail service actions and raw volunteer reads are denied; invalid capability links fail; caller-chosen email content is rejected; private bindings are unexposed. No personal rows were retrieved and no real verification email was sent.
+- Fourteen published routes/assets contain the matching release markers, including the three new spaces and old team/treasurer/People entrances.
+- Private browser schema access, private relationship SELECT grants, anonymous new private RPC grants and publicly marked private file buckets all remain closed. Zero exact rehearsal accounts survive.
+- All 128 historical volunteer records remain, still unassigned until an adult completes the confirmation/review process. Existing payment counts remain 44 canonical records and ten legacy rows; nothing was silently merged or discarded.
+- The minute mail scheduler has successful runs and the live outbox is empty.
+- Production Auth settings verified after changes: twelve-character minimum; email confirmation required; double confirmation for email changes; production website and canonical verification/reset redirect allowlist. SMTP/MFA settings preserved.
+- Branded recovery email subject, button and fallback URL installed using only the Supabase tab inside this app. Saved source/preview persisted after reload. Safari and private inboxes were not opened. Screenshot: `/tmp/bts-reset-template.png` (local session artifact).
+- Remaining acceptance by a real adult: receive a fresh reset email, complete the password change themselves, and accept an invitation in a second account. Automated tests do not claim personal inbox delivery or completion. Operator MFA enrolment, wider privacy/retention/legal launch review and production-specific staffing/capacity checks remain distinct launch requirements.
