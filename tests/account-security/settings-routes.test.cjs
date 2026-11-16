@@ -1,0 +1,31 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const root = path.resolve(__dirname, '../..');
+async function route(file) {
+  return import('data:text/javascript;base64,' + fs.readFileSync(path.join(root, file)).toString('base64'));
+}
+(async () => {
+  const settings = await route('functions/member/settings.js');
+  const legacy = await route('functions/SYSTEM/[[path]].js');
+  const original = 'https://bts.test/member/settings?panel=profile&return=%2Factivities';
+  let fetched;
+  const response = await settings.onRequest({request: new Request(original), env: {ASSETS: {fetch: async input => {
+    assert.ok(input instanceof URL, 'Use the established asset URL fetch, not a copied incoming request.');
+    fetched = input.href;
+    return new Response('<main>Settings fixture</main>', {headers: {'Content-Type': 'text/html'}});
+  }}}});
+  assert.equal(fetched, 'https://bts.test/SYSTEM/Members/Performer/performer-settings.html');
+  assert.equal(response.status, 200); assert.equal(response.headers.get('Location'), null);
+  assert.equal(response.headers.get('Cache-Control'), 'no-store');
+  assert.equal(await response.text(), '<main>Settings fixture</main>');
+  for (const pathname of ['Members/Performer/performer-settings', 'Members/Performer/performer-settings.html', 'members/performer/performer-settings']) {
+    const redirected = await legacy.onRequest({request: new Request('https://bts.test/SYSTEM/' + pathname + '?panel=profile&return=%2Factivities'), params: {path: pathname.split('/')}});
+    assert.equal(redirected.status, 302);
+    assert.equal(redirected.headers.get('Location'), original);
+    assert.equal(redirected.headers.get('Cache-Control'), 'no-store');
+  }
+  const existing = await legacy.onRequest({request: new Request('https://bts.test/SYSTEM/Members/Account/login.html?return=%2Factivities'), params: {path: ['Members','Account','login.html']}});
+  assert.equal(existing.status, 308); assert.equal(existing.headers.get('Location'), 'https://bts.test/login?return=%2Factivities');
+  console.log('PASS: clean Settings serves HTML directly; both internal URL forms return to /member/settings, preserve query parameters and avoid cached redirects; existing login redirect is preserved.');
+})().catch(error => {console.error(error); process.exitCode = 1;});

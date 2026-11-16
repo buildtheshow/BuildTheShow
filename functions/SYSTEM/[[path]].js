@@ -9,6 +9,8 @@ const SYSTEM_REDIRECTS = new Map([
   ['members/profiles/profile-select.html', '/member'],
   ['members/profiles/profile-create.html', '/member/profile/create'],
   ['members/profiles/profile-sections.html', '/member/profile/edit'],
+  ['members/performer/performer-settings', '/member/settings'],
+  ['members/performer/performer-settings.html', '/member/settings'],
   ['members/performer/performer-dashboard.html', '/member/performer/dashboard'],
   ['members/volunteer/volunteer-shifts.html', '/member/volunteer/shifts'],
   ['members/volunteer/volunteer-best-fit.html', '/member/volunteer/best-fit'],
@@ -33,6 +35,9 @@ export async function onRequest(context) {
     const next = new URL(target, url.origin);
     next.search = url.search;
     next.hash = url.hash;
+    if (target === '/member/settings') {
+      return new Response(null, {status: 302, headers: {'Location': next.toString(), 'Cache-Control': 'no-store'}});
+    }
     return Response.redirect(next.toString(), 308);
   }
   return context.env.ASSETS.fetch(context.request);
