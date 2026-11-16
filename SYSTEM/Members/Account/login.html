@@ -313,7 +313,20 @@
         return;
       }
 
-      window.location.href = '/home';
+      try {
+        // The database's current memberships choose the workspace, never an old signup label.
+        const {data: memberships, error: membershipError} = await sb.rpc('bts_my_home', {p_production_id: null});
+        if (membershipError || !memberships || !Array.isArray(memberships.organisations) || !Array.isArray(memberships.management)) {
+          throw new Error('We could not check your workspace. Please try logging in again.');
+        }
+        const managesOrganisation = memberships.organisations.some(organisation => ['owner', 'admin'].includes(organisation.access));
+        const managesProduction = memberships.management.some(production => production.team_member_id);
+        window.location.href = managesOrganisation || managesProduction ? '/org/dashboard' : '/home';
+      } catch (error) {
+        showError(error.message || 'We could not check your workspace. Please try logging in again.');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Log In';
+      }
 
     });
   </script>
