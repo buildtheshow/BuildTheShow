@@ -2293,11 +2293,9 @@
     </div>
     <div class="sidebar-org">
       <div class="sidebar-org-name" id="sb-org-name">One moment...</div>
+      <select id="org-profile-switcher" class="form-select" aria-label="Switch organisation profile" hidden></select>
     </div>
     <nav class="sidebar-nav">
-      <a class="nav-item" href="/home">My Home</a>
-      <a class="nav-item" href="/activities">My Activities</a>
-      <a class="nav-item" href="/manage">Manage Organisations</a>
       <div class="nav-item active" data-tab="home">
         <img src="/ASSETS/Images/Icons/Home.svg?v=20260617" class="nav-icon" alt="" /> Home
       </div>
@@ -2344,6 +2342,7 @@
       </div>
     </nav>
     <div class="sidebar-footer">
+      <a class="sidebar-logout" href="/home">Member profile</a>
       <div class="sidebar-email" id="sb-email"></div>
       <button class="sidebar-logout" id="logout-btn">Sign out</button>
     </div>
@@ -4050,7 +4049,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     const auth = await waitForValidSession();
     if (!auth?.session) {
       btsRouteLog('route guard blocked', { reason: 'no valid session' });
-      window.location.href = '/login';
+      window.location.href = '/login?return='+encodeURIComponent(location.pathname+location.search);
       return;
     }
     if (!await BTSAccountSecurity.ensureAdultAccount(sb)) return;
@@ -4061,12 +4060,29 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     window.PageLoader?.showMessage?.('Loading your organisation…');
     const memberships=await sb.rpc('bts_my_home',{p_production_id:null});
     if(memberships.error){window.PageLoader?.hide?.();showToast('Could not check organisation access.',true);return;}
-    const requestedId=new URLSearchParams(location.search).get('id');
+    const routeParams=new URLSearchParams(location.search);
+    const requestedId=routeParams.get('id');
+    const requestedProduction=routeParams.get('production');
     const pathParts=location.pathname.split('/').filter(Boolean);
     const requestedSlug=pathParts.length>1&&pathParts[1].toLowerCase()==='org'?decodeURIComponent(pathParts[0]):'';
     const available=(memberships.data.organisations||[]).filter(o=>['owner','admin'].includes(o.access));
-    const selected=available.find(o=>requestedId?o.id===requestedId:requestedSlug?o.slug?.toLowerCase()===requestedSlug.toLowerCase():available.length===1);
-    if(!selected){location.replace('/manage');return;}
+    if(requestedProduction){
+      const assigned=(memberships.data.management||[]).filter(p=>p.id===requestedProduction);
+      if(assigned.length){await openAssignedProduction(assigned[0]);return;}
+      renderOrganisationAccess(memberships.data,requestedProduction);return;
+    }
+    const lastOrg=sessionStorage.getItem('bts_org_profile_'+currentUser.id);
+    const selected=available.find(o=>requestedId?o.id===requestedId:requestedSlug?o.slug?.toLowerCase()===requestedSlug.toLowerCase():o.id===lastOrg)||(!requestedId&&!requestedSlug?available[0]:null);
+    if(!selected){
+      const assigned=(memberships.data.management||[]).filter(p=>p.team_member_id);
+      if(!requestedId&&!requestedSlug&&assigned.length===1){await openAssignedProduction(assigned[0]);return;}
+      renderOrganisationAccess(memberships.data,null,!!(requestedId||requestedSlug));return;
+    }
+    sessionStorage.setItem('bts_org_profile_'+currentUser.id,selected.id);
+    const switcher=document.getElementById('org-profile-switcher');
+    switcher.hidden=available.length<2;
+    switcher.innerHTML=available.map(o=>`<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('');switcher.value=selected.id;
+    switcher.onchange=()=>location.assign('/org/dashboard?'+new URLSearchParams({id:switcher.value}));
     const {data:org,error}=await sb.from('bts_visible_organizations').select('*').eq('id',selected.id).single();
     if (error || !org) {
       btsRouteLog('organisation context failed', { message: error?.message });
@@ -4085,6 +4101,39 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     loadProductions();
     loadMembers();
     loadPastShows();
+  }
+
+  async function openAssignedProduction(production) {
+    const query=new URLSearchParams({id:production.id});
+    if(!['owner','admin'].includes(production.organisation_access)){
+      const opened=await sb.rpc('bts_open_production',{p_production_id:production.id,p_member_id:production.team_member_id});
+      if(opened.error){showToast('Could not open your production access. Please try again.',true);return;}
+      query.set('team','1');query.set('member',production.team_member_id);
+    }
+    location.replace('/org/production?'+query);
+  }
+
+  function renderOrganisationAccess(home,productionId,denied=false) {
+    window.PageLoader?.hide?.();
+    const assigned=(home.management||[]).filter(p=>p.team_member_id);
+    document.getElementById('sb-org-name').textContent='Organisation workspace';
+    document.querySelector('.sidebar-nav').innerHTML='';
+    document.querySelectorAll('.content-section').forEach(section=>section.classList.remove('active'));
+    const section=document.getElementById('tab-home');section.classList.add('active');
+    const hero=section.querySelector('.aud-visual-hero');
+    hero.querySelector('.aud-visual-title').textContent=denied?'Organisation access unavailable':'Organisation profiles';
+    hero.querySelector('.aud-visual-copy').textContent=denied?'This account does not have management access to the requested organisation.':'Organisation profiles create and manage productions. Your personal activities stay in your member profile.';
+    hero.querySelector('#view-profile-btn')?.remove();
+    const create=hero.querySelector('.btn-primary');if(create){create.textContent='Create an organisation';create.onclick=()=>location.assign('/org/setup');}
+    const card=section.querySelector('.section-card');card.querySelector('.section-card-title').textContent=productionId?'Confirm production access':'Your production work';card.querySelector('.section-card-header button')?.remove();
+    const content=document.getElementById('home-recent-prods');content.replaceChildren();
+    if(productionId){
+      const text=document.createElement('p');text.className='empty-desc';text.textContent='If this email was assigned a production position, request its invitation and confirm it using your own adult account.';content.append(text);
+      const request=document.createElement('button');request.className='btn-secondary';request.textContent='Email my access invitation';request.onclick=async()=>{request.disabled=true;try{const result=await sb.rpc('bts_request_production_access',{p_production_id:productionId});if(result.error)throw result.error;showToast(result.data.message);}catch(error){showToast('Could not queue an access invitation. Please try again.',true);}finally{request.disabled=false;}};content.append(request);
+    }else if(assigned.length&&!denied){
+      for(const production of assigned){const row=document.createElement('div');row.className='section-card-header';const name=document.createElement('div');name.className='section-card-title';name.textContent=production.title;const open=document.createElement('button');open.className='btn-secondary';open.textContent='Open production';open.onclick=()=>openAssignedProduction(production);row.append(name,open);content.append(row);}
+    }else{const text=document.createElement('p');text.className='empty-desc';text.textContent=denied?'Ask the organisation owner to confirm your access.':'No accepted production management memberships are connected yet. An invitation or a new organisation will appear here.';content.append(text);}
+    section.replaceChildren(hero,card);
   }
 
   function renderOrgInfo() {

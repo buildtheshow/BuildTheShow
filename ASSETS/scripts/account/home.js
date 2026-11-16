@@ -3,7 +3,8 @@ const $=id=>document.getElementById(id);
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const params=new URLSearchParams(location.search);
 const production=params.get('production')||params.get('id')||'';
-const mode=location.pathname==='/manage'||params.get('open')==='manage'?'manage':location.pathname==='/activities'?'activities':'home';
+const mode=location.pathname==='/activities'?'activities':'home';
+if(params.get('open')==='manage')location.replace('/org/dashboard');
 const tokenKey='bts_production_invitation';
 window.addEventListener('hashchange',()=>{const next=new URLSearchParams(location.hash.slice(1));if(next.has('team-invite')||next.has('volunteer-claim'))location.reload();});
 const fragment=new URLSearchParams(location.hash.slice(1));
@@ -20,9 +21,9 @@ function render(){
  const selectedHistory=$('history-profile').value;
  $('history-profile').innerHTML='<option value="">Choose the correct profile</option>'+state.profiles.filter(p=>p.can_volunteer).map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');$('history-profile').value=selectedHistory;
  const managing=state.organisations.length>0||state.management.length>0;
- $('home-title').textContent=mode==='manage'?'Manage Organisations':mode==='activities'?'My Activities':'My Home';document.title=$('home-title').textContent+' | Build The Show';
- const managementNav=document.querySelector('#sidebar-nav a[href="/manage"]');if(managementNav)managementNav.hidden=!managing;$('manage-space').hidden=!managing;$('management-space').hidden=mode!=='manage';$('home-spaces').hidden=mode!=='home';
- for(const id of ['activities-space','upcoming-space'])$(id).hidden=mode==='manage';
+ $('home-title').textContent=mode==='activities'?'My Activities':'My Home';document.title=$('home-title').textContent+' | Build The Show';
+ $('manage-space').hidden=!managing;$('home-spaces').hidden=mode!=='home';
+
  $('shifts-space').hidden=mode!=='activities';
  const actions=[];
  for(const activity of state.activities){const answers=activity.custom_answers||{};const offer=answers.__bts_cast_offer_code||answers.__bts_cast_offer_token;
@@ -30,7 +31,7 @@ function render(){
   if(answers.__bts_cast_offer_status==='accepted'&&answers.__bts_registration_complete!==true&&answers.__bts_registration_complete!=='true')actions.push({label:activity.name+': complete registration',url:'/SYSTEM/Public/registration#'+new URLSearchParams({prod:activity.production_id,app:activity.id})});
  }
  for(const person of state.profiles)if(person.state==='pending'||person.needs_adult_claim)actions.push({label:person.name+': review profile access',url:'/member/households?profile='+encodeURIComponent(person.id)});
- $('actions-space').hidden=mode==='manage'||actions.length===0;
+ $('actions-space').hidden=actions.length===0;
  $('home-actions-needed').innerHTML=actions.map(action=>`<div class="member-record"><a href="${esc(action.url)}">${esc(action.label)}</a></div>`).join('')||'<p>No pending offer, registration or profile-access action is recorded.</p>';
  $('home-profiles').innerHTML=state.profiles.map(p=>`<article class="position-card"><h3 class="position-card-title">${esc(p.name)}</h3><p>${p.needs_adult_claim?'Adult access needs activation':p.can_manage?'Profile access active':'Permission pending'}</p><div class="member-actions"><a href="/member/households?profile=${encodeURIComponent(p.id)}">Access and payments</a>${p.can_manage?`<a class="member-action" href="/member/profile?id=${encodeURIComponent(p.id)}">View profile</a>`:''}</div></article>`).join('')||'<p>No profiles yet. You can start with yourself or someone you are authorised to manage.</p>';
  $('home-profiles').insertAdjacentHTML('beforeend','<div class="member-actions"><a class="member-action" href="/member/households?action=create-profile">Add a profile</a></div>');
@@ -43,18 +44,14 @@ function render(){
  $('home-upcoming').innerHTML=upcoming.slice(0,5).map(e=>{const day=new Date(e.at);return `<div class="upcoming-item"><div class="upcoming-date-badge"><div class="upcoming-date-mon">${esc(day.toLocaleDateString('en-CA',{month:'short'}))}</div><div class="upcoming-date-day">${day.getDate()}</div></div><div><div class="upcoming-event-title">${esc(e.title)}</div><div class="upcoming-event-sub">${esc(showTitle(e.production))} · ${esc(e.detail)}</div></div></div>`;}).join('')||'<p class="upcoming-empty">No upcoming activities are connected yet.</p>';
  $('home-shifts').innerHTML=state.volunteers.map(v=>`<article class="member-record"><strong>${esc(v.name)}: ${esc(v.role_name)}</strong><p>${esc(v.title)} · ${esc(date(v.shift_date))}${v.shift_start_time?' · '+esc(v.shift_start_time.slice(0,5))+(v.shift_end_time?' to '+esc(v.shift_end_time.slice(0,5)):''):''}</p><p>Status: ${esc(v.status.replaceAll('_',' '))}. ${v.approved_hours==null?'Hours not yet confirmed.':'Confirmed hours: '+esc(v.approved_hours)+'.'}</p>${v.status!=='cancelled'?`<button class="member-action" data-cancel-shift="${esc(v.id)}">Cancel this request or shift</button>`:''}</article>`).join('')||'<p>No volunteer shifts yet. Browse volunteer opportunities to get started.</p>';
  $('home-legacy-volunteers').innerHTML=state.volunteers.filter(v=>!v.profile_id).map(v=>`<div class="member-record"><p>${esc(v.name)} · ${esc(v.role_name)}</p><label>Connect this older record to the correct person<select id="legacy-person-${esc(v.id)}">${state.profiles.filter(p=>p.can_volunteer).map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select></label><button data-link-volunteer="${esc(v.id)}">Confirm profile connection</button></div>`).join('')||'<p>No older unlinked volunteer records owned by this login.</p>';
- $('home-organisations').innerHTML=state.organisations.map(o=>`<article class="position-card"><h3 class="position-card-title">${esc(o.name)}</h3><p>${esc(o.access)}</p>${['owner','admin'].includes(o.access)?`<div class="member-actions"><a href="/org/dashboard?id=${encodeURIComponent(o.id)}">Open organisation</a></div>`:'<p>Production tools appear below when you have an accepted production membership.</p>'}</article>`).join('')||'<p>No organisation memberships yet. Accept an invitation or create an organisation.</p>';
- $('home-management').innerHTML=state.management.map(p=>`<article class="position-card"><h3 class="position-card-title">${esc(p.title)}</h3><p>${esc(p.position||p.organisation_access)}</p>${['owner','admin'].includes(p.organisation_access)||p.team_member_id?`<button data-open-production="${esc(p.id)}" data-member="${esc(p.team_member_id||'')}">Open production management</button>`:'<p>Ask an administrator for the production permissions you need.</p>'}</article>`).join('')||'<p>No production management memberships yet.</p>';
- $('access-request').hidden=!(mode==='manage'&&production&&!state.management.some(p=>p.id===production));$('home-content').hidden=false;
+ $('home-content').hidden=false;
  if(params.get('tab')==='shifts')$('shifts-space').scrollIntoView();
  if(params.get('tab')==='calendar')$('upcoming-space').scrollIntoView();
 }
 async function load(){if(loading)return;loading=true;try{state=await call('bts_my_home',{p_production_id:production||null});render();}finally{loading=false;}}
 $('request-volunteer-history').onclick=event=>work(async()=>{const result=await call('bts_request_volunteer_history',{p_production_id:production||null});status(result.message);},event.target);
-$('request-production-invitation').onclick=event=>work(async()=>{const result=await call('bts_request_production_access',{p_production_id:production});status(result.message);},event.target);
 $('home-logout').onclick=()=>work(async()=>{await client.auth.signOut();sessionStorage.clear();location.replace('/login');});
 document.addEventListener('click',event=>{const button=event.target.closest('button');if(!button)return;
- if(button.dataset.openProduction)work(async()=>{const p=state.management.find(p=>p.id===button.dataset.openProduction&&String(p.team_member_id||'')===button.dataset.member);if(!p)throw new Error('Unavailable');const query=new URLSearchParams({id:p.id});if(!['owner','admin'].includes(p.organisation_access)){await call('bts_open_production',{p_production_id:p.id,p_member_id:p.team_member_id});query.set('team','1');query.set('member',p.team_member_id);}location.assign('/org/production?'+query);},button);
  if(button.dataset.cancelShift)work(async()=>{if(!confirm('Cancel this volunteer request or shift?'))return;const result=await client.from('bts_participant_volunteers').update({status:'cancelled'}).eq('id',button.dataset.cancelShift);if(result.error)throw result.error;await load();status('Volunteer request cancelled.');},button);
  if(button.dataset.linkVolunteer)work(async()=>{const id=button.dataset.linkVolunteer;const profile=$('legacy-person-'+id).value;if(!profile||!confirm('I confirm this older volunteer record belongs to the selected person.'))return;await call('bts_link_my_volunteer',{p_signup_id:id,p_profile_id:profile});await load();status('Older volunteer record connected.');},button);
 });

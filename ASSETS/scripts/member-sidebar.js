@@ -110,7 +110,7 @@
     // Dashboard — always visible
     nav += navLink('/home', 'My Home', activePage === 'profile-select');
     nav += navLink('/activities', 'My Activities', activePage === 'activities');
-    nav += navLink('/manage', 'Manage Organisations', activePage === 'manage');
+    nav += navLink('/org/dashboard', 'Organisation profile', activePage === 'manage');
     nav += navLink('/member/profiles', 'My Profiles', activePage === 'profiles');
 
     // Position groups — only if enabled on selected profile

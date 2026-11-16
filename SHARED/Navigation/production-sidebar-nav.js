@@ -595,9 +595,9 @@
   };
 
   window.loadProductionSidebar = function (activeGroup, activePage) {
-    const key = 'bts-prod-sidebar-v77';
+    const key = 'bts-prod-sidebar-v20';
     const storedSidebar = sessionStorage.getItem(key);
-    const cached=storedSidebar?.includes('data-account-navigation="20261116-one-account"')?storedSidebar:null;
+    const cached=storedSidebar?.includes('data-account-navigation="20261116-separate-profiles"')?storedSidebar:null;
     const host = document.getElementById('prod-sidebar-host');
     if (!host) return;
 
@@ -627,7 +627,7 @@
 
     if (cached) applyAndInit(cached);
 
-    fetch('/SHARED/Navigation/production-sidebar.html?v=20261116-one-account')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=20261116-separate-profiles')
       .then(function (res) { return res.text(); })
       .then(function (html) {
         sessionStorage.setItem(key, html);

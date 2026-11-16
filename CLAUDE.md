@@ -32,6 +32,8 @@ Before writing ANY rendering code, READ the template test page first.
 
 ## Design Rules
 
+- Preserve Katie's existing design throughout. Reuse established layouts, visual components, colours and styling. Use judgement for small matching adjustments; explain and ask Katie before major visual or layout edits.
+
 - Brand colours ONLY — 10 official colours: `#000000 #572e88 #efab45 #efefef #769e7b #dd8233 #d1523d #74a2b4 #476aaa #ca7ea7`
 - No horizontal scroll — ever
 - No left border accent bars

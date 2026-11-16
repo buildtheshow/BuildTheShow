@@ -183,15 +183,16 @@
 
   // ── Load shared sidebar ───────────────────────────────
   (function () {
-    const _key = 'bts-prod-sidebar-v35';
+    const _key = 'bts-prod-sidebar-v20';
     for (let i = 0; i < sessionStorage.length; i++) { const k = sessionStorage.key(i); if (k && k.startsWith('bts-prod-sidebar-') && k !== _key) { sessionStorage.removeItem(k); i--; } }
-    const _cached = sessionStorage.getItem(_key);
+    const _stored = sessionStorage.getItem(_key);
+    const _cached = _stored?.includes('data-account-navigation="20261116-separate-profiles"') ? _stored : null;
     if (_cached) {
       document.getElementById('prod-sidebar-host').innerHTML = _cached;
       initProdSidebarEvents();
       try { console.info('[BTS lifecycle]', { timestamp: new Date().toISOString(), functionName: 'production-sidebar-shell', route: window.location.pathname + window.location.search + window.location.hash, reason: 'mounted-from-cache' }); } catch {}
     }
-    fetch('/SHARED/Navigation/production-sidebar.html?v=sidebar-v60-20260626')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=20261116-separate-profiles')
       .then(res => res.text())
       .then(html => {
         sessionStorage.setItem(_key, html);
