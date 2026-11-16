@@ -206,4 +206,4 @@ The preflight reviewed 77 existing public function signatures, including overloa
 
 Step 1 does not claim that historical records are linked, identity/guardianship is verified, booking capacity is transactional, attendance proves hours, email workflows are completed, legal requirements are satisfied, or full browser account journeys and operational recovery drills have passed. Those remain steps 2–10 from the agreed checklist. Browser slot holds are no longer permitted to mutate shared slot rows directly; capacity and hold replacement belong to step 5.
 
-Deployment and postflight results are recorded in `reference_supabase_sql_checklist.md`.
+Step 1 deployed on 2026-11-16 as release `256a3a25`, with migration `20261116120000`. All boundary suites, the hosted rollback rehearsal and 27 live zero-row API/query checks passed. Postflight found no anonymous private-table reads, inherited projection write/delete grants, publicly marked private buckets or remaining fixtures. Deployment details are recorded in `reference_supabase_sql_checklist.md`.
