@@ -12,7 +12,8 @@ Only account holders aged 18 or over may have a login. Parents and legal guardia
 | --- | --- | --- |
 | Login identity | Supabase Auth user ID | Identifies the signed-in person |
 | Adult account eligibility | `bts_private.account_controls` | Private, server-controlled age declaration and status |
-| Profile owner | `profiles.user_id`, with legacy `account_id` checked for consistency | Owns this private profile; neither field may be reassigned from the browser |
+| Profile creator | `profiles.user_id`, with legacy `account_id` checked for consistency | Historical creator identity; neither field may be reassigned from the browser |
+| Performer access | Private `profile_keys` and `profile_controls` | Explicit self, guardian or delegated permission; household membership alone grants nothing |
 | Guardian declaration | Profile guardian ID, consent timestamp and notice version | Adult account holder attests responsibility for this child |
 | Organisation owner | `organizations.admin_id` | Main organisation account holder; the historic column name does not mean every administrator |
 | Organisation access | `org_members.access_level` | Viewer, editor or admin within one organisation |

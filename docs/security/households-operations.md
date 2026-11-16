@@ -59,3 +59,14 @@ Investigate persistent failures using minimal metadata and the relevant producti
 Apply the single migration transaction and record the exact source in migration history; do not blanket-push an unrelated migration history. Deploy `supabase/functions/household-mail` with `--use-api --no-verify-jwt`; its empty-body behaviour is the intended protection. Package `BACKEND/SupaBase/functions/send-email/{index,authorization}.ts` as the matching `send-email` function and deploy through the API. Push the matching website files, then verify HTTPS assets/routes, scheduler, grants, anonymous denials and zero synthetic survivors.
 
 Before rollback, stop the scheduler and assess new live household relationships. Do not drop relationship/audit tables or revert to creator-only rules after families have accepted keys. Use a forward repair preserving relationships; retain a schema-only preflight and exact migration source. Production email/provider receipt and real two-account recovery/browser journeys require an authorised controlled launch test and are not simulated by these suites.
+
+## Release record, 2026-11-16
+
+- Website implementation: `f577b9a5`, pushed to `main`; ten HTTPS route/asset markers verified, including the hosted 308 canonical redirects.
+- Database: `20261116150000`, exact source recorded atomically after the hosted rollback rehearsal.
+- Functions: `send-email` v34 and `household-mail` v1 active.
+- All local account-security suites and the isolated household browser suite pass; 336 website script blocks parse without errors.
+- Eleven live anonymous/zero-row HTTP checks pass. The relationship schema remains unexposed; browser roles cannot execute operator/mail service RPCs. Private file buckets remain private. No synthetic accounts survive.
+- The minute scheduler has completed successful runs. The live household outbox was empty at postflight; no verification email was sent.
+- Existing payment counts remain 44 current registration records and ten legacy household-log rows. Relevant legacy rows require staff reconciliation and are visibly flagged.
+- A real invited second adult's inbox delivery, personal agreement/recovery journey and the wider international privacy/account launch checklist are not certified by these checks.
