@@ -21504,7 +21504,7 @@
       }
     }
   </style>
-<script src="/SHARED/Components/account-security.js?v=20261115-team-sessions"></script>
+<script src="/SHARED/Components/account-security.js?v=20261116-one-account"></script>
 </head>
 <body>
   <div class="toast" id="toast"></div>
@@ -24576,12 +24576,12 @@
 <script src="/ASSETS/scripts/venue-picker.js?v=20261116-private-routes"></script>
 <script src="/ASSETS/scripts/phone-format.js?v=nanp-smart-20260424"></script>
 <script src="/ASSETS/scripts/casting-card.js?v=in-show-card-20260514"></script>
-<script src="/ASSETS/scripts/production-team-card.js?v=volunteer-modal-template-20260511"></script>
+<script src="/ASSETS/scripts/production-team-card.js?v=20261116-one-account"></script>
 <script src="/ASSETS/scripts/team-edit-modal-template.js?v=shared-edit-modal-20260511"></script>
-<script src="/ASSETS/scripts/production-team-access.js?v=brand-sweep-20260728"></script>
+<script src="/ASSETS/scripts/production-team-access.js?v=20261116-one-account"></script>
 <script src="/SHARED/Components/casting-card-back.js?v=brand-sweep-20260728"></script>
 <script src="/SHARED/Components/audition-status-strip.js?v=20260815-build-wizard-link"></script>
-<script src="/SHARED/Components/audition-page-templates.js?v=brand-sweep-20260728"></script>
+<script src="/SHARED/Components/audition-page-templates.js?v=20261116-one-account"></script>
 <!-- VenuePicker uses OpenStreetMap/Nominatim - no API key needed -->
 <script>
   /* SQL needed:
@@ -25024,7 +25024,6 @@
   let teamAccessMode = false;
   let teamAccessMember = null;
   let teamAccessEmail = '';
-  let teamAccessPasscode = '';
   let teamAccessSessionToken = '';
   let workspaceBootReady = false;
   let queuedWorkspaceNavigation = null;
@@ -25237,7 +25236,7 @@
     overlay.id = 'team-access-login-overlay';
     overlay.innerHTML = window.BTSAuditionTemplates.renderTemplate(
       { area: 'auditions', portal: 'team', component: 'login' },
-      { esc, message }
+      { esc, message, productionId:prodId }
     );
     document.body.appendChild(overlay);
   }
@@ -25288,62 +25287,13 @@
   async function loginTeamAccess(options = {}) {
     try { if (!await BTSAccountSecurity.requireAdultLogin(sb)) return; }
     catch (error) { showTeamAccessLogin(error.message); return; }
-    const err = document.getElementById('team-access-login-error');
-    teamAccessEmail = (options.email || document.getElementById('team-access-email')?.value?.trim() || '').toLowerCase();
-    teamAccessPasscode = (options.passcode || document.getElementById('team-access-passcode')?.value || '').trim().replace(/\D+/g, '').slice(0, 6);
-    if (err) err.textContent = options.silent ? 'Opening your saved team access...' : '';
-    if (!options.sessionToken && teamAccessPasscode.length !== 6) {
-      if (err) err.textContent = 'Enter the 6-digit access code from your invite.';
-      return;
-    }
-    if (!prodId && options.sessionToken) { if (err) err.textContent = 'Production not found. Check your link.'; return; }
-    if (options.sessionToken) {
-      const { data, error } = await sb.rpc('team_member_resume_session', { p_production_id: prodId, p_session_token: options.sessionToken });
-      if (error || !data?.length) {
-        forgetTeamAccess();
-        showTeamAccessLogin();
-        return;
-      }
-      teamAccessSessionToken = options.sessionToken;
-      teamAccessMember = data[0];
-      if (!teamAccessMemberMatchesProduction()) {
-        rejectMismatchedTeamAccess();
-        return;
-      }
-      teamAccessEmail = teamAccessMember.email || options.email || '';
-      await loadPortalPermissionsForMember(teamAccessMember);
-      rememberTeamAccess();
-      document.getElementById('team-access-login-overlay')?.remove();
-      document.body.classList.remove('team-access-login-visible');
-      await bootProductionWorkspace(new URLSearchParams(window.location.search));
-      applyTeamAccessMode();
-      openTeamAccessStartTab();
-      loadAuditionRoomStates({ force: true })
-        .then(() => refreshAuditionsCheckInUi())
-        .catch(() => {});
-      startAuditionsPoll();
-      return;
-    }
-    if (!teamAccessEmail || !teamAccessPasscode) { if (err) err.textContent = 'Enter your email and access code.'; return; }
-    if (!prodId) { if (err) err.textContent = 'Production not found. Copy the team link again from this production.'; return; }
-    let data, error;
-    ({ data, error } = await sb.rpc('team_member_start_session', {
-        p_production_id: prodId,
-        p_email: teamAccessEmail,
-        p_passcode: teamAccessPasscode,
-        p_user_agent: navigator.userAgent || null,
-      }));
-    const result = Array.isArray(data) ? data[0] : data;
-    if (error || !result) {
-      console.warn('[BTS] team login failed', error || { message: 'No team member returned' });
-      if (options.silent) {
-        forgetTeamAccess();
-        showTeamAccessLogin();
-        return;
-      }
-      if (err) err.textContent = error?.message || 'That email and access code did not match.';
-      return;
-    }
+    if (!prodId) { showTeamAccessLogin('Production not found. Open it from My Home.'); return; }
+    const {data,error}=await sb.rpc('bts_open_production',{
+      p_production_id:prodId,p_member_id:new URLSearchParams(location.search).get('member')||null,
+    });
+    const result=Array.isArray(data)?data[0]:data;
+    if(error||!result){showTeamAccessLogin(error?.message||'Accept your production invitation first.');return;}
+    teamAccessEmail=result.team_member?.email||'';
     if (result.production_id) prodId = result.production_id;
     if (!prodId) { if (err) err.textContent = 'Production not found. Check your link.'; return; }
     teamAccessSessionToken = result.session_token || '';
@@ -25388,7 +25338,6 @@
     forgetTeamAccess();
     teamAccessMember = null;
     teamAccessEmail = '';
-    teamAccessPasscode = '';
     teamAccessSessionToken = '';
     stopAuditionsPoll();
     if (auditionsRealtimeChannel) {
@@ -27418,18 +27367,13 @@
     btsRouteLog('production context loaded', { prodId: prod.id, organizationId: prod.organization_id });
     if (!teamAccessMode && prod.organization_id) {
       btsRouteLog('permission check start', { organizationId: prod.organization_id });
-      const { data: orgAccess, error: orgAccessError } = await sb
-        .from('bts_visible_organizations')
-        .select('id,admin_id')
-        .eq('id', prod.organization_id)
-        .eq('admin_id', context.user?.id || '')
-        .maybeSingle();
-      if (orgAccessError || !orgAccess?.id) {
+      const {data:orgAccess,error:orgAccessError}=await sb.rpc('bts_organisation_role',{p_org_id:prod.organization_id});
+      if (orgAccessError || !['owner','admin'].includes(orgAccess)) {
         btsRouteLog('permission check failed', { message: orgAccessError?.message, organizationId: prod.organization_id });
-        showRouteBlocked('You do not have access to this production.', 'Sign in with the organisation admin account, or ask the production owner for access.');
+        showRouteBlocked('You do not have access to this production.', 'Open Manage Organisations using your account, or ask the production owner for access.');
         return;
       }
-      btsRouteLog('permission check end', { ok: true, organizationId: orgAccess.id });
+      btsRouteLog('permission check end', { ok: true, organizationId: prod.organization_id });
     }
     updateTeamUrlDisplays();
     ensureProductionSlug()
@@ -29182,7 +29126,7 @@
       sendType: 'team_action',
       required: true,
       usedBy: 'Production Team > Invite',
-      summary: 'Gives a team member their portal link and access code.',
+      summary: 'Gives a team member their account-bound invitation link.',
       sendSummary: 'Sent when inviting team.',
     },
     general: {
@@ -29555,7 +29499,7 @@
         { token: '{{volunteer_portal_url}}', label: 'Production Portal URL', sample: () => rscVolunteerPortalInfoUrl() },
         { token: '{{volunteer_portal_button}}', label: 'Production Portal Button', sample: () => emailActionButtonHtml(rscVolunteerPortalInfoUrl(), 'Open Production Portal') },
         { token: '{{volunteer_email}}', label: 'Volunteer Email', sample: () => 'volunteer@example.com' },
-        { token: '{{volunteer_passcode}}', label: 'Production Code', sample: () => '482913' },
+        { token: '{{volunteer_passcode}}', label: 'Legacy code (retired)', sample: () => '' },
         { token: '{{volunteer_role}}', label: 'Volunteer Role', sample: () => 'Rehearsal Assistant' },
         { token: '{{volunteer_approved_hours}}', label: 'Volunteer Approved Hours', sample: () => '20 hours' },
         { token: '{{volunteer_discount_performer}}', label: 'Connected Performer', sample: () => 'Katherine Hepburn' },
@@ -29590,7 +29534,7 @@
         { token: '{{team_member_name}}',  label: 'Team Member Name',  sample: () => ET_SAMPLE_CONTEXT.teamMemberName },
         { token: '{{team_member_role}}',  label: 'Team Member Role',  sample: 'Vocal Director' },
         { token: '{{team_member_email}}', label: 'Team Member Email', sample: () => ET_SAMPLE_CONTEXT.performerEmail },
-        { token: '{{team_access_code}}',  label: 'Access Code',       sample: '294761' },
+        { token: '{{team_access_code}}', label: 'Legacy code (retired)', sample: '' },
         { token: '{{portal_link}}',       label: 'Portal Link',       sample: 'https://buildtheshow.com/audition-team' },
         { token: '{{portal_button}}',     label: 'Portal Button',     sample: () => emailActionButtonHtml('https://buildtheshow.com/audition-team', 'Open Audition Team Portal') },
       ],
@@ -29745,9 +29689,9 @@
       note: 'Rehearsal emails should make next steps and scheduling details easy to skim.'
     },
     team_invite: {
-      required: ['{{team_member_name}}', '{{portal_link}}', '{{team_access_code}}'],
+      required: ['{{team_member_name}}', '{{portal_link}}'],
       recommended: ['{{team_member_role}}', '{{team_member_email}}', '{{show_name}}'],
-      note: 'Team invite emails must include the portal link and access code. Without these, your team member cannot log in.'
+      note: 'Team invite emails must include the account-bound invitation link. They accept the invitation using their own account.'
     },
     general: {
       required: ['{{contact_name}}'],
@@ -30107,7 +30051,7 @@
       cast_set: 'How it sends: team triggered. When it sends: when you choose to send the role offer email from Final Casting. This email should include accept and decline links only.',
       cast_accepted: 'How it sends: automatic. When it sends: immediately after a performer accepts their role offer. This is where the registration link belongs.',
       not_cast_set: 'How it sends: team triggered. When it sends: only when you choose to send the not cast email to a performer from casting.',
-      team_invite: 'How it sends: team triggered. When it sends: when you invite a production team member and send their portal link and access code.',
+      team_invite: 'How it sends: team triggered. When it sends: when you invite a production team member and send their account-bound invitation link.',
       volunteer_portal_info: 'How it sends: team triggered. When it sends: when you send portal information from Registration > Status after connecting a volunteer to a cast member.',
       manual: 'How it sends: manual only. When it sends: never automatically. Use this for reminders, rehearsal info, and general updates that you decide to send yourself.',
     };
@@ -30860,13 +30804,13 @@ YOUR LOGIN DETAILS
 {{portal_button}}
 (or click this link: {{portal_link}})
 Email:        {{team_member_email}}
-Access code:  {{team_access_code}}
+Access: accept your personal invitation.
 ─────────────────────────────
 
 HOW TO GET IN:
 1. Click the portal button above (or copy and paste the link into your browser).
 2. Enter your email address: {{team_member_email}}
-3. Enter your access code: {{team_access_code}}
+3. Open this production from My Home after accepting the invitation.
 4. Click "Open Auditions."
 
 ONCE YOU'RE IN:
@@ -30894,7 +30838,6 @@ If you have any trouble logging in, reply to this email and we'll sort it out.
   <div style="background:#f7f4fb;border:1.5px solid #ded6ea;border-radius:14px;padding:20px 22px;margin:22px 0;">
     <h2 style="font-size:20px;line-height:1.15;margin:0 0 8px;font-weight:900;color:#572e88;">Your Login Details</h2>
     <p style="margin:0 0 6px;color:#4a3d6b;"><strong>Login Email:</strong> {{volunteer_email}}</p>
-    <p style="margin:0 0 16px;color:#4a3d6b;"><strong>Production Code:</strong> <span style="font-size:22px;font-weight:900;letter-spacing:0.2em;color:#572e88;">{{volunteer_passcode}}</span></p>
     <p style="margin:0 0 10px;">{{volunteer_portal_button}}</p>
     <p style="margin:0;font-size:13px;color:#6f6288;">Portal Link: <a href="{{volunteer_portal_url}}" style="color:#572e88;font-weight:800;">{{volunteer_portal_url}}</a></p>
   </div>
@@ -34681,6 +34624,8 @@ See you soon!
         .order('created_at', { ascending: true });
       if (error) throw error;
       auditionTeamMembers = data || [];
+    const directory=await sb.rpc('bts_production_access_directory',{p_production_id:prodId});
+    if(!directory.error)auditionTeamMembers=auditionTeamMembers.map(member=>({...member,...(directory.data||[]).find(access=>access.id===member.id)}));
     } catch (error) {
       auditionTeamMembers = [];
       console.warn('[BTS] production_team_members unavailable. Run the team portal Supabase SQL.', error);
@@ -34802,11 +34747,6 @@ See you soon!
     }
   }
 
-  async function savePasscodeFromInput(memberId) {
-    const input = document.getElementById(`passcode-input-${memberId}`);
-    if (!input) return;
-    await saveTeamMemberField(memberId, 'passcode', input.value);
-  }
 
   // ── Team tab - Audition team access ──
   function syncNewTeamMemberMenuDefaults() {
@@ -41277,7 +41217,7 @@ See you soon!
   }
 
   function rscVolunteerKey(row = {}) {
-    return row.portal_token || row.id || `${(row.email || row.volunteer_email || '').toLowerCase()}-${row.name || row.volunteer_name || ''}`;
+    return (row.profile_id ? row.production_id + ':' + row.profile_id : '') || row.portal_token || row.id || `${(row.email || row.volunteer_email || '').toLowerCase()}-${row.name || row.volunteer_name || ''}`;
   }
 
   function rscVolunteerName(row = {}) {
@@ -41294,17 +41234,7 @@ See you soon!
   }
 
   function rscVolunteerSignupHours(row = {}) {
-    const approved = parseFloat(row.approved_hours);
-    if (Number.isFinite(approved) && approved > 0) return approved;
-    const start = String(row.shift_start_time || '').slice(0, 5);
-    const end = String(row.shift_end_time || '').slice(0, 5);
-    if (!start || !end) return 0;
-    const [sh, sm] = start.split(':').map(Number);
-    const [eh, em] = end.split(':').map(Number);
-    if (![sh, sm, eh, em].every(Number.isFinite)) return 0;
-    let diff = (eh * 60 + em) - (sh * 60 + sm);
-    if (diff < 0) diff += 24 * 60;
-    return Math.max(0, diff / 60);
+    return Math.max(0, Number(row.approved_hours) || 0);
   }
 
   function rscVolunteerGroups() {
@@ -41368,7 +41298,7 @@ See you soon!
     const required = parseFloat(String(settings.volunteer_hours || '').replace(/[^0-9.]/g, '')) || 0;
     const totalHours = groups.reduce((sum, group) => sum + (Number(group.hours) || 0), 0);
     if (required > 0) return totalHours >= required;
-    return groups.some(group => group.hours > 0 || group.status === 'approved');
+    return groups.some(group => group.hours > 0 || group.hours > 0);
   }
 
   function rptGetInstallments(settings) {
@@ -42569,7 +42499,7 @@ See you soon!
     const totalHours = selectedGroups.reduce((sum, group) => sum + (Number(group.hours) || 0), 0);
     const earned = selectedGroups.length > 0 && (required > 0
       ? totalHours >= required
-      : selectedGroups.some(group => group.hours > 0 || group.status === 'approved'));
+      : selectedGroups.some(group => group.hours > 0 || group.hours > 0));
     const selectedIds = selectedGroups.flatMap(group => group.ids || []).filter(Boolean);
     const selectedNames = [...new Set(selectedGroups.map(group => group.name).filter(Boolean))];
     const selectedRoles = [...new Set(selectedGroups.map(group => group.roles).filter(Boolean))];
@@ -48535,9 +48465,9 @@ See you soon!
           ? `<span style="color:#e05252;font-size:0.7rem;font-weight:700;">Full</span>`
           : `<span style="color:#7a7490;font-size:0.7rem;">${spotsLeft} spot${spotsLeft !== 1 ? 's' : ''} left</span>`;
         bodyHTML += `<button type="button" class="cb-slot-option${isFull ? ' cb-slot-full' : ''}"
-          id="label-${uid}" 
-          data-slot-id="${esc(slot.id)}" 
-          data-session-id="${esc(s.id)}" 
+          id="label-${uid}"
+          data-slot-id="${esc(slot.id)}"
+          data-session-id="${esc(s.id)}"
           ${isFull ? 'disabled aria-disabled="true"' : ''}
           aria-pressed="false">
           <input type="radio" name="cb-slot-pick" id="${uid}" value="${esc(slot.id)}" style="display:none;" ${isFull ? 'disabled' : ''} />

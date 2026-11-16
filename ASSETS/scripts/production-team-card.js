@@ -94,7 +94,6 @@ function renderVolunteerCardBack(member, options = {}) {
   const color = String(m.note_color || m.noteColor || options.color || '#572e88').trim();
   const email = String(m.email || '').trim();
   const phone = window.BTSPhone?.format(m.phone || m.phone_number || '') || (m.phone || m.phone_number || '');
-  const passcode = String(m.passcode || '').trim();
   const bio = String(m.bio || '').trim();
   const headshot = String(m.headshot_url || m.headshot || '').trim();
   const roleHtml = volunteerRoleIdentifierBreakRole(role);
@@ -126,9 +125,9 @@ function renderVolunteerCardBack(member, options = {}) {
           </svg>
         </button>` : ''}
         <div class="volunteer-card-back-contact">
+          <div><span>Account access:</span><strong>${m.account_connected ? 'Connected' : m.invitation_delivery ? escapeHtml(m.invitation_delivery) : 'Invitation needed'}</strong></div>
           <div><span>Phone:</span><strong>${escapeHtml(phone || 'No phone saved')}</strong></div>
           <div><span>Email:</span><strong>${escapeHtml(email || 'No email saved')}</strong></div>
-          <div class="volunteer-card-back-passcode"><span>Volunteer Code:</span><strong>${escapeHtml(passcode || 'Not set')}</strong></div>
         </div>
       </div>
       <div class="volunteer-card-back-bio">
@@ -498,19 +497,4 @@ function ptcBtnFeedback(btn, { working = null, done = 'Saved', timeout = 1800, r
       else btn.textContent = orig;
     }
   };
-}
-
-async function copyProductionTeamCardPasscode(memberId, btn) {
-  const member = getProductionTeamCardMember(memberId);
-  if (!member?.passcode) return;
-  const markDone = ptcBtnFeedback(btn, { done: 'Copied' });
-  try {
-    await navigator.clipboard.writeText(member.passcode);
-    markDone(true);
-    showToast?.('Passcode copied.');
-  } catch (error) {
-    console.error('Copy passcode failed', error);
-    markDone(false);
-    showToast?.('Could not copy passcode.', 'error');
-  }
 }

@@ -254,10 +254,9 @@
         </div>
         <div class="team-access-login-body">
           <h1>Welcome</h1>
-          <p>Enter the email address and 6-digit access code from your invite.</p>
-          <input class="form-input" id="team-access-email" placeholder="Your email address" type="email" autocomplete="email" />
-          <input class="form-input" id="team-access-passcode" placeholder="6-digit access code" autocomplete="one-time-code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" style="margin-top:0.55rem;" />
-          <button class="btn-primary" onclick="loginTeamAccess()" style="width:100%;justify-content:center;margin-top:0.85rem;">Open Auditions</button>
+          <p>Use your accepted production membership with your normal adult account.</p>
+          <button class="btn-primary" onclick="loginTeamAccess()" style="width:100%;justify-content:center;margin-top:0.85rem;">Try opening production</button>
+          <p><a href="/manage?production=${encodeURIComponent(config.productionId || '')}">Confirm or request access</a> · <a href="/home">My Home</a></p>
           <div class="team-access-login-error" id="team-access-login-error">${esc(message)}</div>
         </div>
       </div>`;

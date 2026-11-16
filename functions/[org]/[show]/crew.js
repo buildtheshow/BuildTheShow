@@ -1,11 +1,8 @@
-// Cloudflare Pages Function
-// Routes /:org/:show/crew → serves SYSTEM/Organisations/Productions/Workspace/treasurer-portal.html,
-// the login portal for Department Leads, the Treasurer, and Volunteers (one shared login gate,
-// same file, different role labels -- see PORTAL_DEFS in portals.html). Previously this portal had
-// no pretty URL at all and could only be reached via the raw /SYSTEM/.../treasurer-portal.html path.
-
+// Compatibility entrance; account membership determines the destination.
 export async function onRequest(context) {
-  const url = new URL(context.request.url);
-  const assetUrl = new URL('/SYSTEM/Organisations/Productions/Workspace/treasurer-portal.html', url);
-  return context.env.ASSETS.fetch(assetUrl);
+  const asset = await context.env.ASSETS.fetch(new URL('/PUBLIC/account-entry.html', context.request.url));
+  const response = new Response(asset.body, asset);
+  response.headers.set('Cache-Control', 'no-store');
+  response.headers.set('Referrer-Policy', 'no-referrer');
+  return response;
 }

@@ -11,26 +11,6 @@ function teamPortalUrl() {
   return url.toString();
 }
 
-function randomTeamPasscode() {
-  return Array.from({ length: 6 }, () => Math.floor(Math.random() * 10)).join('');
-}
-
-async function regenPasscode(memberId, btn) {
-  const code = randomTeamPasscode();
-  const input = document.getElementById(`passcode-input-${memberId}`);
-  if (input) input.value = code;
-  const markDone = ptcBtnFeedback?.(btn, { working: 'Saving...', done: 'Saved' });
-  const ok = await saveTeamMemberField(memberId, 'passcode', code, { render: false });
-  markDone?.(ok !== false);
-}
-
-async function saveTeamMemberPasscode(memberId, btn) {
-  const input = document.getElementById(`passcode-input-${memberId}`);
-  const markDone = ptcBtnFeedback?.(btn, { working: 'Saving...', done: 'Saved' });
-  const ok = await saveTeamMemberField(memberId, 'passcode', input?.value || '', { render: false });
-  markDone?.(ok !== false);
-}
-
 function nextAvailableTeamColor(memberId = null) {
   const used = new Set((auditionTeamMembers || [])
     .filter(m => String(m.id || '') !== String(memberId || '') && m.is_active !== false)
@@ -484,7 +464,6 @@ async function upsertTeamAccessForCreativeRole(role) {
   const { data, error } = await insertTeamMemberWithAvailableColor({
     production_id: prodId,
     ...payload,
-    passcode: randomTeamPasscode(),
   });
   if (error) {
     showToast?.('Could not create team access: ' + error.message, true);
@@ -547,7 +526,6 @@ async function addTeamMemberDirect() {
     department,
     access_level: accessLevel,
     menu_access: menuAccess,
-    passcode: randomTeamPasscode(),
     note_color: noteColor,
     is_active: true,
   }, { fullMessage: 'All team colours are already taken. Remove or reassign a colour before adding another team member.' });
@@ -565,22 +543,9 @@ async function addTeamMemberDirect() {
 }
 
 async function saveTeamMemberField(memberId, field, value, options = {}) {
-  if (!['name', 'email', 'role', 'passcode'].includes(field)) return false;
+  if (!['name', 'email', 'role'].includes(field)) return false;
   const shouldRender = options.render !== false;
   const patch = { [field]: String(value || '').trim() || null };
-  if (field === 'passcode') {
-    const digits = String(value || '').replace(/\D+/g, '').slice(0, 6);
-    if (digits.length !== 6) {
-      const existing = auditionTeamMembers.find(m => String(m.id) === String(memberId));
-      const input = document.getElementById(`passcode-input-${memberId}`);
-      if (input) input.value = existing?.passcode || '';
-      showToast('Access code must be exactly 6 numbers.', true);
-      return false;
-    }
-    patch.passcode = digits;
-    const input = document.getElementById(`passcode-input-${memberId}`);
-    if (input) input.value = patch.passcode;
-  }
   const existing = auditionTeamMembers.find(m => String(m.id) === String(memberId));
   const { error } = await sb.from('production_team_members').update(patch).eq('id', memberId);
   if (error) { showToast('Could not save team access: ' + error.message, true); return false; }
@@ -765,7 +730,7 @@ async function removeProductionTeamMember(memberId, btn = null) {
     `Remove ${label}?`,
     '',
     'This will permanently delete:',
-    '- their team access email and passcode',
+    '- their accepted account membership',
     '- saved team login sessions',
     '- all audition notes they wrote',
     '- their team profile details',
@@ -858,20 +823,6 @@ async function removeProductionTeamMember(memberId, btn = null) {
   }
 }
 
-function teamInviteSubstituteTokens(text, member) {
-  if (!text) return '';
-  const link = teamPortalUrl();
-  return text
-    .split('{{team_member_name}}').join(member.name || 'there')
-    .split('{{team_member_role}}').join(member.role || 'a team member')
-    .split('{{team_member_email}}').join(member.email || '')
-    .split('{{team_access_code}}').join(member.passcode || '')
-    .split('{{portal_link}}').join(link)
-    .split('{{show_name}}').join(prod?.title || 'this production')
-    .split('{{org_name}}').join(orgName || 'The production team')
-    .split('{{director_name}}').join(prod?.director || '');
-}
-
 async function emailTeamInvite(memberId, clickedBtn = null) {
   const member = auditionTeamMembers.find(m => m.id === memberId);
   if (!member) return;
@@ -881,51 +832,15 @@ async function emailTeamInvite(memberId, clickedBtn = null) {
   }
 
   const btn = clickedBtn || document.getElementById(`invite-btn-${memberId}`);
-  const markDone = ptcBtnFeedback?.(btn, { working: 'Sending...', done: 'Sent', restore: false });
+  const markDone = ptcBtnFeedback?.(btn, { working: 'Queueing...', done: 'Queued', restore: false });
 
-  const liveTemplate = etLatestTemplateForCategory('team_invite');
-  if (!liveTemplate) {
-    markDone?.(false);
-    showToast('Team invite template is missing. Open Email Templates and restore the Team Access Invite template.', true);
-    return;
-  }
-
-  const subject = teamInviteSubstituteTokens(liveTemplate.subject, member);
-  const message = teamInviteSubstituteTokens(liveTemplate.body, member);
   try {
-    const { data, error } = await sb.functions.invoke('send-email', {
-      body: {
-        production_id: prodId,
-        category: 'team_invite',
-        trigger: 'team_invite',
-        email: member.email,
-        name: member.name || member.email,
-        subject,
-        message,
-        context: {
-          performer_email: member.email,
-          performer_name: member.name || member.email,
-          show_name: prod?.title || '',
-          show_subtitle: prod?.subtitle || '',
-          org_name: orgName || '',
-          org_email: orgEmail || '',
-          production: {
-            title: prod?.title || '',
-            subtitle: prod?.subtitle || '',
-            venue: prod?.venue || '',
-            director: prod?.director || '',
-            organization_id: prod?.organization_id || '',
-            org_name: orgName || '',
-          },
-        },
-      },
-    });
-    if (error || !data?.sent) throw new Error(error?.message || data?.error || 'Email was not sent.');
-    await sb.from('production_team_members').update({ invite_sent_at: new Date().toISOString() }).eq('id', memberId);
+    const {error}=await sb.rpc('bts_invite_production_member',{p_member_id:memberId});
+    if(error)throw error;
     markDone?.(true);
     await loadAuditionTeamMembers();
     setTimeout(() => renderTeamView(document.getElementById('tm-container')), 900);
-    showToast(`Invite emailed to ${member.name || member.email}.`);
+    showToast(`Invitation queued for ${member.name || member.email}.`);
   } catch (err) {
     markDone?.(false);
     console.error('[BTS] team invite email failed', err);

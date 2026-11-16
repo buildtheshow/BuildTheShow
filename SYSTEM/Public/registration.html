@@ -625,7 +625,7 @@
       .rpf-mr-sig-row { grid-template-columns: 1fr; }
     }
   </style>
-<script src="/SHARED/Components/account-security.js?v=20261115-team-sessions"></script>
+<script src="/SHARED/Components/account-security.js?v=20261116-one-account"></script>
 </head>
 <body>
 
@@ -2812,40 +2812,7 @@
     });
   }
 
-  async function rpfEnsurePortalCode() {
-    if (!_applicant?.id) return '';
-    const applicantAnswers = _applicant.custom_answers || {};
-    let booking = _booking || null;
-    let bookingAnswers = booking?.custom_answers || {};
-    try {
-      if (!booking) booking = await loadLinkedRegistrationBooking(_applicant);
-      if (booking) {
-        _booking = booking;
-        bookingAnswers = booking.custom_answers || {};
-      }
-    } catch (_) {}
-    const existing = String(applicantAnswers['__bts_portal_code'] || bookingAnswers['__bts_portal_code'] || '').trim();
-    if (existing) {
-      _applicant.custom_answers = { ...applicantAnswers, '__bts_portal_code': existing };
-      return existing;
-    }
-    const buf = new Uint32Array(1);
-    if (window.crypto?.getRandomValues) window.crypto.getRandomValues(buf);
-    const code = String((buf[0] % 900000) + 100000);
-    const nextApplicantAnswers = { ...applicantAnswers, '__bts_portal_code': code };
-    _applicant.custom_answers = nextApplicantAnswers;
-    try {
-      await sb.from('bts_participant_applications').update({ custom_answers: nextApplicantAnswers }).eq('id', _applicant.id);
-    } catch (_) {}
-    if (booking?.id) {
-      try {
-        const nextBookingAnswers = { ...bookingAnswers, '__bts_portal_code': code };
-        await sb.from('bts_participant_bookings').update({ custom_answers: nextBookingAnswers, portal_code: code }).eq('id', booking.id);
-        _booking = { ...booking, custom_answers: nextBookingAnswers };
-      } catch (_) {}
-    }
-    return code;
-  }
+  async function rpfEnsurePortalCode() { return ''; }
 
   async function rpfMarkRegistrationConfirmationSent() {
     if (!_applicant?.id) return;
@@ -2909,10 +2876,10 @@
     const emailFailed = window._rpfLastConfirmationEmailError;
     const portalBlock = portalUrl ? `
       <div class="rpf-success-card" style="background:#f0f4ff;border-color:#c5d0ea;margin-bottom:1rem;">
-        <div class="rpf-success-title" style="color:#572e88;">Your production portal</div>
+        <div class="rpf-success-title" style="color:#572e88;">My Activities</div>
         <div class="rpf-success-body" style="margin-bottom:0.6rem;">Log in any time to see your schedule, shifts, and production updates.</div>
-        ${portalCode ? `<div style="font-size:0.75rem;color:#6f6288;margin-bottom:0.2rem;">Production Code</div><div style="font-size:1.9rem;font-weight:900;letter-spacing:0.15em;color:#572e88;margin-bottom:0.7rem;">${esc(portalCode)}</div>` : ''}
-        <a href="${esc(portalUrl)}" style="display:inline-block;background:#572e88;color:#fff;text-decoration:none;font-weight:800;font-size:0.85rem;padding:0.55rem 1.25rem;border-radius:8px;">Access My Portal →</a>
+        ${portalCode ? `<div style="font-size:0.75rem;color:#6f6288;margin-bottom:0.2rem;">Registration reference</div><div style="font-size:1.9rem;font-weight:900;letter-spacing:0.15em;color:#572e88;margin-bottom:0.7rem;">${esc(portalCode)}</div>` : ''}
+        <a href="${esc(portalUrl)}" style="display:inline-block;background:#572e88;color:#fff;text-decoration:none;font-weight:800;font-size:0.85rem;padding:0.55rem 1.25rem;border-radius:8px;">Open My Activities →</a>
       </div>` : '';
     body.innerHTML = `<div class="rpf-success">
       <div class="rpf-success-kicker">Registration Complete</div>
@@ -2939,14 +2906,8 @@
   }
 
   // ── Resend confirmation email ─────────────────────────────────────────────────
-  function rpfPortalUrl() {
-    try {
-      const slug = _prod?.slug || '';
-      const org = _org?.slug || _org?.abbreviation || String(window.location.pathname.split('/')[1] || '');
-      if (org && slug) return `${window.location.origin}/${org}/${slug}/portal`;
-    } catch (_) {}
-    return '';
-  }
+  function rpfPortalUrl(){return location.origin+'/activities?production='+encodeURIComponent(_prod?.id||'');}
+
 
   async function rpfSendRegistrationCompleteEmail() {
     const productionId = rpfCurrentProductionId();
@@ -2986,7 +2947,7 @@
           volunteer_link: volunteerLink,
           volunteer_button: rpfEmailButton(volunteerLink, 'View Volunteer Opportunities', '#3f6f47'),
           volunteer_portal_url: portalUrl,
-          volunteer_portal_button: portalUrl ? rpfEmailButton(portalUrl, 'Open Production Portal') : '',
+          volunteer_portal_button: portalUrl ? rpfEmailButton(portalUrl, 'Open My Activities') : '',
           volunteer_passcode: portalCode,
           org_abbreviation: _org?.abbreviation || '',
           organization_abbreviation: _org?.abbreviation || '',

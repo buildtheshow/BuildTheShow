@@ -297,6 +297,8 @@ serve(async (req) => {
     )
   );
 
+  if(String(body.category||'')==='team_invite')return json({ok:false,error:'Send a recipient-confirmed invitation from People and Access.'},410);
+
   // ── Resolve performer data ────────────────────────────────────
   // Prefer audition_applications (has email + all custom answers).
   // Fall back to audition_bookings for booking confirmation flow.
@@ -462,26 +464,7 @@ serve(async (req) => {
     templateList[0] ||
     null;
 
-  let teamMember: Record<string, unknown> | null = null;
-  if (category === 'team_invite') {
-    const teamMemberId = firstDefinedString(body.team_member_id, directContext.team_member_id);
-    try {
-      let teamQuery = sb
-        .from('production_team_members')
-        .select('id,name,email,role,passcode')
-        .eq('production_id', productionId);
-      if (teamMemberId) {
-        teamQuery = teamQuery.eq('id', teamMemberId);
-      } else if (performerEmail) {
-        teamQuery = teamQuery.eq('email', performerEmail);
-      }
-      const { data } = await teamQuery.limit(1).maybeSingle();
-      teamMember = data as Record<string, unknown> | null;
-    } catch { teamMember = null; }
-    performerEmail = firstDefinedString(performerEmail, teamMember?.email, directContext.team_member_email);
-    performerName = firstDefinedString(performerName, teamMember?.name, directContext.team_member_name);
-    if (!performerEmail) return json({ ok: false, error: 'No email address found for this team member' });
-  }
+  const teamMember: Record<string, unknown> | null = null;
 
   if (!template && !isProducerNotification) {
     console.error('[send-email] Template not found for category:', category, 'production:', productionId);
@@ -651,13 +634,8 @@ serve(async (req) => {
       ? (prod as Record<string, unknown>).registration_settings as Record<string, unknown>
       : {});
   const publicBaseUrl = productionPublicBaseUrl(org, productionRecord);
-  let registrationPortalCode = firstDefinedString(directContext.volunteer_passcode, customAnswers.__bts_portal_code);
-  let registrationCustomAnswerPatch: Record<string, unknown> = {};
-  if (category === 'registration_completed' && applicantIdRaw && !registrationPortalCode) {
-    registrationPortalCode = String(Math.floor(100000 + Math.random() * 900000));
-    registrationCustomAnswerPatch.__bts_portal_code = registrationPortalCode;
-    customAnswers = { ...customAnswers, ...registrationCustomAnswerPatch };
-  }
+  const registrationPortalCode='';
+  const registrationCustomAnswerPatch: Record<string,unknown>={};
   const registrationOfferCode = firstDefinedString(customAnswers.__bts_cast_offer_code, customAnswers.cast_offer_code, directContext.registration_code);
   const registrationLink = firstDefinedString(
     directContext.registration_link,
@@ -665,10 +643,7 @@ serve(async (req) => {
     directContext.cast_accept_link,
     directContext.cast_response_link,
   );
-  const volunteerPortalUrl = firstDefinedString(
-    directContext.volunteer_portal_url,
-    publicBaseUrl ? `${publicBaseUrl}/portal` : '',
-  );
+  const volunteerPortalUrl='https://buildtheshow.com/activities?production='+encodeURIComponent(productionId);
   const paymentEmailDetails = buildPaymentEmailDetails(registrationSettings);
   if (isProducerNotification) {
     const notificationEmail = firstDefinedString(directContext.notification_email, producerEmail, orgEmail);
@@ -874,7 +849,7 @@ serve(async (req) => {
     '{{team_member_name}}':      firstDefinedString(directContext.team_member_name, teamMember?.name, performerName),
     '{{team_member_role}}':      firstDefinedString(directContext.team_member_role, teamMember?.role),
     '{{team_member_email}}':     firstDefinedString(directContext.team_member_email, teamMember?.email, performerEmail),
-    '{{team_access_code}}':      firstDefinedString(directContext.team_access_code, teamMember?.passcode),
+    '{{team_access_code}}':      '',
     '{{portal_link}}':           teamPortalLink,
     '{{submission_link}}':       firstDefinedString(directContext.submission_link, directContext.self_tape_submission_link),
     '{{callback_self_tape_link}}': firstDefinedString(directContext.callback_self_tape_link),
@@ -1020,7 +995,7 @@ serve(async (req) => {
     return String(value || '').trim();
   }
   const sourceSubject = reviewedSubject || template?.subject || CATEGORY_SUBJECTS[category] || `Update from ${showName || 'Build The Show'}`;
-  const sourceBody    = normalizeTemplateBody(reviewedBody || template?.body || '');
+  const sourceBody=normalizeTemplateBody(reviewedBody||template?.body||'').replace(/<p\b[^>]*>[^<]*(?:Production Code|Access code)[^<]*{{\s*(?:volunteer_passcode|team_access_code)\s*}}[^<]*<\/p>/gi,'').replace(/^.*{{\s*(?:volunteer_passcode|team_access_code)\s*}}.*$/gm,'');
   const sourceBodyText = htmlToPlainText(String(sourceBody || ''));
 
   if (!sourceBodyText.trim()) {

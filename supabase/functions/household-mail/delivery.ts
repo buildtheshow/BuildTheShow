@@ -6,7 +6,14 @@ export function familyMessage(job:FamilyJob) {
   let subject='A shared performer record changed';
   let text='An authorised person updated a booking, registration, payment tracker or access permission for '+name+'. Sign in to review the change history.';
   let link=base;let label='Open households and access';
-  if(job.kind==='invitation') {
+  if(job.kind==='volunteer_history'){subject='Confirm your older volunteer records';text='Confirm which authorised profile should hold the older volunteer records for '+name+'. You must use the adult account receiving this email. A matching name alone does not grant access.';link='https://buildtheshow.com/home#volunteer-claim='+encodeURIComponent(String(job.payload.token));label='Review older volunteer records';
+  } else if(job.kind==='team_invitation') {
+    subject='Your production access invitation';text='You have been invited to help manage '+String(job.payload.production||'a production')+'. Accept using your own adult account and the email that received this invitation.';link='https://buildtheshow.com/home#team-invite='+encodeURIComponent(String(job.payload.token));label='Review production invitation';
+  } else if(job.kind==='org_invitation') {
+    subject='Your organisation invitation';text='You have been invited to join '+String(job.payload.organisation||'an organisation')+'. Accept using your own adult account.';link='https://buildtheshow.com/invite?token='+encodeURIComponent(String(job.payload.token));label='Review organisation invitation';
+  } else if(job.kind==='volunteer_updated') {
+    subject='Your volunteer activity changed';text='A volunteer request, assignment or confirmed hours changed for '+name+'. Open My Activities to review the current details.';link='https://buildtheshow.com/activities?production='+encodeURIComponent(String(job.payload.production_id||''));label='Open My Activities';
+  } else if(job.kind==='invitation') {
     subject='Confirm a Build The Show invitation';
     const kind=String(job.payload.permission||'access');
     text=kind==='delegate' ? 'Someone would like to manage bookings for '+name+'. Confirm only if this is your profile and you want that help. You do not need a regular login to confirm. You can stop this permission later.' : kind==='contact' ? 'You have been invited to receive production updates for '+name+'. This does not give account access.' : kind==='household' ? 'You have been invited to join a household. This does not automatically grant access to performer profiles.' : 'You have been invited to manage '+name+' using your own adult login. Accept only if you are authorised to do this.';

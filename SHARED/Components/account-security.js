@@ -30,7 +30,7 @@
     const next = new URL(safeReturnPath(returnPath || window.location.pathname + window.location.search), window.location.origin);
     // Preview codes must not be forwarded through login URLs or copied links.
     next.searchParams.delete('pvw_passcode');
-    next.searchParams.delete('pvw_email');
+    for(const key of [...next.searchParams.keys()])if(key.startsWith('pvw_'))next.searchParams.delete(key);
     const destination = next.pathname + next.search;
     const { data, error } = await client.auth.getUser();
     if (error && data?.user) throw new Error('We could not verify your sign-in. Please try again.');

@@ -51,13 +51,9 @@
       }
 
       function esc(s) { return S.esc(s); }
-      function portalKey(req) { return req.portal_token || req.id || (req.email || req.volunteer_email || 'unknown').toLowerCase(); }
+      function portalKey(req) { return (req.profile_id ? req.production_id + ':' + req.profile_id : '') || req.portal_token || req.id || (req.email || req.volunteer_email || 'unknown').toLowerCase(); }
       function rowsForKey(key) {
-        return requests.filter(row => {
-          if (row.portal_token) return row.portal_token === key;
-          if (row.id && row.id === key) return true;
-          return (row.email || row.volunteer_email || '').toLowerCase() === key;
-        });
+        return requests.filter(row => portalKey(row) === key);
       }
       function initials(name) {
         if (!name) return '?';
@@ -121,14 +117,13 @@
         try {
           if (newStatus === 'approved') {
             const rows = ids.map(id => requests.find(r => String(r.id) === String(id))).filter(Boolean);
-            await Promise.all(rows.map(row => {
+            const results = await Promise.all(rows.map(row => {
               const payload = { status: 'approved' };
-              const hrs = shiftHrs(row);
-              if (hrs > 0) payload.approved_hours = hrs;
               return sb.from('volunteer_signups').update(payload).eq('id', row.id);
             }));
+            const failed=results.find(result=>result.error);if(failed)throw failed.error;
           } else {
-            await sb.from('volunteer_signups').update({ status: newStatus }).in('id', ids);
+            const result=await sb.from('volunteer_signups').update({ status: newStatus }).in('id', ids);if(result.error)throw result.error;
           }
           await load();
         } catch (e) {

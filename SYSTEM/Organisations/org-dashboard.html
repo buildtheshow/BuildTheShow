@@ -2241,7 +2241,7 @@
     .toast.toast--success { background:#efab45; border-color:#efab45; color:#000000; font-weight:900; box-shadow:0 14px 34px rgba(87,46,136,0.22); }
     .toast.toast--error { background:rgba(220,60,60,0.12); border-color:rgba(220,60,60,0.35); color:#f08080; }
   </style>
-  <script src="/SHARED/Components/account-security.js?v=20261115-team-sessions"></script>
+  <script src="/SHARED/Components/account-security.js?v=20261116-one-account"></script>
 <script src="/SHARED/Components/organisation-ownership.js?v=20261115-accounts"></script>
 </head>
 <body>
@@ -2295,6 +2295,9 @@
       <div class="sidebar-org-name" id="sb-org-name">One moment...</div>
     </div>
     <nav class="sidebar-nav">
+      <a class="nav-item" href="/home">My Home</a>
+      <a class="nav-item" href="/activities">My Activities</a>
+      <a class="nav-item" href="/manage">Manage Organisations</a>
       <div class="nav-item active" data-tab="home">
         <img src="/ASSETS/Images/Icons/Home.svg?v=20260617" class="nav-icon" alt="" /> Home
       </div>
@@ -3645,7 +3648,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
 
 <script src="/SHARED/Components/page-loader.js?v=brand-sweep-20260728"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="/ASSETS/scripts/production-team-card.js?v=mgmt-20260511b"></script>
+<script src="/ASSETS/scripts/production-team-card.js?v=20261116-one-account"></script>
 <script src="/ASSETS/scripts/team-edit-modal-template.js?v=shared-edit-modal-20260511"></script>
 <!--
   Required SQL migrations for org profile & branding:
@@ -4056,8 +4059,15 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
 
     btsRouteLog('organisation context start', { userId: currentUser.id });
     window.PageLoader?.showMessage?.('Loading your organisation…');
-    const { data: org, error } = await sb.from('bts_visible_organizations')
-      .select('*').eq('admin_id', currentUser.id).limit(1).single();
+    const memberships=await sb.rpc('bts_my_home',{p_production_id:null});
+    if(memberships.error){window.PageLoader?.hide?.();showToast('Could not check organisation access.',true);return;}
+    const requestedId=new URLSearchParams(location.search).get('id');
+    const pathParts=location.pathname.split('/').filter(Boolean);
+    const requestedSlug=pathParts.length>1&&pathParts[1].toLowerCase()==='org'?decodeURIComponent(pathParts[0]):'';
+    const available=(memberships.data.organisations||[]).filter(o=>['owner','admin'].includes(o.access));
+    const selected=available.find(o=>requestedId?o.id===requestedId:requestedSlug?o.slug?.toLowerCase()===requestedSlug.toLowerCase():available.length===1);
+    if(!selected){location.replace('/manage');return;}
+    const {data:org,error}=await sb.from('bts_visible_organizations').select('*').eq('id',selected.id).single();
     if (error || !org) {
       btsRouteLog('organisation context failed', { message: error?.message });
       window.location.href = '/org/setup';
@@ -4813,14 +4823,10 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
 
     // Call Edge Function to send email
     try {
-      await fetch('https://tkmaiktxpwqfbgeojbnf.supabase.co/functions/v1/send-invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8` },
-        body: JSON.stringify({ to: email, orgName: currentOrg.name, title: title || null, access_level, inviteUrl }),
-      });
-    } catch(e) { /* email failed but invite record created */ }
+      const queued=await sb.rpc('bts_email_org_invitation',{p_invitation_id:inv.id});if(queued.error)throw queued.error;
+    } catch(e) {errEl.textContent='Invitation saved, but email could not be queued. Please retry.';errEl.classList.add('visible');btn.disabled=false;btn.textContent='Send Invitation';return;}
 
-    succEl.textContent = `Invitation sent to ${email}. They'll receive a link to join.`;
+    succEl.textContent = `Invitation queued for ${email}. They will receive a link to join.`;
     succEl.style.display = 'block';
     btn.disabled = false; btn.textContent = 'Send Invitation';
     loadMembers();
@@ -4944,7 +4950,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     const member = (window._orgBoardMembers || []).find(m => String(m.id) === String(id));
     if (!member) { showToast('Could not find member — try refreshing the page.', true); return; }
     if (!member.email) { showToast('No email address saved for this member.', true); return; }
-    const markDone = typeof ptcBtnFeedback === 'function' ? ptcBtnFeedback(btn, { working: 'Sending...', done: 'Sent', restore: false }) : null;
+    const markDone = typeof ptcBtnFeedback === 'function' ? ptcBtnFeedback(btn, { working: 'Queueing...', done: 'Queued', restore: false }) : null;
     try {
       const { data: inv, error: invErr } = await sb.from('org_invitations').insert({
         org_id: currentOrg.id,
@@ -4955,11 +4961,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
       }).select().single();
       if (invErr) throw invErr;
       const inviteUrl = new URL('/invite?token=' + inv.token, window.location.href).href;
-      await fetch('https://tkmaiktxpwqfbgeojbnf.supabase.co/functions/v1/send-invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8` },
-        body: JSON.stringify({ to: member.email, orgName: currentOrg.name, title: member.title || null, access_level: member.access_level || 'editor', inviteUrl }),
-      });
+      const queued=await sb.rpc('bts_email_org_invitation',{p_invitation_id:inv.id});if(queued.error)throw queued.error;
       markDone?.(true);
     } catch(e) {
       markDone?.(false);
@@ -8540,7 +8542,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   });
 </script>
 
-  <script src="/SHARED/Components/audition-page-templates.js?v=brand-sweep-20260728"></script>
+  <script src="/SHARED/Components/audition-page-templates.js?v=20261116-one-account"></script>
   <script defer src="/SHARED/Components/text-fit.js"></script>
   <script src="/SHARED/Components/auto-save.js?v=brand-sweep-20260728"></script>
 

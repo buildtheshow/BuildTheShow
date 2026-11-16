@@ -1,8 +1,8 @@
-// Cloudflare Pages Function
-// Routes /:org/:show/portal → production portal (same page as /volunteers, activates portal view)
-
+// Compatibility entrance; account membership determines the destination.
 export async function onRequest(context) {
-  const url = new URL(context.request.url);
-  const assetUrl = new URL('/PUBLIC/volunteer-production-page.html', url);
-  return context.env.ASSETS.fetch(assetUrl);
+  const asset = await context.env.ASSETS.fetch(new URL('/PUBLIC/account-entry.html', context.request.url));
+  const response = new Response(asset.body, asset);
+  response.headers.set('Cache-Control', 'no-store');
+  response.headers.set('Referrer-Policy', 'no-referrer');
+  return response;
 }

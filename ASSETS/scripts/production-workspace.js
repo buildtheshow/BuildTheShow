@@ -478,7 +478,6 @@
   let teamAccessMode = false;
   let teamAccessMember = null;
   let teamAccessEmail = '';
-  let teamAccessPasscode = '';
   let teamAccessSessionToken = '';
   let workspaceBootReady = false;
   let queuedWorkspaceNavigation = null;
@@ -700,7 +699,7 @@
     overlay.id = 'team-access-login-overlay';
     overlay.innerHTML = window.BTSAuditionTemplates.renderTemplate(
       { area: 'auditions', portal: 'team', component: 'login' },
-      { esc, message }
+      { esc, message, productionId:prodId }
     );
     document.body.appendChild(overlay);
   }
@@ -749,64 +748,15 @@
   }
 
   async function loginTeamAccess(options = {}) {
-    const err = document.getElementById('team-access-login-error');
-    try {
-      if (!await BTSAccountSecurity.requireAdultLogin(sb)) return;
-    } catch (error) { if (err) err.textContent = error.message; return; }
-    teamAccessEmail = (options.email || document.getElementById('team-access-email')?.value?.trim() || '').toLowerCase();
-    teamAccessPasscode = (options.passcode || document.getElementById('team-access-passcode')?.value || '').trim().replace(/\D+/g, '').slice(0, 6);
-    if (err) err.textContent = options.silent ? 'Opening your saved team access...' : '';
-    if (!options.sessionToken && teamAccessPasscode.length !== 6) {
-      if (err) err.textContent = 'Enter the 6-digit access code from your invite.';
-      return;
-    }
-    if (!prodId && options.sessionToken) { if (err) err.textContent = 'Production not found. Check your link.'; return; }
-    if (options.sessionToken) {
-      const { data, error } = await sb.rpc('team_member_resume_session', { p_production_id: prodId, p_session_token: options.sessionToken });
-      if (error || !data?.length) {
-        forgetTeamAccess();
-        showTeamAccessLogin();
-        return;
-      }
-      teamAccessSessionToken = options.sessionToken;
-      teamAccessMember = data[0];
-      if (!teamAccessMemberMatchesProduction()) {
-        rejectMismatchedTeamAccess();
-        return;
-      }
-      teamAccessEmail = teamAccessMember.email || options.email || '';
-      rememberTeamAccess();
-      document.getElementById('team-access-login-overlay')?.remove();
-      document.body.classList.remove('team-access-login-visible');
-      await bootProductionWorkspace(new URLSearchParams(window.location.search));
-      applyTeamAccessMode();
-      openTeamAccessStartTab();
-      loadAuditionRoomStates({ force: true })
-        .then(() => refreshAuditionsCheckInUi())
-        .catch(() => {});
-      startAuditionsPoll();
-      return;
-    }
-    if (!teamAccessEmail || !teamAccessPasscode) { if (err) err.textContent = 'Enter your email and access code.'; return; }
-    if (!prodId) { if (err) err.textContent = 'Production not found. Copy the team link again from this production.'; return; }
-    let data, error;
-    ({ data, error } = await sb.rpc('team_member_start_session', {
-        p_production_id: prodId,
-        p_email: teamAccessEmail,
-        p_passcode: teamAccessPasscode,
-        p_user_agent: navigator.userAgent || null,
-      }));
-    const result = Array.isArray(data) ? data[0] : data;
-    if (error || !result) {
-      console.warn('[BTS] team login failed', error || { message: 'No team member returned' });
-      if (options.silent) {
-        forgetTeamAccess();
-        showTeamAccessLogin();
-        return;
-      }
-      if (err) err.textContent = error?.message || 'That email and access code did not match.';
-      return;
-    }
+    try { if (!await BTSAccountSecurity.requireAdultLogin(sb)) return; }
+    catch (error) { showTeamAccessLogin(error.message); return; }
+    if (!prodId) { showTeamAccessLogin('Production not found. Open it from My Home.'); return; }
+    const {data,error}=await sb.rpc('bts_open_production',{
+      p_production_id:prodId,p_member_id:new URLSearchParams(location.search).get('member')||null,
+    });
+    const result=Array.isArray(data)?data[0]:data;
+    if(error||!result){showTeamAccessLogin(error?.message||'Accept your production invitation first.');return;}
+    teamAccessEmail=result.team_member?.email||'';
     if (result.production_id) prodId = result.production_id;
     if (!prodId) { if (err) err.textContent = 'Production not found. Check your link.'; return; }
     teamAccessSessionToken = result.session_token || '';
@@ -850,7 +800,6 @@
     forgetTeamAccess();
     teamAccessMember = null;
     teamAccessEmail = '';
-    teamAccessPasscode = '';
     teamAccessSessionToken = '';
     stopAuditionsPoll();
     if (auditionsRealtimeChannel) {
@@ -2743,11 +2692,7 @@
       } catch (error) { showRouteBlocked('Sign-in check unavailable', error.message); return; }
       btsLifecycleLog('init', { reason: 'team-access-login-required', dataStatus: 'loading' });
       installTeamAccessMobileZoomLock();
-      showTeamAccessLogin();
-      const remembered = loadRememberedTeamAccess();
-      if (remembered?.sessionToken) {
-        loginTeamAccess({ email: remembered.email || '', sessionToken: remembered.sessionToken, silent: true });
-      }
+      await loginTeamAccess();
       return;
     }
 
@@ -2825,22 +2770,17 @@
     btsRouteLog('production context loaded', { prodId: prod.id, organizationId: prod.organization_id });
     if (!teamAccessMode && prod.organization_id) {
       btsRouteLog('permission check start', { organizationId: prod.organization_id });
-      const { data: orgAccess, error: orgAccessError } = await sb
-        .from('bts_visible_organizations')
-        .select('id,admin_id')
-        .eq('id', prod.organization_id)
-        .eq('admin_id', context.user?.id || '')
-        .maybeSingle();
+      const {data:orgAccess,error:orgAccessError}=await sb.rpc('bts_organisation_role',{p_org_id:prod.organization_id});
       if (bootToken !== workspaceBootToken) {
         btsLifecycleLog('bootProductionWorkspace', { reason: 'stale-permission-response', bootToken, activeBootToken: workspaceBootToken });
         return;
       }
-      if (orgAccessError || !orgAccess?.id) {
+      if (orgAccessError || !['owner','admin'].includes(orgAccess)) {
         btsRouteLog('permission check failed', { message: orgAccessError?.message, organizationId: prod.organization_id });
-        showRouteBlocked('You do not have access to this production.', 'Sign in with the organisation admin account, or ask the production owner for access.');
+        showRouteBlocked('You do not have access to this production.', 'Open Manage Organisations using your account, or ask the production owner for access.');
         return;
       }
-      btsRouteLog('permission check end', { ok: true, organizationId: orgAccess.id });
+      btsRouteLog('permission check end', { ok: true, organizationId: prod.organization_id });
     }
     updateTeamUrlDisplays();
     ensureProductionSlug()
@@ -5000,7 +4940,7 @@
       sendType: 'team_action',
       required: true,
       usedBy: 'Production Team > Invite',
-      summary: 'Gives a team member their portal link and access code.',
+      summary: 'Gives a team member their account-bound invitation link.',
       sendSummary: 'Sent when inviting team.',
     },
     general: {
@@ -5477,7 +5417,7 @@
         { token: '{{volunteer_portal_url}}', label: 'Production Portal URL', sample: () => rscVolunteerPortalInfoUrl() },
         { token: '{{volunteer_portal_button}}', label: 'Production Portal Button', sample: () => emailActionButtonHtml(rscVolunteerPortalInfoUrl(), 'View My Production Portal') },
         { token: '{{volunteer_email}}', label: 'Volunteer Email', sample: () => 'volunteer@example.com' },
-        { token: '{{volunteer_passcode}}', label: 'Production Code', sample: () => '482913' },
+        { token: '{{volunteer_passcode}}', label: 'Legacy code (retired)', sample: () => '' },
         { token: '{{volunteer_role}}', label: 'Volunteer Role', sample: () => 'Rehearsal Assistant' },
         { token: '{{volunteer_shift_dates}}', label: 'Volunteer Shift Dates', sample: () => 'Wednesday, August 5, 2026, 9:00 AM – 2:00 PM' },
         { token: '{{volunteer_shifts_block}}', label: 'Volunteer Shift Block (full details)', sample: () => '<em>[Structured shift card with role, when, where, check-in]</em>' },
@@ -5515,7 +5455,7 @@
         { token: '{{team_member_name}}',  label: 'Team Member Name',  sample: () => ET_SAMPLE_CONTEXT.teamMemberName },
         { token: '{{team_member_role}}',  label: 'Team Member Role',  sample: 'Vocal Director' },
         { token: '{{team_member_email}}', label: 'Team Member Email', sample: () => ET_SAMPLE_CONTEXT.performerEmail },
-        { token: '{{team_access_code}}',  label: 'Access Code',       sample: '294761' },
+        { token: '{{team_access_code}}', label: 'Legacy code (retired)', sample: '' },
         { token: '{{portal_link}}',       label: 'Portal Link',       sample: 'https://buildtheshow.com/audition-team' },
         { token: '{{portal_button}}',     label: 'Portal Button',     sample: () => emailActionButtonHtml('https://buildtheshow.com/audition-team', 'Open Audition Team Portal') },
       ],
@@ -5675,9 +5615,9 @@
       note: 'Rehearsal emails should make next steps and scheduling details easy to skim.'
     },
     team_invite: {
-      required: ['{{team_member_name}}', '{{portal_link}}', '{{team_access_code}}'],
+      required: ['{{team_member_name}}', '{{portal_link}}'],
       recommended: ['{{team_member_role}}', '{{team_member_email}}', '{{show_name}}'],
-      note: 'Team invite emails must include the portal link and access code. Without these, your team member cannot log in.'
+      note: 'Team invite emails must include the account-bound invitation link. They accept the invitation using their own account.'
     },
     general: {
       required: ['{{contact_name}}'],
@@ -6161,7 +6101,7 @@
       cast_set: 'How it sends: team triggered. When it sends: when you choose to send the role offer email from Final Casting. This email should include accept and decline links only.',
       cast_accepted: 'How it sends: automatic. When it sends: immediately after a performer accepts their role offer. This is where the registration link belongs.',
       not_cast_set: 'How it sends: team triggered. When it sends: only when you choose to send the not cast email to a performer from casting.',
-      team_invite: 'How it sends: team triggered. When it sends: when you invite a production team member and send their portal link and access code.',
+      team_invite: 'How it sends: team triggered. When it sends: when you invite a production team member and send their account-bound invitation link.',
       volunteer_submitted: 'How it sends: automatic. When it sends: immediately after a volunteer submits shift requests from the public volunteer page.',
       volunteer_approved: 'How it sends: team triggered. When it sends: when you approve a volunteer shift request from Volunteers > Requests.',
       volunteer_portal_info: 'How it sends: team triggered. When it sends: when you send portal information from Registration > Status after connecting a volunteer to a cast member.',
@@ -6911,9 +6851,8 @@ Warmly,
   </div>
   <div style="background:#f0f4ff;border:1.5px solid #c5d0ea;border-radius:14px;padding:20px 22px;margin:22px 0;">
     <h2 style="font-size:20px;line-height:1.15;margin:0 0 8px;font-weight:900;color:#572e88;">Your production portal</h2>
-    <p style="margin:0 0 14px;color:#4a3d6b;">Access your schedule, shifts, and production updates through your personal portal. You'll need your email address and the Production Code below to log in.</p>
+    <p style="margin:0 0 14px;color:#4a3d6b;">Access your schedule, shifts, and production updates through your personal portal. Use your normal adult account to open My Activities.</p>
     <p style="margin:0 0 14px;">{{volunteer_portal_button}}</p>
-    <p style="margin:0 0 6px;font-size:14px;color:#4a3d6b;"><strong>Production Code:</strong> <span style="font-size:22px;font-weight:900;letter-spacing:0.2em;color:#572e88;">{{volunteer_passcode}}</span></p>
     <p style="margin:0;font-size:13px;color:#6f6288;">Portal link: <a href="{{volunteer_portal_url}}" style="color:#572e88;font-weight:800;">{{volunteer_portal_url}}</a></p>
   </div>
   <div style="background:#fffaf0;border:1.5px solid #f1d8a5;border-radius:14px;padding:20px 22px;margin:22px 0;">
@@ -7002,13 +6941,13 @@ YOUR LOGIN DETAILS
 {{portal_button}}
 (or click this link: {{portal_link}})
 Email:        {{team_member_email}}
-Access code:  {{team_access_code}}
+Access: accept your personal invitation.
 ─────────────────────────────
 
 HOW TO GET IN:
 1. Click the portal button above (or copy and paste the link into your browser).
 2. Enter your email address: {{team_member_email}}
-3. Enter your access code: {{team_access_code}}
+3. Open this production from My Home after accepting the invitation.
 4. Click "Open Auditions."
 
 ONCE YOU'RE IN:
@@ -7152,7 +7091,6 @@ Your submission link is unique to you. Please do not share it with another perfo
     <h2 style="font-size:20px;line-height:1.15;margin:0 0 8px;font-weight:900;color:#8a5f10;">Your Production Portal</h2>
     <p style="margin:0 0 14px;color:#4a3d6b;">Once you're approved, you can use your production portal to view your schedule, track your volunteer hours, and stay up to date throughout the production.</p>
     <p style="margin:0 0 6px;color:#4a3d6b;"><strong>Login Email:</strong> {{volunteer_email}}</p>
-    <p style="margin:0 0 16px;color:#4a3d6b;"><strong>Production Code:</strong> <span style="font-size:22px;font-weight:900;letter-spacing:0.2em;color:#572e88;">{{volunteer_passcode}}</span></p>
     <p style="margin:0 0 10px;">{{volunteer_portal_button}}</p>
     <p style="margin:0;font-size:13px;color:#6f6288;">Portal Link: <a href="{{volunteer_portal_url}}" style="color:#572e88;font-weight:800;">{{volunteer_portal_url}}</a></p>
   </div>
@@ -7177,7 +7115,6 @@ Your submission link is unique to you. Please do not share it with another perfo
     <h2 style="font-size:20px;line-height:1.15;margin:0 0 8px;font-weight:900;color:#572e88;">Your Production Portal</h2>
     <p style="margin:0 0 14px;color:#4a3d6b;">You can use your production portal to view your schedule, track your volunteer hours, and stay up to date with any information from the production team.</p>
     <p style="margin:0 0 6px;color:#4a3d6b;"><strong>Login Email:</strong> {{volunteer_email}}</p>
-    <p style="margin:0 0 16px;color:#4a3d6b;"><strong>Production Code:</strong> <span style="font-size:22px;font-weight:900;letter-spacing:0.2em;color:#572e88;">{{volunteer_passcode}}</span></p>
     <p style="margin:0 0 10px;">{{volunteer_portal_button}}</p>
     <p style="margin:0;font-size:13px;color:#6f6288;">Portal Link: <a href="{{volunteer_portal_url}}" style="color:#572e88;font-weight:800;">{{volunteer_portal_url}}</a></p>
   </div>
@@ -7200,7 +7137,6 @@ Your submission link is unique to you. Please do not share it with another perfo
   <div style="background:#f7f4fb;border:1.5px solid #ded6ea;border-radius:14px;padding:20px 22px;margin:22px 0;">
     <h2 style="font-size:20px;line-height:1.15;margin:0 0 8px;font-weight:900;color:#572e88;">Your Login Details</h2>
     <p style="margin:0 0 6px;color:#4a3d6b;"><strong>Login Email:</strong> {{volunteer_email}}</p>
-    <p style="margin:0 0 16px;color:#4a3d6b;"><strong>Production Code:</strong> <span style="font-size:22px;font-weight:900;letter-spacing:0.2em;color:#572e88;">{{volunteer_passcode}}</span></p>
     <p style="margin:0 0 10px;">{{volunteer_portal_button}}</p>
     <p style="margin:0;font-size:13px;color:#6f6288;">Portal Link: <a href="{{volunteer_portal_url}}" style="color:#572e88;font-weight:800;">{{volunteer_portal_url}}</a></p>
   </div>
@@ -7738,9 +7674,8 @@ Your submission link is unique to you. Please do not share it with another perfo
   </div>
   <div style="background:#f0f4ff;border:1.5px solid #c5d0ea;border-radius:14px;padding:20px 22px;margin:22px 0;">
     <h2 style="font-size:20px;line-height:1.15;margin:0 0 8px;font-weight:900;color:#572e88;">Your production portal</h2>
-    <p style="margin:0 0 14px;color:#4a3d6b;">Access your schedule, shifts, and production updates through your personal portal. You'll need your email address and the Production Code below to log in.</p>
+    <p style="margin:0 0 14px;color:#4a3d6b;">Access your schedule, shifts, and production updates through your personal portal. Use your normal adult account to open My Activities.</p>
     <p style="margin:0 0 14px;">{{volunteer_portal_button}}</p>
-    <p style="margin:0 0 6px;font-size:14px;color:#4a3d6b;"><strong>Production Code:</strong> <span style="font-size:22px;font-weight:900;letter-spacing:0.2em;color:#572e88;">{{volunteer_passcode}}</span></p>
     <p style="margin:0;font-size:13px;color:#6f6288;">Portal link: <a href="{{volunteer_portal_url}}" style="color:#572e88;font-weight:800;">{{volunteer_portal_url}}</a></p>
   </div>
   <div style="background:#fffaf0;border:1.5px solid #f1d8a5;border-radius:14px;padding:20px 22px;margin:22px 0;">
@@ -8081,9 +8016,9 @@ See you soon!
   async function etEnsureVolunteerCodeLanguage() {
     const volunteerCategories = new Set(['volunteer_submitted', 'volunteer_approved', 'volunteer_portal_info', 'volunteer_declined']);
     const normalize = value => String(value || '')
-      .replace(/Volunteer Portal Passcode/gi, 'Production Code')
-      .replace(/Volunteer Passcode/gi, 'Production Code')
-      .replace(/\bpasscode\b/gi, 'Production Code');
+      .replace(/Volunteer Portal Passcode/gi, 'Account access')
+      .replace(/Volunteer Passcode/gi, 'Account access')
+      .replace(/\bpasscode\b/gi, 'Account access');
     const updates = (_etTemplates || [])
       .filter(t => volunteerCategories.has(t.category))
       .map(t => ({ ...t, subject: normalize(t.subject), body: normalize(t.body) }))
@@ -12236,6 +12171,8 @@ See you soon!
       const { data, error } = result;
       if (error) throw error;
       auditionTeamMembers = data || [];
+    const directory=await sb.rpc('bts_production_access_directory',{p_production_id:prodId});
+    if(!directory.error)auditionTeamMembers=auditionTeamMembers.map(member=>({...member,...(directory.data||[]).find(access=>access.id===member.id)}));
     } catch (error) {
       auditionTeamMembers = [];
       console.warn('[BTS] production_team_members unavailable. Run the team portal Supabase SQL.', error);
@@ -12373,11 +12310,6 @@ See you soon!
     }
   }
 
-  async function savePasscodeFromInput(memberId) {
-    const input = document.getElementById(`passcode-input-${memberId}`);
-    if (!input) return;
-    await saveTeamMemberField(memberId, 'passcode', input.value);
-  }
 
   // ── Team tab - Audition team access ──
   function syncNewTeamMemberMenuDefaults() {
@@ -19392,7 +19324,7 @@ See you soon!
   }
 
   function rscVolunteerKey(row = {}) {
-    return row.portal_token || row.id || `${(row.email || row.volunteer_email || '').toLowerCase()}-${row.name || row.volunteer_name || ''}`;
+    return (row.profile_id ? row.production_id + ':' + row.profile_id : '') || row.portal_token || row.id || `${(row.email || row.volunteer_email || '').toLowerCase()}-${row.name || row.volunteer_name || ''}`;
   }
 
   function rscVolunteerName(row = {}) {
@@ -19409,17 +19341,7 @@ See you soon!
   }
 
   function rscVolunteerSignupHours(row = {}) {
-    const approved = parseFloat(row.approved_hours);
-    if (Number.isFinite(approved) && approved > 0) return approved;
-    const start = String(row.shift_start_time || '').slice(0, 5);
-    const end = String(row.shift_end_time || '').slice(0, 5);
-    if (!start || !end) return 0;
-    const [sh, sm] = start.split(':').map(Number);
-    const [eh, em] = end.split(':').map(Number);
-    if (![sh, sm, eh, em].every(Number.isFinite)) return 0;
-    let diff = (eh * 60 + em) - (sh * 60 + sm);
-    if (diff < 0) diff += 24 * 60;
-    return Math.max(0, diff / 60);
+    return Math.max(0, Number(row.approved_hours) || 0);
   }
 
   function rscVolunteerGroups() {
@@ -19474,7 +19396,7 @@ See you soon!
     const totalHours = rscVolunteerLinkedHours(assignment);
     const required = parseFloat(String(settings.volunteer_hours || '').replace(/[^0-9.]/g, '')) || 0;
     if (required > 0) return totalHours >= required;
-    return totalHours > 0 || groups.some(group => group.status === 'approved');
+    return totalHours > 0 || groups.some(group => group.hours > 0);
   }
 
   function rptGetInstallments(settings) {
@@ -45622,8 +45544,8 @@ See you soon!
     signups.forEach(s => {
       if (s.status !== 'checked_in' && s.status !== 'completed') return;
       const opp = opportunities.find(o => o.id === s.opportunity_id);
-      const hrs = parseFloat(s.approved_hours || opp?.volunteer_hours || opp?.hours || 0);
-      const key = (s.email || s.volunteer_email || s.id || '').toLowerCase();
+      const hrs = parseFloat(s.approved_hours || 0);
+      const key = volReqPortalKey(s);
       hoursByEmail[key] = (hoursByEmail[key] || 0) + hrs;
     });
 
@@ -45638,8 +45560,8 @@ See you soon!
         const isCheckedIn = signup.status === 'checked_in' || signup.status === 'completed';
         const name = signup.name || [signup.first_name, signup.last_name].filter(Boolean).join(' ') || signup.email || signup.volunteer_email || 'Volunteer';
         const role = signup.role_name || signup.volunteer_role || opp?.production_title || opp?.volunteer_role || 'Shift';
-        const hrs = parseFloat(signup.approved_hours || opp?.volunteer_hours || opp?.hours || 0);
-        const emailKey = (signup.email || signup.volunteer_email || signup.id || '').toLowerCase();
+        const hrs = parseFloat(signup.approved_hours || 0);
+        const emailKey = volReqPortalKey(signup);
         const totalHrs = hoursByEmail[emailKey] || 0;
         const dot = isCheckedIn ? '#22c55e' : '#d1d5db';
         return `<div class="vol-checkin-row ${isCheckedIn ? 'is-checked' : ''}">
@@ -45680,14 +45602,10 @@ See you soon!
     return /volunteer_passcode/i.test(error?.message || '') && /schema cache|column/i.test(error?.message || '');
   }
   function volReqPortalKey(signup = {}) {
-    return signup.portal_token || signup.id || (signup.email || signup.volunteer_email || 'unknown').toLowerCase();
+    return (signup.profile_id ? signup.production_id + ':' + signup.profile_id : '') || signup.portal_token || signup.id || (signup.email || signup.volunteer_email || 'unknown').toLowerCase();
   }
   function volReqRowsForPortalKey(portalKey) {
-    return volunteerRequests.filter(row => {
-      if (row.portal_token) return row.portal_token === portalKey;
-      if (row.id && row.id === portalKey) return true;
-      return (row.email || row.volunteer_email || '').toLowerCase() === portalKey;
-    });
+    return volunteerRequests.filter(row => volReqPortalKey(row) === portalKey);
   }
   function volReqNormalizeIdentity(value) {
     return String(value || '').trim().toLowerCase();
@@ -45704,27 +45622,7 @@ See you soon!
     });
     return [...groups.entries()].map(([key, rows]) => ({ key, rows, primary: rows[0] || {} }));
   }
-  function volReqCombineCandidates(portalKey) {
-    const currentRows = volReqRowsForPortalKey(portalKey);
-    if (!currentRows.length) return [];
-    const currentNames = new Set(currentRows.map(r => volReqNormalizeIdentity(r.name || r.volunteer_name)).filter(Boolean));
-    const currentEmails = new Set(currentRows.map(r => volReqNormalizeIdentity(r.email || r.volunteer_email)).filter(Boolean));
-    const currentPhones = new Set(currentRows.map(r => String(r.phone || '').replace(/\D/g, '')).filter(Boolean));
-    return volReqIdentityGroups()
-      .filter(group => group.key !== portalKey)
-      .map(group => {
-        const names = group.rows.map(r => volReqNormalizeIdentity(r.name || r.volunteer_name)).filter(Boolean);
-        const emails = group.rows.map(r => volReqNormalizeIdentity(r.email || r.volunteer_email)).filter(Boolean);
-        const phones = group.rows.map(r => String(r.phone || '').replace(/\D/g, '')).filter(Boolean);
-        const score =
-          emails.some(v => currentEmails.has(v)) ? 3 :
-          phones.some(v => currentPhones.has(v)) ? 2 :
-          names.some(v => currentNames.has(v)) ? 1 : 0;
-        return { ...group, score };
-      })
-      .filter(group => group.score > 0)
-      .sort((a, b) => b.score - a.score || String(b.primary.created_at || '').localeCompare(String(a.primary.created_at || '')));
-  }
+
 
   async function volMarkCheckin(signupId, currentlyChecked) {
     const newStatus = currentlyChecked ? 'approved' : 'checked_in';
@@ -46103,7 +46001,6 @@ See you soon!
       window._volReqResendEmail    = p.email || '';
       window._volReqResendName     = p.name  || '';
       window._volReqResendPasscode = p.volunteer_passcode || '';
-      const combineCandidates = volReqCombineCandidates(selectedEmail);
       window._volReqCombineKey = selectedEmail;
       return '<div class="vol-req-detail-header">'
         + '<div class="vol-req-detail-id">'
@@ -46111,14 +46008,12 @@ See you soon!
         + '<div><div class="vol-req-detail-name" style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">'
         +   esc(p.name || 'Unknown')
         +   '<button type="button" onclick="volReqEditContact(window._volReqEditKey)" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.6rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;">Edit contact</button>'
-        +   (combineCandidates.length ? '<button type="button" onclick="volReqOpenCombine(window._volReqCombineKey)" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.6rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;">Combine requests</button>' : '')
         +   '<button type="button" onclick="volReqConfirmDelete(window._volReqEditKey)" style="background:none;border:1px solid rgba(180,50,30,0.3);border-radius:5px;padding:0.1rem 0.4rem;font-size:0.6rem;font-weight:800;color:#b33a25;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;">Remove request</button>'
         + '</div>'
         +     '<div class="vol-req-detail-role" style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">'
         +       (p.no_email ? '<span style="font-size:0.72rem;font-weight:800;color:#d1523d;background:rgba(209,82,61,0.08);border-radius:4px;padding:0.1rem 0.4rem;">No email</span>' : esc(p.email || ''))
-        +       (!p.no_email && p.email ? '<button type="button" onclick="volResendCode(window._volReqResendEmail,window._volReqResendName,window._volReqResendPasscode)" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:5px;padding:0.12rem 0.45rem;font-size:0.62rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;white-space:nowrap;">Resend Production Code</button>' : '')
+        +       (!p.no_email && p.email ? '<button type="button" onclick="volResendCode(window._volReqResendEmail,window._volReqResendName)" style="background:none;border:1px solid rgba(87,46,136,0.25);border-radius:5px;padding:0.12rem 0.45rem;font-size:0.62rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;white-space:nowrap;">Send activity link</button>' : '')
         +     '</div>'
-        +     (!p.no_email && p.email ? '<div class="vol-req-detail-time" style="display:flex;align-items:center;gap:0.35rem;">Production Code: <strong style="font-size:0.82rem;letter-spacing:0.08em;color:#352756;">' + esc(p.volunteer_passcode || '—') + '</strong></div>' : '')
         +     (p.phone ? '<div class="vol-req-detail-time">' + esc(p.phone) + '</div>' : '')
         +     '<div class="vol-req-detail-time">Requested ' + volReqTimeAgo(p.created_at) + '</div>'
         + '</div></div>'
@@ -46145,7 +46040,6 @@ See you soon!
           +   '<div style="font-size:0.82rem;font-weight:800;color:#000000;">' + esc(_groupUniqueNames.join(' & ')) + '</div>'
           +   '<div style="font-size:0.7rem;color:rgba(71,106,170,0.7);margin-top:0.1rem;">These people share one request. Split to manage them separately.</div>'
           + '</div>'
-          + '<button type="button" onclick="volReqOpenSplit(window._volReqSplitKey,window._volReqSplitNames)" style="white-space:nowrap;padding:0.45rem 1rem;border:none;border-radius:8px;background:#476aaa;color:#fff;font-size:0.78rem;font-weight:900;cursor:pointer;font-family:inherit;">Split Group</button>'
           + '</div>' : '')
         + (p.notes ? '<div class="vol-req-detail-section"><div class="vol-req-detail-section-title">From the Volunteer</div><div class="vol-req-quote">' + esc(p.notes) + '</div></div>' : '')
         + '<div class="vol-req-detail-section"><div class="vol-req-detail-section-title">Requested Shifts</div>' + shiftRows + '</div>'
@@ -46532,8 +46426,6 @@ See you soon!
       const updates = rows.length ? rows : ids.map(id => ({ id }));
       const results = await Promise.all(updates.map(row => {
         const payload = { status: newStatus };
-        const approvedHours = volReqApprovedHoursForSignup(row);
-        if (approvedHours > 0) payload.approved_hours = approvedHours;
         return sb.from('volunteer_signups').update(payload).eq('id', row.id).select('id');
       }));
       const failed = results.find(result => result.error);
@@ -46583,7 +46475,7 @@ See you soon!
     }
   }
 
-  async function volResendCode(email, name, passcode) {
+  async function volResendCode(email, name) {
     console.log('[BTS] volResendCode called, email:', email);
     if (!email || !prodId) return;
     const btn = event?.target;
@@ -46591,8 +46483,8 @@ See you soon!
     if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
     try {
       const volUrl = volunteerPublicPageUrl ? (window.location.origin + volunteerPublicPageUrl()) : '';
-      const portalUrl = volunteerPortalPageUrl ? (window.location.origin + volunteerPortalPageUrl()) : volUrl;
-      const volunteerCode = passcode || (volunteerPasscode ? volunteerPasscode(email, prodId) : '');
+      const portalUrl=window.location.origin+'/activities?production='+encodeURIComponent(prodId);
+      const volunteerCode='';
       const firstName = String(name || email).split(' ')[0] || email;
       const ctx = {
         ...volEmailOrgContext(),
@@ -46689,10 +46581,6 @@ See you soon!
       +   '<label style="display:block;font-size:0.72rem;font-weight:900;color:#000000;margin-bottom:0.22rem;">Phone Number</label>'
       +   '<input id="vecf-phone" type="tel" value="' + esc(p.phone || '') + '" placeholder="(604) 555-0123" style="width:100%;border:1.5px solid rgba(87,46,136,0.22);border-radius:8px;padding:0.6rem 0.75rem;font-family:inherit;font-size:0.9rem;outline:0;box-sizing:border-box;" />'
       + '</div>'
-      + '<div style="margin-bottom:1rem;">'
-      +   '<label style="display:block;font-size:0.72rem;font-weight:900;color:#000000;margin-bottom:0.22rem;">Production Code</label>'
-      +   '<input id="vecf-passcode" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" value="' + esc(volReqSignupPasscode(p) || '') + '" placeholder="482913" oninput="this.value=this.value.replace(/\\D/g, \'\').slice(0, 6)" style="width:100%;border:1.5px solid rgba(87,46,136,0.22);border-radius:8px;padding:0.6rem 0.75rem;font-family:inherit;font-size:0.9rem;font-weight:800;letter-spacing:0.12em;outline:0;box-sizing:border-box;" />'
-      + '</div>'
       + '<div id="vecf-error" style="display:none;color:#b84432;font-size:0.78rem;margin-bottom:0.7rem;"></div>'
       + '<div style="display:flex;gap:0.6rem;">'
       +   '<button onclick="document.getElementById(\'vol-req-edit-contact-overlay\').remove()" style="flex:1;min-height:40px;border:1px solid rgba(87,46,136,0.22);border-radius:8px;background:#fff;color:#572e88;font-weight:800;font-family:inherit;cursor:pointer;font-size:0.85rem;">Cancel</button>'
@@ -46709,12 +46597,10 @@ See you soon!
     const noEmail     = document.getElementById('vecf-no-email')?.checked || false;
     const emailVal    = noEmail ? '' : (document.getElementById('vecf-email')?.value || '').trim().toLowerCase();
     const phoneVal    = (document.getElementById('vecf-phone')?.value || '').trim();
-    const passcodeVal = (document.getElementById('vecf-passcode')?.value || '').trim();
     const errEl    = document.getElementById('vecf-error');
     const saveBtn  = document.getElementById('vecf-save-btn');
     if (!nameVal) { errEl.textContent = 'Please enter a name.'; errEl.style.display = 'block'; return; }
     if (!noEmail && (!emailVal || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal))) { errEl.textContent = 'Please enter a valid email address, or check "No email address".'; errEl.style.display = 'block'; return; }
-    if (passcodeVal && !/^\d{6}$/.test(passcodeVal)) { errEl.textContent = 'Use exactly 6 numbers for the Production Code.'; errEl.style.display = 'block'; return; }
     errEl.style.display = 'none';
     if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
     const matchingRows = volReqRowsForPortalKey(portalKey);
@@ -46729,7 +46615,6 @@ See you soon!
         email: emailVal || null,
         no_email: noEmail,
         phone: phoneVal || null,
-        volunteer_passcode: passcodeVal || null,
       };
       const { error } = await sb.from('volunteer_signups').update(patch).in('id', ids);
       if (error) throw error;
@@ -46757,204 +46642,6 @@ See you soon!
     return (Number.isInteger(h) ? String(h) : h.toFixed(2).replace(/\.?0+$/,'')) + ' hr' + (h === 1 ? '' : 's');
   }
 
-  function volReqCloseSplitModal() {
-    var m = document.getElementById("vol-split-modal");
-    if (m) m.remove();
-  }
-
-  function volReqOpenSplit(portalKey, uniqueNames) {
-    if (!portalKey || !uniqueNames || uniqueNames.length < 2) return;
-    const allRows = volReqRowsForPortalKey(portalKey);
-    const submitterName = (allRows[0]?.name || '').trim();
-
-    // Build person rows: submitter keeps their info, others need an email
-    const people = uniqueNames.map(name => {
-      const isSubmitter = name === submitterName;
-      const rows = allRows.filter(r => (r.name || '').trim() === name);
-      const existingEmail = isSubmitter ? (allRows[0]?.email || '') : '';
-      const hrs = rows.reduce((sum, r) => sum + volReqShiftHrs(r), 0);
-      return { name, isSubmitter, rows, existingEmail, hrs };
-    });
-
-    window._volReqSplitData = { portalKey, people };
-
-    const peopleHtml = people.map((person, i) => {
-      const shiftCount = person.rows.length;
-      const hrsLabel = person.hrs > 0 ? volReqFmtHrs(person.hrs) : shiftCount + ' shift' + (shiftCount !== 1 ? 's' : '');
-      return '<div style="background:#f7f5fc;border:1px solid rgba(87,46,136,0.12);border-radius:8px;padding:0.75rem 1rem;display:flex;flex-direction:column;gap:0.35rem;">'
-        + '<div style="font-size:0.82rem;font-weight:900;color:#000000;">' + esc(person.name) + '</div>'
-        + '<div style="font-size:0.72rem;color:rgba(87,46,136,0.55);">' + esc(hrsLabel) + '</div>'
-        + (person.isSubmitter
-          ? '<div style="font-size:0.68rem;font-weight:800;color:#476aaa;">Keeps original portal &amp; email: ' + esc(person.existingEmail) + '</div>'
-          : '<div><input id="vol-split-email-' + i + '" type="email" placeholder="Enter ' + esc(person.name.split(' ')[0]) + ' - email address" style="width:100%;box-sizing:border-box;border:1px solid rgba(87,46,136,0.25);border-radius:6px;padding:0.4rem 0.6rem;font-size:0.78rem;font-family:inherit;color:#000000;" /></div>')
-        + '</div>';
-    }).join('');
-
-    const modal = document.createElement("div");
-    modal.id = "vol-split-modal";
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(10,8,20,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;';
-    modal.innerHTML = '<div style="background:#fff;border-radius:14px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,0.22);">'
-      + '<div style="background:#572e88;padding:1.1rem 1.4rem;border-radius:14px 14px 0 0;">'
-      +   '<div style="font-size:0.6rem;font-weight:900;text-transform:uppercase;letter-spacing:0.08em;color:rgba(255,255,255,0.6);margin-bottom:0.2rem;">Volunteers</div>'
-      +   '<div style="font-size:1.1rem;font-weight:900;color:#fff;">Split Group Signup</div>'
-      +   '<div style="font-size:0.74rem;color:rgba(255,255,255,0.7);margin-top:0.2rem;">Each person gets their own portal and request.</div>'
-      + '</div>'
-      + '<div style="padding:1.1rem 1.4rem;display:flex;flex-direction:column;gap:0.65rem;">'
-      +   peopleHtml
-      +   '<div id="vol-split-error" style="display:none;font-size:0.74rem;font-weight:800;color:#b33a25;"></div>'
-      + '</div>'
-      + '<div style="padding:0.85rem 1.4rem 1.1rem;display:flex;gap:0.6rem;border-top:1px solid rgba(87,46,136,0.1);">'
-      +   '<button onclick="volReqCloseSplitModal()" style="flex:1;padding:0.6rem;border:1px solid rgba(87,46,136,0.2);background:#fff;border-radius:8px;font-size:0.82rem;font-weight:800;color:#572e88;cursor:pointer;font-family:inherit;">Cancel</button>'
-      +   '<button onclick="volReqDoSplit()" style="flex:2;padding:0.6rem;border:none;background:#476aaa;border-radius:8px;font-size:0.82rem;font-weight:900;color:#fff;cursor:pointer;font-family:inherit;">Split into ' + people.length + ' Requests</button>'
-      + '</div>'
-      + '</div>';
-    document.body.appendChild(modal);
-  }
-
-  async function volReqDoSplit() {
-    const { portalKey, people } = window._volReqSplitData || {};
-    if (!portalKey || !people) return;
-    const errEl = document.getElementById('vol-split-error');
-    if (errEl) errEl.style.display = 'none';
-
-    // Validate emails for non-submitters
-    const nonSubmitters = people.filter(p => !p.isSubmitter);
-    const emailMap = {};
-    for (let i = 0; i < people.length; i++) {
-      const person = people[i];
-      if (person.isSubmitter) continue;
-      const input = document.getElementById('vol-split-email-' + i);
-      const val = (input?.value || '').trim();
-      if (!val || !val.includes('@')) {
-        if (errEl) { errEl.textContent = 'Please enter a valid email for ' + person.name + '.'; errEl.style.display = 'block'; }
-        return;
-      }
-      emailMap[person.name] = val;
-    }
-
-    const saveBtn = document.querySelector("#vol-split-modal button");
-    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Splitting...'; }
-
-    try {
-      for (const person of nonSubmitters) {
-        const newToken = crypto.randomUUID();
-        const newEmail = emailMap[person.name];
-        const ids = person.rows.map(r => r.id).filter(Boolean);
-        if (!ids.length) continue;
-        const { error } = await sb.from('volunteer_signups')
-          .update({ portal_token: newToken, email: newEmail })
-          .in('id', ids);
-        if (error) throw error;
-      }
-
-      document.getElementById("vol-split-modal")?.remove();
-      showToast('Group split into ' + people.length + ' separate requests.');
-      _volReqSelected = null;
-      await loadVolunteerRequests();
-    } catch (e) {
-      if (errEl) { errEl.textContent = 'Could not split: ' + (e.message || 'Unknown error'); errEl.style.display = 'block'; }
-      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Split into ' + people.length + ' Requests'; }
-    }
-  }
-
-  function volReqOpenCombine(portalKey) {
-    const targetRows = volReqRowsForPortalKey(portalKey);
-    if (!targetRows.length) return;
-    const target = targetRows[0];
-    const candidates = volReqCombineCandidates(portalKey);
-    if (!candidates.length) {
-      showToast('No likely matches found to combine.');
-      return;
-    }
-    const existing = document.getElementById('vol-req-combine-overlay');
-    if (existing) existing.remove();
-    window._volReqCombineReview = { targetKey: portalKey, candidates };
-    const targetCode = volReqSignupPasscode(target);
-    const candidateRows = candidates.map((candidate, idx) => {
-      const row = candidate.primary || {};
-      const roles = [...new Set(candidate.rows.map(r => r.role_name).filter(Boolean))].join(', ') || 'Volunteer requests';
-      const email = row.email || row.volunteer_email || '';
-      const matchLabel = candidate.score === 3 ? 'Same email' : candidate.score === 2 ? 'Same phone' : 'Same name';
-      return '<div style="border:1px solid rgba(87,46,136,0.12);border-radius:8px;padding:0.8rem;display:flex;align-items:flex-start;gap:0.75rem;justify-content:space-between;">'
-        + '<div style="min-width:0;">'
-        +   '<div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;">'
-        +     '<strong style="font-size:0.9rem;color:#000000;">' + esc(row.name || 'Unknown') + '</strong>'
-        +     '<span class="vol-req-badge vol-req-badge--pending" style="font-size:0.55rem;">' + esc(matchLabel) + '</span>'
-        +   '</div>'
-        +   '<div style="font-size:0.76rem;color:#572e88;font-weight:700;overflow-wrap:anywhere;">' + esc(email) + '</div>'
-        +   '<div style="font-size:0.72rem;color:#6f6382;margin-top:0.18rem;line-height:1.4;">' + esc(roles) + ' &middot; ' + candidate.rows.length + ' request' + (candidate.rows.length === 1 ? '' : 's') + '</div>'
-        +   '<div style="font-size:0.68rem;color:rgba(87,46,136,0.5);margin-top:0.2rem;">Current code: ' + esc(volReqSignupPasscode(row) || '—') + '</div>'
-        + '</div>'
-        + '<button type="button" onclick="volReqCombineIntoSelected(' + idx + ', this)" style="flex-shrink:0;border:none;border-radius:8px;background:#572e88;color:#fff;font-weight:900;font-size:0.72rem;font-family:inherit;cursor:pointer;padding:0.55rem 0.7rem;">Combine</button>'
-        + '</div>';
-    }).join('');
-    const overlay = document.createElement('div');
-    overlay.id = 'vol-req-combine-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(23,18,43,0.55);display:flex;align-items:center;justify-content:center;padding:1rem;';
-    overlay.innerHTML =
-      '<div style="background:#fff;border-radius:12px;width:min(560px,100%);max-height:min(720px,92vh);overflow:auto;padding:1.5rem;box-shadow:0 24px 80px rgba(0,0,0,0.3);">'
-      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.8rem;gap:1rem;">'
-      +   '<div><div style="font-size:1rem;font-weight:900;color:#000000;">Combine Volunteer Requests</div><div style="font-size:0.76rem;color:#6f6382;margin-top:0.15rem;">Move another request group under this Production Code.</div></div>'
-      +   '<button onclick="document.getElementById(\'vol-req-combine-overlay\').remove()" style="background:none;border:none;color:#6f6382;font-size:1.4rem;cursor:pointer;line-height:1;padding:0;">&times;</button>'
-      + '</div>'
-      + '<div style="background:#f8f7fc;border:1px solid rgba(87,46,136,0.1);border-radius:8px;padding:0.75rem;margin-bottom:1rem;">'
-      +   '<div style="font-size:0.68rem;font-weight:900;text-transform:uppercase;letter-spacing:0.06em;color:rgba(87,46,136,0.5);margin-bottom:0.18rem;">Keep this account</div>'
-      +   '<div style="font-weight:900;color:#000000;">' + esc(target.name || 'Unknown') + '</div>'
-      +   '<div style="font-size:0.76rem;color:#572e88;font-weight:700;overflow-wrap:anywhere;">' + esc(target.email || target.volunteer_email || '') + '</div>'
-      +   '<div style="font-size:0.72rem;color:#6f6382;margin-top:0.18rem;">Production Code: <strong style="letter-spacing:0.08em;color:#352756;">' + esc(targetCode || '—') + '</strong></div>'
-      + '</div>'
-      + '<div style="display:flex;flex-direction:column;gap:0.65rem;">' + candidateRows + '</div>'
-      + '<div style="font-size:0.68rem;color:rgba(87,46,136,0.48);line-height:1.45;margin-top:1rem;">After combining, both sets of requests will appear together in the producer list and in the production portal for the matching email plus Production Code.</div>'
-      + '</div>';
-    overlay.addEventListener('mousedown', e => { if (e.target === overlay) overlay.remove(); });
-    document.body.appendChild(overlay);
-  }
-
-  async function volReqCombineIntoSelected(candidateIndex, buttonEl) {
-    const review = window._volReqCombineReview;
-    if (!review) return;
-    const candidate = review.candidates?.[candidateIndex];
-    const targetRows = volReqRowsForPortalKey(review.targetKey);
-    if (!candidate || !targetRows.length) return;
-    const originalText = buttonEl?.textContent || '';
-    if (buttonEl) { buttonEl.disabled = true; buttonEl.textContent = 'Combining...'; }
-    try {
-      const targetToken = targetRows.find(r => r.portal_token)?.portal_token
-        || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `vol-${Date.now()}-${Math.random().toString(16).slice(2)}`);
-      const targetPasscode = volReqSignupPasscode(targetRows[0]);
-      const targetIds = targetRows.map(r => r.id).filter(Boolean);
-      const sourceIds = candidate.rows.map(r => r.id).filter(Boolean);
-      if (!sourceIds.length) throw new Error('No request rows were found to combine.');
-
-      const updateVolunteerPortalRows = async (ids, includePasscode = true) => {
-        const payload = { portal_token: targetToken };
-        if (includePasscode) payload.volunteer_passcode = targetPasscode;
-        const result = await sb.from('volunteer_signups').update(payload).in('id', ids);
-        if (result.error && includePasscode && volReqMissingPasscodeColumn(result.error)) {
-          return sb.from('volunteer_signups').update({ portal_token: targetToken }).in('id', ids);
-        }
-        return result;
-      };
-
-      const updates = [];
-      const targetNeedsPatch = targetRows.some(r => r.portal_token !== targetToken || volReqSignupPasscode(r) !== targetPasscode);
-      if (targetNeedsPatch && targetIds.length) {
-        updates.push(updateVolunteerPortalRows(targetIds));
-      }
-      updates.push(updateVolunteerPortalRows(sourceIds));
-      const results = await Promise.all(updates);
-      const failed = results.find(result => result.error);
-      if (failed?.error) throw failed.error;
-
-      _volReqSelected = targetToken;
-      document.getElementById('vol-req-combine-overlay')?.remove();
-      await loadVolunteerRequests();
-      showToast('Volunteer requests combined under one Production Code.');
-    } catch (e) {
-      showToast('Could not combine requests: ' + (e.message || 'Unknown error'), true);
-      if (buttonEl) { buttonEl.disabled = false; buttonEl.textContent = originalText; }
-    }
-  }
 
   async function volReqRespond(ref, newStatus) {
     const id = typeof ref === 'object' ? ref.id : ref;
@@ -47142,9 +46829,6 @@ See you soon!
         patch.description = matchedOpp.description || matchedOpp.summary || signup.description || null;
         patch.check_in_with = matchedOpp.check_in_with || matchedOpp.checkInWith || signup.check_in_with || null;
       }
-      const merged = { ...signup, ...patch };
-      const approvedHours = volReqApprovedHoursForSignup(merged);
-      if (approvedHours > 0) patch.approved_hours = approvedHours;
       const { error } = await sb.from('volunteer_signups').update(patch).eq('id', signup.id);
       if (error) throw error;
       await loadVolunteerRequests();
