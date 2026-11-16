@@ -51,3 +51,12 @@ The public Auth settings endpoint reports `mailer_autoconfirm: true`, with anony
 Before changing the switch, confirm production Custom SMTP is configured and that confirmation/recovery redirect URLs are restricted to the production website. Then disable automatic confirmation and enforce the 12-character password minimum in Supabase itself. Do not use a full config push with defaults that could overwrite unrelated settings.
 
 Turning confirmation on does not retrospectively prove ownership of historical automatically confirmed addresses. Existing accounts need a real inbox-verification workflow before relying on email matches for sensitive staff access. An age/notice acknowledgement alone is not inbox verification. Katie confirmed Custom SMTP is saved and a password-recovery email arrived. The message contained text without a reset link or code, so delivery passed but recovery did not. No test emails were sent by the agent. The replacement Auth recovery template is versioned at `BACKEND/SupaBase/templates/reset-password.html`; applying it in the hosted template editor and testing a fresh message remain outstanding.
+
+
+## Volunteer account ownership (2026-11-16)
+
+Migration: `supabase/migrations/20261116100000_volunteer_account_ownership.sql`.
+
+Adds Auth-owned volunteer requests and private guardian declaration fields to the existing volunteer table, plus the filtered `bts_participant_volunteers` view, atomic request RPC and public count-only availability RPC. `bts_production_page_permission` is now the canonical permission helper; the audition helper forwards to it. Replaces public volunteer policies with scoped staff policies and prevents participant approval/hour/ownership forgery. Historical records are deliberately not claimed by matching email or code.
+
+Apply with the matching volunteer page and legacy financial portal account gates. Rehearse with synthetic fixtures ending in ROLLBACK first. Capacity reservation, attendance-derived hours, historical linking and the wider finance/participant audit remain outstanding. Guardian declarations require inclusion in the privacy request and retention procedure. Deployment verification will be recorded below.

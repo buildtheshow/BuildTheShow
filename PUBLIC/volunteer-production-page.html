@@ -3180,6 +3180,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/SHARED/Components/account-security.js?v=20261116-volunteers"></script>
   <script src="/ASSETS/scripts/casting-card.js?v=portal-connected-tabs"></script>
   <script>
     'use strict';
@@ -3642,31 +3643,12 @@
       if (codeEl) codeEl.value = '';
       if (rememberEl) rememberEl.checked = false;
     }
-    async function generateUniqueVolunteerPasscode() {
-      // Uniqueness is checked across ALL signups for this production — not scoped by email.
-      // Codes are tied to individual portals; the only way to reuse a code is via the returning flow.
-      let usedCodes = new Set();
-      try {
-        let { data, error } = await sb.from('volunteer_signups')
-          .select('volunteer_passcode')
-          .eq('production_id', prod.id)
-          .neq('status', 'cancelled');
-        if (error && missingVolunteerPasscodeColumn(error)) {
-          data = [];
-        } else if (error) throw error;
-        (data || []).forEach(row => { if (row.volunteer_passcode) usedCodes.add(String(row.volunteer_passcode).trim()); });
-      } catch (_) {}
-      for (let attempt = 0; attempt < 20; attempt++) {
-        const code = randomVolunteerPasscode();
-        if (!usedCodes.has(code)) return code;
-      }
-      return randomVolunteerPasscode();
-    }
     async function findVolunteerSignupsByCode(email, code, options = {}) {
+      if (!await BTSAccountSecurity.requireAdultLogin(sb)) return [];
       const normalized = (email || '').trim().toLowerCase();
       const enteredCode = String(code || '').trim();
       if (!normalized || !enteredCode || !prod?.id) return [];
-      const { data, error } = await sb.from('volunteer_signups')
+      const { data, error } = await sb.from('bts_participant_volunteers')
         .select(options.select || '*')
         .eq('production_id', prod.id)
         .neq('status', 'cancelled');
@@ -3677,8 +3659,9 @@
       });
     }
     async function loadVolunteerPortalRowsByToken(token, options = {}) {
+      if (!await BTSAccountSecurity.requireAdultLogin(sb)) return [];
       if (!token || !prod?.id) return [];
-      const query = sb.from('volunteer_signups')
+      const query = sb.from('bts_participant_volunteers')
         .select(options.select || '*')
         .eq('production_id', prod.id)
         .eq('portal_token', token);
@@ -3694,32 +3677,15 @@
       if (error) throw error;
       return data || [];
     }
-    async function isTreasurerPortalUser(portalData, email) {
-      const rows = portalData?.volunteer?.rows || [];
-      if (rows.some(r => String(r.role_name || '').trim() === 'Treasurer')) return true;
-      // Anyone with specific module grants (dept leads, permissioned volunteers) also
-      // needs the permissions-driven shell, not just literal Treasurers. Only check
-      // this when the email+code that was just entered actually resolved to a real
-      // volunteer_signups row — otherwise an email that merely appears as a contact
-      // on someone else's cast registration (e.g. a parent who is also a dept lead
-      // elsewhere) would get redirected using a code that was never theirs.
-      if (!rows.length) return false;
-      const normalizedEmail = String(email || '').trim().toLowerCase();
-      if (!normalizedEmail || !prod?.id) return false;
-      const { data } = await sb.from('portal_permissions')
-        .select('id')
-        .eq('production_id', prod.id)
-        .eq('person_id', normalizedEmail)
-        .limit(1);
-      return !!(data && data.length);
+    async function isTreasurerPortalUser() {
+      const { data, error } = await sb.rpc('bts_production_page_permission', {
+        p_production_id: prod.id, p_page: 'budget.dashboard', p_rank: 1,
+      });
+      return !error && data === true;
     }
-    function redirectToTreasurerPortal(email, code) {
+    function redirectToTreasurerPortal() {
       const url = new URL('/SYSTEM/Organisations/Productions/Workspace/treasurer-portal.html', window.location.origin);
       if (prod?.id) url.searchParams.set('id', prod.id);
-      if (email && code) {
-        url.searchParams.set('pvw_email', email);
-        url.searchParams.set('pvw_code', code);
-      }
       window.location.replace(url.toString());
     }
 
@@ -4304,6 +4270,7 @@
     }
 
     async function portalLogin() {
+      if (!await BTSAccountSecurity.requireAdultLogin(sb)) return;
       const email = (document.getElementById('vp-portal-email')?.value || '').trim().toLowerCase();
       const code  = (document.getElementById('vp-portal-code')?.value  || '').trim();
       const errEl = document.getElementById('vp-portal-error');
@@ -7310,17 +7277,15 @@
         const [planResult, eventResult, signupResult, contactResult] = await Promise.all([
           sb.from('productions').select('volunteer_staffing_plan').eq('id', prod.id).single(),
           sb.from('production_events').select('*').eq('production_id', prod.id).order('start_time', { ascending: true }),
-          sb.from('volunteer_signups').select('role_name,shift_date,required_dates,status').eq('production_id', prod.id).in('status', ['pending','approved','partially_filled']),
+          sb.rpc('bts_public_volunteer_availability', { p_production_id: prod.id }),
           sb.rpc('public_production_contact', { p_production_id: prod.id })
         ]);
         if (planResult.error) throw planResult.error;
         productionContacts = contactResult.error ? [] : (contactResult.data || []);
         (eventResult.data || []).forEach(ev => { eventMap[ev.id] = ev; });
         (signupResult.data || []).forEach(s => {
-          const role = canonicalVolunteerRoleName(s.role_name || '');
-          const dates = new Set([s.shift_date || '']);
-          (Array.isArray(s.required_dates) ? s.required_dates : []).filter(Boolean).forEach(d => dates.add(d));
-          dates.forEach(d => { const k = `${role}::${d}`; signupCounts[k] = (signupCounts[k] || 0) + 1; });
+          const k = `${canonicalVolunteerRoleName(s.role_name || '')}::${s.shift_date || ''}`;
+          signupCounts[k] = (signupCounts[k] || 0) + Number(s.booked_count || 0);
         });
         opps = buildOppsFromPlan(planResult.data?.volunteer_staffing_plan || {}, eventResult.data || []);
 
@@ -8055,7 +8020,8 @@
       requestAnimationFrame(() => document.getElementById('vp-dd-input-open')?.focus());
     }
     function closeAddDropdown() { if (!addDropdownOppId) return; addDropdownOppId = null; addDropdownError = null; renderRows(); }
-    function addToScheduleFor(forPerson) {
+    async function addToScheduleFor(forPerson) {
+      if (!await BTSAccountSecurity.requireAdultLogin(sb)) return;
       const opp = opps.find(o => o.id === addDropdownOppId);
       if (!opp || !forPerson) return;
       const n = forPerson.toLowerCase();
@@ -8116,7 +8082,8 @@
       const btnStyle = isAdded && !spotsRemain ? `${btnClass} added` : btnClass;
       return `<div class="vp-add-dropdown-wrap"><button class="${btnStyle}" type="button" onclick="openAddDropdown('${safeId}',event)">${btnLabel}</button>${ddHtml}</div>`;
     }
-    function addAllGroupToScheduleFor(groupKey, forPerson) {
+    async function addAllGroupToScheduleFor(groupKey, forPerson) {
+      if (!await BTSAccountSecurity.requireAdultLogin(sb)) return;
       if (!forPerson) return;
       const groupOpps = opps.filter(o => roleGroupKey(o) === groupKey && o.require_all && spotsLeft(o) > 0);
       for (const o of groupOpps) {
@@ -8665,7 +8632,8 @@
         + (discountRequested && discountPerformer.trim() ? '<div class="vp-submit-totals-discount">Volunteer discount requested for <strong>' + esc(discountPerformer.trim()) + '</strong></div>' : '')
         + '</div>';
     }
-    function openSubmitModal() {
+    async function openSubmitModal() {
+      if (!await BTSAccountSecurity.requireAdultLogin(sb)) return;
       if (!schedule.length) return;
       if (discountRequested && !discountPerformer.trim()) {
         setCartError('Please enter the performer\'s name before submitting — it\'s required to apply the discount.');
@@ -8683,21 +8651,10 @@
           </div>
           <div class="vp-submit-col-form">
             <div id="vp-submit-error" class="vp-form-error"></div>
-            <div style="border:1.5px solid rgba(87,46,136,0.18);border-radius:10px;padding:0.85rem;margin-bottom:0.75rem;background:rgba(87,46,136,0.03);">
-              <label style="display:flex;align-items:center;gap:0.55rem;cursor:pointer;font-size:0.82rem;font-weight:800;color:var(--purple);">
-                <input type="checkbox" id="su-returning" style="accent-color:#572e88;width:15px;height:15px;flex-shrink:0;" onchange="toggleReturningFields(this.checked)" />
-                Already signed up and want to add more shifts?
-              </label>
-              <div id="su-returning-fields" style="display:none;flex-direction:column;gap:0.55rem;margin-top:0.65rem;">
-                <div style="font-size:0.72rem;color:var(--purple);line-height:1.4;">Pop in the email and Production Code from your confirmation email and we'll pull up your info so you can add more shifts.</div>
-                <div class="vp-form-row" style="margin:0;"><label for="su-returning-email" style="font-size:0.72rem;">Email you used before</label><input type="email" id="su-returning-email" autocomplete="email" placeholder="jane@example.com" onblur="tryAutoFillReturning()" /></div>
-                <div class="vp-form-row" style="margin:0;"><label for="su-returning-code" style="font-size:0.72rem;">Your Production Code</label><input type="text" id="su-returning-code" inputmode="numeric" maxlength="6" placeholder="e.g. 482913" style="letter-spacing:0.15em;font-weight:800;" onblur="tryAutoFillReturning()" /></div>
-                <div id="su-returning-status" style="font-size:0.72rem;min-height:1rem;"></div>
-              </div>
-            </div>
-            <div style="font-size:0.72rem;font-weight:800;color:var(--purple);background:rgba(87,46,136,0.06);border-radius:8px;padding:0.6rem 0.75rem;margin-bottom:0.65rem;line-height:1.45;">Your details below are the primary contact for this whole submission. Your email is where we'll send the portal link — everyone in this group uses it to check their schedule.</div>
+            <p>Requests are linked to your signed-in adult account. New shifts are added to that account's schedule.</p>
+            <div style="font-size:0.72rem;font-weight:800;color:var(--purple);background:rgba(87,46,136,0.06);border-radius:8px;padding:0.6rem 0.75rem;margin-bottom:0.65rem;line-height:1.45;">Your details below are the primary contact for this whole submission. Your signed-in account email receives confirmations. Your account and authorised production staff can access this schedule.</div>
             <div class="vp-form-row"><label for="su-name">Your Full Name *</label><input type="text" id="su-name" autocomplete="name" placeholder="Jane Smith" /></div>
-            <div class="vp-form-row"><label for="su-email">Your Email Address *</label><input type="email" id="su-email" autocomplete="email" placeholder="jane@example.com" /><div class="vp-form-hint">Portal link and confirmations for everyone will be sent here.</div></div>
+            <div class="vp-form-row"><label for="su-email">Your Email Address *</label><input type="email" id="su-email" readonly value="${esc((await sb.auth.getUser()).data.user.email || '')}" autocomplete="email" /><div class="vp-form-hint">Portal link and confirmations for everyone will be sent here.</div></div>
             <div class="vp-form-row"><label for="su-phone">Your Phone Number *</label><input type="tel" id="su-phone" autocomplete="tel" placeholder="(604) 555-0123" required oninput="formatPhoneInput(this)" onchange="formatPhoneInput(this)" onblur="formatPhoneInput(this)" /></div>
             <div class="vp-form-row"><label for="su-notes">Anything we should know?</label><textarea id="su-notes" placeholder="Questions, access notes, or details for the team..."></textarea></div>
             <div class="vp-minor-section">
@@ -8711,7 +8668,7 @@
                   <p>Volunteers under 18 are welcome. Volunteers are expected to participate independently. If a volunteer needs ongoing supervision or support, they must attend with a parent, guardian, or another responsible adult (18+). Volunteers under 14 must have an accompanying adult remain with them for the entire volunteer shift.</p>
                   <label style="display:flex;align-items:flex-start;gap:0.45rem;cursor:pointer;margin-top:0.55rem;">
                     <input type="checkbox" id="su-minor-acknowledged" style="accent-color:#572e88;margin-top:0.18rem;flex-shrink:0;" />
-                    <span style="font-size:0.74rem;font-weight:800;color:var(--ink);">I understand and agree to this policy.</span>
+                    <span style="font-size:0.74rem;font-weight:800;color:var(--ink);">I am the parent or legal guardian of every under-18 volunteer listed here, and I understand and agree to this policy.</span>
                   </label>
                 </div>
               </div>
@@ -8768,6 +8725,7 @@
     }
 
     async function submitSchedule() {
+      if (!await BTSAccountSecurity.requireAdultLogin(sb)) return;
       const name = document.getElementById('su-name').value.trim();
       const email = document.getElementById('su-email').value.trim();
       const phone = document.getElementById('su-phone').value.trim();
@@ -8784,38 +8742,13 @@
         const minorDetails = document.getElementById('su-minor-details')?.value?.trim();
         const minorAcknowledged = document.getElementById('su-minor-acknowledged')?.checked;
         if (!minorDetails) return showFormError(errEl, 'Please enter the name and age of your minor volunteer(s).');
-        if (!minorAcknowledged) return showFormError(errEl, 'Please acknowledge the minor volunteer policy before submitting.');
+        if (!minorAcknowledged) return showFormError(errEl, 'Please confirm that you are the parent or legal guardian and acknowledge the minor volunteer policy.');
       }
       btn.disabled = true;
       btn.textContent = 'Sending...';
       try {
-        // Check if volunteer is linking to an existing schedule via their code
-        const returningChecked = document.getElementById('su-returning')?.checked;
-        const returningEmail = (document.getElementById('su-returning-email')?.value || '').trim().toLowerCase();
-        const returningCode = (document.getElementById('su-returning-code')?.value || '').trim();
-        let portalToken = crypto.randomUUID();
-        let portalPasscode = await generateUniqueVolunteerPasscode();
-        let isReturning = false;
-        if (returningChecked && returningEmail && returningCode) {
-          try {
-            const existing = (await findVolunteerSignupsByCode(returningEmail, returningCode))[0] || null;
-            if (existing?.portal_token) {
-              portalToken = existing.portal_token;
-              portalPasscode = signupPasscode(existing) || returningCode;
-              isReturning = true;
-            } else {
-              btn.disabled = false; btn.textContent = 'Request Selected Shifts';
-              return showFormError(errEl, 'That email and Production Code do not match. Check your confirmation email and try again.');
-            }
-          } catch (_) {
-            btn.disabled = false; btn.textContent = 'Request Selected Shifts';
-            return showFormError(errEl, 'That email and Production Code do not match. Check your confirmation email and try again.');
-          }
-        }
         const baseRow = opp => ({
           production_id: prod.id,
-          portal_token: portalToken,
-          volunteer_passcode: portalPasscode,
           status: 'pending',
           role_name: opp.volunteer_role || null,
           department: opp.department || null,
@@ -8824,7 +8757,6 @@
           shift_start_time: opp.shift_start_time || null,
           shift_end_time: opp.shift_end_time || null,
           required_dates: Array.isArray(opp.required_dates) ? opp.required_dates.filter(Boolean) : [],
-          approved_hours: scheduleHours(opp) || null,
           discount_requested: discountRequested || false,
           discount_performer: discountRequested ? discountPerformer.trim() || null : null,
         });
@@ -8832,16 +8764,17 @@
           ...schedule.map(opp => ({ ...baseRow(opp), name: opp.forPerson || name, email, phone: phone || null, notes: notes || null })),
           ...schedule.flatMap(opp => (opp.people || []).map(person => ({ ...baseRow(opp), name: person.name, email, phone: null, notes: null }))),
         ];
-        let { error } = await sb.from('volunteer_signups').insert(rows);
-        if (error && missingVolunteerPasscodeColumn(error)) {
-          portalPasscode = legacyVolunteerPasscode(email, prod.id);
-          const fallbackRows = rows.map(({ volunteer_passcode, ...row }) => row);
-          const fallback = await sb.from('volunteer_signups').insert(fallbackRows);
-          error = fallback.error;
-        }
+        const { data: result, error } = await sb.rpc('bts_request_volunteer_shifts', {
+          p_production_id: prod.id, p_rows: rows,
+          p_guardian_details: hasMinors ? document.getElementById('su-minor-details').value.trim() : null,
+          p_guardian_confirmed: !!(hasMinors && document.getElementById('su-minor-acknowledged').checked),
+        });
         if (error) throw error;
+        const portalToken = result.portal_token;
+        const portalPasscode = result.volunteer_passcode;
+        const isReturning = false;
         const requestedShifts = schedule.slice();
-        sendVolunteerRequestEmail({ name, email, portalToken, portalPasscode, requestedShifts });
+        sendVolunteerRequestEmail({ name, email: result.email, portalToken, portalPasscode, requestedShifts });
         schedule.forEach(opp => { const k = spotsKey(opp); signupCounts[k] = (signupCounts[k] || 0) + 1 + (opp.people?.length || 0); });
         const count = schedule.length;
         schedule = [];
@@ -8898,6 +8831,7 @@
       document.body.style.overflow = 'hidden';
     }
     async function lookupVolunteer() {
+      if (!await BTSAccountSecurity.requireAdultLogin(sb)) return;
       const email = (document.getElementById('portal-email')?.value || '').trim().toLowerCase();
       const code = (document.getElementById('portal-code')?.value || '').trim();
       const errEl = document.getElementById('vp-portal-error');
@@ -9016,17 +8950,12 @@
 
     async function refreshSignupCounts() {
       if (!prod?.id) return;
-      const { data } = await sb.from('volunteer_signups')
-        .select('role_name,shift_date,required_dates,status')
-        .eq('production_id', prod.id)
-        .in('status', ['pending','approved','partially_filled']);
-      if (!data) return;
+      const { data, error } = await sb.rpc('bts_public_volunteer_availability', { p_production_id: prod.id });
+      if (error || !data) return;
       signupCounts = {};
       data.forEach(s => {
-        const role = canonicalVolunteerRoleName(s.role_name || '');
-        const dates = new Set([s.shift_date || '']);
-        (Array.isArray(s.required_dates) ? s.required_dates : []).filter(Boolean).forEach(d => dates.add(d));
-        dates.forEach(d => { const k = `${role}::${d}`; signupCounts[k] = (signupCounts[k] || 0) + 1; });
+        const k = `${canonicalVolunteerRoleName(s.role_name || '')}::${s.shift_date || ''}`;
+        signupCounts[k] = (signupCounts[k] || 0) + Number(s.booked_count || 0);
       });
       renderRows();
     }

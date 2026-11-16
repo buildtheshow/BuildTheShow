@@ -59,6 +59,16 @@ The `20261115133000` stage binds new public audition writes to active adult acco
 
 The same cutover removes anonymous base-table reads, restricts base records to scoped staff access, and gives participants filtered, updatable projections for their own account. These projections omit staff assessment and server consent fields. Triggers still enforce ownership and allowed changes when writes pass through a view; synthetic tests verify that the view owner cannot bypass those checks. Legacy linking, transactional booking/holds, other participant tables and their storage remain unfinished.
 
+### Volunteer account ownership
+
+Migration `20261116100000_volunteer_account_ownership.sql` replaces public volunteer record access with active adult account ownership and scoped staff permissions. Public shift browsing receives role/date totals only. Short codes and portal tokens select a schedule within the signed-in account; matching an email or a job title does not grant access. Historical records stay unowned pending operator review.
+
+New shift requests are inserted together in one transaction, with the account ID and contact email derived from Auth. They start pending with no approved hours. A volunteer can update their own contact notes or cancel, but cannot approve a request, move ownership, change assignments or award hours. Staff need a current account-bound session and the volunteers page permission, or organisation owner/admin access. Guardian declarations record the submitting adult's acknowledgement and timestamp; they do not verify guardianship or satisfy every jurisdiction's parental-consent requirements by themselves.
+
+The two legacy financial portal entry points also require actual account-bound budget permission. Their role labels and browser preview tokens cannot pass that gate. This is not a complete audit of financial tables or finance permissions.
+
+Remaining volunteer work: operator-reviewed historical linking, server-validated published shift definitions and capacity, attendance-backed confirmed hours, guardian retention/deletion procedures and end-to-end account testing. Batch atomicity prevents partial requests; it does not reserve capacity. The current UI's requested shift labels/times remain proposals for staff review.
+
 ### Account-bound production team sessions
 
 Migration `20261115123000_account_bound_team_access.sql` requires an active adult Auth account before a team code can create a session. The entered email must match that account. Sessions are bound to the Auth user ID and production, expire after eight hours and are checked against current membership/permissions on each RPC. Historical bearer-only sessions are revoked rather than assigned to accounts by an unverified email match. Team login allows at most 20 requests per production/email target in a fixed 15-minute window; counters contain hashes rather than email addresses and expire after two days.

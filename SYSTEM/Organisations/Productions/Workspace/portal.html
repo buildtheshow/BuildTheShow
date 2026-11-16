@@ -85,6 +85,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/SHARED/Navigation/production-sidebar-nav.js?v=90-20260815-module-selfheal"></script>
+<script src="/SHARED/Components/account-security.js?v=20261116-volunteers"></script>
 <script>
 'use strict';
 
@@ -201,6 +202,7 @@ function portalPasscode(email, productionId) {
 
 // ── Auth ───────────────────────────────────────────────────────────
 async function prLogin(emailOverride = '', codeOverride = '', errOverride = null) {
+  if (!await BTSAccountSecurity.requireAdultLogin(sb)) return;
   const email = String(emailOverride || document.getElementById('pr-login-email')?.value || '').trim().toLowerCase();
   const code  = String(codeOverride || document.getElementById('pr-login-code')?.value || '').trim();
   const errEl = errOverride || document.getElementById('pr-login-error');
@@ -336,6 +338,15 @@ async function prInit() {
 }
 
 async function bootPortal() {
+  if (!await BTSAccountSecurity.requireAdultLogin(sb)) return;
+  const access = await sb.rpc('bts_production_page_permission', {
+    p_production_id: _prodId, p_page: 'budget.dashboard', p_rank: 1,
+  });
+  if (access.error || access.data !== true) {
+    document.body.textContent = 'Your account does not have permission to access this staff portal. Ask the production owner for access.';
+    return;
+  }
+
   const { data, error } = await sb
     .from('productions')
     .select('*,organizations(id,name,email,logo_url,logo_white_url,slug)')
