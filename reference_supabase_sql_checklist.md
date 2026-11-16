@@ -2,6 +2,18 @@
 
 The live schema was inspected on 2026-11-15 without reading personal records.
 
+## Households and explicit performer keys
+
+Migration: `supabase/migrations/20261116150000_households_and_profile_keys.sql`.
+
+Adds private relationship tables `households`, `household_members`, `household_profiles`, `profile_controls`, `profile_keys`, `profile_contacts`, `family_invites`, `family_reviews`, `family_audit`, `family_mail` and `profile_file_keys` under `bts_private`. The existing profile, audition, casting and payment records remain canonical. No household membership implicitly grants performer access. Recipient-bound guardian invitations, no-login adult booking consent, later adult activation, reviewed linking/duplicates, age-18 expiry, read-only shared fee tracking, file bindings, change history and durable notification delivery use narrow checked RPCs.
+
+Deploy the matching household page, performer picker, member profile queries, `send-email` authorisation/queue integration and new `household-mail` Edge Function together. The queue pump uses existing Resend secrets, bounded service-only claims and provider idempotency keys. A private `pg_cron`/`pg_net` tick runs each minute. The migration removes the retired `on-audition-booked` webhook pointing to an absent function. Queue metadata is not evidence of actual delivery.
+
+The local household suites and exact hosted rollback rehearsal pass. Hosted preflight found 44 current registration-payment rows and 10 older household-log rows, without retrieving their contents. Current payments drive the total; relevant older logs are separately flagged for staff reconciliation rather than silently double-counted. Legal/custody verification, wider authentication/recovery checks, transactional capacity, attendance proof and operational launch checks remain separate.
+
+Plain-language explanation/map: `docs/security/households-guide.md`. Implementation, reviewed operator tool and delivery runbook: `docs/security/households-operations.md`. Deployment status: migration `20261116150000` applied on 2026-11-16 with exact source recorded atomically. Matching `send-email` and `household-mail` workers deployed through the API. Website publication and live HTTP verification are in progress.
+
 ## Audition account ownership and availability
 
 Migration: `supabase/migrations/20261115133000_audition_account_ownership.sql`.

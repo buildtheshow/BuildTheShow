@@ -46,6 +46,26 @@ export async function authorizeEmailRequest(
     p_user_id: user.id, p_production_id: productionId, p_test: Boolean(testEmail),
   });
   if (accessError || !decision?.allowed) {
+    // Confirmations are a limited participant action; the server derives recipients and content.
+    const category = String(body.category || ({cast:'cast_announcement',callback:'callback',not_cast:'not_cast'} as Record<string,string>)[String(body.status || '')] || 'booking_confirmation');
+    const recordId = String(body.applicant_id || body.booking_id || '');
+    if (!testEmail && /^[0-9a-f-]{36}$/i.test(recordId)) {
+      const family = await service.rpc('bts_family_email_authorize', { p_user_id:user.id, p_production_id:productionId, p_record_id:recordId, p_category:category });
+      if (!family.error && family.data === true) {
+        for (const key of Object.keys(body)) if (!['production_id','applicant_id','booking_id','category','session_id'].includes(key)) delete body[key];
+        body.category = category;
+        return { allowed:true, internal:false };
+      }
+    }
+    if (!testEmail && category === 'volunteer_submitted' && /^[0-9a-f-]{36}$/i.test(String(body.portal_token || ''))) {
+      const confirmation = await service.rpc('bts_family_volunteer_email', { p_user_id:user.id, p_production_id:productionId, p_portal_token:body.portal_token });
+      if (!confirmation.error && confirmation.data?.performer_email) {
+        for (const key of Object.keys(body)) if (!['production_id','category'].includes(key)) delete body[key];
+        body.category=category;body.email=String(confirmation.data.performer_email);body.name=String(confirmation.data.performer_name||'Volunteer');body.context=confirmation.data;
+        return { allowed:true, internal:false };
+      }
+    }
+
     const limited = decision?.reason === 'rate_limited';
     return { allowed: false, status: limited ? 429 : 403, error: limited ? 'Email limit reached. Please try again later.' : 'You do not have permission to send email for this production.' };
   }

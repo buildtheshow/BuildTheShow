@@ -850,8 +850,8 @@ serve(async (req) => {
     '{{cast_offer_deadline}}':   firstDefinedString(directContext.cast_offer_deadline),
     '{{cast_offer_deadline_note}}': firstDefinedString(directContext.cast_offer_deadline_note),
     '{{registration_link}}':     registrationLink,
-    '{{registration_pdf_url}}':  firstDefinedString(directContext.registration_pdf_url, customAnswers.__bts_registration_pdf_url),
-    '{{registration_pdf_button}}': (() => { const u = firstDefinedString(directContext.registration_pdf_url, customAnswers.__bts_registration_pdf_url); return firstDefinedString(directContext.registration_pdf_button, u ? `<a href="${escHtml(u)}" style="display:inline-block;background:#572e88;color:#ffffff;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:8px;">View Registration PDF</a>` : ''); })(),
+    '{{registration_pdf_url}}':  `https://buildtheshow.com/SYSTEM/Public/registration?prod=${encodeURIComponent(productionId)}&app=${encodeURIComponent(applicantIdRaw || bookingIdRaw)}&pdf=1`,
+    '{{registration_pdf_button}}': (() => { const u = `https://buildtheshow.com/SYSTEM/Public/registration?prod=${encodeURIComponent(productionId)}&app=${encodeURIComponent(applicantIdRaw || bookingIdRaw)}&pdf=1`; return firstDefinedString(directContext.registration_pdf_button, u ? `<a href="${escHtml(u)}" style="display:inline-block;background:#572e88;color:#ffffff;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:8px;">View Registration PDF</a>` : ''); })(),
     '{{rehearsal_start_date}}':  firstDefinedString(directContext.rehearsal_start_date, productionRecord.start_date ? fmtDate(String(productionRecord.start_date)) : ''),
     '{{rehearsal_schedule}}':    firstDefinedString(directContext.rehearsal_schedule, directProduction.rehearsal_schedule),
     '{{rehearsal_end_date}}':    firstDefinedString(directContext.rehearsal_end_date, productionRecord.end_date ? fmtDate(String(productionRecord.end_date)) : ''),
@@ -1059,48 +1059,20 @@ serve(async (req) => {
     return json({ ok: false, error: 'Email sending is not configured (missing API key). Contact your admin.' });
   }
 
-  const secondaryCcEmail = normalizeEmailAddress(secondaryContactEmail);
-  const performerEmailNormalized = normalizeEmailAddress(performerEmail);
-  const ccAddresses = (secondaryCcEmail && secondaryCcEmail !== performerEmailNormalized)
-    ? [secondaryCcEmail]
-    : undefined;
-  const bccAddresses = (orgEmail && orgEmail !== performerEmail)
-    ? [orgEmail]
-    : undefined;
-
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${RESEND_API_KEY}`,
-      'Content-Type':  'application/json',
-    },
-    body: JSON.stringify({
-      from:     fromField,
-      to:       [performerEmail],
-      ...(ccAddresses ? { cc: ccAddresses } : {}),
-      reply_to: replyTo,
-      ...(bccAddresses ? { bcc: bccAddresses } : {}),
-      subject,
-      html,
-      text:     bodyText,
-    }),
+  // Queue separate copies for canonical and confirmed family recipients. The worker handles retry/idempotency.
+  const identityId = applicantIdRaw || bookingIdRaw;
+  const queued = await sb.rpc('bts_family_queue_template', {
+    p_production_id:productionId,p_record_id:identityId || null,p_category:category,
+    p_subject:subject,p_html:html,p_text:bodyText,p_from:fromField,p_reply_to:replyTo || null,
+    p_primary_email:identityId ? null : performerEmail,
   });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    const resendMsg = (err as Record<string, string>).message || (err as Record<string, string>).name || JSON.stringify(err);
-    console.error('[send-email] Resend error:', err);
-    return json({ ok: false, error: `Resend API error: ${resendMsg}` });
-  }
+  if (queued.error) return json({ ok:false,error:'Email could not be queued. Please try again.' },503);
 
   if (category === 'registration_completed' && applicantIdRaw) {
     const nowIso = new Date().toISOString();
     const sentPatch = {
       ...registrationCustomAnswerPatch,
-      __bts_registration_complete: true,
-      __bts_registration_status: 'complete',
-      __bts_registration_submitted_at: customAnswers.__bts_registration_submitted_at || nowIso,
-      __bts_registration_confirmation_sent_at: nowIso,
+      __bts_registration_confirmation_queued_at: nowIso,
       __bts_registration_confirmation_error: '',
     };
     try {
@@ -1114,7 +1086,7 @@ serve(async (req) => {
     }
   }
 
-  return json({ ok: true, sent: true, category, trigger: requestedTrigger, performer_email: performerEmail });
+  return json({ ok:true, queued:true, sent:false, category, trigger:requestedTrigger });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[send-email] Unhandled error:', msg);

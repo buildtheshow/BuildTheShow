@@ -1,0 +1,160 @@
+CREATE TEMP TABLE family_test(child uuid,adult uuid,household uuid,invitation uuid,token text,consent_token text);
+INSERT INTO family_test DEFAULT VALUES;
+GRANT ALL ON family_test TO authenticated,anon,service_role;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"4180925a-80f5-443d-aed7-9792e5e96172","role":"authenticated"}',true);
+UPDATE family_test SET child=public.bts_save_profile('{"credit_name":"Synthetic child","legal_first_name":"Synthetic","legal_last_name":"Child","date_of_birth":"2014-01-01","guardian_name":"Parent A","relationship_kind":"child"}',NULL,true);
+UPDATE family_test SET household=(public.bts_family('create_household','{"name":"Household A"}')->>'id')::uuid;
+SELECT public.bts_family('add_to_household',jsonb_build_object('profile_id',child,'household_id',household)) FROM family_test;
+UPDATE family_test SET invitation=(public.bts_family('invite',jsonb_build_object('profile_id',child,'email','team-viewer@example.invalid','kind','guardian'))->>'id')::uuid;
+DO $$ DECLARE info jsonb; BEGIN
+ info:=public.bts_family('snapshot');IF jsonb_array_length(info->'profiles')<>1 OR info::text LIKE '%"token"%' THEN RAISE EXCEPTION 'TEST FAILED: creator snapshot or secret exposure';END IF;
+ BEGIN PERFORM public.bts_family('accept',jsonb_build_object('token',repeat('f',64),'confirmed',true));RAISE EXCEPTION 'TEST FAILED: guessed invitation accepted';EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'TEST FAILED:%' THEN RAISE;END IF;END;
+END $$;
+RESET ROLE;
+UPDATE family_test f SET token=m.payload->>'token' FROM bts_private.family_mail m WHERE m.payload->>'invite_id'=f.invitation::text;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"4180925a-80f5-443d-aed7-9792e5e96172","role":"authenticated"}',true);
+DO $$ BEGIN
+ BEGIN PERFORM public.bts_family('accept',(SELECT jsonb_build_object('token',token,'confirmed',true,'guardian_confirmed',true,'name','Impersonator') FROM family_test));RAISE EXCEPTION 'TEST FAILED: inviter impersonated recipient';EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'TEST FAILED:%' THEN RAISE;END IF;END;
+END $$;
+SELECT set_config('request.jwt.claims','{"sub":"3f6513e6-1dfc-48ae-991f-e889305bb4d6","role":"authenticated"}',true);
+DO $$ BEGIN
+ IF EXISTS(SELECT 1 FROM public.profiles WHERE id=(SELECT child FROM family_test)) THEN RAISE EXCEPTION 'TEST FAILED: invited parent reads before accepting';END IF;
+END $$;
+SELECT public.bts_family('accept',jsonb_build_object('token',token,'confirmed',true,'guardian_confirmed',true,'name','Parent B')) FROM family_test;
+SELECT public.bts_family('create_household','{"name":"Separate household B"}');
+DO $$ DECLARE info jsonb;BEGIN
+ IF NOT public.bts_profile_access((SELECT child FROM family_test)) THEN RAISE EXCEPTION 'TEST FAILED: second guardian key missing';END IF;
+ info:=public.bts_family('snapshot');IF info::text LIKE '%Household A%' OR jsonb_array_length(info->'profiles')<>1 THEN RAISE EXCEPTION 'TEST FAILED: cross-household disclosure';END IF;
+ BEGIN PERFORM public.bts_family('invite',jsonb_build_object('profile_id',(SELECT child FROM family_test),'email','third@example.invalid','kind','guardian'));RAISE EXCEPTION 'TEST FAILED: added guardian granted another key';EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'TEST FAILED:%' THEN RAISE;END IF;END;
+ BEGIN PERFORM public.bts_family('review',jsonb_build_object('kind','guardian_removal','profile_id',(SELECT child FROM family_test),'user_id','4180925a-80f5-443d-aed7-9792e5e96172','explanation','Remove the original creator'));RAISE EXCEPTION 'TEST FAILED: added guardian can remove creator';EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'TEST FAILED:%' THEN RAISE;END IF;END;
+END $$;
+SELECT set_config('request.jwt.claims','{"sub":"4180925a-80f5-443d-aed7-9792e5e96172","role":"authenticated"}',true);
+UPDATE family_test SET adult=public.bts_save_profile('{"credit_name":"Managed adult","date_of_birth":"1990-02-01","relationship_kind":"adult","permission_email":"partner@example.invalid"}',NULL,false);
+DO $$ BEGIN IF public.bts_profile_access((SELECT adult FROM family_test)) THEN RAISE EXCEPTION 'TEST FAILED: adult delegation active before permission';END IF;END $$;
+RESET ROLE;
+UPDATE family_test f SET token=m.payload->>'token' FROM bts_private.family_mail m WHERE m.profile_id=f.adult AND m.kind='invitation';
+SET LOCAL ROLE anon;
+SELECT set_config('request.jwt.claims','{"role":"anon"}',true);
+SELECT public.bts_family('accept',jsonb_build_object('token',token,'confirmed',true)) FROM family_test;
+RESET ROLE;
+UPDATE family_test f SET consent_token=m.payload->>'token' FROM bts_private.family_mail m WHERE m.profile_id=f.adult AND m.kind='consent_receipt';
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"4180925a-80f5-443d-aed7-9792e5e96172","role":"authenticated"}',true);
+DO $$ BEGIN
+ IF NOT public.bts_profile_access((SELECT adult FROM family_test)) THEN RAISE EXCEPTION 'TEST FAILED: confirmed managed adult unavailable';END IF;
+ BEGIN PERFORM public.bts_family('accept',(SELECT jsonb_build_object('token',token,'confirmed',true) FROM family_test));RAISE EXCEPTION 'TEST FAILED: invitation replay';EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'TEST FAILED:%' THEN RAISE;END IF;END;
+END $$;
+SET LOCAL ROLE anon;
+SELECT set_config('request.jwt.claims','{"role":"anon"}',true);
+SELECT public.bts_family('withdraw_permission',jsonb_build_object('token',consent_token,'confirmed',true)) FROM family_test;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"4180925a-80f5-443d-aed7-9792e5e96172","role":"authenticated"}',true);
+DO $$ BEGIN IF public.bts_profile_access((SELECT adult FROM family_test)) THEN RAISE EXCEPTION 'TEST FAILED: adult permission withdrawal ignored';END IF;END $$;
+SELECT set_config('request.jwt.claims','{"sub":"131ad1e8-23b0-4756-81ce-bf59302e4b4f","role":"authenticated"}',true);
+DO $$ BEGIN IF public.bts_profile_access((SELECT child FROM family_test)) OR EXISTS(SELECT 1 FROM public.profiles) THEN RAISE EXCEPTION 'TEST FAILED: unrelated adult can read family';END IF;END $$;
+RESET ROLE;
+RESET ROLE;
+UPDATE public.productions SET page_status='live',registration_settings='{"payment_settings":{"mode":"single","fee":200,"currency":"CAD"}}' WHERE id='fdb2ec7b-a107-41e6-b960-7e6b89e8ca96';
+INSERT INTO public.audition_sessions(id,production_id,name,enabled,show_to_applicants) VALUES('ef072543-8703-49a6-90d7-6f14ed5a2b41','fdb2ec7b-a107-41e6-b960-7e6b89e8ca96','Family test session',true,true);
+INSERT INTO public.audition_time_slots(id,session_id,slot_time) VALUES('03f1a8af-1b48-4a55-ab10-9ced63588dda','ef072543-8703-49a6-90d7-6f14ed5a2b41','10:00');
+ALTER TABLE family_test ADD COLUMN application uuid;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"4180925a-80f5-443d-aed7-9792e5e96172","role":"authenticated"}',true);
+UPDATE public.profiles SET headshot_url='https://tkmaiktxpwqfbgeojbnf.supabase.co/storage/v1/object/public/profile-headshots/4180925a-80f5-443d-aed7-9792e5e96172/family.jpg' WHERE id=(SELECT child FROM family_test);
+WITH created AS(INSERT INTO public.bts_participant_applications(production_id,profile_id,name,email,custom_answers) SELECT 'fdb2ec7b-a107-41e6-b960-7e6b89e8ca96',child,'Tampered name','unconfirmed@example.invalid','{}' FROM family_test RETURNING id) UPDATE family_test SET application=(SELECT id FROM created);
+SELECT set_config('request.jwt.claims','{"sub":"3f6513e6-1dfc-48ae-991f-e889305bb4d6","role":"authenticated"}',true);
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM public.bts_participant_applications WHERE id=(SELECT application FROM family_test) AND name='Synthetic child' AND email='team-creative@example.invalid') THEN RAISE EXCEPTION 'TEST FAILED: shared application or canonical identity';END IF;
+ UPDATE public.bts_participant_applications SET phone='555-0100',notes='Second guardian update' WHERE id=(SELECT application FROM family_test);IF NOT FOUND THEN RAISE EXCEPTION 'TEST FAILED: second guardian update hidden';END IF;
+ BEGIN INSERT INTO public.bts_participant_applications(production_id,profile_id,name,custom_answers) SELECT 'fdb2ec7b-a107-41e6-b960-7e6b89e8ca96',child,'Duplicate','{}' FROM family_test;RAISE EXCEPTION 'TEST FAILED: duplicate application from second login';EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'TEST FAILED:%' THEN RAISE;END IF;END;
+ IF NOT public.bts_file_permission('profile-headshots','4180925a-80f5-443d-aed7-9792e5e96172/family.jpg',1) THEN RAISE EXCEPTION 'TEST FAILED: second guardian cannot view shared headshot';END IF;
+ IF public.bts_file_permission('profile-headshots','4180925a-80f5-443d-aed7-9792e5e96172/private-sibling.jpg',1) THEN RAISE EXCEPTION 'TEST FAILED: shared key reads unbound sibling file';END IF;
+ INSERT INTO public.bts_participant_bookings(production_id,session_id,slot_id,profile_id,name,custom_answers) SELECT 'fdb2ec7b-a107-41e6-b960-7e6b89e8ca96','ef072543-8703-49a6-90d7-6f14ed5a2b41','03f1a8af-1b48-4a55-ab10-9ced63588dda',child,'Ignored name','{}' FROM family_test;
+END $$;
+RESET ROLE;
+INSERT INTO public.casting_assignments(id,production_id,applicant_id,state) SELECT '7013266d-79d1-4d75-a12e-b6aacdd36601','fdb2ec7b-a107-41e6-b960-7e6b89e8ca96',application,'offer_accepted' FROM family_test;
+INSERT INTO public.registration_payment_records(production_id,casting_assignment_id,paid,amount_cents,paid_by) VALUES('fdb2ec7b-a107-41e6-b960-7e6b89e8ca96','7013266d-79d1-4d75-a12e-b6aacdd36601',true,5000,'Production staff');
+SET LOCAL ROLE authenticated;
+DO $$ DECLARE tracker jsonb;BEGIN
+ tracker:=public.bts_family_tracker((SELECT child FROM family_test));IF jsonb_array_length(tracker)<>1 OR tracker#>>'{0,payments,0,amount_cents}'<>'5000' THEN RAISE EXCEPTION 'TEST FAILED: second guardian shared tracker';END IF;
+ BEGIN INSERT INTO public.registration_payment_records(production_id,casting_assignment_id,paid,amount_cents) VALUES('fdb2ec7b-a107-41e6-b960-7e6b89e8ca96','7013266d-79d1-4d75-a12e-b6aacdd36601',true,999999);RAISE EXCEPTION 'TEST FAILED: parent forged payment';EXCEPTION WHEN insufficient_privilege OR raise_exception THEN IF SQLERRM LIKE 'TEST FAILED:%' THEN RAISE;END IF;END;
+END $$;
+RESET ROLE;
+RESET ROLE;
+INSERT INTO public.casting_assignments(id,production_id,applicant_id,state) VALUES('7013266d-79d1-4d75-a12e-b6aacdd36602','fdb2ec7b-a107-41e6-b960-7e6b89e8ca96','956836bf-755b-4d1e-996d-741238b5cdda','offer_accepted');
+UPDATE public.productions SET registration_households='[{"id":"family-test-billing","name":"Private household name","member_ids":["7013266d-79d1-4d75-a12e-b6aacdd36601","7013266d-79d1-4d75-a12e-b6aacdd36602"]}]' WHERE id='fdb2ec7b-a107-41e6-b960-7e6b89e8ca96';
+INSERT INTO public.registration_payment_records(production_id,casting_assignment_id,paid,amount_cents,paid_by) VALUES('fdb2ec7b-a107-41e6-b960-7e6b89e8ca96','7013266d-79d1-4d75-a12e-b6aacdd36602',true,2500,'Production staff');
+INSERT INTO public.household_payment_logs(production_id,household_id,amount_cents) VALUES('fdb2ec7b-a107-41e6-b960-7e6b89e8ca96','family-test-billing',1000);
+SET LOCAL ROLE authenticated;
+DO $$ DECLARE tracker jsonb;BEGIN
+ tracker:=public.bts_family_tracker((SELECT child FROM family_test));
+ IF jsonb_array_length(tracker#>'{0,bills}')<>2 OR jsonb_array_length(tracker#>'{0,payments}')<>2 OR jsonb_array_length(tracker#>'{0,legacy_payments}')<>1 OR tracker::text LIKE '%Private household name%' OR tracker::text LIKE '%Synthetic applicant%' OR tracker::text LIKE '%date_of_birth%' THEN RAISE EXCEPTION 'TEST FAILED: shared financial group totals or private sibling details';END IF;
+END $$;
+RESET ROLE;
+SET LOCAL ROLE service_role;
+DO $$ DECLARE n integer;jobs jsonb;next_jobs jsonb;BEGIN
+ IF NOT public.bts_family_email_authorize('3f6513e6-1dfc-48ae-991f-e889305bb4d6','fdb2ec7b-a107-41e6-b960-7e6b89e8ca96',(SELECT application FROM family_test),'booking_confirmation') OR public.bts_family_email_authorize('131ad1e8-23b0-4756-81ce-bf59302e4b4f','fdb2ec7b-a107-41e6-b960-7e6b89e8ca96',(SELECT application FROM family_test),'booking_confirmation') OR public.bts_family_email_authorize('3f6513e6-1dfc-48ae-991f-e889305bb4d6','fdb2ec7b-a107-41e6-b960-7e6b89e8ca96',(SELECT application FROM family_test),'cast_announcement') THEN RAISE EXCEPTION 'TEST FAILED: limited confirmation sender scope';END IF;
+ n:=public.bts_family_queue_template('fdb2ec7b-a107-41e6-b960-7e6b89e8ca96',(SELECT application FROM family_test),'booking_confirmation','Synthetic subject','<p>Synthetic message</p>','Synthetic message','sender@example.invalid',NULL);
+ IF n<>2 THEN RAISE EXCEPTION 'TEST FAILED: two recipient copies not queued';END IF;
+ n:=public.bts_family_queue_template('fdb2ec7b-a107-41e6-b960-7e6b89e8ca96',(SELECT application FROM family_test),'booking_confirmation','Synthetic subject','<p>Synthetic message</p>','Synthetic message','sender@example.invalid',NULL);
+ IF n<>0 THEN RAISE EXCEPTION 'TEST FAILED: template retry duplicated copies';END IF;
+ jobs:=public.bts_family_mail_claim();next_jobs:=public.bts_family_mail_claim();IF jsonb_array_length(jobs)+jsonb_array_length(next_jobs)>10 THEN RAISE EXCEPTION 'TEST FAILED: queue claim bypassed global limit';END IF;
+END $$;
+RESET ROLE;
+DO $$ DECLARE recipients text[];BEGIN
+ SELECT array_agg(email ORDER BY email) INTO recipients FROM public.bts_family_recipients('fdb2ec7b-a107-41e6-b960-7e6b89e8ca96',(SELECT application FROM family_test));IF recipients<>ARRAY['team-creative@example.invalid','team-viewer@example.invalid'] THEN RAISE EXCEPTION 'TEST FAILED: separate confirmed recipients %',recipients;END IF;
+ IF NOT EXISTS(SELECT 1 FROM bts_private.family_mail WHERE kind='render_booking' AND profile_id=(SELECT child FROM family_test)) THEN RAISE EXCEPTION 'TEST FAILED: booking confirmation not queued';END IF;
+ IF has_function_privilege('anon','public.bts_family_mail_claim()','EXECUTE') OR has_function_privilege('authenticated','public.bts_family_review_resolve(uuid,boolean,text,uuid[])','EXECUTE') OR has_schema_privilege('authenticated','bts_private','USAGE') THEN RAISE EXCEPTION 'TEST FAILED: private operator/service permissions exposed';END IF;
+ UPDATE bts_private.profile_keys SET active=false WHERE profile_id=(SELECT child FROM family_test) AND user_id='3f6513e6-1dfc-48ae-991f-e889305bb4d6';
+END $$;
+SET LOCAL ROLE authenticated;
+DO $$ BEGIN
+ IF EXISTS(SELECT 1 FROM public.bts_participant_applications WHERE id=(SELECT application FROM family_test)) OR public.bts_file_permission('profile-headshots','4180925a-80f5-443d-aed7-9792e5e96172/family.jpg',1) THEN RAISE EXCEPTION 'TEST FAILED: revoked guardian retains records or media';END IF;
+ BEGIN PERFORM public.bts_family_tracker((SELECT child FROM family_test));RAISE EXCEPTION 'TEST FAILED: revoked guardian retains tracker';EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'TEST FAILED:%' THEN RAISE;END IF;END;
+END $$;
+RESET ROLE;
+UPDATE public.profiles SET date_of_birth=(current_date-interval '18 years')::date WHERE id=(SELECT child FROM family_test);
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"4180925a-80f5-443d-aed7-9792e5e96172","role":"authenticated"}',true);
+DO $$ BEGIN
+ IF public.bts_profile_access((SELECT child FROM family_test)) OR EXISTS(SELECT 1 FROM public.bts_participant_applications WHERE id=(SELECT application FROM family_test)) OR public.bts_file_permission('profile-headshots','4180925a-80f5-443d-aed7-9792e5e96172/family.jpg',1) THEN RAISE EXCEPTION 'TEST FAILED: original creator keeps access after performer turns 18';END IF;
+END $$;
+RESET ROLE;
+-- Run inside the synthetic transaction, after the main family fixtures.
+ALTER TABLE family_test ADD COLUMN review_id uuid;
+GRANT ALL ON family_test TO service_role;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"4180925a-80f5-443d-aed7-9792e5e96172","role":"authenticated"}',true);
+UPDATE family_test SET review_id=(public.bts_family('review',jsonb_build_object('kind','adult_activation','profile_id',child,'target_email','team-viewer@example.invalid','explanation','Synthetic adult identity review')) ->>'id')::uuid;
+SET LOCAL ROLE service_role;
+DO $$ BEGIN
+ BEGIN PERFORM public.bts_family_review_resolve((SELECT review_id FROM family_test),true,'Synthetic identity verified for the rehearsal',ARRAY['4180925a-80f5-443d-aed7-9792e5e96172'::uuid]);RAISE EXCEPTION 'TEST FAILED: operator skipped receiving-adult verification';EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'TEST FAILED:%' THEN RAISE;END IF;END;
+END $$;
+RESET ROLE;
+UPDATE public.profiles SET date_of_birth='1990-01-01' WHERE id=(SELECT child FROM family_test);
+SET LOCAL ROLE service_role;
+SELECT public.bts_family_review_resolve(review_id,true,'Synthetic adult and requesting guardian verified',ARRAY['4180925a-80f5-443d-aed7-9792e5e96172'::uuid,'3f6513e6-1dfc-48ae-991f-e889305bb4d6'::uuid]) FROM family_test;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"3f6513e6-1dfc-48ae-991f-e889305bb4d6","role":"authenticated"}',true);
+DO $$ BEGIN IF NOT public.bts_profile_can_declare((SELECT child FROM family_test)) OR NOT public.bts_profile_manager((SELECT child FROM family_test)) OR NOT EXISTS(SELECT 1 FROM public.bts_participant_applications WHERE id=(SELECT application FROM family_test)) THEN RAISE EXCEPTION 'TEST FAILED: adult activation lost history or own authority';END IF;END $$;
+UPDATE family_test SET review_id=(public.bts_family('review',jsonb_build_object('kind','duplicate_account','profile_id',child,'user_id','131ad1e8-23b0-4756-81ce-bf59302e4b4f','explanation','Synthetic duplicate login reviewed')) ->>'id')::uuid;
+SET LOCAL ROLE service_role;
+SELECT public.bts_family_review_resolve(review_id,true,'Synthetic proof of both logins was checked',ARRAY['131ad1e8-23b0-4756-81ce-bf59302e4b4f'::uuid,'3f6513e6-1dfc-48ae-991f-e889305bb4d6'::uuid]) FROM family_test;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"131ad1e8-23b0-4756-81ce-bf59302e4b4f","role":"authenticated"}',true);
+DO $$ BEGIN IF NOT public.bts_profile_manager((SELECT child FROM family_test)) OR NOT public.bts_profile_can_declare((SELECT child FROM family_test)) THEN RAISE EXCEPTION 'TEST FAILED: reviewed duplicate login cannot manage retained profile';END IF;END $$;
+RESET ROLE;
+DO $$ BEGIN IF (SELECT count(*) FROM auth.users WHERE id IN('1f7c169f-c707-48d2-97bb-749c5ca382a0','4180925a-80f5-443d-aed7-9792e5e96172','3f6513e6-1dfc-48ae-991f-e889305bb4d6','131ad1e8-23b0-4756-81ce-bf59302e4b4f'))<>4 OR NOT EXISTS(SELECT 1 FROM public.audition_applications WHERE id=(SELECT application FROM family_test)) THEN RAISE EXCEPTION 'TEST FAILED: linking deleted Auth user or audition history';END IF;END $$;
+-- A second synthetic child pair exercises deliberate profile combining.
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"4180925a-80f5-443d-aed7-9792e5e96172","role":"authenticated"}',true);
+UPDATE family_test SET adult=public.bts_save_profile('{"credit_name":"Duplicate source","date_of_birth":"2015-01-01","guardian_name":"Parent A","relationship_kind":"child"}',NULL,true),child=public.bts_save_profile('{"credit_name":"Retained child","date_of_birth":"2015-01-01","guardian_name":"Parent A","relationship_kind":"child"}',NULL,true);
+UPDATE family_test SET review_id=(public.bts_family('review',jsonb_build_object('kind','duplicate_profile','profile_id',adult,'target_profile_id',child,'explanation','These synthetic records are the same child')) ->>'id')::uuid;
+SET LOCAL ROLE service_role;
+SELECT public.bts_family_review_resolve(review_id,true,'Synthetic identity and all active source holders checked',ARRAY['4180925a-80f5-443d-aed7-9792e5e96172'::uuid]) FROM family_test;
+RESET ROLE;
+DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM public.profiles WHERE id=(SELECT adult FROM family_test) AND deleted_at IS NOT NULL) OR NOT EXISTS(SELECT 1 FROM bts_private.profile_contacts WHERE profile_id=(SELECT child FROM family_test) AND active) THEN RAISE EXCEPTION 'TEST FAILED: reviewed duplicate profile did not retain active contacts';END IF;END $$;
+SELECT 'PASS: separate guardian keys and households, invitation binding, no creator takeover, no-login adult consent/withdrawal, shared applications/bookings, duplicate denial, read-only tracker, headshot scope, revocation, adulthood, service ACLs, reviewed adult activation, duplicate login/profile preservation and unrelated family isolation.' AS result;
+ROLLBACK;

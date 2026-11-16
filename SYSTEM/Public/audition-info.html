@@ -1992,6 +1992,7 @@
   </style>
 <script src="/SHARED/Components/account-security.js?v=20261115-team-sessions"></script>
 <script src="/SHARED/Components/audition-access.js?v=20261115-owned-auditions"></script>
+<script src="/SHARED/Components/household-booking.js?v=20261116-households" defer></script>
 </head>
 <body>
 
@@ -3740,7 +3741,7 @@
     function _bkSaveState() {
       try {
         const { headshot_file, headshot_preview, headshot_url, ...persistableState } = _bkState || {};
-        localStorage.setItem('bts_bk_'+(_bkState.session_id||'x'), JSON.stringify({
+        sessionStorage.setItem('bts_bk_'+_bkAccountId+'_'+(_bkState.session_id||'x'), JSON.stringify({
           ...persistableState,
           headshot_file: null,
           headshot_preview: null,
@@ -3750,7 +3751,7 @@
     }
     function _bkLoadSavedState(sessionId) {
       try {
-        const r = localStorage.getItem('bts_bk_'+sessionId);
+        const r = sessionStorage.getItem('bts_bk_'+_bkAccountId+'_'+sessionId);
         if (!r) return null;
         const saved = JSON.parse(r);
         return { ...saved, headshot_file: null, headshot_preview: null, headshot_url: null };
@@ -3758,8 +3759,12 @@
     }
 
     // ── Open / Close ─────────────────────────────────────────────
+    let _bkAccountId='';
     async function openBookModal(sessionId, isMultiSession) {
+      sessionStorage.setItem('bts_pending_audition',JSON.stringify({production_id:_bkProd?.id,session_id:sessionId,slots:selectedSlots,isMultiSession}));
       if (!await BTSAccountSecurity.requireAdultLogin(sb)) return;
+      _bkAccountId=(await sb.auth.getUser()).data.user.id;
+      sessionStorage.removeItem('bts_pending_audition');
       _bkSession = _allSessions.find(s => s.id === sessionId) || null;
       if (!_bkSession) return;
       const preSlotId = selectedSlots[sessionId] || null;
@@ -4964,7 +4969,7 @@
         sb.from('audition_time_slots').update({hold_expires_at:null,hold_session_id:null}).eq('id',_bkState.slot_id).eq('hold_session_id',_bkHoldSessionId).then(()=>{});
       }
       _bkHoldSessionId = null; _bkHoldExpiry = null;
-      try { localStorage.removeItem('bts_bk_'+_bkState.session_id); } catch {}
+      try { sessionStorage.removeItem('bts_bk_'+_bkAccountId+'_'+_bkState.session_id); } catch {}
       const overlay = document.getElementById('bk-expired-overlay');
       if (overlay) overlay.classList.add('active');
     }
@@ -5050,13 +5055,14 @@
           if (!name || !dob) return null;
           const { data } = await sb.from('bts_participant_applications')
             .select('*')
-            .eq('production_id', _bkProd?.id).eq('user_id', actor.id)
+            .eq('production_id', _bkProd?.id)
             .order('created_at', { ascending: false });
           const rows = data || [];
           return rows.find(row => {
             const rowName = String(row?.name || '').trim().toLowerCase();
             const rowDob  = String(row?.custom_answers?.['Date of Birth'] || '').trim();
-            return rowName === name && rowDob === dob;
+            const chosen=document.getElementById('bts-family-performer')?.value;
+            return chosen && !chosen.startsWith('new:') ? row.profile_id===chosen : row.user_id===actor.id && rowName===name && rowDob===dob;
           }) || null;
         }
         async function _bkFindExistingBookingIdentity() {
@@ -5066,14 +5072,15 @@
           if (!name || !dob) return null;
           const { data } = await sb.from('bts_participant_bookings')
             .select('*')
-            .eq('production_id', _bkProd?.id).eq('user_id', actor.id)
+            .eq('production_id', _bkProd?.id)
             .order('created_at', { ascending: false });
           const rows = data || [];
           return rows.find(row => {
             const rowName = String(row?.name || '').trim().toLowerCase();
             // audition_bookings stores custom_answers differently — fall back gracefully
             const rowDob  = String(row?.custom_answers?.['Date of Birth'] || row?.date_of_birth || '').trim();
-            return rowName === name && rowDob === dob;
+            const chosen=document.getElementById('bts-family-performer')?.value;
+            return chosen && !chosen.startsWith('new:') ? row.profile_id===chosen : row.user_id===actor.id && rowName===name && rowDob===dob;
           }) || null;
         }
         async function _bkFindUnlinkedBookingIdsForIdentity() {
@@ -5089,7 +5096,8 @@
             .filter(row => {
               const rowName = String(row?.name || '').trim().toLowerCase();
               const rowDob = String(row?.custom_answers?.['Date of Birth'] || row?.date_of_birth || '').trim();
-              return rowName === name && rowDob === dob;
+              const chosen=document.getElementById('bts-family-performer')?.value;
+            return chosen && !chosen.startsWith('new:') ? row.profile_id===chosen : row.user_id===actor.id && rowName===name && rowDob===dob;
             })
             .map(row => row.id)
             .filter(Boolean);
@@ -5291,6 +5299,7 @@
         };
         // Returns { id } on success, or { error } on failure
         async function _bkInsertOwnedBooking(payload) {
+          payload=await BTSHouseholdBooking.prepare(sb,payload);
           const { data, error } = await sb.from('bts_participant_bookings').insert(BTSAuditionAccess.bookingPayload(payload)).select('id').single();
           return error ? { error } : { id: data.id };
         }
@@ -5340,6 +5349,7 @@
           status:           existingIdentityApplication?.status || 'pending',
         };
         async function _bkInsertOwnedApplication(payload) {
+          payload=await BTSHouseholdBooking.prepare(sb,payload);
           const { error } = await sb.from('bts_participant_applications').insert(BTSAuditionAccess.applicationPayload(payload));
           return error;
         }
@@ -5349,6 +5359,7 @@
         }
 
         async function _bkUpdateOwnedApplication(appId, payload) {
+          const {user_id,profile_id,email,...editable}=payload;payload=editable;
           const { error } = await sb.from('bts_participant_applications').update(BTSAuditionAccess.applicationPayload(payload)).eq('id', appId);
           return error;
         }
@@ -5535,7 +5546,7 @@
         };
         refreshBookingTab();
         clearInterval(_bkTimerInterval);
-        try { localStorage.removeItem('bts_bk_'+_bkState.session_id); } catch {}
+        try { sessionStorage.removeItem('bts_bk_'+_bkAccountId+'_'+_bkState.session_id); } catch {}
         document.getElementById('bk-steps-wrap').style.display = 'none';
         document.getElementById('bk-body').style.display = 'none';
         document.getElementById('bk-footer').style.display = 'none';
@@ -6183,6 +6194,15 @@
       if (!document.hidden) queuePublicAuditionsRefresh();
     });
 
+    let familyResumeAttempts=0;
+    const familyResumeTimer=setInterval(()=>{
+      if(++familyResumeAttempts>60){clearInterval(familyResumeTimer);return;}
+      try{const pending=JSON.parse(sessionStorage.getItem('bts_pending_audition')||'null');
+      if(!pending){clearInterval(familyResumeTimer);return;}
+      if(_bkProd?.id===pending.production_id&&_allSessions.length){
+        Object.assign(selectedSlots,pending.slots||{});sessionStorage.removeItem('bts_pending_audition');clearInterval(familyResumeTimer);openBookModal(pending.session_id,pending.isMultiSession);
+      }}catch{clearInterval(familyResumeTimer);}
+    },500);
     if (params.get('view') === 'characters') {
       loadCharList();
     } else {

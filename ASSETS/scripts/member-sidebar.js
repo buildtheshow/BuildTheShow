@@ -122,6 +122,7 @@
     }
 
     // Calendar — always visible, top-level (not scoped to a position)
+    nav += navLink('/member/households', 'Households and access', activePage === 'households');
     nav += navLink('/member/calendar', 'Calendar', activePage === 'calendar');
 
     // Settings — always visible

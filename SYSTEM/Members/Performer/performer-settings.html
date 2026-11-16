@@ -430,18 +430,18 @@
 
         <div class="danger-zone">
           <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.3rem;">
-            <div class="danger-zone-title" style="margin-bottom:0;">Delete This Profile</div>
+            <div class="danger-zone-title" style="margin-bottom:0;">Archive This Profile</div>
           </div>
-          <div class="danger-zone-subtitle">This only deletes this profile. Your account stays active.</div>
+          <div class="danger-zone-subtitle">This hides the profile from active use. Your account stays active.</div>
           <div class="danger-warning">
-            Deleting this profile removes all its data - headshots, experience, credits, and application history. If this profile is linked to any active productions, those links will be broken. This cannot be undone.
+            Archiving retains personal information and production history. Resolve active bookings first. Shared child profiles need a reviewed decision. Use the account privacy process to request deletion.
           </div>
           <div class="form-error" id="del-profile-error"></div>
           <button class="btn-danger" onclick="confirmDeleteProfile()">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
               <path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10"/>
             </svg>
-            Delete This Profile
+            Archive This Profile
           </button>
         </div>
 
@@ -607,7 +607,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script defer src="/ASSETS/scripts/member-sidebar.js"></script>
+  <script defer src="/ASSETS/scripts/member-sidebar.js?v=20261116-households"></script>
   <script>
     let toastTimer;
     function showToast(msg, isError = false) {
@@ -752,7 +752,7 @@
     // ── Download My Data ──────────────────────────────────────
     async function downloadMyData() {
       const [{ data: profiles }, { data: memberIdRow }, { data: accountStatus }] = await Promise.all([
-        sb.from('profiles').select('*').eq('user_id', currentUser.id),
+        sb.from('profiles').select('*'),
         sb.from('member_ids').select('display_id').eq('user_id', currentUser.id).limit(1),
         sb.rpc('bts_get_account_status'),
       ]);
@@ -844,10 +844,10 @@
       const email    = currentUser?.email || '';
 
       const confirmed = confirm(
-        `Delete profile "${name}"${customId}?\n\n` +
-        `This removes this profile and its data only.\n` +
+        `Archive profile "${name}"${customId}?\n\n` +
+        `This hides this profile from active use and retains its history.\n` +
         `Your account (${email}) will NOT be deleted.\n\n` +
-        `This cannot be undone.`
+        `This does not erase production history.`
       );
       if (!confirmed) return;
 
@@ -857,7 +857,7 @@
       const errEl = document.getElementById('del-profile-error');
       errEl.classList.remove('visible');
 
-      const { error } = await sb.from('profiles').delete().eq('id', currentProfile.id).eq('user_id', currentUser.id);
+      const { error } = await sb.rpc('bts_family',{p_action:'archive_profile',p_data:{profile_id:currentProfile.id}});
       if (error) {
         errEl.textContent = error.message; errEl.classList.add('visible'); return;
       }

@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict');const fs=require('node:fs');const vm=require('node:vm');const path=require('node:path');const {pathToFileURL}=require('node:url');
+(async()=>{
+ const context={window:{}};vm.createContext(context);vm.runInContext(fs.readFileSync(path.join(__dirname,'../../ASSETS/scripts/households/payments.js'),'utf8'),context);const summary=context.window.BTSFamilyPayments.summary;
+ let bill=summary({settings:{mode:'single',fee:200,currency:'CAD'},bills:[{}],payments:[{paid:true,amount_cents:5000}]});assert.equal(bill.total,20000);assert.equal(bill.balance,15000);assert.equal(bill.schedule[0].remaining,15000);
+ bill=summary({settings:{mode:'split',split_count:2,split_installments:[{amount:100},{amount:100}],volunteer_discount_enabled:true,volunteer_discount:50,volunteer_hours:5},bills:[{volunteer_discount_earned:true,scholarship_status:'approved',scholarship_amount:25}],payments:[{paid:true,amount_cents:10000}]});assert.equal(bill.total,12500);assert.equal(bill.schedule[0].remaining,0);assert.equal(bill.schedule[1].remaining,2500);
+ bill=summary({settings:{mode:'single',fee:200,sibling_discount_enabled:true,sibling_first_child:180,sibling_additional:150},shared_invoice:true,bills:[{household_position:0},{household_position:1}],payments:[{paid:true,amount_cents:35000}]});assert.equal(bill.total,33000);assert.equal(bill.balance,0);assert.equal(bill.credit,2000);assert.equal(bill.discount,7000);
+ assert.equal(summary({settings:{mode:'none'},bills:[{}]}).total,0);
+ const {familyMessage,deliverFamilyMail}=await import(pathToFileURL(path.join(__dirname,'../../supabase/functions/household-mail/delivery.ts')));
+ const job={id:'synthetic',to:'recipient@example.invalid',kind:'invitation',performer:'<script>Private child</script>',payload:{token:'secret-fixture',permission:'guardian'}};const mail=familyMessage(job);assert.ok(mail.html.includes('&lt;script&gt;'));assert.ok(!mail.html.includes('<script>'));assert.ok(mail.text.includes('#invite=secret-fixture'));assert.ok(mail.html.includes('Review invitation'));
+ let calls=0;const fake=async(url,options)=>{calls++;assert.equal(url,'https://api.resend.com/emails');assert.equal(options.headers['Idempotency-Key'],'household/synthetic');const body=JSON.parse(options.body);assert.deepEqual(body.to,['recipient@example.invalid']);assert.equal(body.cc,undefined);return {ok:true,json:async()=>({id:'fake-provider'})};};
+ assert.equal(await deliverFamilyMail(job,{key:'fake',from:'sender@example.invalid'},fake),'fake-provider');assert.equal(calls,1);
+ await assert.rejects(deliverFamilyMail(job,{key:'fake',from:'sender@example.invalid'},async()=>({ok:false,status:429})),/429/);
+ console.log('PASS: shared tracker discounts, instalments, overpayments, escaped invitation buttons, separate recipient copies and provider failure. No emails sent.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

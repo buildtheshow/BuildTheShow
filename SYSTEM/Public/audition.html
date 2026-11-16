@@ -156,6 +156,7 @@
   </style>
 <script src="/SHARED/Components/account-security.js?v=20261115-team-sessions"></script>
 <script src="/SHARED/Components/audition-access.js?v=20261115-owned-auditions"></script>
+<script src="/SHARED/Components/household-booking.js?v=20261116-households" defer></script>
 </head>
 <body>
 
@@ -207,7 +208,7 @@
       <div class="aud-card">
         <!-- Purpose statement (legally required by PIPEDA) -->
         <div class="purpose-banner" id="aud-purpose-banner">
-          <strong>About this form:</strong> An adult account holder completes this application for themselves or a child they manage as a parent or legal guardian. Provide only information needed for the audition. Our <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a> explains data use, retention and your rights.
+          <strong>About this form:</strong> An adult account holder completes this application for themselves, a child they manage as a guardian, or another adult who has confirmed permission. Provide only information needed for the audition. Our <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a> explains data use, retention and your rights.
         </div>
 
         <div id="aud-instructions-box" style="display:none;" class="instructions-box"></div>
@@ -763,6 +764,7 @@
     }
 
     async function insertOwnedApplication(payload) {
+      payload=await BTSHouseholdBooking.prepare(sb,payload);
       const { error } = await sb.from('bts_participant_applications').insert(BTSAuditionAccess.applicationPayload(payload));
       return error;
     }
@@ -937,17 +939,7 @@
         status: 'pending',
       };
 
-      // Attach user_id and profile_id if logged in
-      const { data: { session } } = await sb.auth.getSession();
-      if (session) {
-        payload.user_id = session.user.id;
-        try {
-          const { data: ownProfiles } = await sb.from('profiles').select('id,legal_first_name,legal_last_name,date_of_birth').eq('user_id', session.user.id).eq('date_of_birth', dobVal);
-          const prof = (ownProfiles || []).find(item => [item.legal_first_name,item.legal_last_name].filter(Boolean).join(' ').trim().toLowerCase() === name.toLowerCase());
-          if (prof) payload.profile_id = prof.id;
-        } catch {}
-      }
-
+      // The explicit performer picker chooses an authorised profile.
       const error = await insertOwnedApplication(payload);
       if (error) {
         errEl.textContent = error.message; errEl.classList.add('visible');

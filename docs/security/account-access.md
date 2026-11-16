@@ -115,3 +115,7 @@ Before deleting an account, identify organisation ownership, guardian relationsh
 Remove or de-identify data that can be deleted, revoke active sessions and links, and document any narrow retention exception and its expiry. Account deletion does not automatically remove Storage objects or records held by a production organisation. Check backups and processors under their actual deletion schedules before describing deletion as complete. Then record completion and notify the requester with an honest description of the result. Do not run an unreviewed `auth.users` deletion: the current organisation ownership foreign key cascades.
 
 This release only records the request. A named operator, a working monitored privacy inbox and this operating procedure are launch requirements, not completed automation.
+
+## Household performer access
+
+The household release replaces creator-only performer access with explicit authorised profile keys while keeping original creator IDs as historical fields. See [households-guide.md](households-guide.md) for the twelve-part plain-language map and [households-operations.md](households-operations.md) for reviewed linking, family disputes, email delivery and deployment. This does not complete the wider account/privacy launch checklist.

@@ -749,6 +749,7 @@
         </div>
 
         <!-- ── Parent / Guardian (minors only) ────────── -->
+        <label class="form-label" for="family-relationship">Who is this profile for?</label><select class="form-input" id="family-relationship"><option value="self">Me</option><option value="child">A child I manage as their guardian</option><option value="adult">Another adult who will confirm permission</option></select><label class="form-label" for="family-permission-email">Other adult email (only for a managed adult)</label><input class="form-input" id="family-permission-email" type="email" />
         <div class="guardian-section" id="guardian-section" aria-hidden="true">
 
           <div class="minor-notice">
@@ -1075,8 +1076,8 @@
 
       // Load Member ID and profiles in parallel
       const [memberIdResult, profilesResult] = await Promise.all([
-        sb.from('member_ids').select('display_id').eq('user_id', user.id).limit(1),
-        sb.from('profiles').select('*').eq('user_id', user.id),
+        sb.from('member_ids').select('display_id').limit(1),
+        sb.from('profiles').select('*'),
       ]);
 
       const accountId   = memberIdResult.data?.[0]?.display_id || '-';
@@ -1087,7 +1088,7 @@
 
       if (editProfileId) {
         const { data: profile } = await sb.from('profiles')
-          .select('*').eq('id', editProfileId).eq('user_id', user.id).single();
+          .select('*').eq('id', editProfileId).single();
         if (!profile) { window.location.href = '/member'; return; }
         prefillForm(profile);
         applyInvitePrefill();
@@ -1220,19 +1221,21 @@
       // Look up this user's permanent Member ID
       const { data: memberIdRow } = await sb.from('member_ids')
         .select('display_id')
-        .eq('user_id', user.id)
+
         .limit(1);
       const memberDisplayId = memberIdRow?.[0]?.display_id || null;
 
       // Count existing profiles to determine suffix (01, 02, 03 ...)
       const { data: existingProfiles } = await sb.from('profiles')
         .select('id')
-        .eq('user_id', user.id);
+        ;
       const profileCount = (existingProfiles || []).length;
       const profileSuffix = String(profileCount + 1).padStart(2, '0');
       const profileDisplayId = memberDisplayId ? `${memberDisplayId}-${profileSuffix}` : null;
 
       const profileData = {
+        relationship_kind: isMinor ? 'child' : document.getElementById('family-relationship').value,
+        permission_email: document.getElementById('family-permission-email').value.trim() || null,
         legal_first_name:   legalFirst,
         legal_last_name:    legalLast,
         date_of_birth:      dob,

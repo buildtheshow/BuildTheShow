@@ -18,6 +18,11 @@ const { pathToFileURL } = require('node:url');
   assert.equal((await authorizeEmailRequest(makeRequest('valid'),{production_id:production,applicant_id:'other-production-record'},service,'server-secret')).status,403);
   permission=false;reason='rate_limited';
   assert.equal((await authorizeEmailRequest(makeRequest('valid'),{production_id:production},service,'server-secret')).status,429);
+  // Participant confirmations cannot retain caller-supplied recipients or content.
+  service.rpc=async(name)=>({data:name==='bts_family_email_authorize'?true:{allowed:false,reason:'forbidden'}});
+  const participant={production_id:production,applicant_id:production,category:'booking_confirmation',email:'attacker@example.invalid',context:{private:'forged'},subject:'forged'};record=true;
+  assert.equal((await authorizeEmailRequest(makeRequest('valid'),participant,service,'server-secret')).allowed,true);
+  assert.deepEqual(Object.keys(participant).sort(),['applicant_id','category','production_id']);
   const before=authCalls;
   assert.equal((await authorizeEmailRequest(makeRequest('server-secret'),{},service,'server-secret')).internal,true);
   assert.equal(authCalls,before);
