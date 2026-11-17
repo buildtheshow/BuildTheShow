@@ -296,6 +296,17 @@
             <input class="form-input" type="text" id="beta-code" maxlength="100" autocomplete="off" spellcheck="false" required />
           </div>
 
+          <div class="form-group">
+            <label class="form-label" for="signup-purpose">What are you signing up for?</label>
+            <select class="form-input" id="signup-purpose" name="signup-purpose" aria-describedby="signup-purpose-help" required>
+              <option value="">Choose an option</option>
+              <option value="organisation">Organisation</option>
+              <option value="member">Member</option>
+              <option value="household">Household</option>
+            </select>
+            <span id="signup-purpose-help" style="font-size:0.78rem;color:#6a5a80;line-height:1.5;">Organisation: build shows. Member: one person. Household: more than one person.</span>
+          </div>
+
           <div class="form-row">
             <div class="form-group">
               <label class="form-label" for="first-name">First Name</label>
@@ -423,6 +434,11 @@
       const email     = document.getElementById('email').value.trim();
       const password  = document.getElementById('password').value;
       const betaCode = document.getElementById('beta-code').value.trim();
+      const signupPurpose = document.getElementById('signup-purpose').value;
+      const setupDestinations = {organisation: '/org/setup', member: '/home', household: '/member/households'};
+      if (!Object.prototype.hasOwnProperty.call(setupDestinations, signupPurpose)) {
+        showError('Choose Organisation, Member or Household to continue.'); return;
+      }
 
       if (!firstName || !lastName) {
         showError('Please enter your first and last name.');
@@ -466,7 +482,7 @@
       }
       const signupQuery=new URLSearchParams(location.search);
       const confirmationDestination=new URL('/login',window.location.origin);
-      confirmationDestination.searchParams.set('return',BTSAccountSecurity.safeReturnPath(signupQuery.get('return')||'/home'));
+      confirmationDestination.searchParams.set('return',BTSAccountSecurity.safeReturnPath(signupQuery.get('return')||setupDestinations[signupPurpose]));
       if(signupQuery.get('invite'))confirmationDestination.searchParams.set('invite',signupQuery.get('invite'));
       const { data, error } = await sb.auth.signUp({
         email,
@@ -474,6 +490,7 @@
         options: {
           emailRedirectTo: confirmationDestination.href,
           data: {
+            signup_purpose: signupPurpose,
             beta_code: betaCode,
             first_name: firstName,
             last_name: lastName,
@@ -512,7 +529,7 @@
       if (inviteToken) {
         window.location.href = `/invite?token=${inviteToken}`;
       } else {
-        const destination=new URLSearchParams(location.search).get('return')||'/home';
+        const destination=new URLSearchParams(location.search).get('return')||setupDestinations[signupPurpose];
         window.location.href=BTSAccountSecurity.safeReturnPath(destination);
       }
     });
