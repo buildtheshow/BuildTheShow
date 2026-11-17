@@ -9,7 +9,19 @@ const {chromium}=require('playwright');const fs=require('node:fs'),path=require(
  await page.getByRole('heading',{name:"We're in Beta Testing",exact:true}).waitFor();
  await page.locator('#beta-code').fill('INVALID-BETA');await page.locator('#beta-continue').click();await page.getByText('That code is invalid, expired or fully used.',{exact:false}).waitFor();assert.equal(new URL(page.url()).pathname,'/');
  await page.locator('#beta-code').fill('SYNTHETIC-BETA-CODE');await page.locator('#beta-continue').click();await page.waitForURL('http://bts.test/signup');assert.equal(await page.locator('#beta-code').inputValue(),'SYNTHETIC-BETA-CODE');assert.equal(new URL(page.url()).search,'');
- for(const width of [320,768,1280]){await page.setViewportSize({width,height:900});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Signup overflow '+width);}
+ for(const width of [320,768,1280]){
+   await page.setViewportSize({width,height:900});
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Signup overflow '+width);
+   const appearance=await page.evaluate(()=>{
+     const card=document.querySelector('.auth-card'),field=document.querySelector('#email'),button=document.querySelector('#submit-btn');
+     const cardStyle=getComputedStyle(card),fieldStyle=getComputedStyle(field),buttonStyle=getComputedStyle(button);
+     return {cardColour:cardStyle.backgroundColor,cardRadius:cardStyle.borderRadius,fieldHeight:field.getBoundingClientRect().height,fieldRadius:fieldStyle.borderRadius,buttonColour:buttonStyle.backgroundColor,buttonWidth:button.getBoundingClientRect().width,fieldWidth:field.getBoundingClientRect().width};
+   });
+   assert.equal(appearance.cardColour,'rgb(255, 255, 255)');assert.equal(appearance.cardRadius,'14px');
+   assert.ok(appearance.fieldHeight>=44,'Inputs should retain the designed padded control height');assert.equal(appearance.fieldRadius,'8px');
+   assert.equal(appearance.buttonColour,'rgb(87, 46, 136)');assert.ok(Math.abs(appearance.buttonWidth-appearance.fieldWidth)<2,'Submit uses the original full-width form control');
+   await page.screenshot({path:'/tmp/bts-signup-restored-'+width+'.png',fullPage:true});
+ }
  await page.locator('#first-name').fill('Synthetic');await page.locator('#last-name').fill('Adult');await page.locator('#dob').fill('1990-01-01');await page.locator('#email').fill('synthetic@example.invalid');await page.locator('#password').fill('synthetic-password-only');await page.locator('#consent-privacy').check();await page.locator('#consent-terms').check();
  await page.locator('#beta-code').fill('');await page.locator('#submit-btn').click();await page.getByText('Enter a valid beta invitation code to sign up.',{exact:true}).waitFor();assert.equal(await page.evaluate(()=>testSignupCalls.length),0);
  await page.locator('#beta-code').fill('SYNTHETIC-BETA-CODE');await page.locator('#submit-btn').click();await page.getByText('Account created. Check your inbox to verify your email, then sign in.',{exact:true}).waitFor();assert.equal(await page.evaluate(()=>testSignupCalls[0].options.data.beta_code),'SYNTHETIC-BETA-CODE');assert.equal(await page.evaluate(()=>sessionStorage.getItem('bts_beta_code')),null);
