@@ -88,7 +88,9 @@
   }
 
   // ── Main sidebar builder ─────────────────────────────────────────
+  let activeSidebarPage;
   function renderMemberSidebar(activePage) {
+    activeSidebarPage = activePage;
     // Read active profile context
     const profileId   = sessionStorage.getItem('bts_active_profile_id');
     const profileName = sessionStorage.getItem('bts_active_profile_name') || 'My Profile';
@@ -135,6 +137,9 @@
     const navEl = document.querySelector('.sidebar-nav');
     if (navEl) navEl.innerHTML = nav;
 
+    // The switcher always opens the profile picker, never the account home alias.
+    const switcher = document.getElementById('sidebar-profile-switcher');
+    if (switcher) switcher.href = '/member/profiles';
     // ── Profile switcher ──
     updateProfileSwitcher(profileName, profileId);
 
@@ -150,7 +155,7 @@
             if (data?.display_id) {
               sessionStorage.setItem('bts_user_display_id', data.display_id);
               const numEl = document.getElementById('sidebar-profile-num');
-              if (numEl && !numEl.textContent) numEl.textContent = data.display_id;
+              if (numEl && !numEl.textContent && !sessionStorage.getItem('bts_active_profile_id')) numEl.textContent = 'Account ID: ' + data.display_id;
             }
           });
       });
@@ -188,13 +193,54 @@
         if (hint) info.insertBefore(numEl, hint);
         else info.appendChild(numEl);
       }
-      const customId = sessionStorage.getItem('bts_active_profile_custom_id')
-                    || sessionStorage.getItem('bts_user_display_id')
-                    || '';
-      numEl.textContent = customId;
+      const customId = sessionStorage.getItem('bts_active_profile_custom_id');
+      const accountId = sessionStorage.getItem('bts_user_display_id');
+      numEl.textContent = profileId ? (customId ? 'Profile ID: ' + customId : '') : (accountId ? 'Account ID: ' + accountId : '');
     }
   }
 
+  // Resolve display context from authorised data, not a name left by a previous login.
+  async function loadMemberSidebarProfile(client, profiles) {
+    const {data: auth, error: authError} = await client.auth.getUser();
+    if (authError || !auth?.user) return;
+    const user = auth.user;
+    if (!profiles) {
+      const result = await client.rpc('bts_family', {p_action:'snapshot', p_data:{}});
+      if (result.error) return;
+      profiles = result.data?.profiles || [];
+    }
+    const selectedId = sessionStorage.getItem('bts_active_profile_id');
+    const selected = profiles.find(profile => profile.id === selectedId && profile.can_manage)
+      || profiles.find(profile => profile.is_subject && profile.can_manage);
+    let profileNumber = '';
+    if (selected) {
+      sessionStorage.setItem('bts_active_profile_id', selected.id);
+      sessionStorage.setItem('bts_active_profile_name', selected.name);
+      const result = await client.from('profiles').select('id,credit_name,profile_display_id,sections').eq('id', selected.id).maybeSingle();
+      const record = !result.error && result.data?.id === selected.id ? result.data : null;
+      profileNumber = record?.profile_display_id || '';
+      sessionStorage.setItem('bts_active_profile_sections', JSON.stringify(record?.sections || {}));
+      sessionStorage.setItem('bts_active_profile_custom_id', profileNumber);
+      renderMemberSidebar(activeSidebarPage);
+      updateProfileSwitcher(selected.name, selected.id);
+    } else {
+      for (const key of ['id','name','sections','custom_id']) sessionStorage.removeItem('bts_active_profile_' + key);
+      renderMemberSidebar(activeSidebarPage);
+      const meta = user.user_metadata || {};
+      const name = [meta.first_name,meta.last_name].filter(Boolean).join(' ').trim() || meta.full_name || 'My Profiles';
+      updateProfileSwitcher(name, null);
+    }
+    const number = document.getElementById('sidebar-profile-num');
+    if (number) {
+      number.textContent = profileNumber ? 'Profile ID: ' + profileNumber : '';
+      if (!selected) {
+        const result = await client.from('member_ids').select('display_id').eq('user_id', user.id).maybeSingle();
+        if (!result.error && result.data?.display_id) number.textContent = 'Account ID: ' + result.data.display_id;
+      }
+    }
+    return selected || null;
+  }
+  window.loadMemberSidebarProfile = loadMemberSidebarProfile;
   // ── Expose globally ──────────────────────────────────────────────
   window.renderMemberSidebar = renderMemberSidebar;
 
