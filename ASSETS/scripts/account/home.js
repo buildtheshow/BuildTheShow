@@ -20,21 +20,27 @@ function activityUrl(id){return '/member/activities?production='+encodeURICompon
 function render(){
  const selectedHistory=$('history-profile').value;
  $('history-profile').innerHTML='<option value="">Choose the correct profile</option>'+state.profiles.filter(p=>p.can_volunteer).map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');$('history-profile').value=selectedHistory;
- const managing=state.organisations.length>0||state.management.length>0;
+ const own=state.profiles.find(p=>p.is_subject&&p.can_manage);const circles=state.circles||[];
+ const profileLink=$('my-profile-shortcut');profileLink.href=own?'/member/profiles/'+encodeURIComponent(own.id):'/member/profiles/new';
+ $('home-profile-copy').textContent=own?'Your details and activities.':'Start with your own details and activities.';
+ $('home-profile-cta').textContent=own?'View my profile →':'Create My Profile →';
+ $('home-circle-title').textContent=circles.length?'My Circle':'Create or join a circle';
+ $('home-circle-copy').textContent=circles.length?circles.map(c=>c.name).join(', '):'Managing more than yourself? Keep members together and choose who can help.';
+ $('home-circle-open').hidden=!circles.length;$('home-circle-start').hidden=!!circles.length;
  $('home-title').textContent=mode==='activities'?'My Activities':'My Home';document.title=$('home-title').textContent+' | Build The Show';
- $('manage-space').hidden=!managing;$('home-spaces').hidden=mode!=='home';
+ $('home-spaces').hidden=mode!=='home';
 
- $('shifts-space').hidden=mode!=='activities';
+ $('shifts-space').hidden=mode!=='activities';$('activity-tools').hidden=mode!=='activities';
  const actions=[];
  for(const activity of state.activities){const answers=activity.custom_answers||{};const offer=answers.__bts_cast_offer_code||answers.__bts_cast_offer_token;
   if(offer&&answers.__bts_cast_offer_status==='sent')actions.push({label:activity.name+': review role offer',url:'/cast-offer?'+new URLSearchParams({prod:activity.production_id,token:offer})});
   if(answers.__bts_cast_offer_status==='accepted'&&answers.__bts_registration_complete!==true&&answers.__bts_registration_complete!=='true')actions.push({label:activity.name+': complete registration',url:'/registration#'+new URLSearchParams({prod:activity.production_id,app:activity.id})});
  }
- for(const person of state.profiles)if(person.state==='pending'||person.needs_adult_claim)actions.push({label:person.name+': review profile access',url:'/member/households?profile='+encodeURIComponent(person.id)});
+ for(const person of state.profiles)if(person.state==='pending'||person.needs_adult_claim)actions.push({label:person.name+': review profile access',url:'/member/circles?profile='+encodeURIComponent(person.id)});
  $('actions-space').hidden=actions.length===0;
  $('home-actions-needed').innerHTML=actions.map(action=>`<div class="member-record"><a href="${esc(action.url)}">${esc(action.label)}</a></div>`).join('')||'<p>No pending offer, registration or profile-access action is recorded.</p>';
- $('home-intro').textContent=mode==='activities'?'Auditions, rehearsals and volunteer shifts, all in one place.':'Your people, your shows and what’s coming up.';
- $('home-profiles').innerHTML=state.profiles.map(p=>`<article class="position-card"><div class="profile-heading"><img class="position-card-icon" src="/ASSETS/Images/Icons/performer2.svg" alt=""><h3 class="position-card-title">${esc(p.name)}</h3></div>${p.needs_adult_claim?'<p class="member-note profile-card-copy">This adult needs to confirm their own access.</p>':!p.can_manage?'<p class="member-note profile-card-copy">Waiting for permission to manage this profile.</p>':''}<div class="member-actions">${p.can_manage?`<a href="/member/profiles/${encodeURIComponent(p.id)}">View profile →</a>`:''}<a href="/member/households?profile=${encodeURIComponent(p.id)}">Access and payments →</a></div></article>`).join('')||'<div class="member-empty"><img class="position-card-icon" src="/ASSETS/Images/Icons/performer2.svg" alt=""><div><strong>Who’s taking part?</strong><p class="member-note">Add yourself or someone you look after to get started.</p></div></div>';
+ $('home-intro').textContent=mode==='activities'?'Auditions, rehearsals and volunteer shifts, all in one place.':circles.length?'Your circle, your shows and what’s coming up.':'Your profile, your shows and what’s coming up.';
+ $('home-profiles').innerHTML=state.profiles.filter(p=>p.is_subject).map(p=>`<article class="position-card"><div class="profile-heading"><img class="position-card-icon" src="/ASSETS/Images/Icons/performer2.svg" alt=""><h3 class="position-card-title">${esc(p.name)}</h3></div>${p.needs_adult_claim?'<p class="member-note profile-card-copy">This adult needs to confirm their own access.</p>':!p.can_manage?'<p class="member-note profile-card-copy">Waiting for permission to manage this profile.</p>':''}<div class="member-actions">${p.can_manage?`<a href="/member/profiles/${encodeURIComponent(p.id)}">View profile →</a>`:''}<a href="/member/circles?profile=${encodeURIComponent(p.id)}">Access and payments →</a></div></article>`).join('')||'<div class="member-empty"><img class="position-card-icon" src="/ASSETS/Images/Icons/performer2.svg" alt=""><div><strong>Start with My Profile</strong><p class="member-note">Add your own details to get started. Use My Circle to manage other members.</p></div></div>';
  $('home-productions').innerHTML=state.productions.map(p=>`<article class="position-card"><img class="position-card-icon" src="/ASSETS/Images/Icons/Performer.svg" alt=""><h3 class="position-card-title">${esc(p.title)}</h3><div class="member-actions"><a href="${activityUrl(p.id)}">View activities →</a><a href="/volunteer?id=${encodeURIComponent(p.id)}">Volunteer for this show →</a><a href="/member/applications?production=${encodeURIComponent(p.id)}">Auditions and registrations →</a></div></article>`).join('')||'<div class="member-empty"><img class="position-card-icon" src="/ASSETS/Images/Icons/Performer.svg" alt=""><div><strong>No shows yet</strong><p class="member-note">Your shows appear here when you audition, register or request a volunteer shift.</p></div></div>';
  const today=new Date();const monday=new Date(today);monday.setDate(today.getDate()-(today.getDay()===0?6:today.getDay()-1));
  const eventDates=new Set(state.events.map(e=>String(e.start_time||'').slice(0,10)));
@@ -48,7 +54,7 @@ function render(){
  if(params.get('tab')==='shifts')$('shifts-space').scrollIntoView();
  if(params.get('tab')==='calendar')$('upcoming-space').scrollIntoView();
 }
-async function load(){if(loading)return;loading=true;try{state=await call('bts_my_home',{p_production_id:production||null});render();if($('home-status').textContent==='Loading your shows and profiles…')$('home-status').hidden=true;if(typeof loadMemberSidebarProfile==='function')loadMemberSidebarProfile(client,state.profiles).catch(()=>{});}finally{loading=false;}}
+async function load(){if(loading)return;loading=true;try{const [home,circle]=await Promise.all([call('bts_my_home',{p_production_id:production||null}),call('bts_circle',{p_action:'snapshot',p_data:{}})]);state={...home,circles:circle.circles||circle.households||[],profiles:circle.profiles||home.profiles};render();if($('home-status').textContent==='Loading your shows and profiles…')$('home-status').hidden=true;if(typeof loadMemberSidebarProfile==='function')loadMemberSidebarProfile(client,state.profiles,{circles:state.circles}).catch(()=>{});}finally{loading=false;}}
 $('request-volunteer-history').onclick=event=>work(async()=>{const result=await call('bts_request_volunteer_history',{p_production_id:production||null});status(result.message);},event.target);
 $('home-logout').onclick=()=>work(async()=>{await client.auth.signOut();sessionStorage.clear();location.replace('/login');});
 document.addEventListener('click',event=>{const button=event.target.closest('button');if(!button)return;

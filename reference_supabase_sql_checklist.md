@@ -119,3 +119,7 @@ Migration: `supabase/migrations/20261116230000_beta_signup_invitations.sql`. Add
 Applied `supabase/migrations/20261117130000_canonical_url_namespaces.sql` through the linked CLI. Extends the existing reserved organisation slug validator to the website's public, member and organisation route words. No organisation slug, account, profile or production records are changed. Before applying, the collision count for the newly reserved names was zero. Existing unique slug indexes stay in place.
 
 The follow-up `20261117133000_reserve_about_page_url.sql` also reserves the existing `who-we-are` page name. Its pre-application organisation collision count was zero.
+
+## 2026-11-17: Member circles
+
+`supabase/migrations/20261117173000_member_circles.sql` adds selected circle-admin invitation scope to the existing private invitations table and the `bts_circle` API. Existing household/profile records are reused, not renamed or duplicated. Applied only this migration through the linked CLI after local SQL and browser verification; the earlier transactional-booking migration remains separate.

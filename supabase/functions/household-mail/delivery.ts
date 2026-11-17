@@ -1,11 +1,11 @@
 export type FamilyJob = { id:string; to:string; kind:string; performer?:string; profile_id?:string; payload:Record<string,unknown> };
 const escape = (value:unknown) => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 export function familyMessage(job:FamilyJob) {
-  const base='https://buildtheshow.com/member/households';
+  const base='https://buildtheshow.com/member/circles';
   const name=job.performer || 'your performer';
   let subject='A shared performer record changed';
   let text='An authorised person updated a booking, registration, payment tracker or access permission for '+name+'. Sign in to review the change history.';
-  let link=base;let label='Open households and access';
+  let link=base;let label='Open My Circle';
   if(job.kind==='volunteer_history'){subject='Confirm your older volunteer records';text='Confirm which authorised profile should hold the older volunteer records for '+name+'. You must use the adult account receiving this email. A matching name alone does not grant access.';link='https://buildtheshow.com/member/home#volunteer-claim='+encodeURIComponent(String(job.payload.token));label='Review older volunteer records';
   } else if(job.kind==='team_invitation') {
     subject='Your production access invitation';text='You have been invited to help manage '+String(job.payload.production||'a production')+'. Accept using your own adult account and the email that received this invitation.';link='https://buildtheshow.com/member/home#team-invite='+encodeURIComponent(String(job.payload.token));label='Review production invitation';
@@ -16,7 +16,8 @@ export function familyMessage(job:FamilyJob) {
   } else if(job.kind==='invitation') {
     subject='Confirm a Build The Show invitation';
     const kind=String(job.payload.permission||'access');
-    text=kind==='delegate' ? 'Someone would like to manage bookings for '+name+'. Confirm only if this is your profile and you want that help. You do not need a regular login to confirm. You can stop this permission later.' : kind==='contact' ? 'You have been invited to receive production updates for '+name+'. This does not give account access.' : kind==='household' ? 'You have been invited to join a household. This does not automatically grant access to performer profiles.' : 'You have been invited to manage '+name+' using your own adult login. Accept only if you are authorised to do this.';
+    text=kind==='delegate' ? 'Someone would like to manage bookings for '+name+'. Confirm only if this is your profile and you want that help. You do not need a regular login to confirm. You can stop this permission later.' : kind==='contact' ? 'You have been invited to receive production updates for '+name+'. This does not give account access.' : kind==='household' ? 'You have been invited to join a circle. This does not automatically grant access to performer profiles.' : 'You have been invited to manage '+name+' using your own adult login. Accept only if you are authorised to do this.';
+    if(kind==='household'){const circle=String(job.payload.circle||'a circle');const members=Array.isArray(job.payload.profiles)?job.payload.profiles.map(String).join(', '):'';subject='Your circle admin invitation';text='You have been invited to join '+circle+' as an Admin. '+(members?'This invitation shares access to '+members+'. Other member profiles stay private.':'Member profile access is shared separately.')+' Use your own adult login to review and accept.';}
     link=base+'#invite='+encodeURIComponent(String(job.payload.token));label='Review invitation';
   } else if(job.kind==='consent_receipt') {
     subject='Your permission confirmation';

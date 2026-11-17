@@ -10,7 +10,7 @@ One canonical address describes each destination. Physical folders are implement
 | Person | `/member/profiles/{profile-id}` |
 | Edit person | `/member/profiles/{profile-id}/edit` |
 | Add person | `/member/profiles/new` |
-| Households | `/member/households` |
+| My Circle | `/member/circles` |
 | Calendar | `/member/calendar` |
 | Settings | `/member/settings` |
 | Organisation chooser | `/org` |

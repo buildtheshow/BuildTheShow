@@ -89,6 +89,7 @@
 
   // ── Main sidebar builder ─────────────────────────────────────────
   let activeSidebarPage;
+  let contextHydrationStarted=false;
   function renderMemberSidebar(activePage) {
     activeSidebarPage = activePage;
     // Read active profile context
@@ -112,22 +113,10 @@
     // Dashboard — always visible
     nav += navLink('/member/home', 'My Home', activePage === 'profile-select');
     nav += navLink('/member/activities', 'My Activities', activePage === 'activities');
-    nav += navLink('/org', 'Organisation profile', activePage === 'manage');
-    nav += navLink('/member/profiles', 'My Profiles', activePage === 'profiles');
-
-    // Position groups — only if enabled on selected profile
-    if (isPerformer) {
-      nav += positionGroup('Performer', PERFORMER_SUBNAV, activePosition === 'performer', activePage);
-    }
-    if (isCreative) {
-      nav += positionGroup('Creative Team', CREATIVE_SUBNAV, activePosition === 'creative', activePage);
-    }
-    if (isVolunteer) {
-      nav += positionGroup('Volunteer', VOLUNTEER_SUBNAV, activePosition === 'volunteer', activePage);
-    }
-
-    // Calendar — always visible, top-level (not scoped to a position)
-    nav += navLink('/member/households', 'Households and access', activePage === 'households');
+    let memberContext={};try{memberContext=JSON.parse(sessionStorage.getItem('bts_member_context')||'{}');}catch{}
+    const ownProfile=memberContext.own_profile_id;
+    nav += navLink(ownProfile?'/member/profiles/'+encodeURIComponent(ownProfile):'/member/profiles', 'My Profile', ['profiles','performer-hub'].includes(activePage));
+    if(memberContext.circle_count>0)nav += navLink('/member/circles','My Circle',activePage==='circles'||activePage==='households');
     nav += navLink('/member/calendar', 'Calendar', activePage === 'calendar');
 
     // Settings — always visible
@@ -142,6 +131,7 @@
     if (switcher) switcher.href = '/member/profiles';
     // ── Profile switcher ──
     updateProfileSwitcher(profileName, profileId);
+    if(!contextHydrationStarted&&!['settings','profile-select','activities','circles','households'].includes(activePage)&&typeof sb!=='undefined'){contextHydrationStarted=true;loadMemberSidebarProfile(sb).catch(()=>{});}
 
     // ── Fetch BTS ID if not already cached ──
     if (!sessionStorage.getItem('bts_user_display_id') && typeof sb !== 'undefined') {
@@ -200,15 +190,17 @@
   }
 
   // Resolve display context from authorised data, not a name left by a previous login.
-  async function loadMemberSidebarProfile(client, profiles) {
+  async function loadMemberSidebarProfile(client, profiles, circleSnapshot) {
     const {data: auth, error: authError} = await client.auth.getUser();
     if (authError || !auth?.user) return;
     const user = auth.user;
-    if (!profiles) {
-      const result = await client.rpc('bts_family', {p_action:'snapshot', p_data:{}});
+    if (!profiles || !circleSnapshot) {
+      const result = await client.rpc('bts_circle', {p_action:'snapshot', p_data:{}});
       if (result.error) return;
-      profiles = result.data?.profiles || [];
+      profiles = result.data?.profiles || [];circleSnapshot=result.data||{};
     }
+    const own=profiles.find(profile=>profile.is_subject&&profile.can_manage);
+    sessionStorage.setItem('bts_member_context',JSON.stringify({user_id:user.id,own_profile_id:own?.id||null,circle_count:(circleSnapshot.circles||circleSnapshot.households||[]).length}));
     const selectedId = sessionStorage.getItem('bts_active_profile_id');
     const selected = profiles.find(profile => profile.id === selectedId && profile.can_manage)
       || profiles.find(profile => profile.is_subject && profile.can_manage);
@@ -227,7 +219,7 @@
       for (const key of ['id','name','sections','custom_id']) sessionStorage.removeItem('bts_active_profile_' + key);
       renderMemberSidebar(activeSidebarPage);
       const meta = user.user_metadata || {};
-      const name = [meta.first_name,meta.last_name].filter(Boolean).join(' ').trim() || meta.full_name || 'My Profiles';
+      const name = [meta.first_name,meta.last_name].filter(Boolean).join(' ').trim() || meta.full_name || 'My Profile';
       updateProfileSwitcher(name, null);
     }
     const number = document.getElementById('sidebar-profile-num');

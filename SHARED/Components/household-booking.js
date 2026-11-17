@@ -24,7 +24,7 @@
       profiles.forEach(p=>select.add(new Option(p.name||p.credit_name,p.id)));
       select.add(new Option('Create my own performer profile','new:self'));select.add(new Option('Create a child profile as their guardian','new:child'));select.add(new Option('Arrange permission for another adult','new:adult'));box.append(select);
       const help=document.createElement('p');help.textContent='Use an existing profile to keep bookings together. Another adult must confirm booking permission. Your time choice is saved; availability is checked again when you confirm.';help.style.fontSize='.85rem';box.append(help);
-      const link=document.createElement('a');link.href='/member/households?action=create-profile';link.target='_blank';link.rel='noopener';link.textContent='Manage household profiles and permissions';box.append(link);
+      const link=document.createElement('a');link.href='/member/circles?action=create-profile';link.target='_blank';link.rel='noopener';link.textContent='Manage circle members and access';box.append(link);
       host.prepend(box);
       select.addEventListener('change',()=>{
         const p=profiles.find(x=>x.id===select.value);if(!p)return;
@@ -40,7 +40,7 @@
     await mount();const picker=document.getElementById('bts-family-performer');
     if(payload.profile_id){const {data,error}=await sb.rpc('bts_profile_access',{p_profile_id:payload.profile_id,p_manage:true});if(error||data!==true)throw new Error('Confirm permission for this performer before booking.');return payload;}
     if(!picker?.value){picker?.focus();throw new Error('Choose who is auditioning in the performer section.');}
-    if(picker.value==='new:adult')throw new Error('Open Households to create the adult profile and request permission. Return here once it is confirmed.');
+    if(picker.value==='new:adult')throw new Error('Open My Circle to add the adult member and request permission. Return here once it is confirmed.');
     if(picker.value.startsWith('new:'))return {...payload,custom_answers:{...(payload.custom_answers||{}),__bts_profile_relationship:picker.value.slice(4)}};
     return {...payload,profile_id:picker.value};
   }

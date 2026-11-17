@@ -1,0 +1,57 @@
+CREATE TEMP TABLE circle_test(own uuid,child_a uuid,child_b uuid,circle uuid,inv uuid,token text);
+INSERT INTO circle_test DEFAULT VALUES;
+GRANT ALL ON circle_test TO authenticated,anon,service_role;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"4180925a-80f5-443d-aed7-9792e5e96172","role":"authenticated"}',true);
+UPDATE circle_test SET own=public.bts_save_profile('{"credit_name":"Adult A","date_of_birth":"1990-01-01","relationship_kind":"self"}',NULL,false);
+UPDATE circle_test SET child_a=public.bts_save_profile('{"credit_name":"Child A","date_of_birth":"2014-01-01","relationship_kind":"child","guardian_name":"Adult A"}',NULL,true);
+UPDATE circle_test SET child_b=public.bts_save_profile('{"credit_name":"Child B","date_of_birth":"2015-01-01","relationship_kind":"child","guardian_name":"Adult A"}',NULL,true);
+UPDATE circle_test SET circle=(public.bts_circle('create_circle','{"name":"A circle"}')->>'id')::uuid;
+SELECT public.bts_circle('add_to_household',jsonb_build_object('household_id',circle,'profile_id',child_a)) FROM circle_test;
+SELECT public.bts_circle('add_to_household',jsonb_build_object('household_id',circle,'profile_id',child_b)) FROM circle_test;
+DO $$ DECLARE snap jsonb; BEGIN
+ snap:=public.bts_circle('snapshot');
+ IF snap->'circles'->0->>'role'<>'Owner' OR NOT(snap->'circles'->0->'profiles' @> jsonb_build_array((SELECT own::text FROM circle_test))) THEN RAISE EXCEPTION 'TEST FAILED: owner/self setup';END IF;
+END $$;
+UPDATE circle_test SET inv=(public.bts_circle('invite_admin',jsonb_build_object('circle_id',circle,'email','team-viewer@example.invalid','profile_ids',jsonb_build_array(child_a)))->>'id')::uuid;
+RESET ROLE;
+UPDATE circle_test t SET token=m.payload->>'token' FROM bts_private.family_mail m WHERE m.payload->>'invite_id'=t.inv::text;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"131ad1e8-23b0-4756-81ce-bf59302e4b4f","role":"authenticated"}',true);
+DO $$ BEGIN
+ BEGIN PERFORM public.bts_circle('accept',jsonb_build_object('token',(SELECT token FROM circle_test),'confirmed',true,'guardian_confirmed',true,'name','Wrong adult'));RAISE EXCEPTION 'TEST FAILED: wrong-email acceptance';EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'TEST FAILED:%' THEN RAISE;END IF;END;
+ BEGIN PERFORM public.bts_circle('invite_admin',jsonb_build_object('circle_id',(SELECT circle FROM circle_test),'email','team-owner@example.invalid','profile_ids',jsonb_build_array((SELECT child_a FROM circle_test))));RAISE EXCEPTION 'TEST FAILED: outsider invited admin';EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'TEST FAILED:%' THEN RAISE;END IF;END;
+END $$;
+SELECT set_config('request.jwt.claims','{"sub":"3f6513e6-1dfc-48ae-991f-e889305bb4d6","role":"authenticated"}',true);
+DO $$ DECLARE info jsonb;BEGIN
+ info:=public.bts_circle('preview',jsonb_build_object('token',(SELECT token FROM circle_test)));
+ IF info->>'circle'<>'A circle' OR info->'profiles'<> '["Child A"]'::jsonb OR info::text LIKE '%Child B%' THEN RAISE EXCEPTION 'TEST FAILED: invitation preview scope';END IF;
+ BEGIN PERFORM public.bts_circle('accept',jsonb_build_object('token',(SELECT token FROM circle_test),'confirmed',true));RAISE EXCEPTION 'TEST FAILED: missing guardian confirmation';EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'TEST FAILED:%' THEN RAISE;END IF;END;
+END $$;
+SELECT public.bts_circle('accept',jsonb_build_object('token',token,'confirmed',true,'guardian_confirmed',true,'name','Adult B')) FROM circle_test;
+DO $$ DECLARE snap jsonb; BEGIN
+ IF NOT public.bts_profile_access((SELECT child_a FROM circle_test)) OR public.bts_profile_access((SELECT child_b FROM circle_test)) OR public.bts_profile_access((SELECT own FROM circle_test)) THEN RAISE EXCEPTION 'TEST FAILED: shared scope expanded';END IF;
+ snap:=public.bts_circle('snapshot');IF snap->'circles'->0->>'role'<>'Admin' OR snap::text LIKE '%Child B%' THEN RAISE EXCEPTION 'TEST FAILED: admin snapshot leakage';END IF;
+ BEGIN PERFORM public.bts_circle('accept',jsonb_build_object('token',(SELECT token FROM circle_test),'confirmed',true,'guardian_confirmed',true,'name','Adult B'));RAISE EXCEPTION 'TEST FAILED: replay accepted';EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'TEST FAILED:%' THEN RAISE;END IF;END;
+ BEGIN PERFORM public.bts_circle('invite_admin',jsonb_build_object('circle_id',(SELECT circle FROM circle_test),'email','team-owner@example.invalid','profile_ids',jsonb_build_array((SELECT child_a FROM circle_test))));RAISE EXCEPTION 'TEST FAILED: added admin could invite';EXCEPTION WHEN raise_exception THEN IF SQLERRM LIKE 'TEST FAILED:%' THEN RAISE;END IF;END;
+END $$;
+SELECT public.bts_circle('leave_household',jsonb_build_object('household_id',circle)) FROM circle_test;
+DO $$ BEGIN IF jsonb_array_length(public.bts_circle('snapshot')->'circles')<>0 OR NOT public.bts_profile_access((SELECT child_a FROM circle_test)) THEN RAISE EXCEPTION 'TEST FAILED: leaving group silently altered independent guardian rights';END IF;END $$;
+SELECT set_config('request.jwt.claims','{"sub":"4180925a-80f5-443d-aed7-9792e5e96172","role":"authenticated"}',true);
+UPDATE circle_test SET inv=(public.bts_circle('invite_admin',jsonb_build_object('circle_id',circle,'email','team-viewer@example.invalid','profile_ids',jsonb_build_array(own)))->>'id')::uuid;
+RESET ROLE;
+UPDATE circle_test t SET token=m.payload->>'token' FROM bts_private.family_mail m WHERE m.payload->>'invite_id'=t.inv::text;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"3f6513e6-1dfc-48ae-991f-e889305bb4d6","role":"authenticated"}',true);
+SELECT public.bts_circle('accept',jsonb_build_object('token',token,'confirmed',true)) FROM circle_test;
+DO $$ BEGIN IF NOT public.bts_profile_access((SELECT own FROM circle_test)) OR public.bts_volunteer_profile_access((SELECT own FROM circle_test)) THEN RAISE EXCEPTION 'TEST FAILED: adult volunteering was silently granted';END IF;END $$;
+SELECT set_config('request.jwt.claims','{"sub":"4180925a-80f5-443d-aed7-9792e5e96172","role":"authenticated"}',true);
+UPDATE circle_test SET inv=(public.bts_circle('invite_admin',jsonb_build_object('circle_id',circle,'email','team-viewer@example.invalid','profile_ids',jsonb_build_array(own),'volunteer_help',true))->>'id')::uuid;
+RESET ROLE;
+UPDATE circle_test t SET token=m.payload->>'token' FROM bts_private.family_mail m WHERE m.payload->>'invite_id'=t.inv::text;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"3f6513e6-1dfc-48ae-991f-e889305bb4d6","role":"authenticated"}',true);
+SELECT public.bts_circle('accept',jsonb_build_object('token',token,'confirmed',true)) FROM circle_test;
+DO $$ BEGIN IF NOT public.bts_volunteer_profile_access((SELECT own FROM circle_test)) THEN RAISE EXCEPTION 'TEST FAILED: explicit adult volunteer permission missing';END IF;END $$;
+SELECT 'PASS: circle owner/self membership, explicit admin profile scope, guardian confirmation, wrong email/outsider/replay denial, no automatic access to siblings or adults, no admin takeover and separate guardian rights after leaving.' AS result;
+ROLLBACK;

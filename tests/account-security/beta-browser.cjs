@@ -55,7 +55,7 @@ const {chromium}=require('playwright');const fs=require('node:fs'),path=require(
  await page.screenshot({path:'/tmp/bts-signup-confirmation-phone.png',fullPage:true});
 
  // Each purpose selects its own setup route without becoming an access role.
- for (const [purpose, destination] of [['organisation','/org/setup'],['member','/member/home'],['household','/member/households']]) {
+ for (const [purpose, destination] of [['organisation','/org/setup'],['member','/member/home'],['household','/member/circles?action=create']]) {
    await page.goto('http://bts.test/signup');
    await page.locator('input[name="signup-purpose"][value="'+purpose+'"]').check();await page.locator('#beta-code').fill('SYNTHETIC-BETA-CODE');
    await page.locator('#first-name').fill('Synthetic');await page.locator('#last-name').fill('Adult');await page.locator('#dob').fill('1990-01-01');await page.locator('#email').fill('synthetic@example.invalid');await page.locator('#password').fill('synthetic-password-only');await page.locator('#consent-privacy').check();await page.locator('#consent-terms').check();
