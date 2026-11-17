@@ -6,7 +6,9 @@ const SYSTEM_REDIRECTS = new Map([
   ['members/account/login.html', '/login'],
   ['members/account/signup', '/signup'],
   ['members/account/signup.html', '/signup'],
+  ['members/account/forgot-password', '/forgot-password'],
   ['members/account/forgot-password.html', '/forgot-password'],
+  ['members/account/reset-password', '/reset-password'],
   ['members/account/reset-password.html', '/reset-password'],
   ['members/profiles/profile-select.html', '/member'],
   ['members/profiles/profile-create.html', '/member/profile/create'],
@@ -37,7 +39,7 @@ export async function onRequest(context) {
     const next = new URL(target, url.origin);
     next.search = url.search;
     next.hash = url.hash;
-    if (target === '/member/settings' || target === '/login' || target === '/signup') {
+    if (target === '/member/settings' || target === '/login' || target === '/signup' || target === '/forgot-password' || target === '/reset-password') {
       return new Response(null, {status: 302, headers: {'Location': next.toString(), 'Cache-Control': 'no-store'}});
     }
     return Response.redirect(next.toString(), 308);

@@ -49,6 +49,17 @@ async function route(file) {
     assert.ok(input instanceof URL); assert.equal(input.pathname, '/SYSTEM/Members/Households/households.html'); return new Response('Household fixture');
   }}}});
   assert.equal(householdResponse.status, 200); assert.equal(householdResponse.headers.get('Location'), null);
+  for (const page of ['forgot-password','reset-password']) {
+    const recovery = await route('functions/'+page+'.js');
+    const result = await recovery.onRequest({request: new Request('https://bts.test/'+page+'?code=synthetic-code'), env: {ASSETS: {fetch: async input => {
+      assert.ok(input instanceof URL);assert.equal(input.pathname,'/SYSTEM/Members/Account/'+page+'.html');return new Response('Recovery fixture');
+    }}}});
+    assert.equal(result.status,200);assert.equal(result.headers.get('Location'),null);assert.equal(result.headers.get('Referrer-Policy'),'no-referrer');
+    for (const suffix of [page,page+'.html']) {
+      const old = await legacy.onRequest({request: new Request('https://bts.test/SYSTEM/Members/Account/'+suffix+'?code=synthetic-code'),params:{path:['Members','Account',suffix]}});
+      assert.equal(old.status,302);assert.equal(old.headers.get('Location'),'https://bts.test/'+page+'?code=synthetic-code');
+    }
+  }
   const existing = await legacy.onRequest({request: new Request('https://bts.test/SYSTEM/Members/Account/login.html?return=%2Factivities'), params: {path: ['Members','Account','login.html']}});
   assert.equal(existing.status, 302); assert.equal(existing.headers.get('Location'), 'https://bts.test/login?return=%2Factivities');
   console.log('PASS: clean Settings serves HTML directly; both internal URL forms return to /member/settings, preserve query parameters and avoid cached redirects; login also serves directly and both old login forms retain their return destination.');

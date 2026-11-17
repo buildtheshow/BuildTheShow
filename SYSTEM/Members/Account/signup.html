@@ -123,6 +123,8 @@
       color: #b03030;
     }
 
+    .auth-error a { color: #572e88; font-weight: 700; text-decoration: underline; }
+
     .auth-error.visible {
       display: block;
     }
@@ -170,6 +172,7 @@
 
     .confirmation-email { overflow-wrap: anywhere; font-weight: 700; }
     .confirmation-login { text-align: center; text-decoration: none; }
+    .confirmation-help a { color: #572e88; }
 
     /* Reuse the organisation setup radio-choice treatment and existing icon assets. */
     .signup-purpose { border: 0; padding: 0; margin: 0 0 1.25rem; min-width: 0; }
@@ -395,7 +398,9 @@
         <section id="signup-confirmation" hidden aria-label="Check your email" aria-live="polite">
           <p class="auth-card-subtitle confirmation-email" id="signup-confirmation-email"></p>
           <p class="auth-card-subtitle">Not there? Check your junk or spam folder.</p>
+          <p class="auth-card-subtitle">Signed up before? Log in instead.</p>
           <a id="signup-confirmation-login" class="btn--primary confirmation-login" href="/login">Log In</a>
+          <p class="auth-footer confirmation-help"><a href="/forgot-password">Forgot your password?</a></p>
         </section>
 
         <div class="auth-footer" id="signup-footer">Already have an account? <a href="/login">Log in</a></div>
@@ -459,6 +464,19 @@
     function clearError() {
       errorMsg.classList.remove('visible');
       errorMsg.textContent = '';
+    }
+
+    function showExistingAccount() {
+      showError('That email already has an account. Log in or reset your password.');
+      const login = document.createElement('a');
+      login.textContent = 'Log In';
+      login.href = '/login' + (loginQuery.toString() ? '?' + loginQuery.toString() : '');
+      const reset = document.createElement('a');
+      reset.textContent = 'Reset password';
+      reset.href = '/forgot-password';
+      errorMsg.append(document.createTextNode(' '), login, document.createTextNode(' · '), reset);
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Create Account';
     }
 
     function showEmailConfirmation(email, loginDestination) {
@@ -564,14 +582,20 @@
       });
 
       if (error) {
-        const isDuplicate = error.status === 400 ||
-          error.message.toLowerCase().includes('already') ||
-          error.message.toLowerCase().includes('registered');
-        showError(isDuplicate
-          ? 'This email address is already associated with an existing account. Please sign in or use a different email address.'
-          : error.message);
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Create Account';
+        const isDuplicate = ['user_already_exists', 'email_exists'].includes(error.code) || /already.*(registered|exists|associated)/i.test(error.message || '');
+        if (isDuplicate) showExistingAccount();
+        else {
+          showError(error.message || 'We could not create your account. Please try again.');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Create Account';
+        }
+        return;
+      }
+
+      // Auth can return a masked existing user instead of a duplicate-email error.
+      // Use the returned identity list; never add an anonymous account-lookup endpoint.
+      if (!data.session && Array.isArray(data.user?.identities) && data.user.identities.length === 0) {
+        showExistingAccount();
         return;
       }
 
