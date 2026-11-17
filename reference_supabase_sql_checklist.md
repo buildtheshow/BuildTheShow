@@ -117,3 +117,5 @@ Migration: `supabase/migrations/20261116230000_beta_signup_invitations.sql`. Add
 ## 2026-11-17: Canonical URL namespaces
 
 Applied `supabase/migrations/20261117130000_canonical_url_namespaces.sql` through the linked CLI. Extends the existing reserved organisation slug validator to the website's public, member and organisation route words. No organisation slug, account, profile or production records are changed. Before applying, the collision count for the newly reserved names was zero. Existing unique slug indexes stay in place.
+
+The follow-up `20261117133000_reserve_about_page_url.sql` also reserves the existing `who-we-are` page name. Its pre-application organisation collision count was zero.

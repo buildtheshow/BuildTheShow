@@ -44,3 +44,5 @@ Member profiles keep opaque IDs rather than children's names in addresses. Organ
 `tests/account-security/url-system.test.cjs` checks canonical pages, internal HTML redirects, legacy bookmarks, query/case preservation, reserved roots and POST passthrough. `unified-browser.cjs` runs navigation through the actual middleware with synthetic Auth/database responses, including owner/member separation, profile names, invitations, shifts and mobile widths. `profile-type-browser.cjs` checks type-change confirmations and destinations.
 
 Live checks must verify final browser-visible paths and response content after deployment. These routing checks do not certify that the separate authenticated account-data loading issue is resolved.
+
+The final inventory also covers root landing pages, legacy account entry pages, About, proposal submissions and both self-tape submission screens. Public and account HTML source filenames have compatibility redirects. Email generators were checked against downloaded live source before deploying URL-only changes, preserving their existing JWT and internal authorization settings. No email was sent as part of verification.

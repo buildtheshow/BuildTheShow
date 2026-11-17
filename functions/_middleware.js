@@ -183,6 +183,7 @@ const PAGES = new Map([
 ]);
 for(const [route,asset] of [["/registration", "/SYSTEM/Public/registration.html"], ["/cast-offer", "/SYSTEM/Public/cast-offer-response.html"], ["/sponsors", "/PUBLIC/sponsors.html"], ["/tickets", "/PUBLIC/tickets.html"], ["/volunteer", "/PUBLIC/volunteer-production-page.html"], ["/org/proposals/submit", "/SYSTEM/Public/production-proposal.html"], ["/org/production/casting", "/SYSTEM/Organisations/Productions/Casting/casting.html"], ["/org/production/audition-builder", "/SYSTEM/Organisations/Productions/Setup/audition-builder-wizard.html"]]) PAGES.set(route,asset);
 PAGES.set('/callback-response','/SYSTEM/Public/callback-response.html');
+for(const [route,asset] of [["/self-tape/submit", "/SYSTEM/Public/self-tape-submit.html"], ["/callback-self-tape/submit", "/SYSTEM/Public/callback-self-tape-submit.html"], ["/member/account/confirm", "/PUBLIC/confirm-account.html"], ["/member/account/transfer", "/PUBLIC/transfer-ownership.html"], ["/member/account/entry", "/PUBLIC/account-entry.html"], ["/org/production/tools/registration-setup", "/SYSTEM/Organisations/Productions/Registration/registration-settings.html"], ["/org/production/tools/in-the-room", "/SYSTEM/Organisations/Productions/Casting/in-the-room.html"], ["/who-we-are", "/who-we-are.html"]]) PAGES.set(route,asset);
 // Standalone tools retain their established screens; readable routes replace physical filenames.
 const WORKSPACE_TOOLS = new Map([
   [
@@ -626,6 +627,8 @@ const WORKSPACE_TOOLS = new Map([
     "/SYSTEM/Organisations/Productions/Workspace/departments-hair-receipts.html"
   ]
 ]);
+WORKSPACE_TOOLS.set('registration-setup','/SYSTEM/Organisations/Productions/Registration/registration-settings.html');
+WORKSPACE_TOOLS.set('in-the-room','/SYSTEM/Organisations/Productions/Casting/in-the-room.html');
 for(const [tool,asset] of WORKSPACE_TOOLS){
   PAGES.set('/org/production/tools/'+tool,asset);
 }
@@ -980,7 +983,9 @@ for(const [tool,asset] of WORKSPACE_TOOLS){
 for(const [route,asset] of [["/registration", "/SYSTEM/Public/registration.html"], ["/cast-offer", "/SYSTEM/Public/cast-offer-response.html"], ["/sponsors", "/PUBLIC/sponsors.html"], ["/tickets", "/PUBLIC/tickets.html"], ["/volunteer", "/PUBLIC/volunteer-production-page.html"], ["/org/proposals/submit", "/SYSTEM/Public/production-proposal.html"], ["/org/production/casting", "/SYSTEM/Organisations/Productions/Casting/casting.html"], ["/org/production/audition-builder", "/SYSTEM/Organisations/Productions/Setup/audition-builder-wizard.html"]]){LEGACY.set(asset.toLowerCase(),route);LEGACY.set(asset.replace(/\.html$/,'').toLowerCase(),route);}
 LEGACY.set('/system/public/callback-response.html','/callback-response');LEGACY.set('/system/public/callback-response','/callback-response');
 LEGACY.set('/system/public/sponsors.html','/sponsors');LEGACY.set('/system/public/sponsors','/sponsors');
-const RESERVED = new Set(['assets','backend','home','public','shared','system','functions','supabase','api','auth','login','logout','signup','member','members','org','admin','account','settings','pricing','find','privacy','terms','copyright','accessibility','volunteers','volunteer','volunteer-quiz','invite','opportunity','audition','audition-info','self-tape','callback-self-tape','callback-sides','callbacksides','forgot-password','reset-password','activities','manage','support','help','dashboard','billing','profile','users','organisations','organizations','productions','app','www','mail','registration','cast-offer','sponsors','tickets','callback-response']);
+for(const [asset,route] of [["/system/members/dashboard/member-dashboard", "/member/home"], ["/system/members/profiles/profile-select", "/member/profiles"], ["/system/organisations/productions/setup/create-production", "/org/production/new"], ["/public/volunteer-quiz", "/volunteer-quiz"], ["/system/public/self-tape-submit", "/self-tape/submit"], ["/system/public/callback-self-tape-submit", "/callback-self-tape/submit"], ["/public/confirm-account", "/member/account/confirm"], ["/public/transfer-ownership", "/member/account/transfer"], ["/public/account-entry", "/member/account/entry"], ["/system/organisations/productions/registration/registration-settings", "/org/production/tools/registration-setup"], ["/system/organisations/productions/casting/in-the-room", "/org/production/tools/in-the-room"], ["/who-we-are", "/who-we-are"]]){LEGACY.set(asset,route);LEGACY.set(asset+'.html',route);}
+ALIASES.set('/volunteer-quiz.html','/volunteer-quiz');ALIASES.set('/who-we-are.html','/who-we-are');ALIASES.set('/index.html','/');
+const RESERVED = new Set(['assets','backend','home','public','shared','system','functions','supabase','api','auth','login','logout','signup','member','members','org','admin','account','settings','pricing','find','privacy','terms','copyright','accessibility','volunteers','volunteer','volunteer-quiz','invite','opportunity','audition','audition-info','self-tape','callback-self-tape','callback-sides','callbacksides','forgot-password','reset-password','activities','manage','support','help','dashboard','billing','profile','users','organisations','organizations','productions','app','www','mail','registration','cast-offer','sponsors','tickets','callback-response','who-we-are']);
 function redirect(request, path, params) {
   const next = new URL(request.url); next.pathname = path;
   if(params) for(const [key,value] of Object.entries(params)) next.searchParams.set(key,value);
@@ -1007,7 +1012,7 @@ export async function onRequest(context) {
   if(!['GET','HEAD'].includes(context.request.method)) return context.next();
   if(path==='/audition-team'&&url.searchParams.get('prod'))return redirect(context.request,'/org/production',{id:url.searchParams.get('prod'),team:'1'});
   const legacy = LEGACY.get(path.toLowerCase());
-  if(legacy) return redirect(context.request,legacy);
+  if(legacy && legacy!==path) return redirect(context.request,legacy);
   if(ALIASES.has(path)) return redirect(context.request,ALIASES.get(path));
   if(['/member/profile','/member/profile/edit'].includes(path) && url.searchParams.get('id')) {
     const next=new URL(url);next.searchParams.delete('id');next.pathname='/member/profiles/'+encodeURIComponent(url.searchParams.get('id'))+(path.endsWith('/edit')?'/edit':'');
@@ -1037,6 +1042,7 @@ export async function onRequest(context) {
   if(parts.length===2 && !RESERVED.has(parts[0].toLowerCase()) && parts.every(part=>/^[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(part))) return page(context,'/SYSTEM/Public/audition-info.html');
   if(parts.length>=3 && !RESERVED.has(parts[0].toLowerCase())) {
     const purpose=parts[2].toLowerCase();
+    if(['self-tape','callback-self-tape'].includes(purpose)&&parts[3]==='submit')return page(context,purpose==='self-tape'?'/SYSTEM/Public/self-tape-submit.html':'/SYSTEM/Public/callback-self-tape-submit.html');
     if(/^archive[0-9]{4}$/.test(purpose)){if(parts[2]!==purpose)return redirect(context.request,'/'+parts.slice(0,2).join('/')+'/'+purpose);return page(context,'/SYSTEM/Public/audition-info.html');}
     if(purpose==='team')return redirect(context.request,'/org/'+parts[0].toLowerCase()+'/productions/'+parts[1]+(parts.length>3?'/'+parts.slice(3).join('/') : ''),{team:'1'});
     const aliases={audition:'auditions',volunteers:'volunteer',castoffer:'cast-offer',callbackmaterial:'callback-material',callbackmaterials:'callback-material',callbacksides:'callback-material','callback-sides':'callback-material','callback-materials':'callback-material'};
