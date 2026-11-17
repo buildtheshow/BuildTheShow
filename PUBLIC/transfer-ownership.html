@@ -6,28 +6,27 @@
   <meta name="referrer" content="no-referrer" />
   <title>Accept Organisation Ownership - Build The Show</title>
   <link rel="stylesheet" href="/ASSETS/styles/styles.css?v=20260815-focus-fix" />
-  <style>
-    body { margin:0; background:#fff; color:#000; font-family:var(--bts-font); }
-    main { max-width:560px; margin:3rem auto; padding:1.5rem; } p { line-height:1.6; }
-    label { display:flex; align-items:flex-start; gap:.7rem; margin:1.5rem 0; line-height:1.6; }
-    button { padding:.9rem 1.2rem; border:0; border-radius:8px; background:#572e88; color:#fff; font:inherit; font-weight:700; cursor:pointer; }
-    button:disabled { opacity:.5; cursor:wait; } a { color:#572e88; }
-  </style>
+  <link rel="stylesheet" href="/ASSETS/styles/account-forms.css?v=20261117-account-forms" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="/SYSTEM/config.js"></script>
   <script src="/SHARED/Components/account-security.js?v=20261116-one-account"></script>
 </head>
 <body>
-<main>
-  <a href="/">Build The Show</a>
-  <h1>Organisation ownership</h1>
-  <p id="transfer-status" role="status" aria-live="polite">Checking the ownership invitation…</p>
+<div class="grid-bg"></div>
+<header class="nav">
+  <div class="nav-logo"><a href="/"><img src="/ASSETS/Images/LogoBrand/logo-long-white.png" alt="Build The Show" class="nav-logo-img" /></a></div>
+</header>
+<main class="auth-main"><div class="auth-card">
+  <h1 class="auth-card-title">Organisation ownership</h1>
+  <p class="auth-card-subtitle">Taking over? Check the organisation below before you accept.</p>
+  <p id="transfer-status" class="auth-message" role="status" aria-live="polite">Checking the invitation...</p>
   <form id="transfer-form" hidden>
-    <p>As owner, you will be responsible for this organisation’s account and who can administer it. The previous owner will remain an organisation admin. Your own personal account and profiles remain separate.</p>
-    <label><input type="checkbox" id="accept-responsibility" required /><span>I understand and accept responsibility as this organisation’s owner.</span></label>
-    <button id="accept-transfer" type="submit">Accept ownership</button>
+    <p class="auth-copy">You’ll become the owner and decide who can manage this organisation. The previous owner will stay as an admin. Your personal profile stays separate.</p>
+    <label class="consent-label"><input type="checkbox" id="accept-responsibility" required /><span>I understand and accept responsibility as this organisation’s owner.</span></label>
+    <button class="btn--primary" id="accept-transfer" type="submit">Accept ownership</button>
   </form>
-</main>
+  <div class="auth-footer"><a href="/home">Back to My Home</a></div>
+</div></main>
 <script>
   const client = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
   const token = new URLSearchParams(location.search).get('token') || '';
@@ -38,10 +37,10 @@
     if (!user) { location.replace('/login?return=' + encodeURIComponent(location.pathname + location.search)); return; }
     if (!await BTSAccountSecurity.ensureAdultAccount(client)) return;
     const { data, error } = await client.rpc('bts_preview_ownership_transfer', { p_token: token });
-    if (error || !data) { status.textContent = 'This ownership invitation is unavailable, expired, or belongs to another account.'; return; }
+    if (error || !data) { status.textContent = 'This invitation has expired or cannot be opened with this login. Ask the current owner for a new link.'; return; }
     status.textContent = 'Organisation: ' + data.organisation_name;
     if (data.can_accept) form.hidden = false;
-    else status.textContent += '. The intended recipient must sign in with their own account to accept.';
+    else status.textContent += '. Log in with the account the invitation was sent to.';
   }
   form.addEventListener('submit', async event => {
     event.preventDefault();
@@ -50,12 +49,13 @@
       const { data, error } = await client.rpc('bts_accept_ownership_transfer', { p_token: token });
       if (error) throw error;
       form.hidden = true;
-      status.textContent = 'Ownership accepted. You can now open the organisation dashboard.';
+      status.textContent = 'You’re now the owner. Your organisation is ready to open.';
       const link = document.createElement('a');
-      link.href = data.slug ? '/' + encodeURIComponent(data.slug) + '/ORG' : '/org/dashboard';
-      link.textContent = 'Open organisation dashboard';
+      link.href = '/org/dashboard';
+      link.className = 'btn--primary';
+      link.textContent = 'Open organisation';
       status.after(link);
-    } catch (error) { status.textContent = error.message || 'We could not accept ownership. Please try again.'; }
+    } catch (error) { status.textContent = 'We could not confirm the handover. Please check the organisation before trying again.'; }
     finally { button.disabled = false; }
   });
   init().catch(() => { status.textContent = 'We could not check this ownership invitation. Please try again.'; });
