@@ -133,7 +133,7 @@ async function confirmationView(){
  const info=await rpc(consent?'consent_preview':'preview',{token:confirmation.token});
  const circleInvite=info.kind==='household';const circleChildren=circleInvite&&(info.children||[]).length>0;
  $('confirmation-copy').textContent=consent?`Manage delegated permission for ${info.performer}. You can activate your own login or stop someone else handling bookings.`:`Invitation for ${info.performer||'a circle'}: ${info.kind}. It was sent to ${info.email}.`;
- if(circleInvite){$('confirmation-copy').textContent='Join '+(info.circle||'this circle')+' as an Admin. You can manage '+((info.profiles||[]).join(', ')||'no member profiles until access is shared')+'. Other members stay private. You use your own login.'+(info.volunteer_help?' This also includes volunteer signup help for the selected adult members.':'');$('confirmation-accept').textContent='Join circle';}
+ if(circleInvite){$('confirmation-copy').textContent='Join '+(info.circle||'this circle')+' as an Admin. You can manage '+((info.profiles||[]).join(', ')||'no member profiles until access is shared')+'. Existing access stays as it is. You use your own login.'+(info.volunteer_help?' This also includes volunteer signup help for the selected adult members.':'');$('confirmation-accept').textContent='Join circle';}
  $('confirmation-label').textContent=info.kind==='guardian'||circleChildren?'I am a parent or legal guardian of the listed children and I confirm this access.':'I confirm the permission described above.';
  $('confirmation-name').parentElement.hidden=info.kind!=='guardian'&&!circleChildren;
  $('confirmation-accept').hidden=consent;$('confirmation-decline').hidden=consent;
