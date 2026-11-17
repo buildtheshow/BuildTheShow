@@ -7,13 +7,13 @@
     const organisationPage = context.type === 'organisation';
     const heading = document.createElement('div');
     heading.className = organisationPage ? 'sp-card-title' : 'section-card-title';
-    heading.textContent = 'Correct profile type';
+    heading.textContent = 'Change profile type';
     const description = document.createElement('p');
     description.className = organisationPage ? 'sp-card-desc' : 'section-card-subtitle';
-    description.textContent = 'Set up as a person when it should be an organisation, or the other way around? Correct it here. Your adult login stays the same.';
+    description.textContent = 'Change a Member profile to an Organisation, or an Organisation to a Member. This does not change Performer, Creative Team or Volunteer roles. Your login stays the same.';
     const open = document.createElement('button');
     open.type = 'button'; open.className = organisationPage ? 'btn-secondary' : 'btn-save';
-    open.textContent = 'Review profile correction';
+    open.textContent = 'Review profile type change';
     const content = document.createElement('div');
     const message = document.createElement('p');
     message.className = organisationPage ? 'sp-card-desc' : 'section-card-subtitle';
@@ -45,9 +45,9 @@
         ].filter(item => !organisationPage || (item.type === 'organisation' && item.id === context.id));
         if (sources.length) {
           const form = document.createElement('form');
-          const source = field(form, 'Profile to correct', 'select');
+          const source = field(form, 'Profile to change', 'select');
           option(source, '', 'Choose the profile');
-          for (const item of sources) option(source, item.type + ':' + item.id, (item.type === 'member' ? 'Person: ' : 'Organisation: ') + item.name);
+          for (const item of sources) option(source, item.type + ':' + item.id, (item.type === 'member' ? 'Member: ' : 'Organisation: ') + item.name);
           source.required = true;
           const fields = document.createElement('div');
           form.append(fields); content.append(form);
@@ -60,9 +60,9 @@
             const targetFields = document.createElement('div');
             let existing, name, email, slug;
             if (type === 'member') {
-              text(fields, 'This member profile will become organisation setup. Personal details, photos and date of birth are not copied to the organisation.');
+              text(fields, 'Member → Organisation. The member profile will be archived. Its personal details, photos and date of birth will not carry over. You will set up an organisation, or use one you already own.');
               existing = field(fields, 'Organisation', 'select');
-              option(existing, '', 'Create the correct organisation');
+              option(existing, '', 'Create a new organisation');
               for (const item of data.organisations || []) option(existing, item.id, 'Use existing: ' + item.name);
               name = field(targetFields, 'Organisation name', 'text'); name.maxLength = 150;
               email = field(targetFields, 'Organisation contact email', 'email');
@@ -75,18 +75,18 @@
               existing.onchange = toggle; toggle();
               text(targetFields, 'The new organisation starts private. You can finish its details in Organisation Settings.');
             } else {
-              text(fields, 'This mistaken organisation will be archived. Your existing personal profile will be used, or a personal profile will be created for you. Organisation details are not copied into your personal profile.');
+              text(fields, 'Organisation → Member. The organisation will be archived. Its details will not carry over. You will use your existing member profile, or create one if you do not have one.');
               if (!(data.members || []).length) { name = field(targetFields, 'Your own name', 'text', data.person_name || ''); name.required = true; name.maxLength = 150; }
             }
             fields.append(targetFields);
-            text(fields, 'Unused profiles can be corrected immediately. Productions, bookings, shared access or other linked records require review first. No records are deleted.');
+            text(fields, 'The old profile will leave active use. Its information stays in the archive; it is not permanently deleted. Information is not transferred between types. If you use an existing destination profile, its information stays as it is. Productions, bookings or shared access need review before a change can go ahead.');
             const confirmation = document.createElement('label'); confirmation.className = 'del-chk-row';
             const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.required = true;
-            confirmation.append(checkbox, document.createTextNode(' I confirm this profile was set up as the wrong type. If it can be corrected safely, archive the mistaken profile and use the correct one.'));
+            confirmation.append(checkbox, document.createTextNode(' I understand that the old profile will be archived and its information will not carry over. I want to change between Member and Organisation.'));
             const confirmationGroup = document.createElement('div'); confirmationGroup.className = 'form-group';
             confirmationGroup.append(confirmation); fields.append(confirmationGroup);
             const submit = document.createElement('button'); submit.type = 'submit';
-            submit.className = organisationPage ? 'btn-primary' : 'btn-save'; submit.textContent = 'Confirm correction';
+            submit.className = organisationPage ? 'btn-primary' : 'btn-save'; submit.textContent = 'Confirm profile type change';
             fields.append(submit);
             form.onsubmit = async event => {
               event.preventDefault(); if (!form.reportValidity() || submit.disabled) return;
@@ -100,12 +100,12 @@
                   form.remove();
                   if (type === 'member' && sessionStorage.getItem('bts_active_profile_id') === selected.id) sessionStorage.removeItem('bts_active_profile_id');
                   if (result.data.target_type === 'member') sessionStorage.setItem('bts_active_profile_id', result.data.target_id);
-                  const link = document.createElement('a'); link.textContent = 'Open the corrected profile';
+                  const link = document.createElement('a'); link.textContent = 'Open profile';
                   // Only locally constructed destinations are used, never server-provided arbitrary URLs.
                   link.href = (result.data.target_type === 'organisation' ? '/org/dashboard?id=' : '/member/profile?id=') + encodeURIComponent(result.data.target_id);
                   message.append(document.createTextNode(' '), link);
                 }
-              } catch (failure) { message.textContent = failure.message || 'The correction could not be completed. Please try again.'; }
+              } catch (failure) { message.textContent = failure.message || 'The profile type change could not be completed. Please try again.'; }
               finally { submit.disabled = false; source.disabled = false; open.disabled = false; }
             };
           };
@@ -114,9 +114,9 @@
           const initial = current || (sources.length === 1 ? sources[0] : null);
           if (initial) source.value = initial.type + ':' + initial.id;
           renderCorrection();
-        } else text(content, 'This login has no personal profile or owned organisation available to correct here. Check that you are signed into the login that created it. Child profiles and profiles managed for another adult cannot be converted.');
+        } else text(content, 'There is no profile available to change here. You can only change your own adult member profile or an organisation you own. Sign in with the account that created it. Children’s profiles and profiles you manage for another adult cannot change type.');
         for (const item of data.history || []) text(content, (item.state === 'needs_review' ? 'Review required' : item.state === 'completed' ? 'Completed' : 'Declined') + ': ' + item.source_type + ' to ' + item.target_type + '. Reference: ' + item.id + (item.reason ? '. ' + item.reason : ''));
-      } catch (failure) { message.textContent = failure.message || 'Profile correction is unavailable. Please try again.'; }
+      } catch (failure) { message.textContent = failure.message || 'Profile type changes are unavailable. Please try again.'; }
       finally { open.disabled = false; }
     };
   }
