@@ -33,16 +33,31 @@ const {chromium}=require('playwright');const fs=require('node:fs'),path=require(
  await page.locator('#submit-btn').click();await page.getByText('Choose Organisation, Member or Household to continue.',{exact:true}).waitFor();assert.equal(await page.evaluate(()=>testSignupCalls.length),0);
  await page.locator('input[name="signup-purpose"][value="member"]').check();
  await page.locator('#beta-code').fill('');await page.locator('#submit-btn').click();await page.getByText('Enter a valid beta invitation code to sign up.',{exact:true}).waitFor();assert.equal(await page.evaluate(()=>testSignupCalls.length),0);
- await page.locator('#beta-code').fill('SYNTHETIC-BETA-CODE');await page.locator('#submit-btn').click();await page.getByText('Account created. Check your inbox to verify your email, then sign in.',{exact:true}).waitFor();assert.equal(await page.evaluate(()=>testSignupCalls[0].options.data.beta_code),'SYNTHETIC-BETA-CODE');assert.equal(await page.evaluate(()=>sessionStorage.getItem('bts_beta_code')),null);
+ await page.locator('#beta-code').fill('SYNTHETIC-BETA-CODE');await page.locator('#submit-btn').click();await page.getByRole('heading',{name:'Check your inbox',exact:true}).waitFor();assert.equal(await page.evaluate(()=>testSignupCalls[0].options.data.beta_code),'SYNTHETIC-BETA-CODE');assert.equal(await page.evaluate(()=>sessionStorage.getItem('bts_beta_code')),null);
+ assert.equal(await page.locator('#signup-form').isVisible(),false);assert.equal(await page.locator('#signup-footer').isVisible(),false);
+ assert.equal(await page.locator('#error-msg').isVisible(),false);assert.equal(await page.locator('#signup-confirmation').isVisible(),true);
+ assert.equal(await page.locator('#password').inputValue(),'');
+ assert.equal(await page.locator('#signup-title').evaluate(element=>document.activeElement===element),true);
+ await page.getByText('Not there? Check your junk or spam folder.',{exact:true}).waitFor();
+ assert.ok(await page.locator('#signup-title').evaluate(element=>{const bounds=element.getBoundingClientRect();return bounds.top>=0&&bounds.bottom<=innerHeight;}));
+ assert.equal(await page.locator('#signup-confirmation-login').getAttribute('href'),'/login?return=%2Fhome');
+ await page.screenshot({path:'/tmp/bts-signup-confirmation-desktop.png',fullPage:true});
+ await page.setViewportSize({width:320,height:900});
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ assert.ok(await page.locator('#signup-title').evaluate(element=>{const bounds=element.getBoundingClientRect();return bounds.top>=0&&bounds.bottom<=innerHeight;}));
+ await page.screenshot({path:'/tmp/bts-signup-confirmation-phone.png',fullPage:true});
+
  // Each purpose selects its own setup route without becoming an access role.
  for (const [purpose, destination] of [['organisation','/org/setup'],['member','/home'],['household','/member/households']]) {
    await page.goto('http://bts.test/signup');
    await page.locator('input[name="signup-purpose"][value="'+purpose+'"]').check();await page.locator('#beta-code').fill('SYNTHETIC-BETA-CODE');
    await page.locator('#first-name').fill('Synthetic');await page.locator('#last-name').fill('Adult');await page.locator('#dob').fill('1990-01-01');await page.locator('#email').fill('synthetic@example.invalid');await page.locator('#password').fill('synthetic-password-only');await page.locator('#consent-privacy').check();await page.locator('#consent-terms').check();
-   await page.locator('#submit-btn').click();await page.getByText('Account created. Check your inbox to verify your email, then sign in.',{exact:true}).waitFor();
+   await page.locator('#submit-btn').click();await page.getByRole('heading',{name:'Check your inbox',exact:true}).waitFor();
    const signup=await page.evaluate(()=>testSignupCalls[0]);
    assert.equal(signup.options.data.signup_purpose,purpose);assert.equal(signup.options.data.account_type,undefined);
    assert.equal(new URL(signup.options.emailRedirectTo).searchParams.get('return'),destination);
+   assert.equal(await page.locator('#signup-confirmation-login').getAttribute('href'),'/login?return='+encodeURIComponent(destination));
+   assert.equal(await page.locator('#signup-form').isVisible(),false);
  }
  // Every public signup entrance shares the same live beta form.
  for (const entry of ['/login?return=%2Factivities&invite=synthetic', '/pricing']) {

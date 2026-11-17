@@ -168,6 +168,9 @@
       gap: 0.75rem;
     }
 
+    .confirmation-email { overflow-wrap: anywhere; font-weight: 700; }
+    .confirmation-login { text-align: center; text-decoration: none; }
+
     /* Reuse the organisation setup radio-choice treatment and existing icon assets. */
     .signup-purpose { border: 0; padding: 0; margin: 0 0 1.25rem; min-width: 0; }
     .signup-purpose legend { margin-bottom: 0.6rem; }
@@ -304,8 +307,8 @@
   <main class="auth-main">
 
     <div class="auth-card">
-        <h1 class="auth-card-title" tabindex="-1">Create your account</h1>
-        <p class="auth-card-subtitle">One personal account for your household, volunteering and organisation work.</p>
+        <h1 class="auth-card-title" id="signup-title" tabindex="-1">Create your account</h1>
+        <p class="auth-card-subtitle" id="signup-subtitle">One personal account for your household, volunteering and organisation work.</p>
 
         <div class="auth-error" id="error-msg" role="alert" aria-live="assertive"></div>
 
@@ -389,7 +392,13 @@
 
         </form>
 
-        <div class="auth-footer">Already have an account? <a href="/login">Log in</a></div>
+        <section id="signup-confirmation" hidden aria-label="Check your email" aria-live="polite">
+          <p class="auth-card-subtitle confirmation-email" id="signup-confirmation-email"></p>
+          <p class="auth-card-subtitle">Not there? Check your junk or spam folder.</p>
+          <a id="signup-confirmation-login" class="btn--primary confirmation-login" href="/login">Log In</a>
+        </section>
+
+        <div class="auth-footer" id="signup-footer">Already have an account? <a href="/login">Log in</a></div>
 
     </div>
 
@@ -442,10 +451,29 @@
     function showError(msg) {
       errorMsg.textContent = msg;
       errorMsg.classList.add('visible');
+      errorMsg.tabIndex = -1;
+      errorMsg.focus({preventScroll: true});
+      errorMsg.scrollIntoView({block: 'center', behavior: 'instant'});
     }
 
     function clearError() {
       errorMsg.classList.remove('visible');
+      errorMsg.textContent = '';
+    }
+
+    function showEmailConfirmation(email, loginDestination) {
+      clearError();
+      document.getElementById('signup-form').hidden = true;
+      document.getElementById('signup-footer').hidden = true;
+      document.getElementById('password').value = '';
+      const heading = document.getElementById('signup-title');
+      heading.textContent = 'Check your inbox';
+      document.getElementById('signup-subtitle').textContent = 'Use the link in your email to finish signing up.';
+      document.getElementById('signup-confirmation-email').textContent = email;
+      document.getElementById('signup-confirmation-login').href = loginDestination.pathname + loginDestination.search;
+      document.getElementById('signup-confirmation').hidden = false;
+      heading.focus({preventScroll: true});
+      document.querySelector('.auth-card').scrollIntoView({block: 'center', behavior: 'instant'});
     }
 
     const loginQuery=new URLSearchParams([...new URLSearchParams(location.search)].filter(([key])=>['return','invite'].includes(key)));
@@ -455,6 +483,7 @@
     document.getElementById('beta-code').value = sessionStorage.getItem('bts_beta_code') || '';
     document.getElementById('signup-form').addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (submitBtn.disabled) return;
       clearError();
 
       const firstName = document.getElementById('first-name').value.trim();
@@ -549,8 +578,7 @@
       sessionStorage.removeItem('bts_beta_code');
       document.getElementById('beta-code').value = '';
       if (!data.session) {
-        showError('Account created. Check your inbox to verify your email, then sign in.');
-        submitBtn.disabled = false; submitBtn.textContent = 'Create Account';
+        showEmailConfirmation(email, confirmationDestination);
         return;
       }
 
