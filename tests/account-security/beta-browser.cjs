@@ -4,11 +4,18 @@ const {chromium}=require('playwright');const fs=require('node:fs'),path=require(
   window.testSignupCalls=[];localStorage.setItem('bts_cookie_ok','1');
   window.testClient={auth:{getSession:async()=>({data:{session:null}}),signUp:async input=>{window.testSignupCalls.push(input);return {data:{session:null},error:null};}},rpc:async(name,args)=>({data:name==='bts_check_beta_code'&&args.p_code==='SYNTHETIC-BETA-CODE'})};
  });
- await page.route('**/*',route=>{const url=new URL(route.request().url());if(url.hostname==='cdn.jsdelivr.net'&&url.pathname.includes('supabase'))return route.fulfill({contentType:'text/javascript',body:'window.supabase={createClient:()=>window.testClient}'});if(url.origin!=='http://bts.test')return route.abort();if(url.pathname==='/ASSETS/scripts/supabase.js')return route.fulfill({contentType:'text/javascript',body:'export const supabase=window.testClient;'});if(url.pathname.includes('private-profile-media.js'))return route.fulfill({contentType:'text/javascript',body:''});const pathname=url.pathname==='/'?'/index.html':url.pathname==='/signup'?'/SYSTEM/Members/Account/signup.html':url.pathname==='/login'?'/SYSTEM/Members/Account/login.html':url.pathname==='/pricing'?'/PUBLIC/pricing.html':url.pathname;const file=path.resolve(root,'.'+pathname);if(!file.startsWith(root+path.sep)||!fs.existsSync(file)||fs.statSync(file).isDirectory())return route.fulfill({status:404,body:''});return route.fulfill({contentType:file.endsWith('.js')?'text/javascript':file.endsWith('.html')?'text/html':file.endsWith('.css')?'text/css':'application/octet-stream',body:fs.readFileSync(file)});});
+ await page.route('**/*',route=>{const url=new URL(route.request().url());if(url.hostname==='cdn.jsdelivr.net'&&url.pathname.includes('supabase'))return route.fulfill({contentType:'text/javascript',body:'window.supabase={createClient:()=>window.testClient}'});if(url.origin!=='http://bts.test')return route.abort();if(url.pathname==='/ASSETS/scripts/supabase.js')return route.fulfill({contentType:'text/javascript',body:'export const supabase=window.testClient;'});if(url.pathname.includes('private-profile-media.js'))return route.fulfill({contentType:'text/javascript',body:''});const pathname=url.pathname==='/'?'/index.html':url.pathname==='/signup'?'/SYSTEM/Members/Account/signup.html':url.pathname==='/login'?'/SYSTEM/Members/Account/login.html':url.pathname==='/pricing'?'/PUBLIC/pricing.html':url.pathname;const file=path.resolve(root,'.'+pathname);if(!file.startsWith(root+path.sep)||!fs.existsSync(file)||fs.statSync(file).isDirectory())return route.fulfill({status:404,body:''});return route.fulfill({contentType:file.endsWith('.js')?'text/javascript':file.endsWith('.html')?'text/html':file.endsWith('.css')?'text/css':file.endsWith('.svg')?'image/svg+xml':'application/octet-stream',body:fs.readFileSync(file)});});
  await page.goto('http://bts.test/');await page.locator('.nav-actions .btn--signup,#nav-actions .btn--signup').first().click();
  await page.getByRole('heading',{name:"We're in Beta Testing",exact:true}).waitFor();
  await page.locator('#beta-code').fill('INVALID-BETA');await page.locator('#beta-continue').click();await page.getByText('That code is invalid, expired or fully used.',{exact:false}).waitFor();assert.equal(new URL(page.url()).pathname,'/');
  await page.locator('#beta-code').fill('SYNTHETIC-BETA-CODE');await page.locator('#beta-continue').click();await page.waitForURL('http://bts.test/signup');assert.equal(await page.locator('#beta-code').inputValue(),'SYNTHETIC-BETA-CODE');assert.equal(new URL(page.url()).search,'');
+ const purposeGroup=page.getByRole('group',{name:'What are you signing up for?',exact:true});
+ assert.equal(await purposeGroup.getByRole('radio').count(),3);
+ await page.waitForFunction(()=>[...document.querySelectorAll('.check-option img')].every(image=>image.complete&&image.naturalWidth>0));
+ await purposeGroup.locator('input[value="member"]').focus();await page.keyboard.press('ArrowDown');
+ assert.equal(await purposeGroup.locator('input[value="household"]').isChecked(),true);
+ await purposeGroup.locator('label').first().locator('img').click();assert.equal(await purposeGroup.locator('input[value="organisation"]').isChecked(),true);
+ await page.reload();
  for(const width of [320,768,1280]){
    await page.setViewportSize({width,height:900});
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Signup overflow '+width);
@@ -24,13 +31,13 @@ const {chromium}=require('playwright');const fs=require('node:fs'),path=require(
  }
  await page.locator('#first-name').fill('Synthetic');await page.locator('#last-name').fill('Adult');await page.locator('#dob').fill('1990-01-01');await page.locator('#email').fill('synthetic@example.invalid');await page.locator('#password').fill('synthetic-password-only');await page.locator('#consent-privacy').check();await page.locator('#consent-terms').check();
  await page.locator('#submit-btn').click();await page.getByText('Choose Organisation, Member or Household to continue.',{exact:true}).waitFor();assert.equal(await page.evaluate(()=>testSignupCalls.length),0);
- await page.locator('#signup-purpose').selectOption('member');
+ await page.locator('input[name="signup-purpose"][value="member"]').check();
  await page.locator('#beta-code').fill('');await page.locator('#submit-btn').click();await page.getByText('Enter a valid beta invitation code to sign up.',{exact:true}).waitFor();assert.equal(await page.evaluate(()=>testSignupCalls.length),0);
  await page.locator('#beta-code').fill('SYNTHETIC-BETA-CODE');await page.locator('#submit-btn').click();await page.getByText('Account created. Check your inbox to verify your email, then sign in.',{exact:true}).waitFor();assert.equal(await page.evaluate(()=>testSignupCalls[0].options.data.beta_code),'SYNTHETIC-BETA-CODE');assert.equal(await page.evaluate(()=>sessionStorage.getItem('bts_beta_code')),null);
  // Each purpose selects its own setup route without becoming an access role.
  for (const [purpose, destination] of [['organisation','/org/setup'],['member','/home'],['household','/member/households']]) {
    await page.goto('http://bts.test/signup');
-   await page.locator('#signup-purpose').selectOption(purpose);await page.locator('#beta-code').fill('SYNTHETIC-BETA-CODE');
+   await page.locator('input[name="signup-purpose"][value="'+purpose+'"]').check();await page.locator('#beta-code').fill('SYNTHETIC-BETA-CODE');
    await page.locator('#first-name').fill('Synthetic');await page.locator('#last-name').fill('Adult');await page.locator('#dob').fill('1990-01-01');await page.locator('#email').fill('synthetic@example.invalid');await page.locator('#password').fill('synthetic-password-only');await page.locator('#consent-privacy').check();await page.locator('#consent-terms').check();
    await page.locator('#submit-btn').click();await page.getByText('Account created. Check your inbox to verify your email, then sign in.',{exact:true}).waitFor();
    const signup=await page.evaluate(()=>testSignupCalls[0]);
@@ -50,5 +57,5 @@ const {chromium}=require('playwright');const fs=require('node:fs'),path=require(
  await page.screenshot({path:'/tmp/bts-beta-popup-login.png',fullPage:false});
  await page.keyboard.press('Escape');assert.equal(await page.locator('#beta-signup-overlay').isVisible(),false);
  await page.goto('http://bts.test/pricing');await page.getByRole('link',{name:'Get Started Free',exact:true}).click();await page.getByRole('heading',{name:"We're in Beta Testing",exact:true}).waitFor();
- assert.deepEqual(errors,[]);console.log('PASS: home, login and pricing signup entrances share one beta popup; footer/CTA links and invitation returns work; existing home popup accepts beta code, rejects invalid codes, carries code privately to clean signup, requires code on direct form, preserves adult consent and email verification, and fits mobile widths. Synthetic APIs only; no account or email created.');
+ assert.deepEqual(errors,[]);console.log('PASS: home, login and pricing signup entrances share one beta popup; footer/CTA links and invitation returns work; existing home popup accepts beta code, rejects invalid codes, carries code privately to clean signup, requires code on direct form, preserves adult consent and email verification, and fits mobile widths; all existing icons load, icon labels select the radio, and arrow-key navigation works. Synthetic APIs only; no account or email created.');
 }finally{await browser.close();}})().catch(error=>{console.error(error);process.exitCode=1;});
