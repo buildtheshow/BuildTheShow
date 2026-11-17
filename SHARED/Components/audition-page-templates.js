@@ -256,7 +256,7 @@
           <h1>Welcome</h1>
           <p>Use your accepted production membership with your normal adult account.</p>
           <button class="btn-primary" onclick="loginTeamAccess()" style="width:100%;justify-content:center;margin-top:0.85rem;">Try opening production</button>
-          <p><a href="/manage?production=${encodeURIComponent(config.productionId || '')}">Confirm or request access</a> · <a href="/home">My Home</a></p>
+          <p><a href="/manage?production=${encodeURIComponent(config.productionId || '')}">Confirm or request access</a> · <a href="/member/home">My Home</a></p>
           <div class="team-access-login-error" id="team-access-login-error">${esc(message)}</div>
         </div>
       </div>`;

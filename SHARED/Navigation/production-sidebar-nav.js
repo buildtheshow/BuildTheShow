@@ -31,9 +31,11 @@
     return '_cb=' + Date.now().toString(36);
   }
 
+  let canonicalProductionBase='';
+  function productionBase(){const parts=location.pathname.split('/').filter(Boolean);return parts[0]==='org'&&parts[2]==='productions'&&parts[3]?'/'+parts.slice(0,4).join('/'):canonicalProductionBase||'/org/production';}
   function workspaceUrl(tab, sub) {
     const id = prodId();
-    let url = '/SYSTEM/Organisations/Productions/Workspace/production-workspace.html?id=' + encodeURIComponent(id) + '&tab=' + tab;
+    let url = productionBase()+'?id=' + encodeURIComponent(id) + '&tab=' + tab;
     if (sub) url += '&sub=' + sub;
     url += '&' + cacheBust();
     return url;
@@ -41,7 +43,7 @@
 
   function pageUrl(file) {
     const id = prodId();
-    return '/SYSTEM/Organisations/Productions/Workspace/' + file + '?id=' + encodeURIComponent(id) + '&' + cacheBust();
+    return productionBase()+'/tools/' + file.replace(/\.html$/,'') + '?id=' + encodeURIComponent(id) + '&' + cacheBust();
   }
 
   window.btsProdNav = function (file) {
@@ -233,7 +235,7 @@
       settings:    'volunteer-settings.html',
       supportlist: 'volunteer-supportlist.html',
     };
-    location.href = '/SYSTEM/Organisations/Productions/Workspace/' + (pages[sub] || 'volunteers.html') + suffix;
+    location.href = pageUrl(pages[sub] || 'volunteers.html') + suffix.replace(/^\?/, '&');
   };
 
   window.navigateToBudget = function (sub) {
@@ -731,7 +733,8 @@
     });
 
     const orgSlug = prod.organizations && prod.organizations.slug;
-    const orgHref = orgSlug ? '/' + encodeURIComponent(orgSlug) + '/ORG' : '/org/dashboard';
+    if(orgSlug&&prod.slug)canonicalProductionBase='/org/'+encodeURIComponent(orgSlug.toLowerCase())+'/productions/'+encodeURIComponent(prod.slug);
+    const orgHref = orgSlug ? '/org/' + encodeURIComponent(orgSlug.toLowerCase()) : '/org';
     document.querySelectorAll('#sidebar-org-back, #sidebar-mobile-org-back').forEach(function (link) {
       link.href = orgHref;
     });

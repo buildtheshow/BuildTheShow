@@ -472,13 +472,13 @@
     SpnsState.orgData = organization || {};
     var orgKey = organization.slug || organization.abbreviation || '';
     if (orgKey && production.slug) return window.location.origin + '/' + encodeURIComponent(orgKey) + '/' + encodeURIComponent(production.slug) + '/sponsors';
-    return window.location.origin + '/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId);
+    return window.location.origin + '/sponsors?prod=' + encodeURIComponent(SpnsState.prodId);
   }
 
   function hydratePublicPageAction() {
     var action = document.getElementById('spn-public-page-action');
     if (!action) return;
-    action.href = window.location.origin + '/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId);
+    action.href = window.location.origin + '/sponsors?prod=' + encodeURIComponent(SpnsState.prodId);
     publicPageMeta().then(function (meta) { action.href = sponsorPublicUrl(meta); }).catch(function () {});
   }
 
@@ -490,7 +490,7 @@
     var modal = document.getElementById('spn-crm-public-book-modal');
     var frame = document.getElementById('spn-crm-public-book-frame');
     if (!modal || !frame) return;
-    var fallbackUrl = window.location.origin + '/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId);
+    var fallbackUrl = window.location.origin + '/sponsors?prod=' + encodeURIComponent(SpnsState.prodId);
     frame.src = withUrlParam(fallbackUrl, 'open_booking', '1');
     modal.classList.add('open');
     publicPageMeta().then(function (meta) {
@@ -4517,7 +4517,7 @@
             '<div class="spn-public-builder">' +
               '<div class="spn-public-builder-editor"><div id="spn-public-editor"></div><div class="spn-public-stats-grid" id="spn-public-stats-grid" hidden></div></div>' +
               '<aside class="spn-public-builder-preview"><div class="spn-public-preview-toolbar"><span><strong>Here\'s how your page looks</strong><small>This is a preview. Publish when you are happy with it.</small></span><div class="spn-public-preview-controls"><div class="spn-public-builder-actions"><span class="spn-public-draft-status" id="spn-public-draft-status" role="status" aria-live="polite" hidden></span><button type="button" class="spn-btn spn-btn--primary" id="spn-public-publish-changes" onclick="MarketingSponsorsModule.savePublicPage(true)" disabled>Publish Changes</button></div><div class="spn-public-device-controls"><button type="button" class="spn-public-device active" data-public-device="desktop" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'desktop\')">Desktop</button><button type="button" class="spn-public-device" data-public-device="mobile" onclick="MarketingSponsorsModule.setPublicPreviewDevice(\'mobile\')">Mobile</button></div></div></div>' +
-                '<div class="spn-public-preview-frame-shell" id="spn-public-preview-shell" data-device="desktop"><div id="spn-preview-scaler"><iframe id="spn-public-preview-frame" title="Public sponsor page preview" src="/PUBLIC/sponsors.html?prod=' + encodeURIComponent(SpnsState.prodId) + '&preview=1&v=' + Date.now() + '" onload="MarketingSponsorsModule.refreshPublicPreview();MarketingSponsorsModule.scalePreviewFrame()"></iframe></div></div>' +
+                '<div class="spn-public-preview-frame-shell" id="spn-public-preview-shell" data-device="desktop"><div id="spn-preview-scaler"><iframe id="spn-public-preview-frame" title="Public sponsor page preview" src="/sponsors?prod=' + encodeURIComponent(SpnsState.prodId) + '&preview=1&v=' + Date.now() + '" onload="MarketingSponsorsModule.refreshPublicPreview();MarketingSponsorsModule.scalePreviewFrame()"></iframe></div></div>' +
               '</aside>' +
             '</div>' +
           '</div>' +

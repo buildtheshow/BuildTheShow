@@ -1443,7 +1443,7 @@
     const intakeKey = intake?.id || '';
     const token = intake?.access_token || '';
     if (!intakeKey || !token) return '';
-    const url = new URL('/SYSTEM/Public/production-proposal.html', window.location.origin);
+    const url = new URL('/org/proposals/submit', window.location.origin);
     url.searchParams.set('intake', intakeKey);
     url.searchParams.set('token', token);
     return url.toString();

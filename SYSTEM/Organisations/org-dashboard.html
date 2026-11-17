@@ -2241,8 +2241,8 @@
     .toast.toast--success { background:#efab45; border-color:#efab45; color:#000000; font-weight:900; box-shadow:0 14px 34px rgba(87,46,136,0.22); }
     .toast.toast--error { background:rgba(220,60,60,0.12); border-color:rgba(220,60,60,0.35); color:#f08080; }
   </style>
-  <script src="/SHARED/Components/account-security.js?v=20261116-one-account"></script>
-<script src="/SHARED/Components/profile-type-correction.js?v=04f111c2"></script>
+  <script src="/SHARED/Components/account-security.js?v=20261117-canonical-urls"></script>
+<script src="/SHARED/Components/profile-type-correction.js?v=20261117-canonical-urls"></script>
 <script src="/SHARED/Components/organisation-ownership.js?v=20261115-accounts"></script>
 </head>
 <body>
@@ -2343,7 +2343,7 @@
       </div>
     </nav>
     <div class="sidebar-footer">
-      <a class="sidebar-logout" href="/home">Member profile</a>
+      <a class="sidebar-logout" href="/member/home">Member profile</a>
       <div class="sidebar-email" id="sb-email"></div>
       <button class="sidebar-logout" id="logout-btn">Sign out</button>
     </div>
@@ -3287,7 +3287,7 @@
                 <p id="vfm-photo-name" style="font-size:0.72rem;color:#6a5a80;margin:0.4rem 0 0;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></p>
               </div>
               <div id="vfm-photo-prompt">
-                <img src="/ASSETS/Images/Icons/Upload.svg" alt="" style="width:26px;height:26px;opacity:0.4;" onerror="this.style.display='none'" />
+                <img src="/ASSETS/Images/Icons/upload.svg" alt="" style="width:26px;height:26px;opacity:0.4;" onerror="this.style.display='none'" />
                 <span>Drag and drop a photo here<br>or click to browse</span>
               </div>
               <input type="file" id="vfm-photos-input" accept="image/*" style="display:none;" onchange="vfmHandlePhotoSelect(this)" />
@@ -4066,7 +4066,9 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     const requestedId=routeParams.get('id');
     const requestedProduction=routeParams.get('production');
     const pathParts=location.pathname.split('/').filter(Boolean);
-    const requestedSlug=pathParts.length>1&&pathParts[1].toLowerCase()==='org'?decodeURIComponent(pathParts[0]):'';
+    const requestedSlug=pathParts[0]==='org'&&pathParts[1]&&!['dashboard','setup','production'].includes(pathParts[1])?decodeURIComponent(pathParts[1]):pathParts.length>1&&pathParts[1].toLowerCase()==='org'?decodeURIComponent(pathParts[0]):'';
+    const routeTab=pathParts[0]==='org'?({settings:'settings',productions:'productions',calendar:'cronus',members:'members'}[pathParts[2]]):null;
+    if(routeTab) requestedOrgTab=routeTab;
     const available=(memberships.data.organisations||[]).filter(o=>['owner','admin'].includes(o.access));
     if(requestedProduction){
       const assigned=(memberships.data.management||[]).filter(p=>p.id===requestedProduction);
@@ -4084,7 +4086,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     const switcher=document.getElementById('org-profile-switcher');
     switcher.hidden=available.length<2;
     switcher.innerHTML=available.map(o=>`<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('');switcher.value=selected.id;
-    switcher.onchange=()=>location.assign('/org/dashboard?'+new URLSearchParams({id:switcher.value}));
+    switcher.onchange=()=>{const chosen=available.find(o=>o.id===switcher.value);location.assign(chosen?.slug?'/org/'+encodeURIComponent(chosen.slug.toLowerCase()):'/org?'+new URLSearchParams({id:switcher.value}));};
     const {data:org,error}=await sb.from('bts_visible_organizations').select('*').eq('id',selected.id).single();
     if (error || !org) {
       btsRouteLog('organisation context failed', { message: error?.message });
@@ -4093,6 +4095,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
     }
 
     currentOrg = org;
+    if(org.slug){const canonical=new URL(location.href);canonical.pathname='/org/'+encodeURIComponent(org.slug.toLowerCase())+(routeTab?'/'+pathParts[2]:'');canonical.searchParams.delete('id');history.replaceState(null,'',canonical.pathname+canonical.search+canonical.hash);}
     window.currentUser = currentUser;
     window.currentOrg = currentOrg;
     await hydrateCronusPlanningEvents();
@@ -5046,6 +5049,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
       return;
     }
     btsRouteLog('route transition started', { type: 'org-tab', id });
+    if(currentOrg?.slug){const url=new URL(location.href);const section=({settings:'settings',productions:'productions',cronus:'calendar',members:'members'})[id];url.pathname='/org/'+encodeURIComponent(currentOrg.slug.toLowerCase())+(section?'/'+section:'');if(!section && id!=='home')url.searchParams.set('openTab',id);else url.searchParams.delete('openTab');history.replaceState(null,'',url.pathname+url.search+url.hash);}
     document.querySelectorAll('.nav-item[data-tab], .nav-subitem[data-tab]').forEach(el => el.classList.toggle('active', el.dataset.tab === id));
     var proposalsGroup = document.getElementById('nav-group-proposals');
     if (proposalsGroup) proposalsGroup.classList.toggle('open', id === 'proposals' || id === 'creative-team');
@@ -5118,15 +5122,15 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
 
   function productionWorkspaceUrl(production) {
     const orgSlug = currentOrg?.slug || '';
-    const showSlug = production?.slug || slugifyProductionUrlPart(production?.title || 'production');
+    const showSlug = production?.slug || '';
     if (orgSlug && showSlug) {
-      return `/${encodeURIComponent(orgSlug)}/ORG/Productions/${encodeURIComponent(showSlug)}?id=${encodeURIComponent(production.id)}`;
+      return `/org/${encodeURIComponent(orgSlug.toLowerCase())}/productions/${encodeURIComponent(showSlug)}`;
     }
     return `/org/production?id=${encodeURIComponent(production.id)}`;
   }
 
   function productionWizardUrl(mode) {
-    return `/org/production/new?mode=${encodeURIComponent(mode)}`;
+    return currentOrg?.slug?`/org/${encodeURIComponent(currentOrg.slug.toLowerCase())}/productions/new?mode=${encodeURIComponent(mode)}`:`/org/production/new?mode=${encodeURIComponent(mode)}`;
   }
 
   function slugifyProductionUrlPart(value) {
@@ -8569,7 +8573,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
 </script>
 
 <script defer src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
-<script src="/ASSETS/scripts/org-production-proposals-v36.js?v=20261116-private-routes"></script>
+<script src="/ASSETS/scripts/org-production-proposals-v36.js?v=20261117-canonical-urls"></script>
 <script>
   // Load Cronus data after FullCalendar is ready, then subscribe to live updates
   window.addEventListener('load', async () => {
@@ -8594,7 +8598,7 @@ CREATE POLICY "Org admin can manage past shows" ON past_shows USING (
   });
 </script>
 
-  <script src="/SHARED/Components/audition-page-templates.js?v=20261116-one-account"></script>
+  <script src="/SHARED/Components/audition-page-templates.js?v=20261117-canonical-urls"></script>
   <script defer src="/SHARED/Components/text-fit.js"></script>
   <script src="/SHARED/Components/auto-save.js?v=brand-sweep-20260728"></script>
 

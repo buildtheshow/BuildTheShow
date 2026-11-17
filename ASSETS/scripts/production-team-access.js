@@ -4,9 +4,10 @@
  */
 
 function teamPortalUrl() {
-  const abbrev = orgSlug || orgAbbreviation || 'team';
-  const showSlug = prod?.slug || generateSlug(prod?.title || 'show');
-  const url = new URL(`/${abbrev}/${showSlug}/Team`, window.location.origin);
+  const abbrev = orgSlug || '';
+  const showSlug = prod?.slug || '';
+  const url = new URL(abbrev&&showSlug?`/org/${encodeURIComponent(abbrev.toLowerCase())}/productions/${encodeURIComponent(showSlug)}`:'/org/production', window.location.origin);
+  url.searchParams.set('team','1');
   if (prodId) url.searchParams.set('id', prodId);
   return url.toString();
 }

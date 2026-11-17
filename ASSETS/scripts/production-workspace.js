@@ -225,12 +225,12 @@
 
   function btsProdNav(file) {
     const id = prodId || new URLSearchParams(location.search).get('id') || '';
-    location.href = '/SYSTEM/Organisations/Productions/Workspace/' + file + '?id=' + encodeURIComponent(id);
+    location.href = workspaceCanonicalBasePath()+'/tools/' + file.replace(/\.html$/,'') + '?id=' + encodeURIComponent(id);
   }
 
   function btsDeptSectionNav(group, section, tab) {
     const id = prodId || new URLSearchParams(location.search).get('id') || '';
-    location.href = '/SYSTEM/Organisations/Productions/Workspace/department-section.html?id=' + encodeURIComponent(id)
+    location.href = workspaceCanonicalBasePath()+'/tools/department-section?id=' + encodeURIComponent(id)
       + '&group=' + encodeURIComponent(group || '')
       + '&section=' + encodeURIComponent(section || '')
       + '&tab=' + encodeURIComponent(tab || 'dashboard');
@@ -360,7 +360,7 @@
     showWorkspaceNotFound(
       title || "Couldn't load this production",
       message || 'Try refreshing. If this keeps happening, you may not have access to this production.',
-      '/org/dashboard',
+      '/org',
       'Back to dashboard'
     );
   }
@@ -539,8 +539,8 @@
   function teamPortalPathParts() {
     const parts = window.location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
     return {
-      org: parts[0] || '',
-      show: parts[1] || '',
+      org: parts[0]==='org'&&parts[2]==='productions'?parts[1]:parts[0]||'',
+      show: parts[0]==='org'&&parts[2]==='productions'?parts[3]:parts[1]||'',
     };
   }
 
@@ -548,11 +548,11 @@
     const parts = window.location.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
     const orgIndex = parts.findIndex(part => part.toLowerCase() === 'org');
     const productionsIndex = parts.findIndex(part => part.toLowerCase() === 'productions');
-    if (orgIndex < 1 || productionsIndex < 0 || productionsIndex + 1 >= parts.length) {
+    if (orgIndex < 0 || productionsIndex < 0 || productionsIndex + 1 >= parts.length) {
       return { org: '', show: '' };
     }
     return {
-      org: parts[orgIndex - 1] || '',
+      org: parts[orgIndex === 0 ? 1 : orgIndex - 1] || '',
       show: parts[productionsIndex + 1] || '',
     };
   }
@@ -3306,7 +3306,7 @@
 
   function workspaceCanonicalBasePath() {
     if (!teamAccessMode && orgSlug && prod?.slug) {
-      return `/${encodeURIComponent(orgSlug)}/ORG/Productions/${encodeURIComponent(prod.slug)}`;
+      return `/org/${encodeURIComponent(orgSlug.toLowerCase())}/productions/${encodeURIComponent(prod.slug)}`;
     }
     return workspaceRouteBasePath();
   }
@@ -5378,8 +5378,8 @@
         { token: '{{callback_name}}',  label: 'Session Name', sample: () => etSessionSampleValue('callback', 'name', 'callback name', 'Callback', 'callback') },
         { token: '{{callback_prepare}}', label: 'What to Prepare', sample: () => etSessionSampleValue('callback', 'prepare', 'what to prepare for callbacks', 'Please review the Glinda side and be ready to sing the selected reprise.', 'callback') },
         { token: '{{callback_materials}}', label: 'Callback Materials', sample: () => etPlaceholder('callback materials') },
-        { token: '{{callback_materials_link}}', label: 'Callback Materials Link', sample: () => etSampleProductionUrl('/Callbackmaterial') },
-        { token: '{{callback_materials_button}}', label: 'Callback Materials Button', sample: () => emailActionButtonHtml(etSampleProductionUrl('/Callbackmaterial'), 'Download Callback Materials') },
+        { token: '{{callback_materials_link}}', label: 'Callback Materials Link', sample: () => etSampleProductionUrl('/callback-material') },
+        { token: '{{callback_materials_button}}', label: 'Callback Materials Button', sample: () => emailActionButtonHtml(etSampleProductionUrl('/callback-material'), 'Download Callback Materials') },
         { token: '{{callback_self_tape_link}}', label: 'Callback Self Tape Link', sample: () => etSampleProductionUrl(`/CallbackSelfTape/${ET_SAMPLE_CONTEXT.selfTapeCode}`) },
         { token: '{{callback_self_tape_button}}', label: 'Callback Self Tape Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/CallbackSelfTape/${ET_SAMPLE_CONTEXT.selfTapeCode}`), 'Open Callback Self Tape') },
         { token: '{{callback_accept_link}}', label: 'Accept Link', sample: () => etSampleProductionUrl(`/Callback/${ET_SAMPLE_CONTEXT.selfTapeCode}/accept`) },
@@ -5400,12 +5400,12 @@
         { token: '{{role_names}}', label: 'All Offered Roles', sample: ET_SAMPLE_CONTEXT.roleNames },
         { token: '{{role_type}}', label: 'Role Type', sample: ET_SAMPLE_CONTEXT.roleType },
         { token: '{{role_description}}', label: 'Role Description', sample: 'A brief description from the character card, including Ensemble breakdowns.' },
-        { token: '{{cast_accept_link}}', label: 'Accept Offer Link', sample: () => etSampleProductionUrl(`/CastOffer/${ET_SAMPLE_CONTEXT.castOfferCode}/YES`) },
-        { token: '{{cast_decline_link}}', label: 'Decline Offer Link', sample: () => etSampleProductionUrl(`/CastOffer/${ET_SAMPLE_CONTEXT.castOfferCode}/NO`) },
-        { token: '{{cast_accept_button}}', label: 'Accept Offer Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/CastOffer/${ET_SAMPLE_CONTEXT.castOfferCode}/YES`), 'YES, I accept this role') },
-        { token: '{{cast_decline_button}}', label: 'Decline Offer Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/CastOffer/${ET_SAMPLE_CONTEXT.castOfferCode}/NO`), 'NO, I decline this offer', 'secondary') },
-        { token: '{{cast_response_link}}', label: 'Review Offer Link', sample: () => etSampleProductionUrl(`/CastOffer/${ET_SAMPLE_CONTEXT.castOfferCode}`) },
-        { token: '{{cast_response_button}}', label: 'Review Offer Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/CastOffer/${ET_SAMPLE_CONTEXT.castOfferCode}`), 'Review Offer and Respond') },
+        { token: '{{cast_accept_link}}', label: 'Accept Offer Link', sample: () => etSampleProductionUrl(`/cast-offer/${ET_SAMPLE_CONTEXT.castOfferCode}/YES`) },
+        { token: '{{cast_decline_link}}', label: 'Decline Offer Link', sample: () => etSampleProductionUrl(`/cast-offer/${ET_SAMPLE_CONTEXT.castOfferCode}/NO`) },
+        { token: '{{cast_accept_button}}', label: 'Accept Offer Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/cast-offer/${ET_SAMPLE_CONTEXT.castOfferCode}/YES`), 'YES, I accept this role') },
+        { token: '{{cast_decline_button}}', label: 'Decline Offer Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/cast-offer/${ET_SAMPLE_CONTEXT.castOfferCode}/NO`), 'NO, I decline this offer', 'secondary') },
+        { token: '{{cast_response_link}}', label: 'Review Offer Link', sample: () => etSampleProductionUrl(`/cast-offer/${ET_SAMPLE_CONTEXT.castOfferCode}`) },
+        { token: '{{cast_response_button}}', label: 'Review Offer Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/cast-offer/${ET_SAMPLE_CONTEXT.castOfferCode}`), 'Review Offer and Respond') },
         { token: '{{cast_offer_deadline}}', label: 'Offer Reply Deadline', sample: 'Friday, May 15, 2026 at 5:00 PM' },
         { token: '{{registration_link}}', label: 'Registration Link', sample: () => etSampleProductionUrl(`/registration/${ET_SAMPLE_CONTEXT.registrationCode}`) },
         { token: '{{registration_button}}', label: 'Registration Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/registration/${ET_SAMPLE_CONTEXT.registrationCode}`), 'Complete Registration') },
@@ -5458,7 +5458,7 @@
         { token: '{{team_member_email}}', label: 'Team Member Email', sample: () => ET_SAMPLE_CONTEXT.performerEmail },
         { token: '{{team_access_code}}', label: 'Legacy code (retired)', sample: '' },
         { token: '{{portal_link}}',       label: 'Portal Link',       sample: 'https://buildtheshow.com/audition-team' },
-        { token: '{{portal_button}}',     label: 'Portal Button',     sample: () => emailActionButtonHtml('https://buildtheshow.com/audition-team', 'Open Audition Team Portal') },
+        { token: '{{portal_button}}',     label: 'Portal Button',     sample: () => emailActionButtonHtml(teamPortalUrl(), 'Open Audition Team Portal') },
       ],
     },
     // ── Self Tape ────────────────────────────────────────────────
@@ -5467,8 +5467,8 @@
       color: '#2563eb',
       bg:    '#dbeafe',
       vars: [
-        { token: '{{submission_link}}', label: 'Submission Link', sample: () => etSampleProductionUrl(`/SelfTape/${ET_SAMPLE_CONTEXT.selfTapeCode}`) },
-        { token: '{{submission_button}}', label: 'Submission Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/SelfTape/${ET_SAMPLE_CONTEXT.selfTapeCode}`), 'Submit Self Tape') },
+        { token: '{{submission_link}}', label: 'Submission Link', sample: () => etSampleProductionUrl(`/self-tape/${ET_SAMPLE_CONTEXT.selfTapeCode}`) },
+        { token: '{{submission_button}}', label: 'Submission Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/self-tape/${ET_SAMPLE_CONTEXT.selfTapeCode}`), 'Submit Self Tape') },
         { token: '{{self_tape_instructions}}', label: 'What to Film', sample: () => prod?.wizard_data?.self_tape_instructions || 'Please sing 60 to 90 seconds of a musical theatre song and read the Glinda side provided in your audition information.' },
         { token: '{{self_tape_deadline}}', label: 'Submission Deadline', sample: () => etSelfTapeDeadlineSample() },
         { token: '{{show_name}}',       label: 'Show Name',       sample: () => ET_SAMPLE_CONTEXT.showName },
@@ -5494,8 +5494,8 @@
         { token: '{{show_dates}}',            label: 'Run Dates',       sample: () => (prod?.start_date && prod?.end_date) ? `${fmtDate(prod.start_date)} to ${fmtDate(prod.end_date)}` : etPlaceholder('show dates') },
         { token: '{{director_name}}',         label: 'Director',        sample: () => prod?.director || 'Dorothy Gale' },
         { token: '{{opening_night}}',         label: 'Opening Night',   sample: () => prod?.end_date ? fmtDate(prod.end_date) : etPlaceholder('opening night') },
-        { token: '{{booking_link}}',          label: 'Booking Link',    sample: () => etSampleProductionUrl(`/Auditions/${ET_SAMPLE_CONTEXT.selfTapeCode}`) },
-        { token: '{{booking_button}}',        label: 'Booking Button',  sample: () => emailActionButtonHtml(etSampleProductionUrl(`/Auditions/${ET_SAMPLE_CONTEXT.selfTapeCode}`), 'Open Audition Booking') },
+        { token: '{{booking_link}}',          label: 'Booking Link',    sample: () => etSampleProductionUrl(`/auditions/${ET_SAMPLE_CONTEXT.selfTapeCode}`) },
+        { token: '{{booking_button}}',        label: 'Booking Button',  sample: () => emailActionButtonHtml(etSampleProductionUrl(`/auditions/${ET_SAMPLE_CONTEXT.selfTapeCode}`), 'Open Audition Booking') },
         { token: '{{video_call_link}}',       label: 'Video Call Link', sample: () => prod?.wizard_data?.video_call_link || prod?.wizard_data?.video_link || ET_SAMPLE_CONTEXT.videoCallLink },
         { token: '{{all_audition_sessions}}', label: 'All Sessions',    sample: () => `General Auditions: ${ET_SAMPLE_CONTEXT.generalAuditionDate} at ${ET_SAMPLE_CONTEXT.generalAuditionTime}\nDance Call: ${ET_SAMPLE_CONTEXT.generalAuditionDate} at ${ET_SAMPLE_CONTEXT.danceCallTime}\nCallback: ${ET_SAMPLE_CONTEXT.callbackDate} at ${ET_SAMPLE_CONTEXT.callbackTime}` },
       ],
@@ -5956,7 +5956,7 @@
       role_name: ET_SAMPLE_CONTEXT.roleName,
       role_names: ET_SAMPLE_CONTEXT.roleNames,
       registration_link: etSampleProductionUrl(`/registration/${ET_SAMPLE_CONTEXT.registrationCode}`),
-      submission_link: etSampleProductionUrl(`/SelfTape/${ET_SAMPLE_CONTEXT.selfTapeCode}`),
+      submission_link: etSampleProductionUrl(`/self-tape/${ET_SAMPLE_CONTEXT.selfTapeCode}`),
       self_tape_deadline: etSelfTapeDeadlineSample(),
     }, key) || `Sample ${key}`;
   }
@@ -8707,7 +8707,7 @@ See you soon!
       mobileStatusEl.textContent = labels[prod.status] || 'Setup';
       mobileStatusEl.className = 'status-badge s-' + (prod.status || 'setup') + ' sidebar-mobile-status';
     }
-    const orgBackHref = orgSlug ? `/${encodeURIComponent(orgSlug)}/ORG` : '/org/dashboard';
+    const orgBackHref = orgSlug ? `/org/${encodeURIComponent(orgSlug.toLowerCase())}` : '/org';
     document.querySelectorAll('#sidebar-org-back, #sidebar-mobile-org-back').forEach(link => {
       link.hidden = !!teamAccessMode;
       link.href = orgBackHref;
@@ -13834,7 +13834,7 @@ See you soon!
 
   function navigateToVolunteers(section) {
     if (section === 'supportlist') {
-      location.href = '/SYSTEM/Organisations/Productions/Workspace/volunteer-supportlist.html?id=' + encodeURIComponent(prodId || '');
+      location.href = workspaceCanonicalBasePath()+'/tools/volunteer-supportlist?id=' + encodeURIComponent(prodId || '');
       return;
     }
     switchProdTab('volunteers', { sub: section || 'calendar' });
@@ -13850,7 +13850,7 @@ See you soon!
       settings:  'ticketing-settings.html',
     };
     const file = fileMap[section] || fileMap.dashboard;
-    location.href = '/SYSTEM/Organisations/Productions/Workspace/' + file + '?id=' + encodeURIComponent(prodId || '');
+    location.href = workspaceCanonicalBasePath()+'/tools/' + file.replace(/\.html$/,'') + '?id=' + encodeURIComponent(prodId || '');
   }
 
   function navigateToRegistration(sub) {
@@ -13876,7 +13876,7 @@ See you soon!
     const crmSubTabs = { sponsors: 1, programmeads: 1, showsponsors: 1, sponsorssettings: 1 };
     const moduleVersions = { programme: '?v=20260804-programme-workspace-live-fix' };
     const scriptSrc = crmSubTabs[subSafe]
-      ? '/ASSETS/scripts/modules/sponsors-crm.js?v=20260807f-export-photos&_cb=' + Date.now()
+      ? '/ASSETS/scripts/modules/sponsors-crm.js?v=20261117-canonical-urls&live=' + Date.now()
       : '/ASSETS/scripts/modules/marketing-' + subSafe + '.js' + (moduleVersions[subSafe] || '');
     loadScriptOnce(scriptSrc)
       .then(() => {
@@ -17861,7 +17861,7 @@ See you soon!
       prod: prodId || '',
       code: 'KATHERINE42725',
     });
-    return `${window.location.origin}/SYSTEM/Public/registration#${hash.toString()}`;
+    return `${window.location.origin}/registration#${hash.toString()}`;
   }
 
   function registrationPublicCandidateScore(item = {}) {
@@ -17923,7 +17923,7 @@ See you soon!
       showToast('Production is still loading. Try again in a moment.', true);
       return;
     }
-    const parsed = new URL('/SYSTEM/Public/registration.html', window.location.origin);
+    const parsed = new URL('/registration', window.location.origin);
     parsed.searchParams.set('prod', prodId);
     parsed.searchParams.set('sample', '1');
     parsed.searchParams.set('pdf', '1');
@@ -20716,7 +20716,7 @@ See you soon!
   function registrationPdfUrlForApplicant(app = {}) {
     const appId = String(app?.id || '').trim();
     if (!appId || !prodId) return '';
-    const parsed = new URL('/SYSTEM/Public/registration.html', window.location.origin);
+    const parsed = new URL('/registration', window.location.origin);
     parsed.searchParams.set('app', appId);
     parsed.searchParams.set('prod', prodId);
     parsed.searchParams.set('pdf', '1');
@@ -24125,7 +24125,7 @@ See you soon!
   }
 
   function castOfferFallbackBaseUrl(token) {
-    const base = `${window.location.origin}/SYSTEM/Public/cast-offer-response.html`;
+    const base = `${window.location.origin}/cast-offer`;
     return `${base}?prod=${encodeURIComponent(prodId)}&token=${encodeURIComponent(token)}`;
   }
 
@@ -24141,13 +24141,13 @@ See you soon!
     const registrationHash = new URLSearchParams({ prod: prodId || '' });
     if (appId) registrationHash.set('app', appId);
     if (code) registrationHash.set('code', code);
-    return `${window.location.origin}/SYSTEM/Public/registration#${registrationHash.toString()}`;
+    return `${window.location.origin}/registration#${registrationHash.toString()}`;
   }
 
   function castOfferLinks(token, code = token) {
     const registrationUrl = registrationUrlForCode(code || token || '');
     if (orgSlug && prod?.slug && code) {
-      const base = `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/CastOffer/${encodeURIComponent(code)}`;
+      const base = `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/cast-offer/${encodeURIComponent(code)}`;
       const showBase = `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}`;
       return {
         review: base,
@@ -25322,7 +25322,7 @@ See you soon!
 
   function callbackSidesPublicLink() {
     if (orgSlug && prod?.slug) {
-      return `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/Callbackmaterial`;
+      return `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/callback-material`;
     }
     const query = new URLSearchParams();
     if (prodId) query.set('prod', prodId);
@@ -25365,7 +25365,7 @@ See you soon!
   }
 
   function publicUrlSection() {
-    return isArchivedPublicPath() ? `Archive${productionArchiveYear()}` : 'Audition';
+    return isArchivedPublicPath() ? `archive${productionArchiveYear()}` : 'auditions';
   }
 
   function withQueryParam(url, key, value) {
@@ -25870,7 +25870,7 @@ See you soon!
 
     const { error } = await sb.from('productions').delete().eq('id', prodId);
     if (error) { showToast('Error: ' + error.message, true); return; }
-    window.location.href = '/org/dashboard';
+    window.location.href = '/org';
   }
 
   // ── Auditions ─────────────────────────────────────────
@@ -38141,8 +38141,8 @@ See you soon!
 
   function callbackResponseBaseUrl() {
     const base = (orgSlug && prod?.slug)
-      ? `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/Auditions/callback-response`
-      : `${window.location.origin}/SYSTEM/Public/callback-response.html`;
+      ? `${window.location.origin}/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/auditions/callback-response`
+      : `${window.location.origin}/callback-response`;
     return `${base}?prod=${encodeURIComponent(prodId)}`;
   }
 
@@ -43059,7 +43059,7 @@ See you soon!
   function apmBuildSubmissionLink(app) {
     if (!orgSlug || !prod?.slug || !app?.id) return '';
     const code = apmBuildSubmissionCode(app.name, app.id);
-    return `https://buildtheshow.com/${orgSlug}/${prod.slug}/SelfTape/${code}`;
+    return `https://buildtheshow.com/${orgSlug}/${prod.slug}/self-tape/${code}`;
   }
 
   async function copySelfTapeSubmissionLink(app, buttonEl = null) {
@@ -44828,7 +44828,7 @@ See you soon!
 
 	  function volunteerPublicPageUrl() {
 	    if (orgSlug && prod?.slug) {
-	      return `/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/volunteers`;
+	      return `/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/volunteer`;
 	    }
 	    const url = new URL('/volunteers', window.location.origin);
 	    if (prodId) url.searchParams.set('prod', prodId);
@@ -46484,7 +46484,7 @@ See you soon!
     if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
     try {
       const volUrl = volunteerPublicPageUrl ? (window.location.origin + volunteerPublicPageUrl()) : '';
-      const portalUrl=window.location.origin+'/activities?production='+encodeURIComponent(prodId);
+      const portalUrl=window.location.origin+'/member/activities?production='+encodeURIComponent(prodId);
       const volunteerCode='';
       const firstName = String(name || email).split(' ')[0] || email;
       const ctx = {

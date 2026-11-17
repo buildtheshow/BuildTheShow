@@ -113,3 +113,7 @@ Rollout requires exact-source hosted rollback rehearsal, atomic migration/histor
 ## Beta invitation signup — 2026-11-16
 
 Migration: `supabase/migrations/20261116230000_beta_signup_invitations.sql`. Adds private hashed, expiring, revocable beta invitations with atomic use limits and an invitation reference on existing private account controls. A new Auth insert guard enforces a valid code server-side after adult/consent checks, removes raw code metadata, and rolls back uses when signup fails. An anonymous boolean checker supports the existing popup/form; code issuance is service-only. Existing accounts, login and recovery are unchanged. Exact hosted rollback rehearsal, atomic source/history recording and live grants/trigger/fixture checks are required. Operator details: `docs/security/beta-testing.md`.
+
+## 2026-11-17: Canonical URL namespaces
+
+Applied `supabase/migrations/20261117130000_canonical_url_namespaces.sql` through the linked CLI. Extends the existing reserved organisation slug validator to the website's public, member and organisation route words. No organisation slug, account, profile or production records are changed. Before applying, the collision count for the newly reserved names was zero. Existing unique slug indexes stay in place.

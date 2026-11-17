@@ -1823,12 +1823,12 @@
 
   <!-- Header -->
   <header class="wizard-header">
-    <a href="/org/dashboard">
+    <a href="/org">
       <img src="/ASSETS/Images/LogoBrand/logo-long-white.png" alt="Build The Show" />
     </a>
     <div style="display:flex;align-items:center;gap:0.75rem;">
       <button onclick="quickSaveDraft()" id="headerDraftBtn" style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.85);border-radius:6px;padding:0.35rem 0.85rem;font-size:0.85rem;font-weight:700;font-family:var(--bts-font);cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.12)'">Save Draft</button>
-      <a href="/org/dashboard" class="header-dash-link">Dashboard</a>
+      <a href="/org" class="header-dash-link">Dashboard</a>
     </div>
   </header>
 
@@ -2237,7 +2237,7 @@
           <p class="step-subtitle">This part sets the base: your title, dates, and image. Once your show exists, you'll come back to build out auditions, tickets, and everything else.</p>
 
           <div class="wizard-nav" style="margin-top:1.5rem;">
-            <a href="/org/dashboard" class="back-to-dash">&larr; Back to Dashboard</a>
+            <a href="/org" class="back-to-dash">&larr; Back to Dashboard</a>
             <button class="btn-continue" onclick="goNextStep()">Let's go &rarr;</button>
           </div>
         </div>
@@ -2259,7 +2259,7 @@
             </div>
             <div class="form-error" id="step1Error"></div>
             <div class="wizard-nav" style="margin-top:1rem;">
-              <a href="/org/dashboard" class="back-to-dash">&larr; Back to Dashboard</a>
+              <a href="/org" class="back-to-dash">&larr; Back to Dashboard</a>
               <button class="btn-continue" onclick="goNextStep()">Use this image &rarr;</button>
             </div>
           </div>
@@ -2283,7 +2283,7 @@
           <a class="step1-skip-link" onclick="goNextStep()">No image yet? Skip this step &rarr;</a>
 
           <div class="wizard-nav" style="margin-top:0.5rem;">
-            <a href="/org/dashboard" class="back-to-dash">&larr; Back to Dashboard</a>
+            <a href="/org" class="back-to-dash">&larr; Back to Dashboard</a>
           </div>
         </div>
       `;
@@ -2434,7 +2434,7 @@
       if (!chosenSlug) chosenSlug = titleToSlug(title);
       wizardData.slug = chosenSlug;
 
-      const slugValid = /^[a-z0-9]+(-[a-z0-9]+)*$/.test(chosenSlug) && chosenSlug.length >= 3 && chosenSlug.length <= 50;
+      const slugValid = chosenSlug !== 'new' && /^[a-z0-9]+(-[a-z0-9]+)*$/.test(chosenSlug) && chosenSlug.length >= 3 && chosenSlug.length <= 50;
       if (!slugValid) {
         showError('step2Error', 'Show URL can only contain lowercase letters, numbers, and hyphens, and must be 3-50 characters.');
         return;
@@ -4069,7 +4069,7 @@
     function productionAdminUrl(productionId, productionSlug = '') {
       const orgSlug = currentOrg?.slug || '';
       if (orgSlug && productionSlug) {
-        return `/${encodeURIComponent(orgSlug)}/ORG/Productions/${encodeURIComponent(productionSlug)}`;
+        return `/org/${encodeURIComponent(orgSlug.toLowerCase())}/productions/${encodeURIComponent(productionSlug)}`;
       }
       return `/org/production?id=${encodeURIComponent(productionId)}`;
     }
@@ -4287,18 +4287,16 @@
         }
         currentUser = session.user;
 
-        const { data: org, error: orgError } = await sb
-          .from('bts_visible_organizations')
-          .select('*')
-          .eq('admin_id', currentUser.id)
-          .limit(1)
-          .single();
-
-        if (orgError || !org) {
-          window.location.href = '/org/setup';
-          return;
-        }
-        currentOrg = org;
+        const memberships = await sb.rpc('bts_my_home',{p_production_id:null});
+        if(memberships.error) throw memberships.error;
+        const parts=location.pathname.split('/').filter(Boolean);
+        const abbreviation=parts[0]==='org'&&parts[2]==='productions'?decodeURIComponent(parts[1]):'';
+        const choices=(memberships.data.organisations||[]).filter(org=>['owner','admin'].includes(org.access));
+        const selected=choices.find(org=>abbreviation?org.slug?.toLowerCase()===abbreviation.toLowerCase():org.id===sessionStorage.getItem('bts_org_profile_'+currentUser.id))||(!abbreviation&&choices.length===1?choices[0]:null);
+        if(!selected){window.location.href='/org';return;}
+        const {data:org,error:orgError}=await sb.from('bts_visible_organizations').select('*').eq('id',selected.id).single();
+        if(orgError||!org) throw orgError||new Error('Organisation unavailable');
+        currentOrg=org;
 
         // Check for existing draft
         const savedProdId = localStorage.getItem('bts_wizard_prod_id');
@@ -4313,8 +4311,9 @@
           // loadFromLocalStorage() — otherwise localStorage overwrites them.
           const { data: prodRow } = await sb.from('bts_visible_productions')
             .select('poster_url, title, description, production_type, wizard_data')
-            .eq('id', savedProdId).maybeSingle();
-          _dbResumeProd = prodRow || null;
+            .eq('id', savedProdId).eq('organization_id',currentOrg.id).maybeSingle();
+          if(!prodRow){renderStep();initCookieNotice();return;}
+          _dbResumeProd = prodRow;
 
           if (autoResume) {
             resumeDraft();

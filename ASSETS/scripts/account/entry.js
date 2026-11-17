@@ -8,7 +8,7 @@ async function run(){
  let id=params.get('production')||params.get('id')||'';
  if(!id){const result=await client.rpc('bts_production_from_link',{p_org:params.get('org')||parts[0]||'',p_show:params.get('show')||parts[1]||''});if(result.error)throw result.error;id=result.data;}
  if(!id)throw {code:'P0001',message:'This show link is not available. Open My Home or ask the production team for a new link.'};
- if(participant){location.replace('/activities?production='+encodeURIComponent(id));return;}
+ if(participant){location.replace('/member/activities?production='+encodeURIComponent(id));return;}
  const result=await client.rpc('bts_my_home',{p_production_id:id});if(result.error)throw result.error;
  const memberships=result.data.management.filter(p=>p.id===id);
  const owner=memberships.find(p=>['owner','admin'].includes(p.organisation_access));

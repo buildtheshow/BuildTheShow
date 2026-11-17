@@ -18,7 +18,7 @@
   }
 
   function publicUrl() {
-    return window.location.origin + '/PUBLIC/tickets.html?prod=' + encodeURIComponent(_prodId || '');
+    return window.location.origin + '/tickets?prod=' + encodeURIComponent(_prodId || '');
   }
 
   function strip() {

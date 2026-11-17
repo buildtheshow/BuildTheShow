@@ -729,17 +729,12 @@
       if (!session) return;
 
       const user = session.user;
-      const accountType = user.user_metadata?.account_type;
-
-      // Determine dashboard URL
-      let dashUrl = '/member';
-      if (accountType === 'organization') {
-        const { data: orgs } = await sb.from('organizations').select('slug').eq('admin_id', user.id).limit(1);
-        dashUrl = orgs?.[0]?.slug ? `/${encodeURIComponent(orgs[0].slug)}/ORG` : '/org/dashboard';
-      } else if (!accountType) {
-        const { data: orgs } = await sb.from('organizations').select('slug').eq('admin_id', user.id).limit(1);
-        if (orgs && orgs.length > 0) dashUrl = orgs[0]?.slug ? `/${encodeURIComponent(orgs[0].slug)}/ORG` : '/org/dashboard';
-      }
+      // Use accepted memberships, with one canonical destination for each space.
+      const {data:home,error:homeError}=await sb.rpc('bts_my_home',{p_production_id:null});
+      const organisations=home?.organisations||[];
+      const managing=organisations.length>0||(home?.management||[]).some(item=>item.team_member_id);
+      let dashUrl='/member/home';
+      if(!homeError&&managing)dashUrl=organisations.length===1&&organisations[0].slug?'/org/'+encodeURIComponent(organisations[0].slug.toLowerCase()):'/org';
 
       // Load member/account ID
       const { data: memberRow } = await sb.from('member_ids').select('display_id').eq('user_id', user.id).limit(1);

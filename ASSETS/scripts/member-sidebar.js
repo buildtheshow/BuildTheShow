@@ -22,7 +22,7 @@
     { label: 'Dashboard',    href: '/member/performer',   key: 'performer-hub' },
     { label: 'Auditions',    href: '/find',         key: 'find-auditions' },
     { label: 'Applications', href: '/member/applications',    key: 'applications' },
-    { label: 'Schedule',     href: '/activities?tab=calendar', key: 'calendar' },
+    { label: 'Schedule',     href: '/member/calendar', key: 'calendar' },
     { label: 'Media',        href: '/member/media', key: 'performer-media' },
   ];
 
@@ -33,7 +33,7 @@
   ];
 
   const VOLUNTEER_SUBNAV = [
-    { label: 'Volunteer activities', href: '/activities?tab=shifts',              key: 'volunteer-hub' },
+    { label: 'Volunteer activities', href: '/member/activities?tab=shifts',              key: 'volunteer-hub' },
     { label: 'Opportunities',   href: '/volunteers',                    key: 'find-volunteer' },
     { label: 'Assigned Shifts', href: '/member/volunteer/shifts',          key: 'volunteer-shifts' },
     { label: 'Availability',    href: '/volunteer-quiz',                   key: 'volunteer-best-fit' },
@@ -110,9 +110,9 @@
     let nav = '';
 
     // Dashboard — always visible
-    nav += navLink('/home', 'My Home', activePage === 'profile-select');
-    nav += navLink('/activities', 'My Activities', activePage === 'activities');
-    nav += navLink('/org/dashboard', 'Organisation profile', activePage === 'manage');
+    nav += navLink('/member/home', 'My Home', activePage === 'profile-select');
+    nav += navLink('/member/activities', 'My Activities', activePage === 'activities');
+    nav += navLink('/org', 'Organisation profile', activePage === 'manage');
     nav += navLink('/member/profiles', 'My Profiles', activePage === 'profiles');
 
     // Position groups — only if enabled on selected profile
@@ -128,7 +128,7 @@
 
     // Calendar — always visible, top-level (not scoped to a position)
     nav += navLink('/member/households', 'Households and access', activePage === 'households');
-    nav += navLink('/activities?tab=calendar', 'Calendar', activePage === 'calendar');
+    nav += navLink('/member/calendar', 'Calendar', activePage === 'calendar');
 
     // Settings — always visible
     nav += navLink('/member/settings', 'Settings', activePage === 'settings');

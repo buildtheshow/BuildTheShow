@@ -12,9 +12,9 @@
     return age >= 18 && age <= 120;
   }
   function safeReturnPath(value) {
-    if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//') || /[\\\r\n]/.test(value)) return '/member';
+    if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//') || /[\\\r\n]/.test(value)) return '/member/home';
     const url = new URL(value, window.location.origin);
-    return url.origin === window.location.origin ? url.pathname + url.search + url.hash : '/member';
+    return url.origin === window.location.origin ? url.pathname + url.search + url.hash : '/member/home';
   }
   async function ensureAdultAccount(client, returnPath) {
     const { data, error } = await client.rpc('bts_get_account_status');

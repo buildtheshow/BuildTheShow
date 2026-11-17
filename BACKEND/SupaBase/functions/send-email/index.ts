@@ -190,10 +190,10 @@ serve(async (req) => {
       // Casting (sample)
       '{{role_name}}': 'The Lead',
       '{{role_type}}': 'Principal',
-      '{{cast_response_link}}': 'https://buildtheshow.com/ryt/mary-poppins-jr-2026/CastOffer/JAMIE04827',
-      '{{cast_accept_link}}': 'https://buildtheshow.com/ryt/mary-poppins-jr-2026/CastOffer/JAMIE04827/YES',
-      '{{cast_decline_link}}': 'https://buildtheshow.com/ryt/mary-poppins-jr-2026/CastOffer/JAMIE04827/NO',
-      '{{registration_link}}': `https://buildtheshow.com/SYSTEM/Public/registration#prod=${prodIdTest}&code=JAMIE04827`,
+      '{{cast_response_link}}': 'https://buildtheshow.com/ryt/mary-poppins-jr-2026/cast-offer/JAMIE04827',
+      '{{cast_accept_link}}': 'https://buildtheshow.com/ryt/mary-poppins-jr-2026/cast-offer/JAMIE04827/YES',
+      '{{cast_decline_link}}': 'https://buildtheshow.com/ryt/mary-poppins-jr-2026/cast-offer/JAMIE04827/NO',
+      '{{registration_link}}': `https://buildtheshow.com/registration#prod=${prodIdTest}&code=JAMIE04827`,
       '{{registration_pdf_url}}': 'https://buildtheshow.com/sample-registration.pdf',
       '{{registration_pdf_button}}': '<a href="https://buildtheshow.com/sample-registration.pdf" style="display:inline-block;background:#572e88;color:#ffffff;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:8px;">View Registration PDF</a>',
       // Rehearsals (real)
@@ -207,8 +207,8 @@ serve(async (req) => {
       '{{team_member_role}}':  'Vocal Director',
       '{{team_member_email}}': testEmail,
       '{{team_access_code}}':  '294761',
-      '{{portal_link}}':       `https://buildtheshow.com/audition-team?prod=${prodIdTest}`,
-      '{{submission_link}}':    `https://buildtheshow.com/ryt/mary-poppins-jr-2026/SelfTape/JAMIE4827`,
+      '{{portal_link}}':       `https://buildtheshow.com/org/production?team=1&id=${prodIdTest}`,
+      '{{submission_link}}':    `https://buildtheshow.com/ryt/mary-poppins-jr-2026/self-tape/JAMIE4827`,
       '{{callback_self_tape_link}}': `https://buildtheshow.com/self-tape/submit?prod=${prodIdTest}&app=sample&scope=callback`,
       '{{self_tape_instructions}}': 'Please film 16-32 bars of a song in the style of the show and one short scene or monologue. Start by saying your name, and make sure your link is viewable.',
     };
@@ -643,7 +643,7 @@ serve(async (req) => {
     directContext.cast_accept_link,
     directContext.cast_response_link,
   );
-  const volunteerPortalUrl='https://buildtheshow.com/activities?production='+encodeURIComponent(productionId);
+  const volunteerPortalUrl='https://buildtheshow.com/member/activities?production='+encodeURIComponent(productionId);
   const paymentEmailDetails = buildPaymentEmailDetails(registrationSettings);
   if (isProducerNotification) {
     const notificationEmail = firstDefinedString(directContext.notification_email, producerEmail, orgEmail);
@@ -781,7 +781,7 @@ serve(async (req) => {
   ));
   const teamPortalLink = firstDefinedString(
     directContext.portal_link,
-    `https://buildtheshow.com/audition-team?prod=${productionId}`,
+    `https://buildtheshow.com/org/production?team=1&id=${productionId}`,
   );
 
   const tokenValues: Record<string, string> = {
@@ -825,8 +825,8 @@ serve(async (req) => {
     '{{cast_offer_deadline}}':   firstDefinedString(directContext.cast_offer_deadline),
     '{{cast_offer_deadline_note}}': firstDefinedString(directContext.cast_offer_deadline_note),
     '{{registration_link}}':     registrationLink,
-    '{{registration_pdf_url}}':  `https://buildtheshow.com/SYSTEM/Public/registration?prod=${encodeURIComponent(productionId)}&app=${encodeURIComponent(applicantIdRaw || bookingIdRaw)}&pdf=1`,
-    '{{registration_pdf_button}}': (() => { const u = `https://buildtheshow.com/SYSTEM/Public/registration?prod=${encodeURIComponent(productionId)}&app=${encodeURIComponent(applicantIdRaw || bookingIdRaw)}&pdf=1`; return firstDefinedString(directContext.registration_pdf_button, u ? `<a href="${escHtml(u)}" style="display:inline-block;background:#572e88;color:#ffffff;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:8px;">View Registration PDF</a>` : ''); })(),
+    '{{registration_pdf_url}}':  `https://buildtheshow.com/registration?prod=${encodeURIComponent(productionId)}&app=${encodeURIComponent(applicantIdRaw || bookingIdRaw)}&pdf=1`,
+    '{{registration_pdf_button}}': (() => { const u = `https://buildtheshow.com/registration?prod=${encodeURIComponent(productionId)}&app=${encodeURIComponent(applicantIdRaw || bookingIdRaw)}&pdf=1`; return firstDefinedString(directContext.registration_pdf_button, u ? `<a href="${escHtml(u)}" style="display:inline-block;background:#572e88;color:#ffffff;text-decoration:none;font-weight:800;padding:14px 22px;border-radius:8px;">View Registration PDF</a>` : ''); })(),
     '{{rehearsal_start_date}}':  firstDefinedString(directContext.rehearsal_start_date, productionRecord.start_date ? fmtDate(String(productionRecord.start_date)) : ''),
     '{{rehearsal_schedule}}':    firstDefinedString(directContext.rehearsal_schedule, directProduction.rehearsal_schedule),
     '{{rehearsal_end_date}}':    firstDefinedString(directContext.rehearsal_end_date, productionRecord.end_date ? fmtDate(String(productionRecord.end_date)) : ''),

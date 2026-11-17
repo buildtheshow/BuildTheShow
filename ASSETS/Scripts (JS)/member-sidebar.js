@@ -108,7 +108,7 @@
     let nav = '';
 
     // Dashboard — always visible
-    nav += navLink('/member', 'Dashboard', activePage === 'profile-select');
+    nav += navLink('/member/home', 'Dashboard', activePage === 'profile-select');
 
     // Position groups — only if enabled on selected profile
     if (isPerformer) {

@@ -28,7 +28,7 @@
       }
 
       function volunteerPublicPageUrl() {
-        if (orgSlug && prod?.slug) return `/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/volunteers`;
+        if (orgSlug && prod?.slug) return `/${encodeURIComponent(orgSlug)}/${encodeURIComponent(prod.slug)}/volunteer`;
         const url = new URL('/volunteers', window.location.origin);
         if (prodId) url.searchParams.set('prod', prodId);
         return url.pathname + url.search;

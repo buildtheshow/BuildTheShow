@@ -1,0 +1,7 @@
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const root=path.resolve(__dirname,'../..');const violations=[];let checked=0;
+function walk(dir){for(const item of fs.readdirSync(path.join(root,dir),{withFileTypes:true})){const file=path.join(dir,item.name);if(item.isDirectory())walk(file);else if(/\.(html|js|ts)$/.test(file)){checked++;const text=fs.readFileSync(path.join(root,file),'utf8');for(const match of text.matchAll(/\/(?:SYSTEM|PUBLIC)\/[A-Za-z0-9_./-]+/g)){if(match[0].startsWith('/SYSTEM/config.js'))continue;violations.push(file+': '+match[0]);}for(const match of text.matchAll(/(?:href|action)=["']([^"']+)/g)){if(/^(?:\/home|\/activities|\/org\/dashboard)(?:[?#]|$)/.test(match[1]))violations.push(file+': '+match[1]);}}}}
+for(const dir of ['ASSETS/scripts','SHARED','SYSTEM','PUBLIC','HOME','supabase/functions','BACKEND/SupaBase/functions','volunteers','volunteer-quiz'])walk(dir);
+for(const file of ['index.html','who-we-are.html','volunteer-quiz.html']){const text=fs.readFileSync(path.join(root,file),'utf8');checked++;if(/(?:href=["']|["'])(?:\/home|\/activities|\/org\/dashboard)["'?#]/.test(text))violations.push(file+': retired URL');}
+assert.deepEqual(violations,[],'Application-generated links must use public routes, not source folders or retired home aliases.');
+console.log('PASS: '+checked+' application files have no internal page URLs or retired home links. Static config assets are allowed.');

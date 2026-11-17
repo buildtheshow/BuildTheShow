@@ -891,7 +891,7 @@
       return `<div style="text-align:center;padding:2.5rem 1.5rem;">
         <div style="font-size:0.92rem;font-weight:700;color:#000000;margin-bottom:0.5rem;">No performance dates found</div>
         <div style="font-size:0.78rem;color:rgba(0,0,0,0.5);margin-bottom:1rem;">Add performance dates in your production calendar first.</div>
-        <button type="button" class="btn-primary" style="font-size:0.82rem;" onclick="location.href='/SYSTEM/Organisations/Productions/Workspace/plan-calendar.html?id='+encodeURIComponent('${esc(prodId)}')">Open Calendar</button>
+        <button type="button" class="btn-primary" style="font-size:0.82rem;" onclick="location.href='/org/production/tools/plan-calendar?id='+encodeURIComponent('${esc(prodId)}')">Open Calendar</button>
       </div>`;
     }
 

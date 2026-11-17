@@ -28,7 +28,7 @@ const {chromium}=require('playwright');const fs=require('node:fs');const path=re
  await card.screenshot({path:'/tmp/bts-member-profile-correction.png'});
  await card.getByRole('button',{name:'Confirm profile type change'}).click();
  await card.getByRole('link',{name:'Open profile'}).waitFor();
- assert.equal(await card.getByRole('link').getAttribute('href'),'/org/dashboard?id=corrected');
+ assert.equal(await card.getByRole('link').getAttribute('href'),'/org?id=corrected');
  assert.equal(await page.evaluate(()=>testCalls.find(call=>call.name==='bts_correct_profile_type').args.p_details.slug),'synthetic-organisation');
  // An organisation owner does not need to create a personal profile to correct their organisation.
  await page.goto('http://bts.test/member/settings?fixture=owner-only');
@@ -40,7 +40,7 @@ const {chromium}=require('playwright');const fs=require('node:fs');const path=re
  await card.getByRole('checkbox').check();
  await card.getByRole('button',{name:'Confirm profile type change'}).click();
  await card.getByRole('link',{name:'Open profile'}).waitFor();
- assert.equal(await card.getByRole('link').getAttribute('href'),'/member/profile?id=corrected');
+ assert.equal(await card.getByRole('link').getAttribute('href'),'/member/profiles/corrected');
  const ownerRequest=await page.evaluate(()=>testCalls.find(call=>call.name==='bts_correct_profile_type'));
  assert.equal(ownerRequest.args.p_source_type,'organisation');assert.equal(ownerRequest.args.p_source_id,'org');
  assert.equal(ownerRequest.args.p_details.person_name,'Synthetic Organisation Owner');

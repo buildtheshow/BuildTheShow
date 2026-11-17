@@ -15,7 +15,7 @@ const {chromium}=require('playwright');const fs=require('node:fs'),path=require(
  await page.route('**/*',route=>{
   const url=new URL(route.request().url());if(url.hostname==='cdn.jsdelivr.net'&&url.pathname.includes('supabase'))return route.fulfill({contentType:'text/javascript',body:'window.supabase={createClient:()=>window.testClient}'});
   if(url.origin!=='http://bts.test')return route.abort();if(url.pathname==='/ASSETS/scripts/supabase.js')return route.fulfill({contentType:'text/javascript',body:'export const supabase=window.testClient;'});
-  if(['/home','/login','/org/dashboard'].includes(url.pathname))return route.fulfill({contentType:'text/html',body:'<p>Synthetic destination</p>'});
+  if(['/home','/member/home','/activities','/member/activities','/login','/org','/org/dashboard'].includes(url.pathname))return route.fulfill({contentType:'text/html',body:'<p>Synthetic destination</p>'});
   const filePath=url.pathname==='/member/account/confirm'?'/PUBLIC/confirm-account.html':url.pathname==='/member/account/transfer'?'/PUBLIC/transfer-ownership.html':url.pathname==='/account-entry'?'/PUBLIC/account-entry.html':url.pathname;
   const file=path.resolve(root,'.'+filePath);if(!file.startsWith(root+path.sep)||!fs.existsSync(file)||fs.statSync(file).isDirectory())return route.fulfill({status:404,body:''});
   return route.fulfill({contentType:file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.svg')?'image/svg+xml':'text/html',body:fs.readFileSync(file)});

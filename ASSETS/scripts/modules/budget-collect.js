@@ -111,7 +111,7 @@
       if (toggle) toggle.checked = enabled;
       if (label)  label.textContent = enabled ? 'Accepting Submissions' : 'Submissions Paused';
 
-      var url   = window.location.origin + '/SYSTEM/Organisations/Productions/Workspace/budget-submit.html?token=' + ((settings && settings.collect_token) || '');
+      var url   = window.location.origin + '/org/production/tools/budget-submit?token=' + ((settings && settings.collect_token) || '');
       var urlEl = document.getElementById('bgt-collect-url');
       if (urlEl) urlEl.textContent = url;
 

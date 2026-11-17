@@ -826,7 +826,7 @@
     var mount = document.getElementById('dept-costume-planning-native');
     if (!mount) return;
     try {
-      var response = await fetch('/SYSTEM/Organisations/Productions/Workspace/departments-costume.html?id=' + encodeURIComponent(state.prodId) + '&embed=1', { cache: 'no-store' });
+      var response = await fetch('/org/production/tools/departments-costume?id=' + encodeURIComponent(state.prodId) + '&embed=1', { cache: 'no-store' });
       if (!response.ok) throw new Error('Could not load costume planner');
       var html = await response.text();
       var doc = new DOMParser().parseFromString(html, 'text/html');
@@ -1971,7 +1971,7 @@
     if (!mount) return;
     try {
       if (!_receiptFormMarkupCache) {
-        var response = await fetch('/SYSTEM/Organisations/Productions/Workspace/department-receipt-form.html?_t=' + Date.now(), { cache: 'no-store' });
+        var response = await fetch('/org/production/tools/department-receipt-form?_t=' + Date.now(), { cache: 'no-store' });
         if (!response.ok) throw new Error('Could not load receipts form');
         var html = await response.text();
         var doc = new DOMParser().parseFromString(html, 'text/html');

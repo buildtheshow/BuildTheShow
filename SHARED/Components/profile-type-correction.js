@@ -102,7 +102,7 @@
                   if (result.data.target_type === 'member') sessionStorage.setItem('bts_active_profile_id', result.data.target_id);
                   const link = document.createElement('a'); link.textContent = 'Open profile';
                   // Only locally constructed destinations are used, never server-provided arbitrary URLs.
-                  link.href = (result.data.target_type === 'organisation' ? '/org/dashboard?id=' : '/member/profile?id=') + encodeURIComponent(result.data.target_id);
+                  link.href = (result.data.target_type === 'organisation' ? '/org?id=' : '/member/profiles/') + encodeURIComponent(result.data.target_id);
                   message.append(document.createTextNode(' '), link);
                 }
               } catch (failure) { message.textContent = failure.message || 'The profile type change could not be completed. Please try again.'; }
