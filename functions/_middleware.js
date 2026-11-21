@@ -1021,6 +1021,7 @@ export async function onRequest(context) {
     return new Response(null,{status:302,headers:{Location:next.href,'Cache-Control':'no-store'}});
   }
   if(path.startsWith('/org/production/tools/') && path.endsWith('.html'))return redirect(context.request,path.slice(0,-5));
+  if(path==='/member/access') return page(context,'/SYSTEM/Members/Profiles/profile-access.html');
   if(PAGES.has(path)) return page(context,PAGES.get(path));
   const parts=path.split('/').filter(Boolean);
   if(parts[0]==='member' && parts[1]==='profiles' && parts[2] && parts[2]!=='new' && parts.length<=4) {

@@ -127,3 +127,7 @@ The follow-up `20261117133000_reserve_about_page_url.sql` also reserves the exis
 ## 2026-11-17: Member circles
 
 `supabase/migrations/20261117173000_member_circles.sql` adds selected circle-admin invitation scope to the existing private invitations table and the `bts_circle` API. Existing household/profile records are reused, not renamed or duplicated. Applied only this migration through the linked CLI after local SQL and browser verification; the earlier transactional-booking migration remains separate.
+
+## 2026-11-21: Circle connections and recipient-bound requests
+
+Applied and recorded only `supabase/migrations/20261121120000_circle_connections.sql` through the linked CLI, after exact-source hosted rollback rehearsal. The earlier transactional audition booking migration remains separate and unapplied. Reuses profile permissions and the existing invitation/mail queue; adds private access-request workflow state, recipient-only notices, scoped request approval and invitation-bound beta signup. Matching household-mail function deployed. Local SQL, browser, email-rendering and canonical URL checks pass. Katie confirmed receipt of the explicitly authorised, labelled test invitation. Katie approved the revised branded invitation, and the matching household-mail function was redeployed. Matching frontend changes are included with this release; verify deployed routes and asset markers after publication. Sensitive contact/safety field controls in My Profile remain separate follow-up work. See `docs/security/circle-connections.md`.
