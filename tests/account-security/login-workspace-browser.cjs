@@ -13,7 +13,7 @@ const root = path.resolve(__dirname, '../..');
       const variant = new URLSearchParams(location.search).get('fixture');
       window.testCalls = [];
       window.supabase = {createClient: () => ({
-        auth: {signInWithPassword: async () => ({data: {user: {id: 'synthetic-adult', user_metadata: {account_type: 'organization'}}}})},
+        auth: {signInWithPassword: async () => variant==='offline'?({data:null,error:{message:'Synthetic connection failure'}}):({data: {user: {id: 'synthetic-adult', user_metadata: {account_type: 'organization'}}}})},
         rpc: async (name, args) => {
           window.testCalls.push({name, args});
           if (name === 'bts_get_account_status') return {data: {active: true}};
@@ -31,15 +31,15 @@ const root = path.resolve(__dirname, '../..');
       if (url.hostname === 'cdn.jsdelivr.net' && url.pathname.includes('supabase')) return route.fulfill({contentType: 'text/javascript', body: ''});
       if (url.origin !== 'http://bts.test') return route.abort();
       if (url.pathname === '/login') return route.fulfill({contentType: 'text/html', body: fs.readFileSync(path.join(root, 'SYSTEM/Members/Account/login.html'))});
-      if (url.pathname === '/org/dashboard' || url.pathname === '/home' || url.pathname === '/activities' || url.pathname === '/invite') return route.fulfill({contentType: 'text/html', body: '<p>Synthetic destination</p>'});
+      if (url.pathname.startsWith('/org') || url.pathname === '/member/home' || url.pathname === '/home' || url.pathname === '/activities' || url.pathname === '/invite') return route.fulfill({contentType: 'text/html', body: '<p>Synthetic destination</p>'});
       if (url.pathname.includes('private-profile-media.js')) return route.fulfill({contentType: 'text/javascript', body: ''});
       const file = path.resolve(root, '.' + url.pathname);
       if (!file.startsWith(root + path.sep) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return route.fulfill({status: 404, body: ''});
       return route.fulfill({contentType: file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : 'application/octet-stream', body: fs.readFileSync(file)});
     });
     const cases = [
-      ['owner', '', '/org/dashboard'], ['admin', '', '/org/dashboard'], ['staff', '', '/org/dashboard'],
-      ['member', '', '/home'], ['viewer', '', '/home'],
+      ['owner', '', '/member/home'], ['admin', '', '/member/home'], ['staff', '', '/member/home'],
+      ['member', '', '/member/home'], ['viewer', '', '/member/home'],
       ['owner', '&return=%2Fhome', '/home'], ['owner', '&return=%2Factivities%3Ftab%3Dshifts', '/activities?tab=shifts'],
       ['owner', '&invite=synthetic-invitation', '/invite?token=synthetic-invitation'],
       ['stored', '', '/activities?tab=shifts']
@@ -56,10 +56,10 @@ const root = path.resolve(__dirname, '../..');
     await page.locator('#email').fill('synthetic@example.invalid');
     await page.locator('#password').fill('synthetic-password-only');
     await page.locator('#submit-btn').click();
-    await page.getByText('We could not check your workspace. Please try logging in again.', {exact: true}).waitFor();
+    await page.getByText('Synthetic connection failure', {exact: true}).waitFor();
     assert.equal(new URL(page.url()).pathname, '/login');
     assert.equal(await page.locator('#submit-btn').isEnabled(), true);
     assert.deepEqual(errors, []);
-    console.log('PASS: ordinary login sends owners/admins/staff to organisation workspace and members/viewers to member home; explicit member/volunteer returns and invitations are preserved; forged signup labels and network failures cannot choose an organisation. Synthetic sign-ins only.');
+    console.log('PASS: ordinary login opens Home for owners/admins/staff/members/viewers; explicit returns and invitations are preserved; sign-in errors remain visible. Synthetic sign-ins only.');
   } finally { await browser.close(); }
 })().catch(error => {console.error(error); process.exitCode = 1;});

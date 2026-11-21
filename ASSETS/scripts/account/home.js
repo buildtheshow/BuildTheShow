@@ -1,4 +1,5 @@
 import {supabase as client} from '/ASSETS/scripts/supabase.js';
+import {updateMemberHome,syncMemberHomeSidebar,homeScope} from './member-home.js?v=20261121-member-home';
 const $=id=>document.getElementById(id);
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const params=new URLSearchParams(location.search);
@@ -10,7 +11,7 @@ window.addEventListener('hashchange',()=>{const next=new URLSearchParams(locatio
 const fragment=new URLSearchParams(location.hash.slice(1));
 if(fragment.get('volunteer-claim')){sessionStorage.setItem('bts_volunteer_claim',fragment.get('volunteer-claim'));history.replaceState(null,'',location.pathname+location.search);}
 if(fragment.get('team-invite')){sessionStorage.setItem(tokenKey,fragment.get('team-invite'));history.replaceState(null,'',location.pathname+location.search);}
-let state;let loading=false;
+let state;let loading=false;let signedInUserId='';
 let activityTab=params.get('tab')==='calendar'?'calendar':'activities';
 function setActivityTab(tab,updateUrl=false){
  activityTab=tab;const calendar=mode==='activities'&&tab==='calendar';
@@ -21,7 +22,7 @@ function setActivityTab(tab,updateUrl=false){
  $('actions-space').hidden=calendar||$('home-actions-needed').querySelectorAll('a').length===0;
  $('upcoming-space').setAttribute('role',calendar?'tabpanel':'region');if(calendar)$('upcoming-space').setAttribute('aria-labelledby','calendar-tab');else $('upcoming-space').removeAttribute('aria-labelledby');
  $('activities-space').setAttribute('role',mode==='activities'?'tabpanel':'region');if(mode==='activities')$('activities-space').setAttribute('aria-labelledby','activities-tab');
- $('upcoming-space').querySelector('.week-strip-title').lastChild.textContent=calendar?'Calendar':'Coming Up';
+ $('home-calendar-title').textContent=calendar?'Calendar':'Coming Up';
  $('upcoming-space').querySelector('.week-strip-link').hidden=calendar;
  if(updateUrl){const url=new URL(location.href);if(calendar)url.searchParams.set('tab','calendar');else url.searchParams.delete('tab');history.replaceState(null,'',url.pathname+url.search);}
 }
@@ -35,13 +36,8 @@ function activityUrl(id){return '/member/activities?production='+encodeURICompon
 function render(){
  const selectedHistory=$('history-profile').value;
  $('history-profile').innerHTML='<option value="">Choose the correct profile</option>'+state.profiles.filter(p=>p.can_volunteer).map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');$('history-profile').value=selectedHistory;
- const own=state.profiles.find(p=>p.is_subject&&p.can_manage);const circles=state.circles||[];
- const profileLink=$('my-profile-shortcut');profileLink.href=own?'/member/profiles/'+encodeURIComponent(own.id):'/member/profiles/new';
- $('home-profile-copy').textContent=own?'Your details and activities.':'Start with your own details and activities.';
- $('home-profile-cta').textContent=own?'View my profile →':'Create My Profile →';
- $('home-circle-title').textContent=circles.length?'My Circle':'Create or join a circle';
- $('home-circle-copy').textContent=circles.length?circles.map(c=>c.name).join(', '):'Managing more than yourself? Keep members together and choose who can help.';
- $('home-circle-open').hidden=!circles.length;$('home-circle-start').hidden=!!circles.length;
+ if(mode==='home'){document.body.classList.add('member-home');updateMemberHome(state,{client,userId:signedInUserId});return;}
+ $('home-circles-space').hidden=true;document.querySelector('.home-view-summary').hidden=true;$('home-calendar-views').hidden=true;$('home-calendar-period').hidden=true;$('home-calendar-source-note').hidden=true;$('home-unlinked-note').hidden=true;
  $('home-title').textContent=mode==='activities'?'My Activities':'My Home';document.title=$('home-title').textContent+' | Build The Show';
  $('home-spaces').hidden=mode!=='home';
 
@@ -69,7 +65,13 @@ function render(){
  if(params.get('tab')==='shifts')$('shifts-space').scrollIntoView();
  setActivityTab(activityTab);
 }
-async function load(){if(loading)return;loading=true;try{const [home,circle]=await Promise.all([call('bts_my_home',{p_production_id:production||null}),call('bts_circle',{p_action:'snapshot',p_data:{}})]);state={...home,circles:circle.circles||circle.households||[],profiles:circle.profiles||home.profiles};render();if($('home-status').textContent==='Loading your shows and profiles…')$('home-status').hidden=true;if(typeof loadMemberSidebarProfile==='function')loadMemberSidebarProfile(client,state.profiles,{circles:state.circles}).catch(()=>{});}finally{loading=false;}}
+async function enrichAuditions(home){
+ const activities=home.activities||[];const slots=[...new Set(activities.map(a=>a.slot_id).filter(Boolean))];const sessions=[...new Set(activities.map(a=>a.session_id).filter(Boolean))];if(!slots.length&&!sessions.length)return;
+ const queries=[slots.length?client.from('bts_visible_audition_time_slots').select('id,session_id,slot_time,slot_date').in('id',slots):Promise.resolve({data:[]}),slots.length?client.from('bts_visible_audition_slots').select('id,production_id,date,start_time,end_time').in('id',slots):Promise.resolve({data:[]}),sessions.length?client.from('bts_visible_audition_sessions').select('id,production_id,date,end_date,start_time,end_time,location,booking_mode').in('id',sessions):Promise.resolve({data:[]})];
+ const results=await Promise.allSettled(queries);const rows=results.map(r=>r.status==='fulfilled'&&!r.value.error&&Array.isArray(r.value.data)?r.value.data:[]);
+ for(const activity of activities){const session=rows[2].find(s=>s.id===activity.session_id&&s.production_id===activity.production_id);const timed=rows[0].find(t=>t.id===activity.slot_id&&t.session_id===activity.session_id);const legacy=rows[1].find(t=>t.id===activity.slot_id&&t.production_id===activity.production_id);const singleDay=session&&(!session.end_date||session.end_date===session.date)?session.date:null;const day=timed?(timed.slot_date||singleDay):legacy?.date||(session?.booking_mode==='group'?singleDay:null);const time=timed?.slot_time||legacy?.start_time||(session?.booking_mode==='group'?session.start_time:null);if(day){activity.start_time=day+'T'+(time||'00:00:00');activity.time_tbd=!time;activity.venue=session?.location||'';activity.end_time=legacy?.end_time||null;}}
+}
+async function load(){if(loading)return;loading=true;try{const [home,circle]=await Promise.all([call('bts_my_home',{p_production_id:production||null}),call('bts_circle',{p_action:'snapshot',p_data:{}})]);state={...home,circles:circle.circles||circle.households||[],profiles:circle.profiles||home.profiles};await enrichAuditions(state);const authorisedProfiles=state.profiles;let viewSelection=null;try{const saved=JSON.parse(sessionStorage.getItem('bts_member_home_selection')||'null');if(saved?.user_id===signedInUserId)viewSelection=saved.selection;}catch{}if(params.has('profile')||params.has('circle'))viewSelection={kind:params.has('circle')?'circle':'profile',id:params.get('circle')||params.get('profile')};if(mode==='activities'&&viewSelection){const scope=homeScope(state,viewSelection);state={...state,...scope,profiles:scope.members};}render();if($('home-status').textContent==='Loading your shows and profiles…')$('home-status').hidden=true;if(typeof loadMemberSidebarProfile==='function')loadMemberSidebarProfile(client,authorisedProfiles,{circles:state.circles}).then(()=>{if(mode==='home')syncMemberHomeSidebar();}).catch(()=>{});}finally{loading=false;}}
 $('request-volunteer-history').onclick=event=>work(async()=>{const result=await call('bts_request_volunteer_history',{p_production_id:production||null});status(result.message);},event.target);
 $('home-logout').onclick=()=>work(async()=>{await client.auth.signOut();sessionStorage.clear();location.replace('/login');});
 document.addEventListener('click',event=>{const button=event.target.closest('button');if(!button)return;
@@ -82,7 +84,7 @@ await work(async()=>{
  const token=sessionStorage.getItem(tokenKey);
  if(token){try{const invitation=await call('bts_production_invitation',{p_token:token,p_accept:false});$('membership-invitation').hidden=false;$('membership-copy').textContent=invitation.production+': '+invitation.position+'. Accept using '+invitation.email+'.';$('membership-accept').onclick=event=>work(async()=>{if(!await BTSAccountSecurity.requireAdultLogin(client,'/member/home'))return;await call('bts_production_invitation',{p_token:token,p_accept:true});sessionStorage.removeItem(tokenKey);$('membership-invitation').hidden=true;status('Production membership accepted.');await load();},event.target);}catch(error){sessionStorage.removeItem(tokenKey);throw error;}}
  if(typeof renderMemberSidebar==='function')renderMemberSidebar(mode==='home'?'profile-select':mode);
- const {data}=await client.auth.getUser();if(!data?.user&&(token||historyToken)){if(historyToken){$('history-accept').textContent='Sign in to confirm';$('history-accept').onclick=()=>BTSAccountSecurity.requireAdultLogin(client,'/member/home');}return;}if(!await BTSAccountSecurity.requireAdultLogin(client))return;$('home-logout').hidden=false;$('sidebar-email').textContent=data.user.email||'';await load();if(historyToken)$('history-profile').innerHTML='<option value="">Choose the correct profile</option>'+state.profiles.filter(p=>p.can_volunteer).map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+ const {data}=await client.auth.getUser();if(!data?.user&&(token||historyToken)){if(historyToken){$('history-accept').textContent='Sign in to confirm';$('history-accept').onclick=()=>BTSAccountSecurity.requireAdultLogin(client,'/member/home');}return;}if(!await BTSAccountSecurity.requireAdultLogin(client))return;signedInUserId=data.user.id;$('home-logout').hidden=false;$('sidebar-email').textContent=data.user.email||'';await load();if(historyToken)$('history-profile').innerHTML='<option value="">Choose the correct profile</option>'+state.profiles.filter(p=>p.can_volunteer).map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
 });
 setInterval(()=>{if(document.visibilityState==='visible'&&state)work(load);},30000);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&state)work(load);});
