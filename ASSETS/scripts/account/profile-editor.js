@@ -352,6 +352,12 @@ async function init() {
     $('sidebar-email').textContent = user.email || '';
     document.title = 'My Profile | Build The Show';
     renderFields(); renderPhotos(); switchTab('performer');
+    $('profile-settings-title').textContent=(profile.credit_name||'This member')+'’s profile settings';
+    $('profile-settings-note').textContent='These controls apply to this person’s profile. Your login and email preferences are in Account settings.';
+    $('profile-access-link').href='/member/access?profile='+encodeURIComponent(profileId);
+    $('profile-settings').hidden=false;
+    // Only the selected adult subject can be offered conversion; children and delegated profiles never inherit another source.
+    try{const scope=await client.rpc('bts_circle',{p_action:'snapshot',p_data:{}});if(!scope.error&&scope.data?.profiles?.some(p=>p.id===profileId&&p.is_subject)){$('profile-type-settings').hidden=false;window.BTSProfileTypeCorrection?.mount(client,$('profile-type-correction'),{type:'member',id:profileId,selectedOnly:true});}}catch{}
     ready = true; form.hidden = false; $('profile-load-status').hidden = true;
   } catch (error) { $('profile-load-status').textContent = error.message; $('profile-retry').hidden = false; }
 }
@@ -383,6 +389,13 @@ $('profile-preview-toggle').addEventListener('click',()=>{
   previewing=!previewing;$('profile-panels').hidden=previewing;$('profile-preview').hidden=!previewing;
   $('profile-preview-toggle').textContent=previewing?'Keep editing':'Preview profile';$('profile-preview-toggle').setAttribute('aria-expanded',String(previewing));
   if(previewing)renderPreview();
+});
+$('profile-archive').addEventListener('click',async()=>{
+ const status=$('profile-settings-status');if(saving){status.textContent='Wait for your profile to finish saving.';return;}
+ if(dirty){status.textContent='Save or reload your profile changes before archiving.';return;}
+ if(!confirm('Archive '+(profile.credit_name||'this profile')+'? This hides the profile and retains its history. Your account stays active.'))return;
+ const b=$('profile-archive');b.disabled=true;
+ try{const result=await client.rpc('bts_family',{p_action:'archive_profile',p_data:{profile_id:profileId}});if(result.error)throw result.error;for(const key of ['id','name','sections','num','custom_id'])sessionStorage.removeItem('bts_active_profile_'+key);location.assign('/member/profiles');}catch(error){status.textContent=error.message||'This profile could not be archived. Please try again.';status.setAttribute('role','alert');b.disabled=false;}
 });
 $('profile-logout').addEventListener('click',async()=>{if(dirty&&!confirm('Leave without saving your profile changes?'))return;dirty=false;await client.auth.signOut();location.replace('/login');});
 window.addEventListener('beforeunload',event=>{if(dirty||saving){event.preventDefault();event.returnValue='';}});

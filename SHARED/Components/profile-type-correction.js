@@ -42,7 +42,7 @@
         const sources = [
           ...(data.members || []).map(item => ({...item, type: 'member'})),
           ...(data.organisations || []).map(item => ({...item, type: 'organisation'}))
-        ].filter(item => !organisationPage || (item.type === 'organisation' && item.id === context.id));
+        ].filter(item => context.selectedOnly ? item.type === context.type && item.id === context.id : !organisationPage || (item.type === 'organisation' && item.id === context.id));
         if (sources.length) {
           const form = document.createElement('form');
           const source = field(form, 'Profile to change', 'select');

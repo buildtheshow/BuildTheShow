@@ -15,6 +15,9 @@ Deno.serve(async request => {
   for(const job of jobs||[]) {
     await new Promise(resolve=>setTimeout(resolve,600));
     try {
+      const preference=await service.rpc('bts_account_mail_allowed',{p_job_id:job.id});
+      if(preference.error)throw new Error('Notification preferences could not be checked.');
+      if(preference.data!==true)continue;
       let provider='';
       if(job.kind==='render_booking'){
         const source=job.payload.table==='audition_bookings'?{booking_id:job.payload.record_id}:{applicant_id:job.payload.record_id};
