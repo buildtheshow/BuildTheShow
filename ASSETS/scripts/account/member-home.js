@@ -65,19 +65,19 @@ function viewUrl(production){
 function renderHome(){
  const scope=homeScope(model,selection);selection=scope.selected;sessionStorage.setItem(selectionKey,JSON.stringify({user_id:userId,selection}));
  const circles=model.circles||[];const own=(model.profiles||[]).find(p=>p.is_subject&&p.can_manage);
- $('home-title').textContent='My Home';document.title='My Home | Build The Show';$('home-intro').textContent='Your people, your shows and what’s coming up.';
+ $('home-title').textContent='My Home';document.title='My Home | Build The Show';$('home-intro').textContent='See what’s coming up for you and the people you manage.';
  $('home-spaces').hidden=false;$('home-circles-space').hidden=!circles.length;
  $('activity-view-tabs').hidden=true;$('activity-tools').hidden=true;$('home-profile-section').hidden=true;$('shifts-space').hidden=true;
  $('home-profile-options').innerHTML=(model.profiles||[]).map(p=>{
   const allowed=p.can_manage&&!p.needs_adult_claim;const selected=selection?.kind==='profile'&&selection.id===p.id;
   return `<button type="button" class="home-person-card" data-home-profile="${esc(p.id)}" aria-pressed="${selected}"${allowed?'':' disabled'}><img src="${icon('performer2.svg')}" alt=""><strong>${esc(p.name||'Member')}</strong><span>${p.is_subject?'My Profile':p.needs_adult_claim?'Own adult login needed':allowed?'Member':'Waiting for permission'}</span>${selected?'<small>Selected</small>':''}</button>`;
- }).join('')||'<div class="member-empty"><img class="position-card-icon" src="'+icon('performer2.svg')+'" alt=""><div><strong>Start with My Profile</strong><p class="member-note">Add your own details to get started.</p><a class="member-action" href="/member/profiles/new">Create My Profile</a></div></div>';
+ }).join('')||'<div class="member-empty"><img class="position-card-icon" src="'+icon('performer2.svg')+'" alt=""><div><strong>Start with My Profile</strong><p class="member-note">Add your own details first. You can manage someone else’s profile too.</p><a class="member-action" href="/member/profiles/new">Create My Profile</a></div></div>';
  $('home-own-profile-note').hidden=!!own||!(model.profiles||[]).length;
  $('home-circle-options').innerHTML=circles.map(c=>{
   const members=(model.profiles||[]).filter(p=>p.can_manage&&!p.needs_adult_claim&&(c.profiles||[]).includes(p.id));const selected=selection?.kind==='circle'&&selection.id===c.id;
   return `<button type="button" class="home-circle-card" data-home-circle="${esc(c.id)}" aria-pressed="${selected}"><img src="${icon('Home.svg')}" alt=""><div><strong>${esc(c.name)}</strong><span>${esc(members.map(p=>p.name).join(', ')||'No members shared with you yet')}${members.length?' · '+members.length+' '+(members.length===1?'member':'members'):''}</span></div>${selected?'<small>Selected</small>':''}</button>`;
  }).join('');
- $('home-viewing').textContent=scope.circle?'Viewing '+scope.circle.name+'. Only members shared with you are included.':scope.members.length?'Viewing '+scope.members[0].name+'. '+(scope.members[0].is_subject?'Your':'Their')+' calendar, shows and things to do.':'Choose a profile to see their calendar, shows and things to do.';
+ $('home-viewing').textContent=scope.circle?'Showing '+scope.circle.name+'’s dates, shows and updates. Includes the members shared with you.':scope.members.length?'Showing '+(scope.members[0].is_subject?'your':scope.members[0].name+'’s')+' dates, shows and updates.':'Choose a profile or circle to see their dates, shows and updates.';
  $('home-selected-profile-link').hidden=!scope.members.length||!!scope.circle;
  if(scope.members.length)$('home-selected-profile-link').href='/member/profiles/'+encodeURIComponent(scope.members[0].id);
  const actions=[];
@@ -101,7 +101,7 @@ function renderHome(){
  $('home-productions').innerHTML=scope.productions.map(show=>{
   const names=scope.members.filter(p=>[...scope.activities,...scope.volunteers].some(a=>active(a)&&a.production_id===show.id&&a.profile_id===p.id)).map(p=>p.name);
   return `<article class="position-card"><img class="position-card-icon" src="${icon('Performer.svg')}" alt=""><h3 class="position-card-title">${esc(show.title)}</h3><p class="member-note">${esc(names.join(', '))}</p><a class="member-action" href="${esc(viewUrl(show.id))}">View show</a></article>`;
- }).join('')||'<div class="member-empty"><img class="position-card-icon" src="'+icon('Performer.svg')+'" alt=""><div><strong>No shows yet</strong><p class="member-note">Your shows appear here when you audition, register or request a volunteer shift.</p></div></div>';
+ }).join('')||'<div class="member-empty"><img class="position-card-icon" src="'+icon('Performer.svg')+'" alt=""><div><strong>No shows yet</strong><p class="member-note">Shows appear here when you or someone you manage auditions, registers or volunteers.</p></div></div>';
  renderCalendar(scope);$('home-content').hidden=false;$('home-retry').hidden=true;syncMemberHomeSidebar();
 }
 function showName(id){return (model.productions||[]).find(p=>p.id===id)?.title||'Production';}
@@ -130,7 +130,7 @@ function renderCalendar(scope){
  $('home-upcoming').innerHTML=events.map(e=>{
   const day=parsed(e.at);const time=e.allDay?'All day':e.unknownTime?'Time to be arranged':day.toLocaleTimeString('en-CA',{hour:'numeric',minute:'2-digit'});let end='';if(e.end&&!e.allDay){const finish=/^\d{2}:/.test(e.end)?parsed(localDate(day)+'T'+e.end):parsed(e.end);if(Number.isFinite(finish.getTime()))end='–'+finish.toLocaleTimeString('en-CA',{hour:'numeric',minute:'2-digit'});}
   return `<div class="upcoming-item"><div class="upcoming-date-badge"><div class="upcoming-date-mon">${esc(day.toLocaleDateString('en-CA',{month:'short'}))}</div><div class="upcoming-date-day">${day.getDate()}</div></div><div><a class="upcoming-event-title" href="${esc(viewUrl(e.production))}">${esc((scope.circle&&e.person?e.person+' · ':'')+e.title)}</a><p class="upcoming-event-sub">${esc(showName(e.production))}<br>${esc(time+(e.unknownTime||e.allDay?'':end)+(e.venue?' · '+e.venue:''))}${e.detail?'<br>'+esc(e.detail):''}</p></div></div>`;
- }).join('')||'<p class="upcoming-empty">Nothing coming up '+(calendarView==='week'?'this week':'this month')+'. Your auditions, rehearsals and shifts will appear here.</p>';
+ }).join('')||'<p class="upcoming-empty">Nothing coming up '+(calendarView==='week'?'this week':'this month')+'. Auditions, rehearsals and volunteer dates will appear here.</p>';
 }
 async function loadPayments(){
  const current=generation;const scope=homeScope(model,selection);const missing=scope.members.filter(p=>!paymentCache.has(p.id));
