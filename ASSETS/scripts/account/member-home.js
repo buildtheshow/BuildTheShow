@@ -18,8 +18,9 @@ export function homeScope(model,selection){
  const ids=new Set(members.map(p=>p.id));
  const activities=(model.activities||[]).filter(a=>ids.has(a.profile_id));
  const volunteers=(model.volunteers||[]).filter(v=>ids.has(v.profile_id));
- const productionIds=new Set([...activities,...volunteers].filter(active).map(a=>a.production_id));
- return {selected,circle:circle||null,members,activities,volunteers,productions:(model.productions||[]).filter(p=>productionIds.has(p.id)),events:(model.events||[]).filter(e=>productionIds.has(e.production_id)&&(!e.profile_id||ids.has(e.profile_id)))};
+ const participations=(model.participations||[]).filter(p=>ids.has(p.profile_id));
+ const productionIds=new Set([...activities,...volunteers,...participations].filter(active).map(a=>a.production_id));
+ return {selected,circle:circle||null,members,activities,volunteers,participations,productions:(model.productions||[]).filter(p=>productionIds.has(p.id)),events:(model.events||[]).filter(e=>productionIds.has(e.production_id)&&(!e.profile_id||ids.has(e.profile_id)))};
 }
 
 export function paymentReminders(invoices,now=new Date()){
@@ -90,12 +91,12 @@ function renderHome(){
  }
  for(const person of (model.profiles||[]))if(person.state==='pending'||person.needs_adult_claim)actions.push({text:'Review '+person.name+'’s profile access.',label:'View profile access',url:'/member/circles?profile='+encodeURIComponent(person.id)});
  for(const {profile,invoice,due,currency,review} of paymentReminders(scope.members.flatMap(profile=>(paymentCache.get(profile.id)?.invoices||[]).map(invoice=>({profile,invoice}))))){
-  actions.push({text:review?'The production team needs to check older payments.':profile.name+'’s '+(invoice.shared_invoice?'shared payment':'next payment')+' is due '+readableDate(due.due)+'.',detail:invoice.title+(review?'': ' · '+new Intl.NumberFormat('en-CA',{style:'currency',currency}).format(due.remaining/100)),label:'View payment schedule',url:'/member/circles?profile='+encodeURIComponent(profile.id)});
+  actions.push({text:review?'The production team needs to check older payments.':profile.name+'’s '+(invoice.shared_invoice?'shared payment':'next payment')+' is due '+readableDate(due.due)+'.',detail:invoice.title+(review?'': ' · '+new Intl.NumberFormat('en-CA',{style:'currency',currency}).format(due.remaining/100)),label:'View payment schedule',url:'/member/activities?'+new URLSearchParams({production:invoice.production_id,profile:profile.id})+'#production-payments'});
  }
  $('home-actions-needed').innerHTML=actions.map(a=>`<div class="home-attention-item"><div><p>${esc(a.text)}</p>${a.detail?'<small>'+esc(a.detail)+'</small>':''}</div><a class="cta-btn" href="${esc(a.url)}">${esc(a.label)}</a></div>`).join('');
  const paymentErrors=scope.members.some(p=>paymentCache.get(p.id)?.error);
  $('home-payment-error').hidden=!paymentErrors;$('actions-space').hidden=!actions.length&&!paymentErrors;
- if(paymentErrors){const person=scope.members.find(p=>paymentCache.get(p.id)?.error);$('home-payment-error').innerHTML='Payment reminders could not load. <a href="/member/circles?profile='+encodeURIComponent(person.id)+'">View payment schedules</a>.';}
+ if(paymentErrors){const person=scope.members.find(p=>paymentCache.get(p.id)?.error);$('home-payment-error').innerHTML='Payment reminders could not load. <a href="/member/activities?profile='+encodeURIComponent(person.id)+'">View payment schedules</a>.';}
  const legacy=(model.activities||[]).some(a=>!a.profile_id)||(model.volunteers||[]).some(v=>!v.profile_id);
  $('home-unlinked-note').hidden=!legacy;
  $('home-productions').innerHTML=scope.productions.map(show=>{

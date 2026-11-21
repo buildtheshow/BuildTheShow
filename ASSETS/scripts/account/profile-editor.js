@@ -1,3 +1,4 @@
+import {mountProfileAccess} from './profile-access.js?v=20261121-production-payments';
 import {supabase as client} from '/ASSETS/scripts/supabase.js';
 import {clone, readPath, collectProfile, validateUpload, safeMediaLink, ROLE_KEYS} from './profile-data.js?v=20261121-profile-editor';
 import '/SHARED/Components/private-profile-media.js?v=20261116-private-routes';
@@ -354,11 +355,11 @@ async function init() {
     renderFields(); renderPhotos(); switchTab('performer');
     $('profile-settings-title').textContent=(profile.credit_name||'This member')+'’s profile settings';
     $('profile-settings-note').textContent='These controls apply to this person’s profile. Your login and email preferences are in Account settings.';
-    $('profile-access-link').href='/member/access?profile='+encodeURIComponent(profileId);
+    mountProfileAccess(client,$('profile-access-panel'),profileId);
     $('profile-settings').hidden=false;
     // Only the selected adult subject can be offered conversion; children and delegated profiles never inherit another source.
     try{const scope=await client.rpc('bts_circle',{p_action:'snapshot',p_data:{}});if(!scope.error&&scope.data?.profiles?.some(p=>p.id===profileId&&p.is_subject)){$('profile-type-settings').hidden=false;window.BTSProfileTypeCorrection?.mount(client,$('profile-type-correction'),{type:'member',id:profileId,selectedOnly:true});}}catch{}
-    ready = true; form.hidden = false; $('profile-load-status').hidden = true;
+    ready = true; form.hidden = false; $('profile-load-status').hidden = true;if(location.hash==='#profile-settings')$('profile-settings').open=true;
   } catch (error) { $('profile-load-status').textContent = error.message; $('profile-retry').hidden = false; }
 }
 form.addEventListener('submit',save);

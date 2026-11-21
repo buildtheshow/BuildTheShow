@@ -32,6 +32,7 @@ export function showInvolvement(model,scope,showId){
    if(names.length)roles.push(...names);else if(answers.__bts_cast_offer_status==='sent')roles.push('Role offered');else if(confirmed)roles.push('Cast');else roles.push(activity.type==='booking'?'Audition booked':'Audition application');
   }
   for(const shift of scope.volunteers.filter(v=>v.profile_id===person.id&&v.production_id===showId&&live(v)))roles.push((shift.role_name||'Volunteer')+(shift.status==='pending'?' (requested)':''));
+  for(const role of scope.participations||[])if(role.profile_id===person.id&&role.production_id===showId&&live(role))roles.push(role.role||'Creative Team');
   if(roles.length)labels.push({name:person.name,roles:[...new Set(roles)]});
  }
  return labels;
@@ -62,7 +63,7 @@ export function syncActivitySidebar(scope){
  document.querySelectorAll('.sidebar-profile-avatar').forEach(image=>image.hidden=true);
  if(!scope.circle&&person){sessionStorage.setItem('bts_active_profile_id',person.id);sessionStorage.setItem('bts_active_profile_name',person.name);}
  // Applications currently open a single profile. Circle users choose a member first.
- const applications=document.querySelector('#activity-tools a[href="/member/applications"]');if(applications)applications.hidden=!!scope.circle;
+ const applications=document.querySelector('#activity-tools a[href="/member/applications"]');if(applications)applications.hidden=!!scope.circle||!scope.activities.length;
 }
 export function renderActivityShows(model,scope){
  const grid=document.getElementById('home-productions');
@@ -70,7 +71,7 @@ export function renderActivityShows(model,scope){
   const params=new URLSearchParams({production:show.id});if(scope.selected)params.set(scope.selected.kind,scope.selected.id);
   const captions=showInvolvement(model,scope,show.id).map(row=>esc(row.name)+' · '+esc(row.roles.join(', '))).join('<br>');
   const poster=imageUrl(show.poster_url);
-  return `<a class="activity-show-card production-card" href="/member/activities?${esc(params)}"><div class="production-card-poster-frame">${poster?`<img src="${esc(poster)}" alt="${esc(show.title)} poster" data-activity-poster>`:''}<img class="activity-poster-placeholder" src="${icon('Placeholder - Poster.svg')}" alt="${poster?'':'Show poster unavailable'}"${poster?' hidden':''}></div><div class="production-card-body"><h3>${esc(show.title)}</h3><p>${captions}</p></div></a>`;
- }).join('')||'<p class="member-note">No shows yet. Shows appear here when you or someone you manage auditions, registers or volunteers.</p>';
+  return `<a class="activity-show-card production-card" href="/member/activities?${esc(params)}"><div class="production-card-poster-frame">${poster?`<img src="${esc(poster)}" alt="${esc(show.title)} poster" data-activity-poster>`:''}<img class="activity-poster-placeholder" src="${icon('Placeholder - Poster.svg')}" alt="${poster?'':'Production poster unavailable'}"${poster?' hidden':''}></div><div class="production-card-body"><h3>${esc(show.title)}</h3><p>${captions}</p></div></a>`;
+ }).join('')||'<p class="member-note">No productions yet. Productions appear here when this person auditions, joins a production or volunteers.</p>';
  grid.querySelectorAll('[data-activity-poster]').forEach(image=>{image.addEventListener('error',()=>{image.hidden=true;image.nextElementSibling.hidden=false;},{once:true});});
 }

@@ -179,7 +179,7 @@ await work(async()=>{
  if(!await BTSAccountSecurity.ensureAdultAccount(client))return;
  $('family-app').hidden=false;await load();await loadUnlinked();
  const action=new URLSearchParams(location.search).get('action');if(action==='create'&&!confirmation)startCircle();if(action==='join')$('join-circle').hidden=false;
- const requestedProfile=new URLSearchParams(location.search).get('profile');if(requestedProfile&&snapshot.profiles.some(p=>p.id===requestedProfile&&p.can_manage))await openPerson(requestedProfile);
+ const requestedProfile=new URLSearchParams(location.search).get('profile');if(requestedProfile&&snapshot.profiles.some(p=>p.id===requestedProfile&&p.can_manage)){if(location.pathname==='/member/access'&&!confirmation){location.replace('/member/profiles/'+encodeURIComponent(requestedProfile)+'/edit#profile-settings');return;}await openPerson(requestedProfile);}
  if(new URLSearchParams(location.search).get('action')==='create-profile')$('create-person').hidden=false;
 });
 setInterval(()=>{if(document.visibilityState==='visible'&&!confirmation)work(()=>load(true));},30000);
