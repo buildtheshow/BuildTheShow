@@ -116,7 +116,7 @@
     nav += navLink('/member/activities', 'My Activities', ['activities','calendar'].includes(activePage));
     let memberContext={};try{memberContext=JSON.parse(sessionStorage.getItem('bts_member_context')||'{}');}catch{}
     const ownProfile=memberContext.own_profile_id;
-    nav += navLink(ownProfile?'/member/profiles/'+encodeURIComponent(ownProfile):'/member/profiles', 'My Profile', ['profiles','performer-hub'].includes(activePage));
+    nav += navLink(profileId?'/member/profiles/'+encodeURIComponent(profileId)+'/edit':ownProfile?'/member/profiles/'+encodeURIComponent(ownProfile)+'/edit':'/member/profiles', 'My Profile', ['profiles','performer-hub'].includes(activePage));
     if(memberContext.circle_count>0)nav += navLink('/member/circles','My Circle',activePage==='circles'||activePage==='households');
 
     // Settings — always visible

@@ -2,6 +2,10 @@
 
 The live schema was inspected on 2026-11-15 without reading personal records.
 
+## Member profile editor (2026-11-21)
+
+No SQL needs to be run. The four-tab editor reuses `profiles.bio`, `profiles.headshot_url`, `profiles.headshot_urls` and the existing `profiles.sections` JSONB. Volunteer and Creative History use `sections.volunteer.history` and `sections.creative.history`; training, skills and private portfolio/media references stay under the corresponding existing section. Uploads reuse the private `profile-headshots` bucket and `bts_bind_profile_file`. Existing row and storage policies remain in force; saving grants no public access. See `docs/security/member-profile-editor.md` for the save and privacy checks.
+
 ## Households and explicit performer keys
 
 Migration: `supabase/migrations/20261116150000_households_and_profile_keys.sql`.

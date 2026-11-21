@@ -806,6 +806,10 @@ These rules define the platform voice for all user-facing copy, labels, help tex
 
 ### Product Language
 
+Use **production** for the work people create or take part in. Never call a production a “show” in user-facing copy. This includes theatre, dance, puppetry, circus arts, and other forms of performance. Keep the brand name **Build The Show** unchanged. This rule concerns the noun for a production, not the verb “show” or established terms such as “showreel”.
+
+Use **Resume / CV** without accents in user-facing labels.
+
 1. The words in the UI are the system language.
 2. Code, UI, database, and logic must use the same terms.
 3. Do not invent alternate labels.
