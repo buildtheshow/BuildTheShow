@@ -25,7 +25,7 @@ function setActivityTab(tab,updateUrl=false){
  $('activities-space').setAttribute('role',mode==='activities'?'tabpanel':'region');if(mode==='activities')$('activities-space').setAttribute('aria-labelledby','activities-tab');
  $('home-calendar-title').textContent=calendar?'Calendar':'Coming Up';
  $('upcoming-space').querySelector('.week-strip-link').hidden=calendar;
- if(updateUrl){const url=new URL(location.href);if(calendar)url.searchParams.set('tab','calendar');else url.searchParams.delete('tab');history.replaceState(null,'',url.pathname+url.search);}
+ if(updateUrl){const url=new URL(location.href);if(calendar)url.searchParams.set('tab','calendar');else url.searchParams.delete('tab');history.replaceState(null,'',url.pathname+url.search);if(typeof window.renderMemberSidebar==='function')window.renderMemberSidebar(mode==='home'?'profile-select':mode);}
 }
 document.querySelectorAll('[data-activity-tab]').forEach(button=>{button.addEventListener('click',()=>{setActivityTab(button.dataset.activityTab,true);if(state)render();});button.addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const tab=event.key==='Home'?'activities':event.key==='End'?'calendar':activityTab==='calendar'?'activities':'calendar';document.querySelector('[data-activity-tab="'+tab+'"]').click();document.querySelector('[data-activity-tab="'+tab+'"]').focus();});});
 function status(text){$('home-status').textContent=text;$('home-status').hidden=false;}

@@ -63,7 +63,7 @@
   }
 
   // ── Build a plain nav link ───────────────────────────────────────
-  const navIcons={'My Home':'navoverview.svg','My Activities':'Performer.svg','My Profile':'performer2.svg','My Circle':'Home.svg','Settings':'navsettings.svg'};
+  const navIcons={'My Home':'navoverview.svg','My Activities':'Performer.svg','My Calendar':'navproductioncalendar.svg','My Profile':'performer2.svg','My Circle':'Home.svg','Settings':'navsettings.svg'};
   function navLink(href, label, isActive) {
     return `<a href="${href}" class="sidebar-nav-item${isActive ? ' active' : ''}"${isActive ? ' aria-current="page"' : ''}>
       ${navIcons[label]?`<img class="sidebar-nav-icon" src="/ASSETS/Images/Icons/${navIcons[label]}" alt="" aria-hidden="true">`:""}<span>${label}</span>
@@ -113,7 +113,9 @@
 
     // Dashboard — always visible
     nav += navLink('/member/home', 'My Home', activePage === 'profile-select');
-    nav += navLink('/member/activities', 'My Activities', ['activities','calendar'].includes(activePage));
+    const calendarActive=activePage==='calendar'||activePage==='activities'&&new URLSearchParams(location.search).get('tab')==='calendar';
+    nav += navLink('/member/activities', 'My Activities', activePage==='activities'&&!calendarActive);
+    nav += navLink('/member/activities?tab=calendar', 'My Calendar', calendarActive);
     let memberContext={};try{memberContext=JSON.parse(sessionStorage.getItem('bts_member_context')||'{}');}catch{}
     const ownProfile=memberContext.own_profile_id;
     nav += navLink(profileId?'/member/profiles/'+encodeURIComponent(profileId)+'/edit':ownProfile?'/member/profiles/'+encodeURIComponent(ownProfile)+'/edit':'/member/profiles', 'My Profile', ['profiles','performer-hub'].includes(activePage));
