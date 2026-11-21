@@ -29,3 +29,5 @@ Old manageable-profile View links forward to the agreed editor; canonical old ac
 - Exact-source hosted rehearsal uses only labelled synthetic fixtures in one transaction ending ROLLBACK. No emails are sent. Apply and record only this migration, preserving the unrelated pending audition-booking migration; then publish and verify the matching frontend.
 
 Database deployment verified: exact-source hosted rollback rehearsal passed; migration `20261121170000` was applied and its exact source recorded atomically. Postflight confirmed the recorded checksum, anonymous denial, private helper grants and absence of rehearsal accounts. No real profile, organisation payment instruction or payment record was changed; no emails were sent.
+
+Frontend release `9f9034c4` published and verified: live Activities/Profile HTML and new script/CSS markers matched. Both production-payment and inline-profile-access browser journeys passed against published assets with synthetic APIs. No receiving-account email or financial record was changed. `production-payments.test.cjs` additionally verifies overdue amounts, no-fee visibility, paid history and unknown legacy balances.
