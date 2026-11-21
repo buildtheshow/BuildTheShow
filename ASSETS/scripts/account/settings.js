@@ -12,7 +12,7 @@ $('email-save').onclick=event=>action(event.currentTarget,async()=>{
  const input=$('new-email'),email=input.value.trim();if(!email||!input.reportValidity())return;
  const me=await user();if(email.toLowerCase()===me.email.toLowerCase())throw new Error('That is already your login email.');
  const result=await sb.auth.updateUser({email},{emailRedirectTo:location.origin+'/login'});if(result.error)throw result.error;
- input.value='';message('Check your email for confirmation instructions, including junk or spam. Your login email stays the same until the change is confirmed.');
+ input.value='';message('Check your email for confirmation instructions, including junk or spam. Your login email stays the same until the change is confirmed. Afterwards, review the separate contact addresses on your profiles.');
 });
 $('password-save').onclick=event=>action(event.currentTarget,async()=>{
  const password=$('new-password').value;if(password.length<12)throw new Error('Use at least 12 characters for your new password.');if(password!==$('confirm-password').value)throw new Error('Those passwords don’t match. Please type them again.');
