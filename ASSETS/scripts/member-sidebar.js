@@ -12,7 +12,7 @@
     const s = document.createElement('link');
     s.id   = 'member-sidebar-css';
     s.rel  = 'stylesheet';
-    s.href = '/ASSETS/styles/member-sidebar.css';
+    s.href = '/ASSETS/styles/member-sidebar.css?v=20261121-nav-icons';
     document.head.appendChild(s);
   }
 
@@ -63,9 +63,10 @@
   }
 
   // ── Build a plain nav link ───────────────────────────────────────
+  const navIcons={'My Home':'navoverview.svg','My Activities':'Performer.svg','My Profile':'performer2.svg','My Circle':'Home.svg','Settings':'navsettings.svg'};
   function navLink(href, label, isActive) {
     return `<a href="${href}" class="sidebar-nav-item${isActive ? ' active' : ''}"${isActive ? ' aria-current="page"' : ''}>
-      ${label}
+      ${navIcons[label]?`<img class="sidebar-nav-icon" src="/ASSETS/Images/Icons/${navIcons[label]}" alt="" aria-hidden="true">`:""}<span>${label}</span>
     </a>`;
   }
 
@@ -112,12 +113,11 @@
 
     // Dashboard — always visible
     nav += navLink('/member/home', 'My Home', activePage === 'profile-select');
-    nav += navLink('/member/activities', 'My Activities', activePage === 'activities');
+    nav += navLink('/member/activities', 'My Activities', ['activities','calendar'].includes(activePage));
     let memberContext={};try{memberContext=JSON.parse(sessionStorage.getItem('bts_member_context')||'{}');}catch{}
     const ownProfile=memberContext.own_profile_id;
     nav += navLink(ownProfile?'/member/profiles/'+encodeURIComponent(ownProfile):'/member/profiles', 'My Profile', ['profiles','performer-hub'].includes(activePage));
     if(memberContext.circle_count>0)nav += navLink('/member/circles','My Circle',activePage==='circles'||activePage==='households');
-    nav += navLink('/member/calendar', 'Calendar', activePage === 'calendar');
 
     // Settings — always visible
     nav += navLink('/member/settings', 'Settings', activePage === 'settings');

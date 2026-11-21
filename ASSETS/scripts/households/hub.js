@@ -27,6 +27,21 @@ function renderProfiles() {
   $('family-profiles').innerHTML = snapshot.profiles.map(p => `<article class="family-person"><img src="/ASSETS/Images/Icons/performer2.svg" alt=""><h3>${esc(p.name || 'Performer')}</h3><p>${esc(kindLabel[p.kind] || p.kind)}</p><p>${p.needs_adult_claim ? 'This performer is now an adult. Guardian access has ended; request activation of their own account.' : p.state === 'pending' ? 'Waiting for the adult to confirm permission.' : p.state === 'active' ? '' : esc(p.state)}</p>${p.can_manage ? `<button data-profile="${esc(p.id)}">Access and payments</button><a class="family-link secondary" href="/member/profiles/${encodeURIComponent(p.id)}">View profile</a>` : ''}${p.kind === 'adult' && ['pending','declined'].includes(p.state) ? `<button data-permission-retry="${esc(p.id)}">${p.state==='pending'?'Change or resend permission request':'Review needed after declined permission'}</button><button class="secondary" data-cancel-pending="${esc(p.id)}">Archive unconfirmed profile</button>` : ''}${p.kind === 'legacy' ? `<button data-adopt="${esc(p.id)}">Confirm profile relationship</button>` : ''}${p.needs_adult_claim ? `<button data-adult-review="${esc(p.id)}">Request adult activation</button>` : ''}</article>`).join('') || '<p>No members yet. Start with your own profile or add someone you are authorised to help.</p>';
 }
 let invitingCircle = null;
+let createdCircleId = null;
+function circleSetup(open) {
+ document.body.classList.toggle('circle-setup',open);
+ $('circle-page-icon').hidden=!open;
+ $('circle-page-title').textContent=open?'Create a circle':'My Circle';
+ $('circle-page-intro').textContent=open?'Keep the people you manage in one place.':'Keep members together and choose who can help. Your personal profile stays yours.';
+ document.title=(open?'Create a circle':'My Circle')+' | Build The Show';
+ const url=new URL(location.href);if(open)url.searchParams.set('action','create');else url.searchParams.delete('action');history.replaceState(null,'',url.pathname+url.search);
+}
+function startCircle(){circleSetup(true);$('circle-created').hidden=true;$('create-circle').hidden=false;$('family-status').hidden=true;$('household-name').focus();}
+function closeCircleSetup(){circleSetup(false);$('create-circle').hidden=true;$('circle-created').hidden=true;}
+$('circle-create-cancel').onclick=()=>{closeCircleSetup();$('show-create-circle').focus();};
+$('circle-created-open').onclick=()=>{closeCircleSetup();$('circle-list-section').scrollIntoView({block:'start'});};
+$('circle-created-add').onclick=event=>work(async()=>{await load();if(!(snapshot.circles||snapshot.households||[]).some(c=>c.id===createdCircleId&&c.creator))throw {code:'P0001',message:'Your circle was created. Refresh this page to load its members.'};closeCircleSetup();$('create-person').hidden=false;$('person-circle').value=createdCircleId;$('person-name').focus();},event.currentTarget);
+$('circle-created-invite').onclick=()=>{const circle=(snapshot.circles||snapshot.households||[]).find(c=>c.id===createdCircleId&&c.creator);if(!circle){message('Your circle was created. Open My Circle again to load its members.');return;}closeCircleSetup();showAdminInvite(circle.id);};
 function renderCircles() {
   const circles = snapshot.circles || snapshot.households || [];
   $('circle-list-section').hidden = circles.length === 0;
@@ -38,7 +53,7 @@ function renderCircles() {
   $('person-circle').innerHTML='<option value="">Keep outside a circle</option>'+owned.map(h=>`<option value="${esc(h.id)}">${esc(h.name)}</option>`).join('');
   $('person-circle').value=owned.some(h=>h.id===previous)?previous:owned.length===1?owned[0].id:'';
   const own=snapshot.profiles.find(p=>p.is_subject);
-  $('circle-create-note').textContent=own?`${own.name} will be the first member. You’ll be the Owner and can invite admins afterwards.`:'You’ll be the Owner. Add your own profile or another member after creating the circle.';
+  $('circle-owner-name').textContent=own?.name||'Your own profile';$('circle-owner-note').textContent=own?'Your profile will be the first member.':'Add your own profile after creating the circle.';$('circle-create-note').textContent='You’ll manage invitations. Each adult uses their own login.';
 }
 function showAdminInvite(id){
  const h=(snapshot.circles||snapshot.households||[]).find(c=>c.id===id&&c.creator);if(!h)return;
@@ -50,7 +65,7 @@ function showAdminInvite(id){
 function updateAdminPreview(){const ids=[...document.querySelectorAll('input[name="admin-profile"]:checked')].map(input=>input.value);$('circle-admin-send').disabled=!ids.length;const adult=ids.some(id=>snapshot.profiles.find(p=>p.id===id)?.kind!=='child');$('circle-admin-volunteer-row').hidden=!adult;if(!adult)$('circle-admin-volunteer').checked=false;$('circle-admin-preview').textContent=ids.length?'This invitation shares: '+ids.map(id=>snapshot.profiles.find(p=>p.id===id)?.name).join(', ')+'.':'Choose at least one member.';}
 $('circle-admin-choices').onchange=updateAdminPreview;
 $('circle-admin-form').onsubmit=event=>{event.preventDefault();work(async()=>{const ids=[...document.querySelectorAll('input[name="admin-profile"]:checked')].map(input=>input.value);if(!invitingCircle||!ids.length)return;await rpc('invite_admin',{circle_id:invitingCircle.id,email:$('circle-admin-email').value.trim(),profile_ids:ids,volunteer_help:$('circle-admin-volunteer').checked});$('circle-admin-section').hidden=true;$('circle-admin-email').value='';await load();message('Admin invitation queued. They must accept before access is added.');},event.submitter);};
-$('show-create-circle').onclick=()=>{$('create-circle').hidden=false;$('household-name').focus();};
+$('show-create-circle').onclick=startCircle;
 $('show-join-circle').onclick=()=>{$('join-circle').hidden=false;$('circle-invitation-link').focus();};
 $('join-circle-form').onsubmit=event=>{event.preventDefault();try{const url=new URL($('circle-invitation-link').value.trim());const token=new URLSearchParams(url.hash.slice(1)).get('invite');if(url.origin!==location.origin||!token||!/[a-f0-9]{64}/i.test(token)||token.length!==64){message('Paste the complete Build The Show invitation link from your email.');return;}location.assign('/member/circles#invite='+encodeURIComponent(token));}catch{message('Paste the complete invitation link from your email.');}};
 function renderInvites() {
@@ -104,7 +119,16 @@ $('person-form').onsubmit = event => { event.preventDefault();work(async () => {
   await rpc('add_member',{ profile:{ credit_name:name,legal_first_name:name.split(' ')[0],legal_last_name:name.split(' ').slice(1).join(' '),date_of_birth:$('person-birth').value,relationship_kind:kind,permission_email:kind==='adult'?$('person-email').value.trim():null,guardian_name:kind==='child'?$('person-guardian').value.trim():null },circle_id:$('person-circle').value||null,guardian_confirmed:kind==='child'&&$('person-guardian-confirmed').checked });
   $('person-form').reset();$('create-person').hidden=true;await load();message(kind==='adult'?'Profile created. Permission is pending until the adult confirms their email invitation.':'Profile created.');
 },event.submitter); };
-$('household-form').onsubmit = event => { event.preventDefault();work(async()=>{await rpc('create_circle',{name:$('household-name').value.trim()});$('household-name').value='';await load();$('create-circle').hidden=true;message('Circle created. You are the Owner.');},event.submitter); };
+$('household-form').onsubmit = event => { event.preventDefault();work(async()=>{
+ const name=$('household-name').value.trim();if(!name){$('household-name').setCustomValidity('Give your circle a name.');$('household-name').reportValidity();return;}
+ const own=snapshot.profiles.find(p=>p.is_subject);const result=await rpc('create_circle',{name});createdCircleId=result.id;
+ const url=new URL(location.href);url.searchParams.delete('action');history.replaceState(null,'',url.pathname+url.search);
+ $('create-circle').hidden=true;$('circle-created').hidden=false;$('circle-created-name').textContent=name;$('circle-created-copy').textContent=own?'You’re the Owner. Your profile is already included.':'You’re the Owner. You can now add your profile or another member.';$('family-status').hidden=true;
+ $('circle-page-title').textContent='My Circle';$('circle-page-intro').textContent='';document.title='Circle created | Build The Show';$('circle-created-title').focus();window.scrollTo({top:0});
+ // Creation has succeeded. A refresh failure must not invite a duplicate submission.
+ try{await load();}catch{message('Your circle was created. Refresh this page if its members have not loaded.');}
+},event.submitter); };
+$('household-name').addEventListener('input',()=>$('household-name').setCustomValidity(''));
 $('invite-kind').onchange=()=>{$('invite-volunteer-row').hidden=$('invite-kind').value!=='delegate_key';$('invite-volunteer').checked=false;};
 $('invite-form').onsubmit = event => { event.preventDefault();work(async()=>{await rpc('invite',{profile_id:selected.id,email:$('invite-email').value.trim(),kind:$('invite-kind').value,volunteer_help:$('invite-kind').value==='delegate_key'&&$('invite-volunteer').checked});$('invite-email').value='';await load();message('Invitation queued. Delivery status is shown below.');},event.submitter); };
 $('attach-household-form').onsubmit = event => { event.preventDefault();work(async()=>{await rpc('add_to_household',{profile_id:selected.id,household_id:$('attach-household').value});await load();message('Member added to the circle. Admins only get access when it is explicitly shared.');},event.submitter); };
@@ -154,7 +178,7 @@ await work(async()=>{
  if(!data?.user){if(!confirmation)await BTSAccountSecurity.requireAdultLogin(client,'/member/circles');return;}
  if(!await BTSAccountSecurity.ensureAdultAccount(client))return;
  $('family-app').hidden=false;await load();await loadUnlinked();
- const action=new URLSearchParams(location.search).get('action');if(action==='create')$('create-circle').hidden=false;if(action==='join')$('join-circle').hidden=false;
+ const action=new URLSearchParams(location.search).get('action');if(action==='create'&&!confirmation)startCircle();if(action==='join')$('join-circle').hidden=false;
  const requestedProfile=new URLSearchParams(location.search).get('profile');if(requestedProfile&&snapshot.profiles.some(p=>p.id===requestedProfile&&p.can_manage))await openPerson(requestedProfile);
  if(new URLSearchParams(location.search).get('action')==='create-profile')$('create-person').hidden=false;
 });
