@@ -6,7 +6,7 @@
 - My Activities lists the selected person's or authorised circle members' productions using existing compact poster cards and actual audition/cast/volunteer roles. Accepted account-bound team participation is attached only to that adult's own subject profile. Organisation ownership alone does not place every managed production in the member/circle list. Unaccepted email matches grant nothing.
 - Opening a production keeps the profile/circle context. Payment information appears there only when an authorised profile has fees, a confirmed discount/waiver or recorded payments. Paid history remains visible. No-fee productions have no payment tracker. The production view offers a scoped All productions link; irrelevant creative tools and empty shift sections are hidden.
 - Payments show the remaining balance and next/overdue amount, then collapsed sections in the approved order: Fee breakdown, Payment schedule, Payments received, How to pay. Shared invoices are deduplicated and explicitly show the full shared balance. Currencies remain separate. Older shared payments or payment history without fee information are marked unconfirmed; failed loads never become £0.
-- My Calendar remains in the sidebar and uses the existing scoped calendar view. The existing Home payment reminders now open the relevant production's payment section in Activities.
+- My Calendar is a separate page at `/member/calendar`, accessible from the sidebar. My Activities has no calendar tab. Home retains its calendar overview. The existing Home payment reminders now open the relevant production's payment section in Activities.
 
 ## Sources and permissions
 

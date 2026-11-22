@@ -74,7 +74,7 @@ const PAGES = new Map([
   ],
   [
     "/member/calendar",
-    "/SYSTEM/Members/Dashboard/member-calendar.html"
+    "/PUBLIC/my-home.html"
   ],
   [
     "/member/households",
@@ -1022,6 +1022,10 @@ export async function onRequest(context) {
   }
   if(path.startsWith('/org/production/tools/') && path.endsWith('.html'))return redirect(context.request,path.slice(0,-5));
   if(path==='/member/access') return page(context,'/SYSTEM/Members/Profiles/profile-access.html');
+  if(path==='/member/activities' && url.searchParams.get('tab')==='calendar') {
+    url.pathname='/member/calendar';url.searchParams.delete('tab');
+    return new Response(null,{status:302,headers:{Location:url.href,'Cache-Control':'no-store'}});
+  }
   if(PAGES.has(path)) return page(context,PAGES.get(path));
   const parts=path.split('/').filter(Boolean);
   if(parts[0]==='member' && parts[1]==='profiles' && parts[2] && parts[2]!=='new' && parts.length<=4) {

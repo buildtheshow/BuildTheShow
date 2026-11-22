@@ -58,7 +58,7 @@ export function syncActivitySidebar(scope){
  document.getElementById('sidebar-profile-name').textContent=name;
  const number=document.getElementById('sidebar-profile-num');if(number)number.textContent='';
  const hint=document.querySelector('.sidebar-profile-switcher-hint');if(hint)hint.textContent=scope.circle?'My Circle':person.is_subject?'My Profile':'Member';
- const switcher=document.getElementById('sidebar-profile-switcher');switcher.href='/member/activities#activity-scope-picker';switcher.setAttribute('aria-label','Choose a profile or circle');
+ const switcher=document.getElementById('sidebar-profile-switcher');switcher.href=(location.pathname==='/member/calendar'?'/member/calendar':'/member/activities')+'#activity-scope-picker';switcher.setAttribute('aria-label','Choose a profile or circle');
  const placeholder=document.getElementById('sidebar-avatar-placeholder');if(placeholder){placeholder.hidden=false;placeholder.innerHTML=`<img src="${icon(scope.circle?'Home.svg':'performer2.svg')}" alt="" style="width:24px;height:28px;object-fit:contain">`;}
  document.querySelectorAll('.sidebar-profile-avatar').forEach(image=>image.hidden=true);
  if(!scope.circle&&person){sessionStorage.setItem('bts_active_profile_id',person.id);sessionStorage.setItem('bts_active_profile_name',person.name);}

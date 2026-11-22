@@ -1,13 +1,13 @@
 import {mountProductionPayments} from './member-payments.js?v=20261121-production-payments';
 import {supabase as client} from '/ASSETS/scripts/supabase.js';
-import {updateMemberHome,syncMemberHomeSidebar,homeScope} from './member-home.js?v=20261121-production-payments';
-import {enrichActivityMedia,renderActivityPicker,renderActivityShows,syncActivitySidebar} from './member-activities.js?v=20261121-production-payments';
+import {updateMemberHome,syncMemberHomeSidebar,homeScope} from './member-home.js?v=20261122-separate-calendar';
+import {enrichActivityMedia,renderActivityPicker,renderActivityShows,syncActivitySidebar} from './member-activities.js?v=20261122-separate-calendar';
 const $=id=>document.getElementById(id);
 const paymentView=mountProductionPayments(client,$('production-payments'));
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const params=new URLSearchParams(location.search);
 const production=params.get('production')||params.get('id')||'';
-const mode=location.pathname==='/member/activities'?'activities':'home';
+const mode=location.pathname==='/member/calendar'?'calendar':location.pathname==='/member/activities'?'activities':'home';
 if(params.get('open')==='manage')location.replace('/org');
 const tokenKey='bts_production_invitation';
 window.addEventListener('hashchange',()=>{const next=new URLSearchParams(location.hash.slice(1));if(next.has('team-invite')||next.has('volunteer-claim'))location.reload();});
@@ -15,34 +15,28 @@ const fragment=new URLSearchParams(location.hash.slice(1));
 if(fragment.get('volunteer-claim')){sessionStorage.setItem('bts_volunteer_claim',fragment.get('volunteer-claim'));history.replaceState(null,'',location.pathname+location.search);}
 if(fragment.get('team-invite')){sessionStorage.setItem(tokenKey,fragment.get('team-invite'));history.replaceState(null,'',location.pathname+location.search);}
 let state,allState,activitySelection=null;let activitySelectionReady=false;let loading=false;let signedInUserId='';
-let activityTab=params.get('tab')==='calendar'?'calendar':'activities';
-function setActivityTab(tab,updateUrl=false){
- activityTab=tab;const calendar=mode==='activities'&&tab==='calendar';
- $('activity-view-tabs').hidden=mode!=='activities';
+function setPageView(){
+ const calendar=mode==='calendar';
  if($('production-payments'))$('production-payments').hidden=calendar||!$('production-payments').children.length;
- document.querySelectorAll('[data-activity-tab]').forEach(button=>{const selected=button.dataset.activityTab===tab;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;});
- $('upcoming-space').hidden=mode==='activities'&&!calendar;
- $('activities-space').hidden=calendar;$('shifts-space').hidden=mode!=='activities'||calendar||params.get('tab')!=='shifts'&&(!production||!state?.volunteers?.length);
+ $('upcoming-space').hidden=!calendar;
+ $('activities-space').hidden=calendar;
+ $('shifts-space').hidden=mode!=='activities'||params.get('tab')!=='shifts'&&(!production||!state?.volunteers?.length);
  $('actions-space').hidden=calendar||$('home-actions-needed').querySelectorAll('a').length===0;
- $('upcoming-space').setAttribute('role',calendar?'tabpanel':'region');if(calendar)$('upcoming-space').setAttribute('aria-labelledby','calendar-tab');else $('upcoming-space').removeAttribute('aria-labelledby');
- $('activities-space').setAttribute('role',mode==='activities'?'tabpanel':'region');if(mode==='activities')$('activities-space').setAttribute('aria-labelledby','activities-tab');
- $('home-calendar-title').textContent=calendar?'Calendar':'Coming Up';
+ $('home-calendar-title').textContent='Calendar';
  $('upcoming-space').querySelector('.week-strip-link').hidden=calendar;
- if(updateUrl){const url=new URL(location.href);if(calendar)url.searchParams.set('tab','calendar');else url.searchParams.delete('tab');history.replaceState(null,'',url.pathname+url.search);if(typeof window.renderMemberSidebar==='function')window.renderMemberSidebar(mode==='home'?'profile-select':mode);}
 }
-document.querySelectorAll('[data-activity-tab]').forEach(button=>{button.addEventListener('click',()=>{setActivityTab(button.dataset.activityTab,true);if(state)render();});button.addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const tab=event.key==='Home'?'activities':event.key==='End'?'calendar':activityTab==='calendar'?'activities':'calendar';document.querySelector('[data-activity-tab="'+tab+'"]').click();document.querySelector('[data-activity-tab="'+tab+'"]').focus();});});
 function status(text){$('home-status').textContent=text;$('home-status').hidden=false;}
 async function call(name,args={}){const result=await client.rpc(name,args);if(result.error)throw result.error;return result.data;}
 async function work(action,button){if(button)button.disabled=true;try{await action();}catch(error){status(error.code==='P0001'?error.message:'We could not load this account activity. Please try again.');}finally{if(button)button.disabled=false;}}
 const date=value=>value?new Date(value.length===10?value+'T12:00:00':value).toLocaleDateString('en-CA',{month:'short',day:'numeric',year:'numeric'}):'Date to be arranged';
 const showTitle=id=>state.productions.find(p=>p.id===id)?.title||'Production';
 function render(){
- let activityScope;if(mode==='activities'){activityScope=homeScope(allState,activitySelection);activitySelection=activityScope.selected;state={...allState,...activityScope,profiles:allState.profiles};document.body.classList.add('member-activities');$('activity-scope-picker').hidden=false;renderActivityPicker(allState,activityScope);}
+ let activityScope;if(mode!=='home'){activityScope=homeScope(allState,activitySelection);activitySelection=activityScope.selected;state={...allState,...activityScope,profiles:allState.profiles};document.body.classList.add('member-activities');$('activity-scope-picker').hidden=false;renderActivityPicker(allState,activityScope);}
  const selectedHistory=$('history-profile').value;
  $('history-profile').innerHTML='<option value="">Choose the correct profile</option>'+state.profiles.filter(p=>p.can_volunteer).map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');$('history-profile').value=selectedHistory;
  if(mode==='home'){document.body.classList.add('member-home');updateMemberHome(state,{client,userId:signedInUserId});return;}
  $('home-circles-space').hidden=true;document.querySelector('.home-view-summary').hidden=true;$('home-calendar-views').hidden=true;$('home-calendar-period').hidden=true;$('home-calendar-source-note').hidden=true;$('home-unlinked-note').hidden=true;
- $('home-title').textContent=mode==='activities'?'My Activities':'My Home';document.title=$('home-title').textContent+' | Build The Show';
+ $('home-title').textContent=mode==='calendar'?'My Calendar':'My Activities';document.title=$('home-title').textContent+' | Build The Show';
  $('home-spaces').hidden=mode!=='home';
 
  $('shifts-space').hidden=!production&&params.get('tab')!=='shifts';$('activity-tools').hidden=!production&&params.get('tab')!=='shifts';
@@ -54,22 +48,22 @@ function render(){
  for(const person of state.profiles)if(person.state==='pending'||person.needs_adult_claim)actions.push({label:person.name+': review profile access',url:'/member/circles?profile='+encodeURIComponent(person.id)});
  $('actions-space').hidden=actions.length===0;
  $('home-actions-needed').innerHTML=actions.map(action=>`<div class="member-record"><a href="${esc(action.url)}">${esc(action.label)}</a></div>`).join('')||'<p>No pending offer, registration or profile-access action is recorded.</p>';
- $('home-intro').textContent='Auditions, rehearsals and volunteer work for you and the people you manage.';
+ $('home-intro').textContent=mode==='calendar'?'Auditions, rehearsals and volunteer dates for the selected profile or circle.':'Auditions, rehearsals and volunteer work for you and the people you manage.';
  $('home-profile-section').hidden=true;renderActivityShows(allState,{...activityScope,productions:production?activityScope.productions.filter(p=>p.id===production):activityScope.productions});
  const creative=(activityScope.participations||[]).some(p=>!production||p.production_id===production);for(const a of $('activity-tools').querySelectorAll('a[href^="/member/creative/"]'))a.hidden=!creative;const shiftLink=$('activity-tools').querySelector('a[href*="tab=shifts"]');if(shiftLink)shiftLink.hidden=!activityScope.volunteers.length;$('activity-tools').hidden=!production&&params.get('tab')!=='shifts'||![...$('activity-tools').querySelectorAll('a')].some(a=>!a.hidden);
- if(production&&activityTab!=='calendar')paymentView.refresh({production,members:activityScope.members});else paymentView.clear();
+ if(production&&mode==='activities')paymentView.refresh({production,members:activityScope.members});else paymentView.clear();
  if(production){const back=$('activity-back-link'),link=document.createElement('a'),query=new URLSearchParams();if(activityScope.selected)query.set(activityScope.selected.kind,activityScope.selected.id);link.href='/member/activities'+(query.size?'?'+query:'');link.textContent='← All productions';back.replaceChildren(link);back.hidden=false;}
  const today=new Date();const monday=new Date(today);monday.setDate(today.getDate()-(today.getDay()===0?6:today.getDay()-1));
  const eventDates=new Set(state.events.map(e=>String(e.start_time||'').slice(0,10)));
  $('home-week').innerHTML=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((name,i)=>{const day=new Date(monday);day.setDate(monday.getDate()+i);const current=day.toDateString()===today.toDateString();const stamp=day.getFullYear()+'-'+String(day.getMonth()+1).padStart(2,'0')+'-'+String(day.getDate()).padStart(2,'0');return `<div class="week-day${current?' today':''}"><div class="week-day-name">${name}</div><div class="week-day-num">${day.getDate()}</div><div class="${eventDates.has(stamp)?'week-day-dot':'week-day-dot-placeholder'}"></div></div>`;}).join('');
  const shifts=state.volunteers.filter(v=>v.status!=='cancelled');
  const upcoming=[...state.events.map(e=>({at:e.start_time,title:e.title,production:e.production_id,detail:e.venue||''})),...shifts.filter(v=>v.shift_date).map(v=>({at:v.shift_date+'T'+(v.shift_start_time||'12:00:00'),title:v.name+': '+v.role_name,production:v.production_id,detail:v.status==='pending'?'Volunteer request awaiting approval':'Volunteer shift'}))].filter(e=>new Date(e.at)>=new Date(Date.now()-86400000)).sort((a,b)=>a.at.localeCompare(b.at));
- $('home-upcoming').innerHTML=(mode==='activities'&&activityTab==='calendar'?upcoming:upcoming.slice(0,5)).map(e=>{const day=new Date(e.at);return `<div class="upcoming-item"><div class="upcoming-date-badge"><div class="upcoming-date-mon">${esc(day.toLocaleDateString('en-CA',{month:'short'}))}</div><div class="upcoming-date-day">${day.getDate()}</div></div><div><div class="upcoming-event-title">${esc(e.title)}</div><div class="upcoming-event-sub">${esc(showTitle(e.production))} · ${esc(e.detail)}</div></div></div>`;}).join('')||'<p class="upcoming-empty">Nothing coming up yet. Auditions, rehearsals and volunteer dates will appear here.</p>';
+ $('home-upcoming').innerHTML=(mode==='calendar'?upcoming:upcoming.slice(0,5)).map(e=>{const day=new Date(e.at);return `<div class="upcoming-item"><div class="upcoming-date-badge"><div class="upcoming-date-mon">${esc(day.toLocaleDateString('en-CA',{month:'short'}))}</div><div class="upcoming-date-day">${day.getDate()}</div></div><div><div class="upcoming-event-title">${esc(e.title)}</div><div class="upcoming-event-sub">${esc(showTitle(e.production))} · ${esc(e.detail)}</div></div></div>`;}).join('')||'<p class="upcoming-empty">Nothing coming up yet. Auditions, rehearsals and volunteer dates will appear here.</p>';
  $('home-shifts').innerHTML=state.volunteers.map(v=>`<article class="member-record"><strong>${esc(v.name)}: ${esc(v.role_name)}</strong><p>${esc(v.title)} · ${esc(date(v.shift_date))}${v.shift_start_time?' · '+esc(v.shift_start_time.slice(0,5))+(v.shift_end_time?' to '+esc(v.shift_end_time.slice(0,5)):''):''}</p><p>Status: ${esc(v.status.replaceAll('_',' '))}. ${v.approved_hours==null?'Hours not yet confirmed.':'Confirmed hours: '+esc(v.approved_hours)+'.'}</p>${v.status!=='cancelled'?`<button class="member-action" data-cancel-shift="${esc(v.id)}">Cancel this request or shift</button>`:''}</article>`).join('')||'<p>No volunteer shifts yet. Browse volunteer opportunities to get started.</p>';
  $('home-legacy-volunteers').innerHTML=state.volunteers.filter(v=>!v.profile_id).map(v=>`<div class="member-record"><p>${esc(v.name)} · ${esc(v.role_name)}</p><label>Connect this older record to the correct person<select id="legacy-person-${esc(v.id)}">${state.profiles.filter(p=>p.can_volunteer).map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select></label><button data-link-volunteer="${esc(v.id)}">Confirm profile connection</button></div>`).join('')||'<p>No older unlinked volunteer records owned by this login.</p>';
  $('home-content').hidden=false;$('home-retry').hidden=true;
- if(params.get('tab')==='shifts'&&activityTab!=='calendar')$('shifts-space').scrollIntoView();
- setActivityTab(activityTab);
+ if(params.get('tab')==='shifts'&&mode==='activities')$('shifts-space').scrollIntoView();
+ setPageView();
 }
 async function enrichAuditions(home){
  const activities=home.activities||[];const slots=[...new Set(activities.map(a=>a.slot_id).filter(Boolean))];const sessions=[...new Set(activities.map(a=>a.session_id).filter(Boolean))];if(!slots.length&&!sessions.length)return;
@@ -77,7 +71,7 @@ async function enrichAuditions(home){
  const results=await Promise.allSettled(queries);const rows=results.map(r=>r.status==='fulfilled'&&!r.value.error&&Array.isArray(r.value.data)?r.value.data:[]);
  for(const activity of activities){const session=rows[2].find(s=>s.id===activity.session_id&&s.production_id===activity.production_id);const timed=rows[0].find(t=>t.id===activity.slot_id&&t.session_id===activity.session_id);const legacy=rows[1].find(t=>t.id===activity.slot_id&&t.production_id===activity.production_id);const singleDay=session&&(!session.end_date||session.end_date===session.date)?session.date:null;const day=timed?(timed.slot_date||singleDay):legacy?.date||(session?.booking_mode==='group'?singleDay:null);const time=timed?.slot_time||legacy?.start_time||(session?.booking_mode==='group'?session.start_time:null);if(day){activity.start_time=day+'T'+(time||'00:00:00');activity.time_tbd=!time;activity.venue=session?.location||'';activity.end_time=legacy?.end_time||null;}}
 }
-async function load(){if(loading)return;loading=true;try{const [home,circle]=await Promise.all([call('bts_my_home',{p_production_id:production||null}),call('bts_circle',{p_action:'snapshot',p_data:{}})]);state={...home,circles:circle.circles||circle.households||[],profiles:circle.profiles||home.profiles};await enrichAuditions(state);if(mode==='activities')await enrichActivityMedia(client,state);allState=state;const authorisedProfiles=state.profiles;if(mode==='activities'&&!activitySelectionReady){let viewSelection=null;try{const saved=JSON.parse(sessionStorage.getItem('bts_member_home_selection')||'null');if(saved?.user_id===signedInUserId)viewSelection=saved.selection;}catch{}if(params.has('profile')||params.has('circle'))viewSelection={kind:params.has('circle')?'circle':'profile',id:params.get('circle')||params.get('profile')};activitySelection=homeScope(state,viewSelection).selected;if(!activitySelection){const first=state.profiles.find(p=>p.can_manage&&!p.needs_adult_claim);if(first)activitySelection={kind:'profile',id:first.id};}activitySelectionReady=true;}render();if($('home-status').textContent==='Loading your productions and profiles…')$('home-status').hidden=true;if(typeof loadMemberSidebarProfile==='function')loadMemberSidebarProfile(client,authorisedProfiles,{circles:state.circles}).then(()=>{if(mode==='home')syncMemberHomeSidebar();else syncActivitySidebar(homeScope(allState,activitySelection));}).catch(()=>{});}finally{loading=false;}}
+async function load(){if(loading)return;loading=true;try{const [home,circle]=await Promise.all([call('bts_my_home',{p_production_id:production||null}),call('bts_circle',{p_action:'snapshot',p_data:{}})]);state={...home,circles:circle.circles||circle.households||[],profiles:circle.profiles||home.profiles};await enrichAuditions(state);if(mode!=='home')await enrichActivityMedia(client,state);allState=state;const authorisedProfiles=state.profiles;if(mode!=='home'&&!activitySelectionReady){let viewSelection=null;try{const saved=JSON.parse(sessionStorage.getItem('bts_member_home_selection')||'null');if(saved?.user_id===signedInUserId)viewSelection=saved.selection;}catch{}if(params.has('profile')||params.has('circle'))viewSelection={kind:params.has('circle')?'circle':'profile',id:params.get('circle')||params.get('profile')};activitySelection=homeScope(state,viewSelection).selected;if(!activitySelection){const first=state.profiles.find(p=>p.can_manage&&!p.needs_adult_claim);if(first)activitySelection={kind:'profile',id:first.id};}activitySelectionReady=true;}render();if($('home-status').textContent==='Loading your productions and profiles…')$('home-status').hidden=true;if(typeof loadMemberSidebarProfile==='function')loadMemberSidebarProfile(client,authorisedProfiles,{circles:state.circles}).then(()=>{if(mode==='home')syncMemberHomeSidebar();else syncActivitySidebar(homeScope(allState,activitySelection));}).catch(()=>{});}finally{loading=false;}}
 $('request-volunteer-history').onclick=event=>work(async()=>{const result=await call('bts_request_volunteer_history',{p_production_id:production||null});status(result.message);},event.target);
 $('home-logout').onclick=()=>work(async()=>{await client.auth.signOut();sessionStorage.clear();location.replace('/login');});
 document.addEventListener('click',event=>{const button=event.target.closest('button');if(!button)return;

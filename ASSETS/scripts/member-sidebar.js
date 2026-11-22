@@ -113,9 +113,9 @@
 
     // Dashboard — always visible
     nav += navLink('/member/home', 'My Home', activePage === 'profile-select');
-    const calendarActive=activePage==='calendar'||activePage==='activities'&&new URLSearchParams(location.search).get('tab')==='calendar';
+    const calendarActive=activePage==='calendar';
     nav += navLink('/member/activities', 'My Activities', activePage==='activities'&&!calendarActive);
-    nav += navLink('/member/activities?tab=calendar', 'My Calendar', calendarActive);
+    nav += navLink('/member/calendar', 'My Calendar', calendarActive);
     let memberContext={};try{memberContext=JSON.parse(sessionStorage.getItem('bts_member_context')||'{}');}catch{}
     const ownProfile=memberContext.own_profile_id;
     nav += navLink(profileId?'/member/profiles/'+encodeURIComponent(profileId)+'/edit':ownProfile?'/member/profiles/'+encodeURIComponent(ownProfile)+'/edit':'/member/profiles', 'My Profile', ['profiles','performer-hub'].includes(activePage));

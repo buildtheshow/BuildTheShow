@@ -68,7 +68,7 @@ function renderHome(){
  const circles=model.circles||[];const own=(model.profiles||[]).find(p=>p.is_subject&&p.can_manage);
  $('home-title').textContent='My Home';document.title='My Home | Build The Show';$('home-intro').textContent='See what’s coming up for you and the people you manage.';
  $('home-spaces').hidden=false;$('home-circles-space').hidden=!circles.length;
- $('activity-view-tabs').hidden=true;$('activity-tools').hidden=true;$('home-profile-section').hidden=true;$('shifts-space').hidden=true;
+ $('activity-tools').hidden=true;$('home-profile-section').hidden=true;$('shifts-space').hidden=true;
  $('home-profile-options').innerHTML=(model.profiles||[]).map(p=>{
   const allowed=p.can_manage&&!p.needs_adult_claim;const selected=selection?.kind==='profile'&&selection.id===p.id;
   return `<button type="button" class="home-person-card" data-home-profile="${esc(p.id)}" aria-pressed="${selected}"${allowed?'':' disabled'}><img src="${icon('performer2.svg')}" alt=""><strong>${esc(p.name||'Member')}</strong><span>${p.is_subject?'My Profile':p.needs_adult_claim?'Own adult login needed':allowed?'Member':'Waiting for permission'}</span>${selected?'<small>Selected</small>':''}</button>`;

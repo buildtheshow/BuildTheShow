@@ -14,4 +14,4 @@ Verification: `circle-run.cjs` checks actual SQL scope, recipient binding, repla
 
 Create a circle opens the approved compact dialog at `/member/circles?action=create`. A successful server response adds and selects the new circle card. Failed saves retain the entered name; a failed refresh cannot reopen an already submitted form. See `circle-connections.md` for the current page and invitation workflows.
 
-Member navigation uses the existing named icon assets. My Calendar is restored as a direct sidebar link to `/member/activities?tab=calendar`, using `navproductioncalendar.svg`. Calendar remains the same view within My Activities; existing calendar bookmarks still lead there. Both views use the same account activity response.
+Member navigation uses the existing named icon assets. My Calendar is a separate page at `/member/calendar`, using `navproductioncalendar.svg`. My Activities contains productions and roles, with no calendar tab. Older `/member/activities?tab=calendar` bookmarks redirect to My Calendar and retain profile, circle and production filters. Home keeps its calendar overview. Both pages use the same authorised account activity response.
