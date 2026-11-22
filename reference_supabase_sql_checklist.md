@@ -143,3 +143,8 @@ Account settings deployment: exact-source hosted rollback rehearsal passed; appl
 `supabase/migrations/20261121170000_member_production_payments.sql` reuses the existing tracker ledger and account activity API, adds safe organisation/production payment instructions, accepted own-profile team participation and a narrow profile-access projection. No new tables or historical record reassignment. Old implementations become private helpers with browser execution revoked. Local SQL/browser checks and exact-source hosted rollback rehearsal pass. Only this migration has been applied and recorded; the matching Activities/profile UI is included in this release. The unrelated transactional-booking migration remains separate. See `docs/security/member-production-payments.md`.
 
 Member production payments deployment: applied and recorded only version `20261121170000` after the exact-source rollback rehearsal. Checksum and grants verified; zero rehearsal accounts remain. No existing payment/instruction records changed and no email sent. Matching frontend publication is part of the same release.
+
+
+## Member production details (2026-11-22)
+
+`supabase/migrations/20261122110000_member_production_details.sql` adds a profile-bound read-only RPC for existing production contacts, cast calls, event instructions, venues and permitted files. It creates no tables and grants no blanket access to staff files or notes. Tests cover cast/volunteer/mixed roles, legacy and pending calls, private notes/files and outsider/profile/production boundaries. Applied and recorded only this migration after its exact-source hosted rollback rehearsal passed; the unrelated transactional audition booking migration remains separate. See `docs/security/member-production-details.md`.

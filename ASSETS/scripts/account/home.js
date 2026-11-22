@@ -1,8 +1,10 @@
+import {mountMemberProduction} from './member-production.js?v=20261122-production-details';
 import {mountProductionPayments} from './member-payments.js?v=20261121-production-payments';
 import {supabase as client} from '/ASSETS/scripts/supabase.js';
 import {updateMemberHome,syncMemberHomeSidebar,homeScope} from './member-home.js?v=20261122-separate-calendar';
-import {enrichActivityMedia,renderActivityPicker,renderActivityShows,syncActivitySidebar} from './member-activities.js?v=20261122-separate-calendar';
+import {enrichActivityMedia,renderActivityPicker,renderActivityShows,syncActivitySidebar} from './member-activities.js?v=20261122-production-details';
 const $=id=>document.getElementById(id);
+const productionView=mountMemberProduction(client,$('production-details'));
 const paymentView=mountProductionPayments(client,$('production-payments'));
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const params=new URLSearchParams(location.search);
@@ -20,7 +22,7 @@ function setPageView(){
  if($('production-payments'))$('production-payments').hidden=calendar||!$('production-payments').children.length;
  $('upcoming-space').hidden=!calendar;
  $('activities-space').hidden=calendar;
- $('shifts-space').hidden=mode!=='activities'||params.get('tab')!=='shifts'&&(!production||!state?.volunteers?.length);
+ $('shifts-space').hidden=mode!=='activities'||params.get('tab')!=='shifts';
  $('actions-space').hidden=calendar||$('home-actions-needed').querySelectorAll('a').length===0;
  $('home-calendar-title').textContent='Calendar';
  $('upcoming-space').querySelector('.week-strip-link').hidden=calendar;
@@ -51,6 +53,8 @@ function render(){
  $('home-intro').textContent=mode==='calendar'?'Auditions, rehearsals and volunteer dates for the selected profile or circle.':'Auditions, rehearsals and volunteer work for you and the people you manage.';
  $('home-profile-section').hidden=true;renderActivityShows(allState,{...activityScope,productions:production?activityScope.productions.filter(p=>p.id===production):activityScope.productions});
  const creative=(activityScope.participations||[]).some(p=>!production||p.production_id===production);for(const a of $('activity-tools').querySelectorAll('a[href^="/member/creative/"]'))a.hidden=!creative;const shiftLink=$('activity-tools').querySelector('a[href*="tab=shifts"]');if(shiftLink)shiftLink.hidden=!activityScope.volunteers.length;$('activity-tools').hidden=!production&&params.get('tab')!=='shifts'||![...$('activity-tools').querySelectorAll('a')].some(a=>!a.hidden);
+ $('home-productions').hidden=!!production;const productionHeading=$('activity-production-heading');if(productionHeading)productionHeading.hidden=!!production;document.querySelector('.welcome-block').hidden=mode==='activities'&&!!production;
+ if(production&&mode==='activities')productionView.refresh({model:allState,scope:activityScope,production});else productionView.clear();
  if(production&&mode==='activities')paymentView.refresh({production,members:activityScope.members});else paymentView.clear();
  if(production){const back=$('activity-back-link'),link=document.createElement('a'),query=new URLSearchParams();if(activityScope.selected)query.set(activityScope.selected.kind,activityScope.selected.id);link.href='/member/activities'+(query.size?'?'+query:'');link.textContent='← All productions';back.replaceChildren(link);back.hidden=false;}
  const today=new Date();const monday=new Date(today);monday.setDate(today.getDate()-(today.getDay()===0?6:today.getDay()-1));

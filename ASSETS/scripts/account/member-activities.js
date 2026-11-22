@@ -33,7 +33,7 @@ export function showInvolvement(model,scope,showId){
   }
   for(const shift of scope.volunteers.filter(v=>v.profile_id===person.id&&v.production_id===showId&&live(v)))roles.push((shift.role_name||'Volunteer')+(shift.status==='pending'?' (requested)':''));
   for(const role of scope.participations||[])if(role.profile_id===person.id&&role.production_id===showId&&live(role))roles.push(role.role||'Creative Team');
-  if(roles.length)labels.push({name:person.name,roles:[...new Set(roles)]});
+  if(roles.length)labels.push({id:person.id,name:person.name,roles:[...new Set(roles)]});
  }
  return labels;
 }
@@ -69,7 +69,7 @@ export function renderActivityShows(model,scope){
  const grid=document.getElementById('home-productions');
  grid.innerHTML=scope.productions.map(show=>{
   const params=new URLSearchParams({production:show.id});if(scope.selected)params.set(scope.selected.kind,scope.selected.id);
-  const captions=showInvolvement(model,scope,show.id).map(row=>esc(row.name)+' · '+esc(row.roles.join(', '))).join('<br>');
+  const captions=[...new Set(showInvolvement(model,scope,show.id).flatMap(row=>row.roles))].map(esc).join(', ');
   const poster=imageUrl(show.poster_url);
   return `<a class="activity-show-card production-card" href="/member/activities?${esc(params)}"><div class="production-card-poster-frame">${poster?`<img src="${esc(poster)}" alt="${esc(show.title)} poster" data-activity-poster>`:''}<img class="activity-poster-placeholder" src="${icon('Placeholder - Poster.svg')}" alt="${poster?'':'Production poster unavailable'}"${poster?' hidden':''}></div><div class="production-card-body"><h3>${esc(show.title)}</h3><p>${captions}</p></div></a>`;
  }).join('')||'<p class="member-note">No productions yet. Productions appear here when this person auditions, joins a production or volunteers.</p>';
