@@ -27543,7 +27543,6 @@
 </div>
 
 <script src="/SHARED/Components/page-loader.js?v=brand-sweep-20260728"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
 <script src="/ASSETS/scripts/image-resize.js"></script>
 <script src="/ASSETS/scripts/venue-picker.js?v=20261116-private-routes"></script>
@@ -27558,7 +27557,79 @@
 <script src="/SHARED/Components/audition-page-templates.js?v=20261117-canonical-urls"></script>
 <!-- VenuePicker uses OpenStreetMap/Nominatim - no API key needed -->
 <script src="/SHARED/Components/account-security.js?v=20261117-canonical-urls"></script>
-<script src="/ASSETS/scripts/production-workspace.js?v=20261125-route-loader-recovery"></script>
+<script>
+(function () {
+  const loader = window.PageLoader;
+  let started = false;
+  let attemptTimer;
+
+  function showStartupFailure(message) {
+    clearTimeout(attemptTimer);
+    loader?.showError?.(message);
+    const inner = document.querySelector('#bts-page-loader .bts-pl-inner');
+    if (!inner || inner.querySelector('[data-bts-startup-retry]')) return;
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.dataset.btsStartupRetry = 'true';
+    retry.textContent = 'Try again';
+    retry.style.cssText = 'margin-top:1rem;padding:.7rem 1.25rem;border:0;border-radius:8px;background:#572e88;color:#fff;font-family:inherit;font-size:1rem;font-weight:700;cursor:pointer';
+    retry.addEventListener('click', function () { window.location.reload(); });
+    inner.appendChild(retry);
+  }
+
+  function startWorkspace() {
+    if (started) return;
+    started = true;
+    clearTimeout(attemptTimer);
+    const app = document.createElement('script');
+    const handleWorkspaceError = function (event) {
+      if (event.filename && event.filename.includes('/ASSETS/scripts/production-workspace.js')) {
+        showStartupFailure('The production workspace hit a startup error. Please try again.');
+      }
+    };
+    window.addEventListener('error', handleWorkspaceError);
+    app.src = '/ASSETS/scripts/production-workspace.js?v=20261125-supabase-startup-retry';
+    app.onload = function () { window.removeEventListener('error', handleWorkspaceError); };
+    app.onerror = function () {
+      window.removeEventListener('error', handleWorkspaceError);
+      showStartupFailure('The production workspace could not be loaded. Please try again.');
+    };
+    document.body.appendChild(app);
+  }
+
+  function loadSupabase(url, fallbackUrl) {
+    const script = document.createElement('script');
+    let settled = false;
+    script.src = url;
+    script.onload = function () {
+      if (settled) return;
+      settled = true;
+      if (window.supabase?.createClient) startWorkspace();
+      else if (fallbackUrl) loadSupabase(fallbackUrl, null);
+      else showStartupFailure('We could not connect to the sign-in service. Check your connection and try again.');
+    };
+    script.onerror = function () {
+      if (settled) return;
+      settled = true;
+      if (fallbackUrl) loadSupabase(fallbackUrl, null);
+      else showStartupFailure('We could not connect to the sign-in service. Check your connection and try again.');
+    };
+    document.head.appendChild(script);
+    attemptTimer = setTimeout(function () {
+      if (settled) return;
+      settled = true;
+      script.remove();
+      if (fallbackUrl) loadSupabase(fallbackUrl, null);
+      else showStartupFailure('The sign-in service is taking too long to respond. Check your connection and try again.');
+    }, 8000);
+  }
+
+  loadSupabase(
+    'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
+    'https://unpkg.com/@supabase/supabase-js@2'
+  );
+})();
+</script>
 
 </div><!-- /prod-main -->
 
