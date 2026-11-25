@@ -424,17 +424,30 @@
     return token;
   }
 
+  function withStartupTimeout(promise, timeoutMs, label) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        const error = new Error(`${label} timed out after ${timeoutMs}ms`);
+        error.code = 'BTS_STARTUP_TIMEOUT';
+        reject(error);
+      }, timeoutMs);
+    });
+    return Promise.race([Promise.resolve(promise), timeout]).finally(() => clearTimeout(timer));
+  }
+
   async function waitForValidSession({ timeoutMs = 8000 } = {}) {
     btsLifecycleLog('waitForValidSession', { reason: 'auth-session-check-start', dataStatus: 'loading' });
     btsRouteLog('session restore start');
-    const timeout = new Promise(resolve => setTimeout(() => resolve({ timedOut: true }), timeoutMs));
     const sessionAttempt = sb.auth.getSession()
       .then(({ data, error }) => ({ session: data?.session || null, error }))
       .catch(error => ({ session: null, error }));
-    const result = await Promise.race([sessionAttempt, timeout]);
-    if (result?.timedOut) {
+    let result;
+    try {
+      result = await withStartupTimeout(sessionAttempt, timeoutMs, 'Sign-in check');
+    } catch (error) {
       btsLifecycleLog('waitForValidSession', { reason: 'auth-session-timeout', dataStatus: 'error' });
-      btsRouteLog('session restore timeout');
+      btsRouteLog('session restore timeout', { message: error.message });
       return null;
     }
     if (result?.error) btsRouteLog('session restore warning', { message: result.error.message });
@@ -443,7 +456,14 @@
       btsRouteLog('session restore end', { ok: false });
       return null;
     }
-    const userResult = await sb.auth.getUser().catch(error => ({ data: null, error }));
+    let userResult;
+    try {
+      userResult = await withStartupTimeout(sb.auth.getUser(), timeoutMs, 'Account check');
+    } catch (error) {
+      btsLifecycleLog('waitForValidSession', { reason: 'auth-user-validation-timeout', dataStatus: 'error', error: error.message });
+      btsRouteLog('session validation timeout', { message: error.message });
+      return null;
+    }
     if (userResult?.error || !userResult?.data?.user) {
       btsLifecycleLog('waitForValidSession', { reason: 'auth-user-validation-failed', dataStatus: 'error', error: userResult?.error?.message || 'No user' });
       btsRouteLog('session validation failed', { message: userResult?.error?.message });
@@ -749,7 +769,7 @@
   }
 
   async function loginTeamAccess(options = {}) {
-    try { if (!await BTSAccountSecurity.requireAdultLogin(sb)) return; }
+    try { if (!await withStartupTimeout(BTSAccountSecurity.requireAdultLogin(sb), 8000, 'Team sign-in check')) return; }
     catch (error) { showTeamAccessLogin(error.message); return; }
     if (!prodId) { showTeamAccessLogin('Production not found. Open it from My Home.'); return; }
     const {data,error}=await sb.rpc('bts_open_production',{
@@ -2675,7 +2695,20 @@
     teamAccessMode = isTeamAccessRequest();
     prodId = params.get('id');
     if (!prodId) {
-      prodId = teamAccessMode ? await resolveTeamProductionIdFromPath() : await resolveAdminProductionIdFromPath();
+      const pathLookup = teamAccessMode ? resolveTeamProductionIdFromPath() : resolveAdminProductionIdFromPath();
+      try {
+        prodId = await withStartupTimeout(pathLookup, 8000, 'Production URL lookup');
+      } catch (error) {
+        btsLifecycleLog('init', { reason: 'production-path-lookup-timeout', dataStatus: 'error', error: error.message });
+        btsRouteLog('production URL lookup timed out', { message: error.message });
+        showWorkspaceNotFound(
+          'This is taking longer than expected',
+          'We could not finish opening this production. Check your connection and try again.',
+          window.location.href,
+          'Try again'
+        );
+        return;
+      }
     }
     if (!prodId) {
       await showProductionPathNotFound();
@@ -2689,7 +2722,7 @@
 
     if (teamAccessMode) {
       try {
-        if (!await BTSAccountSecurity.requireAdultLogin(sb)) return;
+        if (!await withStartupTimeout(BTSAccountSecurity.requireAdultLogin(sb), 8000, 'Team sign-in check')) return;
       } catch (error) { showRouteBlocked('Sign-in check unavailable', error.message); return; }
       btsLifecycleLog('init', { reason: 'team-access-login-required', dataStatus: 'loading' });
       installTeamAccessMobileZoomLock();
@@ -2704,12 +2737,22 @@
       return;
     }
     try {
-      if (!await BTSAccountSecurity.ensureAdultAccount(sb)) return;
+      if (!await withStartupTimeout(BTSAccountSecurity.ensureAdultAccount(sb), 8000, 'Account access check')) return;
     } catch (error) { showRouteBlocked('Account check unavailable', error.message); return; }
     try {
-      await bootProductionWorkspace(params, { user: auth.user });
+      await withStartupTimeout(bootProductionWorkspace(params, { user: auth.user }), 15000, 'Production workspace startup');
     } catch (err) {
       console.error('[BTS] bootProductionWorkspace threw', err);
+      if (err?.code === 'BTS_STARTUP_TIMEOUT') {
+        workspaceBootToken += 1;
+        showWorkspaceNotFound(
+          'This is taking longer than expected',
+          'We could not finish opening this production. Check your connection and try again.',
+          window.location.href,
+          'Try again'
+        );
+        return;
+      }
       showRouteBlocked(
         "Couldn't load this production",
         'Try refreshing. If this keeps happening, return to the dashboard and open the production again.'
@@ -2801,6 +2844,7 @@
     prefillSettings();
     applyModuleVisibility();
     await loadProductionAccessPermissions({ force: true });
+    if (bootToken !== workspaceBootToken) return;
     if (teamAccessMode) applyTeamAccessMode();
     // Calendar initialises lazily when the Calendar tab is opened (see switchProdTab)
     // Checklists load on tab open
