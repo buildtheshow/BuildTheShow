@@ -2064,18 +2064,26 @@
     function displayGender(raw) {
       if (!raw) return '';
       const map = {
-        'male':                        'He/Him',
-        'Male':                        'He/Him',
-        'MALE':                        'He/Him',
-        'Man / Boy':                   'He/Him',
-        'female':                      'She/Her',
-        'Female':                      'She/Her',
-        'FEMALE':                      'She/Her',
-        'Woman / Girl':                'She/Her',
-        'Non-binary / Gender-neutral': 'They/Them',
-        'any':                         'Any',
-        'Any':                         'Any',
-        'ANY':                         'Any',
+        'male':                        'Man / boy',
+        'Male':                        'Man / boy',
+        'MALE':                        'Man / boy',
+        'Man / Boy':                   'Man / boy',
+        'Man / boy':                   'Man / boy',
+        'Man':                         'Man',
+        'Boy':                         'Boy',
+        'female':                      'Woman / girl',
+        'Female':                      'Woman / girl',
+        'FEMALE':                      'Woman / girl',
+        'Woman / Girl':                'Woman / girl',
+        'Woman / girl':                'Woman / girl',
+        'Woman':                       'Woman',
+        'Girl':                        'Girl',
+        'Non-binary / Gender-neutral': 'Nonbinary',
+        'Nonbinary':                   'Nonbinary',
+        'any':                         'Any Gender',
+        'Any':                         'Any Gender',
+        'ANY':                         'Any Gender',
+        'Any Gender':                  'Any Gender',
       };
       return map[raw] ?? raw;
     }
@@ -3449,6 +3457,7 @@
 
     let _spSessions = [], _spSlotsBySession = {}, _spSessionIdx = 0, _spSelectedSlots = {};
     let _spHolds = {};       // { sessionId: { slotId, holdSessionId } } — in-flight pre-booking holds
+    let _spAvailabilityTimer = null;
     let _spRealtimeSub = null; // Supabase realtime subscription for live slot updates
 
     async function openFatesSlotPicker() {
@@ -3535,6 +3544,8 @@
         } catch {}
       }
 
+      clearInterval(_spAvailabilityTimer);
+      _spAvailabilityTimer=setInterval(()=>{if(document.visibilityState==='visible'&&document.getElementById('sp-overlay')?.classList.contains('open'))_spRefreshOccupancy();},10000);
       _spRealtimeSub = sb.channel('sp-slots-live')
         .on('postgres_changes', {
           event: '*',
@@ -3620,36 +3631,34 @@
       document.getElementById('sp-continue-btn').disabled = !_spSelectedSlots[session.id];
     }
 
-    function spSelectSlot(sessionId, slotId, btn) {
-      const grid = btn.closest('.sp-slot-grid');
-      if (grid) grid.querySelectorAll('.sp-slot-btn').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-
-      // Release previous hold for this session if switching slots
-      const prev = _spHolds[sessionId];
-      if (prev && prev.slotId !== slotId && prev.holdSessionId) {
-        sb.from('audition_time_slots')
-          .update({ hold_expires_at: null, hold_session_id: null })
-          .eq('id', prev.slotId)
-          .eq('hold_session_id', prev.holdSessionId)
-          .then(() => {}).catch(() => {});
+    let _spSelecting = false;
+    async function spSelectSlot(sessionId, slotId, btn) {
+      if (_spSelecting) return;
+      _spSelecting = true;
+      document.getElementById('sp-continue-btn').disabled = true;
+      try {
+        const {data,error} = await sb.auth.getUser();
+        if (error) throw error;
+        const previous = _spHolds[sessionId];
+        // Guests choose a time first. Reservations start once the adult signs in.
+        if (data?.user) {
+          const held = await BTSAuditionAccess.hold(sb,'acquire',slotId);
+          _spHolds[sessionId] = {slotId,holdSessionId:held.id,expiresAt:held.expires_at};
+          if (previous && previous.slotId !== slotId) {
+            await BTSAuditionAccess.hold(sb,'release',previous.slotId,previous.holdSessionId);
+          }
+        }
+        _spSelectedSlots[sessionId] = slotId;
+      } catch (error) {
+        showToast(error.message || 'We could not reserve that time. Please choose again.',true);
+      } finally {
+        _spSelecting = false;
+        _spRender();
       }
-
-      // Place a 15-minute hold immediately
-      const holdId = (typeof crypto !== 'undefined' && crypto.randomUUID)
-        ? crypto.randomUUID() : String(Date.now()) + Math.random();
-      const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-      _spHolds[sessionId] = { slotId, holdSessionId: holdId };
-      sb.from('audition_time_slots')
-        .update({ hold_expires_at: expiresAt.toISOString(), hold_session_id: holdId })
-        .eq('id', slotId)
-        .then(() => {}).catch(() => {});
-
-      _spSelectedSlots[sessionId] = slotId;
-      document.getElementById('sp-continue-btn').disabled = false;
     }
 
     function spContinue() {
+      if (_spSelecting) return;
       const session = _spSessions[_spSessionIdx];
       if (!session || !_spSelectedSlots[session.id]) return;
       selectedSlots[session.id] = _spSelectedSlots[session.id];
@@ -3664,14 +3673,10 @@
     }
 
     function spClose() {
+      clearInterval(_spAvailabilityTimer);
       document.getElementById('sp-overlay').classList.remove('open');
-      // Release all pre-booking holds placed in the picker
-      Object.values(_spHolds).forEach(({ slotId, holdSessionId }) => {
-        sb.from('audition_time_slots')
-          .update({ hold_expires_at: null, hold_session_id: null })
-          .eq('id', slotId)
-          .eq('hold_session_id', holdSessionId)
-          .then(() => {}).catch(() => {});
+      Object.values(_spHolds).forEach(({slotId,holdSessionId}) => {
+        BTSAuditionAccess.hold(sb,'release',slotId,holdSessionId).catch(error=>console.warn('[BTS] Reservation release pending expiry:',error.message));
       });
       _spHolds = {};
       if (_spRealtimeSub) { try { _spRealtimeSub.unsubscribe(); } catch {} _spRealtimeSub = null; }
@@ -3803,7 +3808,9 @@
       _bkBuildStepDots();
       _bkGoTo(jumpToReview ? steps[steps.length - 1] : steps[0]);
       document.getElementById('bk-overlay').classList.add('open');
-      if (_bkState.slot_id) _bkStartHold(_bkState.slot_id);
+      _bkState.request_id ||= BTSAuditionAccess.requestId();
+      _bkSaveState();
+      if (_bkState.slot_id) await _bkStartHold(_bkState.slot_id);
     }
 
     async function closeBookModal() {
@@ -4920,16 +4927,25 @@
     // ── Slot Hold ──────────────────────────────────────────────────
     async function _bkStartHold(slotId) {
       if (!slotId) return;
-      _bkHoldSessionId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now())+Math.random();
       _bkExtended = false;
-      const expiresAt = new Date(Date.now() + 15*60*1000);
+      const extendButton=document.getElementById('bk-extend-btn');if(extendButton){extendButton.disabled=false;extendButton.textContent='Add 5 min';}
       try {
-        await sb.from('audition_time_slots')
-          .update({hold_expires_at: expiresAt.toISOString(), hold_session_id: _bkHoldSessionId})
-          .eq('id', slotId);
-        _bkHoldExpiry = expiresAt;
+        const selections = [{session_id:_bkState.session_id,slot_id:slotId},...(_bkState.extra_sessions||[])];
+        const deadlines = [];
+        for (const selection of selections) {
+          if (!selection.slot_id) continue;
+          const held = await BTSAuditionAccess.hold(sb,'acquire',selection.slot_id);
+          _spHolds[selection.session_id] = {slotId:selection.slot_id,holdSessionId:held.id,expiresAt:held.expires_at};
+          deadlines.push(new Date(held.expires_at).getTime());
+          if (selection.slot_id === slotId) {_bkHoldSessionId=held.id;_bkExtended=held.extended;}
+        }
+        _bkHoldExpiry = new Date(Math.min(...deadlines));
         _bkStartTimer();
-      } catch {}
+      } catch (error) {
+        await _bkClearHold();
+        _bkErr(error.message || 'We could not reserve the selected times.');
+        _bkShowSlotFilled();
+      }
     }
     function _bkStartTimer() {
       clearInterval(_bkTimerInterval);
@@ -4959,30 +4975,30 @@
     }
     async function _bkExtendHold() {
       if (_bkExtended) return;
-      _bkExtended = true;
-      const extBtn = document.getElementById('bk-extend-btn');
-      if (extBtn) { extBtn.disabled = true; extBtn.textContent = 'Extended!'; }
-      _bkHoldExpiry = new Date(Date.now() + 5*60*1000);
-      try { await sb.from('audition_time_slots').update({hold_expires_at: _bkHoldExpiry.toISOString()}).eq('id', _bkState.slot_id); } catch {}
+      const button=document.getElementById('bk-extend-btn');
+      if(button)button.disabled=true;
+      try {
+        const deadlines=[];
+        for(const held of Object.values(_spHolds)) {
+          const updated=await BTSAuditionAccess.hold(sb,'extend',held.slotId,held.holdSessionId);
+          held.expiresAt=updated.expires_at;deadlines.push(new Date(updated.expires_at).getTime());
+        }
+        if(!deadlines.length)throw new Error('Choose an available time again.');
+        _bkExtended=true;_bkHoldExpiry=new Date(Math.min(...deadlines));
+        if(button)button.textContent='Extended!';
+      } catch(error) {_bkErr(error.message);_bkSessionExpired();}
     }
     function _bkSessionExpired() {
-      clearInterval(_bkTimerInterval);
-      if (_bkState.slot_id && _bkHoldSessionId) {
-        sb.from('audition_time_slots').update({hold_expires_at:null,hold_session_id:null}).eq('id',_bkState.slot_id).eq('hold_session_id',_bkHoldSessionId).then(()=>{});
-      }
-      _bkHoldSessionId = null; _bkHoldExpiry = null;
-      try { sessionStorage.removeItem('bts_bk_'+_bkAccountId+'_'+_bkState.session_id); } catch {}
-      const overlay = document.getElementById('bk-expired-overlay');
-      if (overlay) overlay.classList.add('active');
+      _bkSaveState();
+      _bkClearHold();
+      document.getElementById('bk-expired-overlay')?.classList.add('active');
     }
     async function _bkClearHold() {
       clearInterval(_bkTimerInterval);
-      if (_bkState.slot_id && _bkHoldSessionId) {
-        try { await sb.from('audition_time_slots').update({hold_expires_at:null,hold_session_id:null}).eq('id',_bkState.slot_id).eq('hold_session_id',_bkHoldSessionId); } catch {}
-      }
-      _bkHoldSessionId = null; _bkHoldExpiry = null; _bkExtended = false;
-      const timerEl = document.getElementById('bk-timer-display');
-      if (timerEl) timerEl.textContent = '';
+      const holds=Object.values(_spHolds);_spHolds={};
+      _bkHoldSessionId=null;_bkHoldExpiry=null;_bkExtended=false;
+      const timer=document.getElementById('bk-timer-display');if(timer)timer.textContent='';
+      await Promise.allSettled(holds.map(held=>BTSAuditionAccess.hold(sb,'release',held.slotId,held.holdSessionId)));
     }
 
     // ── Submit ────────────────────────────────────────────────────
@@ -4992,33 +5008,15 @@
       try {
         if (!await BTSAccountSecurity.requireAdultLogin(sb)) return;
         const { data: { user: actor } } = await sb.auth.getUser();
-        // Re-validate slot: check hold still ours AND live booking count hasn't hit capacity
-        if (_bkState.slot_id) {
-          const [{ data: slotCheck }, { count: liveCount }] = await Promise.all([
-            sb.from('bts_visible_audition_time_slots')
-              .select('hold_session_id,hold_expires_at,is_available,label,capacity')
-              .eq('id', _bkState.slot_id).single(),
-            BTSAuditionAccess.availability(sb, _bkProd?.id).then(result => ({count: BTSAuditionAccess.counts(result.data)[_bkState.slot_id] || 0})),
-          ]);
-          const capacity = slotCheck?.capacity || _bkSession?.capacity_per_slot || 1;
-          const weHoldIt = slotCheck?.hold_session_id === _bkHoldSessionId;
-          const holdExpired = !slotCheck?.hold_expires_at || new Date(slotCheck.hold_expires_at) < new Date();
-          const slotFull = (liveCount ?? 0) >= capacity;
-          const labelOk = isBookablePublicSlot(slotCheck);
-          const stillValid = slotCheck && labelOk && (weHoldIt || holdExpired) && !slotFull;
-          if (!stillValid) {
-            if (next) { next.disabled=false; next.textContent='Confirm Booking'; }
-            if (slotFull) {
-              _bkShowSlotFilled();
-            } else {
-              document.getElementById('bk-expired-overlay').classList.add('active');
-            }
-            return;
-          }
+        const alreadySaved=await BTSAuditionAccess.receipt(sb,_bkState.request_id);
+        // The server checks reservation ownership/expiry; capacity is checked again in the save transaction.
+        for(const selection of [{session_id:_bkState.session_id,slot_id:_bkState.slot_id},...(_bkState.extra_sessions||[])]) {
+          if(!selection.slot_id||alreadySaved)continue;
+          const held=_spHolds[selection.session_id];
+          await BTSAuditionAccess.hold(sb,'check',selection.slot_id,held?.holdSessionId||null);
         }
-        // Upload headshot if present; otherwise preserve any already-saved headshot URL.
-        let headshotUrl = _bkState.headshot_url || null;
-        if (_bkState.headshot_file) {
+        let headshotUrl = alreadySaved?.headshot_url || _bkState.headshot_url || null;
+        if (_bkState.headshot_file && !alreadySaved) {
           try {
             if (!_bkHasValidHeadshotFile()) throw new Error('Selected headshot is not a valid JPG, PNG, or WEBP file.');
             var file = await resizeImage(_bkState.headshot_file, { maxSize: 400, quality: 0.8 });
@@ -5084,25 +5082,6 @@
             const chosen=document.getElementById('bts-family-performer')?.value;
             return chosen && !chosen.startsWith('new:') ? row.profile_id===chosen : row.user_id===actor.id && rowName===name && rowDob===dob;
           }) || null;
-        }
-        async function _bkFindUnlinkedBookingIdsForIdentity() {
-          const name = perfName.trim().toLowerCase();
-          const dob = String(_bkState.perf_birthday || '').trim();
-          if (!name || !dob || !_bkProd?.id) return [];
-          const { data } = await sb.from('bts_participant_bookings')
-            .select('id, name, date_of_birth, custom_answers, applicant_id')
-            .eq('production_id', _bkProd.id).eq('user_id', actor.id)
-            .is('applicant_id', null)
-            .order('created_at', { ascending: false });
-          return (data || [])
-            .filter(row => {
-              const rowName = String(row?.name || '').trim().toLowerCase();
-              const rowDob = String(row?.custom_answers?.['Date of Birth'] || row?.date_of_birth || '').trim();
-              const chosen=document.getElementById('bts-family-performer')?.value;
-            return chosen && !chosen.startsWith('new:') ? row.profile_id===chosen : row.user_id===actor.id && rowName===name && rowDob===dob;
-            })
-            .map(row => row.id)
-            .filter(Boolean);
         }
         function _bkPerformerNumberHasBannedWord(value) {
           const banned = [
@@ -5299,17 +5278,6 @@
           performer_number: performerNumber,
           attendance_mode: _bkState.attendance_mode || null,
         };
-        // Returns { id } on success, or { error } on failure
-        async function _bkInsertOwnedBooking(payload) {
-          payload=await BTSHouseholdBooking.prepare(sb,payload);
-          const { data, error } = await sb.from('bts_participant_bookings').insert(BTSAuditionAccess.bookingPayload(payload)).select('id').single();
-          return error ? { error } : { id: data.id };
-        }
-
-        const bookingResult = await _bkInsertOwnedBooking(bookingPayload);
-        if (bookingResult.error) throw bookingResult.error;
-        const insertedBookingId = bookingResult.id || null;
-
         // Also write to audition_applications so the casting board picks this up
         const appNotes = [
           _bkState.perf_p1 ? 'Pronouns: '+_bkState.perf_p1+'/'+_bkState.perf_p2 : '',
@@ -5350,195 +5318,15 @@
           attendance_mode:  _bkState.attendance_mode || null,
           status:           existingIdentityApplication?.status || 'pending',
         };
-        async function _bkInsertOwnedApplication(payload) {
-          payload=await BTSHouseholdBooking.prepare(sb,payload);
-          const { error } = await sb.from('bts_participant_applications').insert(BTSAuditionAccess.applicationPayload(payload));
-          return error;
-        }
-
-        async function _bkFindExistingApplication(payload) {
-          return existingIdentityApplication || null;
-        }
-
-        async function _bkUpdateOwnedApplication(appId, payload) {
-          const {user_id,profile_id,email,...editable}=payload;payload=editable;
-          const { error } = await sb.from('bts_participant_applications').update(BTSAuditionAccess.applicationPayload(payload)).eq('id', appId);
-          return error;
-        }
-
-        const existingApplication = await _bkFindExistingApplication(applicationPayload);
-        const appErr = existingApplication?.id
-          ? await _bkUpdateOwnedApplication(existingApplication.id, applicationPayload)
-          : await _bkInsertOwnedApplication(applicationPayload);
-        if (appErr) console.error('[BTS] audition_applications insert failed:', appErr.message);
-        const persistedApplication = existingApplication?.id
-          ? existingApplication
-          : await _bkFindExistingApplicationIdentity();
-
-        // Link the booking back to the application so Clio can match by applicant_id.
-        if (persistedApplication?.id) {
-          try {
-            const unlinkedBookingIds = await _bkFindUnlinkedBookingIdsForIdentity();
-            if (unlinkedBookingIds.length) {
-              await sb.from('bts_participant_bookings')
-                .update({ applicant_id: persistedApplication.id })
-                .in('id', unlinkedBookingIds);
-            }
-          } catch { /* non-critical — the workspace can still match by identity */ }
-        }
-        const slotList = _allSlots[_bkState.session_id] || [];
-        const localSlot = slotList.find(s => s.id === _bkState.slot_id);
-        if (_bkState.slot_id) {
-          const cap = localSlot?.capacity || _bkSession?.capacity_per_slot || 1;
-          const nextBooked = Number(localSlot?.booked_count || 0) + 1;
-          const nowFull = nextBooked >= cap;
-          await sb.from('audition_time_slots')
-            .update({ is_available: !nowFull, hold_expires_at: null, hold_session_id: null })
-            .eq('id', _bkState.slot_id);
-          if (localSlot) {
-            localSlot.booked_count = nextBooked;
-            localSlot.is_available = !nowFull;
-            localSlot.hold_expires_at = null;
-            localSlot.hold_session_id = null;
-          }
-        }
-
-        // ── Extra sessions (multi-session mode) ───────────────────
-        // Each extra session gets its own booking row in Apollo.
-        // We also need to add the extra session's slot to the application's slot_assignments
-        // so that Check-In, Schedule, and In The Room show the performer for that session too.
         const extraSessions = _bkState.extra_sessions || [];
-        for (const extra of extraSessions) {
-          if (!extra.session_id) continue;
-          const extraBookingPayload = { ...bookingPayload, session_id: extra.session_id, slot_id: extra.slot_id || null };
-          const extraBookingResult = await _bkInsertOwnedBooking(extraBookingPayload);
-          if (extraBookingResult.error) console.error('[BTS] Extra booking insert failed:', extraBookingResult.error?.message);
-          // Mark extra slot as booked (capacity-aware)
-          if (extra.slot_id) {
-            const extraLocalSlot = (_allSlots[extra.session_id]||[]).find(s => s.id === extra.slot_id);
-            const extraSession = _allSessions.find(s => s.id === extra.session_id);
-            const extraCap = extraLocalSlot?.capacity || extraSession?.capacity_per_slot || 1;
-            const extraNextBooked = Number(extraLocalSlot?.booked_count || 0) + 1;
-            const extraNowFull = extraNextBooked >= extraCap;
-            await sb.from('audition_time_slots')
-              .update({ is_available: !extraNowFull, hold_expires_at: null, hold_session_id: null })
-              .eq('id', extra.slot_id);
-            if (extraLocalSlot) {
-              extraLocalSlot.booked_count = extraNextBooked;
-              extraLocalSlot.is_available = !extraNowFull;
-              extraLocalSlot.hold_expires_at = null;
-              extraLocalSlot.hold_session_id = null;
-            }
-          }
-        }
-
-        // ── Sync extra sessions into slot_assignments on the application ──
-        // Do this as a single read-merge-write after all extra bookings are written.
-        // Ensures the performer appears in Check-In and Schedule for every session they booked.
-        if (extraSessions.length > 0 && persistedApplication?.id) {
-          try {
-            const { data: linkedApp } = await sb.from('bts_participant_applications')
-              .select('id, slot_assignments')
-              .eq('id', persistedApplication.id)
-              .single();
-            if (linkedApp?.id) {
-              const currentAssignments = Array.isArray(linkedApp.slot_assignments) ? linkedApp.slot_assignments : [];
-              const extraEntries = extraSessions
-                .filter(e => e.session_id && e.slot_id)
-                .map(e => ({ session_id: e.session_id, slot_id: e.slot_id }));
-              // Upsert each extra session entry — replace if session already present, otherwise append
-              const finalAssignments = [...currentAssignments];
-              extraEntries.forEach(entry => {
-                const idx = finalAssignments.findIndex(x => x.session_id === entry.session_id);
-                if (idx >= 0) finalAssignments[idx] = entry;
-                else finalAssignments.push(entry);
-              });
-              await sb.from('bts_participant_applications')
-                .update({ slot_assignments: finalAssignments })
-                .eq('id', linkedApp.id);
-            }
-          } catch { /* non-critical — slot_assignments will be back-filled by workspace on load */ }
-        }
-
-        // Send booking confirmation email using the org's template (fire-and-forget)
-        if (insertedBookingId) {
-          const emailSlotAssignments = [..._mergedSlotAssignments];
-          (extraSessions || []).forEach(extra => {
-            if (!extra.session_id || !extra.slot_id) return;
-            const idx = emailSlotAssignments.findIndex(x => x.session_id === extra.session_id);
-            const entry = { session_id: extra.session_id, slot_id: extra.slot_id };
-            if (idx >= 0) emailSlotAssignments[idx] = entry;
-            else emailSlotAssignments.push(entry);
-          });
-          const resolvedWhatToPrepare = (() => {
-            const questionValue = finalCustomAnswersPayload && typeof finalCustomAnswersPayload === 'object'
-              ? (finalCustomAnswersPayload['What to Prepare'] || finalCustomAnswersPayload['what_to_prepare'])
-              : '';
-            return questionValue || _bkSession?.prepare_text || '';
-          })();
-          sb.functions.invoke('send-email', {
-            body: {
-              booking_id: insertedBookingId,
-              applicant_id: persistedApplication?.id || null,
-              production_id: _bkProd.id,
-              category: 'booking_confirmation',
-              trigger: 'booking_confirmed',
-              email: bookingPayload.email,
-              name: bookingPayload.name,
-              session_id: bookingPayload.session_id,
-              slot_id: bookingPayload.slot_id || null,
-              role_interest: bookingPayload.role_interest || '',
-              context: {
-                performer_name: bookingPayload.name,
-                performer_email: bookingPayload.email,
-                show_name: _bkProd?.title || '',
-                show_subtitle: _bkProd?.subtitle || '',
-                audition_session: _bkSession?.name || 'Audition',
-                audition_date: _bkSession?.date ? fmtDate(_bkSession.date) : '',
-                audition_time: localSlot?.slot_time ? fmtTimeStr(localSlot.slot_time) : '',
-                audition_venue: _bkSession?.location || _bkProd?.venue || '',
-                what_to_prepare: resolvedWhatToPrepare,
-                org_name: _bkProd?.org_name || '',
-                director_name: _bkProd?.director || '',
-                role_name: bookingPayload.role_interest || '',
-                custom_answers: finalCustomAnswersPayload || null,
-                slot_assignments: emailSlotAssignments,
-                session_id: bookingPayload.session_id,
-                slot_id: bookingPayload.slot_id || null,
-                production: {
-                  title: _bkProd?.title || '',
-                  subtitle: _bkProd?.subtitle || '',
-                  venue: _bkProd?.venue || '',
-                  director: _bkProd?.director || '',
-                  organization_id: _bkProd?.organization_id || '',
-                  start_date: _bkProd?.start_date || '',
-                  end_date: _bkProd?.end_date || '',
-                  org_name: _bkProd?.org_name || '',
-                }
-              }
-            }
-          }).then(({ data, error }) => {
-            if (error) {
-              console.error('[BTS] booking confirmation email failed:', error);
-              setBookingEmailStatus(`Email update: booking saved, but the confirmation email failed. ${error.message || 'Unknown error'}`, true);
-              try { showToast(`Booking saved, but email failed: ${error.message || 'Unknown error'}`, true); } catch {}
-              return;
-            }
-            if (!data?.sent) {
-              console.error('[BTS] booking confirmation email not sent:', data?.error || data);
-              setBookingEmailStatus(`Email update: booking saved, but the confirmation email was not sent. ${data?.error || 'Unknown reason'}`, true);
-              try { showToast(`Booking saved, but email was not sent: ${data?.error || 'Unknown reason'}`, true); } catch {}
-              return;
-            }
-            setBookingEmailStatus('Email update: your confirmation email was sent successfully.');
-            try { showToast('Booking confirmation email sent.'); } catch {}
-          }).catch((err) => {
-            console.error('[BTS] booking confirmation email crashed:', err);
-            setBookingEmailStatus(`Email update: booking saved, but the confirmation email crashed. ${err?.message || 'Unknown error'}`, true);
-            try { showToast(`Booking saved, but email crashed: ${err?.message || 'Unknown error'}`, true); } catch {}
-          });
-        }
-
+        const preparedBooking = await BTSHouseholdBooking.prepare(sb,bookingPayload);
+        const preparedApplication = {...applicationPayload,...(preparedBooking.custom_answers?.__bts_profile_submission?.headshot_url?{headshot_url:preparedBooking.custom_answers.__bts_profile_submission.headshot_url}:{}),...(preparedBooking.custom_answers?.__bts_profile_submission?.resume_url?{file_url:preparedBooking.custom_answers.__bts_profile_submission.resume_url}:{}),...(preparedBooking.custom_answers?.__bts_profile_submission?.experience?{experience:preparedBooking.custom_answers.__bts_profile_submission.experience}:{}),profile_id:preparedBooking.profile_id||null,custom_answers:{...applicationPayload.custom_answers,...preparedBooking.custom_answers}};
+        _bkState.request_id ||= BTSAuditionAccess.requestId();
+        _bkSaveState();
+        const receipt = await BTSAuditionAccess.confirm(sb,_bkState.request_id,preparedBooking,preparedApplication,extraSessions);
+        const localSlot = (_allSlots[_bkState.session_id]||[]).find(slot=>slot.id===_bkState.slot_id);
+        _spHolds={};_bkHoldSessionId=null;_bkHoldExpiry=null;
+        // The database queued canonical confirmations; the browser never sends a second copy.
         _userBooking = {
           ...(applicationPayload || {}),
           session_id: _bkState.session_id,
@@ -5576,9 +5364,9 @@
             </div>`;
           }).join('');
         }
-        setBookingEmailStatus('Email update: sending your confirmation email…');
+        setBookingEmailStatus('Booking saved. The confirmation email is queued for delivery.');
         const emailNote = document.getElementById('bk-success-email-note');
-        if (emailNote) emailNote.innerHTML = `📬 A confirmation email is on its way. If you don't see it in a few minutes, check your junk or spam folder.${_bkOrgEmail ? ` If you still can't find it, email <a href="mailto:${esc(_bkOrgEmail)}" style="color:#572e88;font-weight:700;">${esc(_bkOrgEmail)}</a>.` : ''}`;
+        if (emailNote) emailNote.innerHTML = `Your booking is saved. If the confirmation email does not arrive, check your junk or spam folder.${_bkOrgEmail ? ` If you still can't find it, email <a href="mailto:${esc(_bkOrgEmail)}" style="color:#572e88;font-weight:700;">${esc(_bkOrgEmail)}</a>.` : ''}`;
         document.getElementById('bk-success').classList.add('active');
       } catch (err) {
         console.error('[BTS] Booking submit error:', err);
@@ -5955,7 +5743,7 @@
     const ROLE_ORDER  = ['Principal','Supporting','Featured','Cameo','Group'];
     const VOCAL_ORDER = ['Baritone','Alto','Mezzo Soprano','Soprano','Non-Singing'];
     const USAGE_ORDER = ['Primary Vocals','Featured Vocals','Vocal Group','Supporting Vocals','Ensemble Vocals','Minimal','Non-Singing'];
-    const DANCE_ORDER = ['No Dance','Beginner Friendly','Performer Level','Dance-Focused'];
+    const DANCE_ORDER = ['No Movement','Light Movement','Moderate Movement','Strong Movement','Dance Required','No Dance','Beginner Friendly','Performer Level','Dance-Focused'];
 
     const _ddStyle = '';
 
@@ -5979,26 +5767,34 @@
       const vocals   = customSort([...new Set(characters.map(c => c.vocal_type).filter(Boolean))], VOCAL_ORDER);
       const dances   = customSort([...new Set(characters.map(c => c.dancing_strength).filter(s => s && s !== 'None' && s !== 'Non-Dancing'))], DANCE_ORDER);
       const usages   = customSort([...new Set(characters.map(c => effectiveVocalUsage(c)).filter(Boolean))], USAGE_ORDER);
-      const genders  = customSort([...new Set(characters.map(c => displayGender(c.gender)).filter(Boolean))], ['She/Her','He/Him','They/Them','Any']);
+      const genders  = customSort([...new Set(characters.map(c => displayGender(c.written_as)).filter(Boolean))], ['Woman','Man','Girl','Boy','Nonbinary','Any Gender']);
 
       const DANCE_DESCS = {
-        'No Dance':          'No choreography — staging only',
-        'Beginner Friendly': 'Simple, guided movement — no experience needed',
-        'Performer Level':   'Consistent choreography — coordination required',
-        'Dance-Focused':     'Heavy choreography — strong dance ability required',
+        'No Movement': 'No planned dance or movement beyond everyday stage directions.',
+        'Light Movement': 'Simple, occasional movement.',
+        'Moderate Movement': 'Regular movement or simple choreography.',
+        'Strong Movement': 'Frequent or physically demanding movement.',
+        'Dance Required': 'Choreography is a core part of the role.',
+        'No Dance': 'No planned choreography.',
+        'Beginner Friendly': 'Simple, guided movement.',
+        'Performer Level': 'Regular choreography.',
+        'Dance-Focused': 'Frequent choreography requiring strong dance ability.',
       };
 
-      const fieldOn = (f) => _charDisplayFields[f] !== false;
+      const fieldOn = (f) => {
+        if (f === 'written_as' && !('written_as' in _charDisplayFields) && 'gender' in _charDisplayFields) return _charDisplayFields.gender !== false;
+        return _charDisplayFields[f] !== false;
+      };
 
       const typeOpts  = `<option value="">All Role Types</option>`  + types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
       const vocalOpts = `<option value="">All Vocal Types</option>` + vocals.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
       const danceOpts = `<option value="">Any Movement Level</option>` + dances.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
       const usageOpts = `<option value="">All Vocal Usage</option>` + usages.map(u => `<option value="${esc(u)}">${esc(u)}</option>`).join('');
-      const genderOpts = `<option value="">All Pronouns</option>` + genders.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('');
+      const genderOpts = `<option value="">All character genders</option>` + genders.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('');
 
       const filterControl = (label, html) => html ? `<label class="ai-filter-control"><span class="ai-filter-label">${label}</span>${html}</label>` : '';
       const typeDD  = (fieldOn('role_type')       && types.length)  ? `<select aria-label="Filter by role type" onchange="setCharFilter('type',this.value)">${typeOpts}</select>`  : '';
-      const genderDD = (fieldOn('gender')         && genders.length) ? `<select aria-label="Filter by pronouns" onchange="setCharFilter('gender',this.value)">${genderOpts}</select>` : '';
+      const genderDD = (fieldOn('written_as')         && genders.length) ? `<select aria-label="Filter by character gender" onchange="setCharFilter('written_as',this.value)">${genderOpts}</select>` : '';
       const vocalDD = (fieldOn('vocal_type')       && vocals.length) ? `<select aria-label="Filter by vocal type" onchange="setCharFilter('vocal',this.value)">${vocalOpts}</select>` : '';
       const danceDD = (fieldOn('dancing_strength') && dances.length) ? `<select aria-label="Filter by movement level" onchange="setCharFilter('dance',this.value)">${danceOpts}</select>` : '';
       const usageDD = (fieldOn('vocal_usage')      && usages.length) ? `<select aria-label="Filter by vocal usage" onchange="setCharFilter('usage',this.value)">${usageOpts}</select>` : '';
@@ -6034,7 +5830,7 @@
       if (dimension === 'vocal') _charFilterVocal = value;
       if (dimension === 'dance') _charFilterDance = value;
       if (dimension === 'usage') _charFilterUsage = value;
-      if (dimension === 'gender') _charFilterGender = value;
+      if (dimension === 'written_as') _charFilterGender = value;
       _applyCharView();
     }
 
@@ -6049,7 +5845,7 @@
       if (_charFilterVocal) list = list.filter(c => c.vocal_type       === _charFilterVocal);
       if (_charFilterDance) list = list.filter(c => c.dancing_strength === _charFilterDance);
       if (_charFilterUsage) list = list.filter(c => effectiveVocalUsage(c) === _charFilterUsage);
-      if (_charFilterGender) list = list.filter(c => displayGender(c.gender) === _charFilterGender);
+      if (_charFilterGender) list = list.filter(c => displayGender(c.written_as) === _charFilterGender);
       list = sortCharacterList(list);
       const grid = document.getElementById('roles-grid');
       if (grid) grid.innerHTML = list.length ? renderRoleCards(list) : '<p style="color:#c8bad7;font-size:0.9rem;">No roles match this filter.</p>';
@@ -6091,8 +5887,8 @@
 
       return characters.map(c => {
 
-        const genderBadge = (show('gender') && c.gender)
-          ? `<span class="ai-role-gender">${esc(displayGender(c.gender))}</span>`
+        const genderBadge = (show('written_as') && c.written_as)
+          ? `<span class="ai-role-gender">Character gender: ${esc(displayGender(c.written_as))}</span>`
           : '';
 
         const countNote = (c.performer_count && c.performer_count > 1)
@@ -6101,10 +5897,15 @@
           ? `<div class="ai-role-desc">${esc(c.description)}</div>` : '';
 
         const DANCE_DESCS = {
-          'No Dance':          'No choreography. The role involves standing, walking, and simple stage directions only.',
-          'Beginner Friendly': 'Very simple, guided movement. Repeated actions, easy to follow, no prior dance experience needed.',
-          'Performer Level':   'Regular choreography throughout the show. Requires coordination, memory, and comfort moving on stage.',
-          'Dance-Focused':     'Heavy choreography. Fast-paced, precise, and requires strong dance ability and stamina.',
+          'No Movement': 'No planned dance or movement beyond everyday stage directions.',
+          'Light Movement': 'Simple, occasional movement.',
+          'Moderate Movement': 'Regular movement or simple choreography.',
+          'Strong Movement': 'Frequent or physically demanding movement.',
+          'Dance Required': 'Choreography is a core part of the role.',
+          'No Dance': 'No planned choreography.',
+          'Beginner Friendly': 'Simple, guided movement.',
+          'Performer Level': 'Regular choreography.',
+          'Dance-Focused': 'Frequent choreography requiring strong dance ability.',
         };
         const facts = [];
         const fact = (label, value, color = 'var(--role-accent, #572e88)', note = '') => {
@@ -6115,12 +5916,16 @@
           </div>`);
         };
         if (show('role_type') && c.role_type && c.role_type !== 'Ensemble') fact('Role Type', c.role_type, 'var(--role-accent, #572e88)');
-        if (show('age_range') && c.age_range) fact('Age Range', c.age_range, '#d97706');
-        if (show('vocal_type') && c.vocal_type) fact('Vocal Type', c.vocal_type, '#2563eb');
-        if (show('vocal_range') && c.vocal_range) fact('Vocal Range', c.vocal_range, '#0891b2');
-        if (show('vocal_usage') && effectiveVocalUsage(c)) fact('Vocal Usage', effectiveVocalUsage(c), '#16a34a');
+        if (show('casting_eligibility') && c.casting_eligibility === 'open') fact('Who can audition', 'Open to any performer', '#476aaa');
+        else if (show('casting_eligibility') && c.casting_eligibility === 'character_gender') fact('Who can audition', 'Performers who match the character gender', '#476aaa');
+        else if (show('casting_eligibility') && c.casting_eligibility === 'specific') fact('Who can audition', c.casting_notes || 'See the production’s casting requirements', '#476aaa');
+        if (show('performance_disciplines') && Array.isArray(c.performance_disciplines) && c.performance_disciplines.length) fact('Performance skills', c.performance_disciplines.join(' · '), '#74a2b4');
+        if (show('age_range') && c.age_range) fact('Playable age', c.age_range, '#efab45');
+        if (show('vocal_type') && c.vocal_type) fact('Vocal Type', c.vocal_type, '#476aaa');
+        if (show('vocal_range') && c.vocal_range) fact('Vocal Range', c.vocal_range, '#74a2b4');
+        if (show('vocal_usage') && effectiveVocalUsage(c)) fact('Vocal Usage', effectiveVocalUsage(c), '#769e7b');
         if (show('dancing_strength') && c.dancing_strength && c.dancing_strength !== 'None' && c.dancing_strength !== 'Non-Dancing') {
-          fact('Movement', c.dancing_strength, '#db2777', DANCE_DESCS[c.dancing_strength] || '');
+          fact('Movement', c.dancing_strength, '#ca7ea7', DANCE_DESCS[c.dancing_strength] || '');
         }
         const materialItems = [];
         publicMaterialTypesForProduction().forEach(type => {
@@ -6512,7 +6317,7 @@
         <div class="bk-success-title">You're booked!</div>
         <div class="bk-success-bookings" id="bk-success-bookings"></div>
         <div class="bk-success-sub" id="bk-success-sub">Can't wait to see you!</div>
-        <div class="bk-success-email-note" id="bk-success-email-note">📬 A confirmation email is on its way. If you don't see it in a few minutes, check your junk or spam folder.</div>
+        <div class="bk-success-email-note" id="bk-success-email-note">Your booking is saved. If the confirmation email does not arrive, check your junk or spam folder.</div>
         <div class="bk-success-email-status" id="bk-success-email-status"></div>
         <button class="bk-btn-next" onclick="closeBookModal()">Done</button>
       </div>

@@ -13534,11 +13534,10 @@ See you soon!
 
   function openAuditionBuilderWizard(continueDraft = false) {
     if (!prodId) return;
-    const panel = document.getElementById('wizard-iframe-panel');
-    const iframe = document.getElementById('wizard-iframe');
-    const base = `../Setup/audition-builder-wizard.html?id=${encodeURIComponent(prodId)}&inframe=1`;
-    iframe.src = continueDraft ? base + '&continue=1' : base;
-    panel.style.display = 'block';
+    switchAudTab('setup');
+    switchAudInner('settings');
+    if (!_audSetupController?.state.loaded) renderAudSessions();
+    else _audSetupController.render();
   }
 
   function closeWizardIframe(reloadAuditions) {
@@ -27136,6 +27135,295 @@ See you soon!
     _reRenderBlocksList(sessionId);
   }
 
+  let _audSetupController = null;
+
+  function _audSetupDefault(id, name = 'General audition') {
+    return { id, name, type: 'audition', audience: 'open', methods: ['in_person'], mode: 'appointment', days: [{ id: 'day-' + crypto.randomUUID(), date: '', start: '', end: '', venue: null, room: '', locationNotes: '' }], slot: '10', gap: '2', capacity: '1', activities: [], prep: '', bring: '', access: '', finish: 'After their appointment', registration: 'Book in advance', arrivalClose: '', deadline: '', customName: false };
+  }
+
+  function _audSetupFromPublished(id, published, fallback) {
+    // Prefer the explicit published snapshot returned by the private RPC, then
+    // fill only older fields from the currently visible session projection.
+    const base = { ...(fallback || {}), ...(published || {}) };
+    const type = ['audition', 'dance_call', 'callback', 'other'].includes(published?.type) ? published.type : (base.type || 'audition');
+    const modeMap = { group_session: 'group', open_call: 'walkin', appointment: 'appointment' };
+    const methodSet = getSessionAccessOptions(base);
+    const methods = [methodSet.in_person && 'in_person', methodSet.video_call && 'video_call', methodSet.self_tape && 'self_tape'].filter(Boolean);
+    const legacyBlocks = Array.isArray(published?.slot_blocks) ? published.slot_blocks : Array.isArray(fallback?.slot_blocks) ? fallback.slot_blocks : [];
+    const days = legacyBlocks.filter(block => block?.date).map((block, index) => ({
+      id: String(block.id || 'day-' + index), date: String(block.date || ''), start: String(block.start_time || '' ).slice(0, 5), end: String(block.end_time || '').slice(0, 5),
+      venue: block.venue && typeof block.venue === 'object' ? structuredClone(block.venue) : block.location ? { name: String(block.location).split(',')[0], address: String(block.location).split(',').slice(1).join(',').trim() } : null,
+      room: String(block.room || ''), locationNotes: String(block.location_instructions || ''), videoInstructions: String(block.video_instructions || '')
+    }));
+    if (!days.length) days.push({ id: 'day-' + crypto.randomUUID(), date: String(base.date || ''), start: String(base.start_time || '').slice(0, 5), end: String(base.end_time || '').slice(0, 5), venue: base.location ? { name: String(base.location).split(',')[0], address: String(base.location).split(',').slice(1).join(',').trim() } : null, room: '', locationNotes: '', videoInstructions: '' });
+    const currentTypeName = sessionTypeLabel(type);
+    const name = String(published?.name || base.name || currentTypeName);
+    const record = {
+      ..._audSetupDefault(id, name), type, name,
+      customName: ![currentTypeName, 'Auditions', 'Other'].includes(name),
+      audience: type === 'callback' || published?.attendance_mode === 'invited' || published?.attendance_policy === 'invited' ? 'invited' : 'open',
+      methods: methods.length ? methods : ['in_person'],
+      mode: modeMap[base.booking_mode] || 'appointment', days,
+      slot: String(base.slot_length || 10), gap: String(base.buffer_time || 0), capacity: String(base.capacity_per_slot || 1),
+      activities: [], prep: String(base.prepare_text || getSessionPrepareText(base) || ''),
+      bring: '', access: String(base.instructions || ''),
+    };
+    return record;
+  }
+
+  function _createAudSetupController() {
+    const state = { loaded: false, loading: false, records: [], revisions: {}, openId: null, step: 0, timers: {}, saving: {}, error: '' };
+    const sections = ['Details', 'Booking & times', 'Activities', 'Preparation', 'Review'];
+    const types = [
+      { value: 'audition', label: 'General audition', name: 'General audition', colour: '#476aaa', icon: 'Auditions.svg' },
+      { value: 'dance_call', label: 'Dance call', name: 'Dance call', colour: '#dd8233', icon: 'Choreography.svg' },
+      { value: 'callback', label: 'Callback', name: 'Callback', colour: '#769e7b', icon: 'Star.svg' },
+      { value: 'other', label: 'Another audition', name: 'Other audition', colour: '#d1523d', icon: 'Auditions.svg' },
+    ];
+    const methods = [['in_person', 'In person', 'navprofile.svg'], ['video_call', 'Live video call', 'VideoCall.svg'], ['self_tape', 'Self-tape', 'SelfTape.svg']];
+    const modes = [
+      ['appointment', 'Their own audition time', 'One person books each appointment.', 'audition-booking-type-owntime.svg'],
+      ['arrival', 'A shared arrival time', 'Several people arrive together, then audition individually.', 'audition-booking-type-sharedarrival.svg'],
+      ['group', 'A place in a group session', 'People book a place and take part together.', 'audition-booking-type-groupsession.svg'],
+      ['walkin', 'Arrive during advertised hours', 'People check in and join a queue.', 'audition-booking-type-walkin.svg'],
+      ['assigned', 'A time assigned by the team', 'The team sends each person their time.', 'audition-booking-type-assigned time.svg'],
+    ];
+    const activities = [['singing', 'Singing'], ['acting', 'Acting / scene reading'], ['movement', 'Dance / movement'], ['workshop', 'Workshop activities'], ['specialist', 'Other skills']];
+    const e = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const escapeId = value => String(value).replace(/[^a-zA-Z0-9_-]/g, '-');
+    const colour = record => types.find(item => item.value === record.type)?.colour || '#476aaa';
+    const niceDate = value => { if (!value) return 'Date to be added'; const date = new Date(value + 'T12:00:00'); return Number.isNaN(date.getTime()) ? 'Date to be added' : date.toLocaleDateString('en-CA', { weekday: 'long', day: 'numeric', month: 'long' }); };
+    const niceTime = value => value ? new Date('2000-01-01T' + value).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' }) : 'Time to be confirmed';
+    const mapLink = venue => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([venue?.name, venue?.address].filter(Boolean).join(', '));
+    const ensureDays = record => { if (!Array.isArray(record.days) || !record.days.length) record.days = [{ id: 'day-' + crypto.randomUUID(), date: '', start: '', end: '', venue: null, room: '', locationNotes: '' }]; return record.days; };
+
+    async function load() {
+      if (state.loading) return;
+      state.loading = true;
+      try {
+        const { data, error } = await sb.rpc('bts_audition_setup_load', { p_production_id: prodId });
+        if (error) throw error;
+        let rows = Array.isArray(data) ? data : [];
+        if (!rows.length) {
+          const id = crypto.randomUUID();
+          const created = await sb.rpc('bts_audition_setup_create', { p_production_id: prodId, p_session_id: id, p_initial: true });
+          if (created.error) throw created.error;
+          rows = [created.data];
+        }
+        const visibleById = new Map((audSessions || []).map(session => [String(session.id), session]));
+        state.records = rows.map(row => {
+          const id = String(row.id);
+          state.revisions[id] = Number(row.revision || 0);
+          const session = visibleById.get(id);
+          const record = row.draft && typeof row.draft === 'object' ? structuredClone(row.draft) : _audSetupFromPublished(id, row.published, session);
+          record.id = id;
+          if (!record.name) record.name = sessionTypeLabel(record.type || 'audition');
+          if (!Array.isArray(record.methods)) record.methods = ['in_person'];
+          if (!Array.isArray(record.activities)) record.activities = [];
+          ensureDays(record);
+          return record;
+        });
+        if (!state.records.length) throw new Error('No audition draft could be loaded.');
+        state.openId = state.records.find(r => r.type === 'audition')?.id || state.records[0].id;
+        state.loaded = true;
+        render();
+        const rowsWithoutDraft = new Set(rows.filter(row => !row.draft || typeof row.draft !== 'object').map(row => String(row.id)));
+        state.records.filter(record => rowsWithoutDraft.has(record.id)).forEach(record => save(record, true));
+      } catch (error) {
+        console.error('[BTS] audition draft load failed', error);
+        state.error = error?.message || 'Could not load audition drafts.';
+        renderError();
+      } finally { state.loading = false; }
+    }
+
+    function renderError() {
+      const host = document.getElementById('aud-sessions-list');
+      if (host) host.innerHTML = `<div class="ap-setup-error" role="alert"><strong>Audition drafts could not be loaded.</strong><p>${e(state.error)}</p><button type="button" onclick="window.BTSAuditionSetupRetry?.()">Try again</button></div>`;
+    }
+
+    function missing(record) {
+      const out = [];
+      if (!record.name?.trim()) out.push({ step: 0, key: 'name', text: 'Add an audition name.' });
+      if (!record.methods?.length) out.push({ step: 0, key: 'methods', text: 'Choose at least one way people can take part.' });
+      const tape = record.methods?.length === 1 && record.methods.includes('self_tape');
+      if (record.methods?.includes('self_tape') && !record.deadline) out.push({ step: 1, key: 'deadline', text: 'Add a submission deadline.' });
+      if (!tape) {
+        ensureDays(record).forEach((day, index) => {
+          if (!day.date) out.push({ step: 1, key: 'date', day: index, text: 'Add a date.' });
+          if (!day.start) out.push({ step: 1, key: 'start', day: index, text: 'Add a start time.' });
+          if (!day.end || day.start && day.end <= day.start) out.push({ step: 1, key: 'end', day: index, text: 'Add a finish time after the start.' });
+          if (record.methods.includes('in_person') && (!day.venue?.name || !day.venue?.address)) out.push({ step: 1, key: 'venue', day: index, text: 'Choose a venue with its full address.' });
+          if (day.date && ensureDays(record).some((other, otherIndex) => otherIndex < index && other.date === day.date)) out.push({ step: 1, key: 'date', day: index, text: 'This date is already listed. Change it or remove this day.' });
+        });
+        if (['group', 'arrival'].includes(record.mode) && Number(record.capacity) < 1) out.push({ step: 1, key: 'capacity', text: 'Add the number of places.' });
+        if (record.mode === 'appointment' && Number(record.slot) < 1) out.push({ step: 1, key: 'slot', text: 'Add the appointment length.' });
+      }
+      if (!record.activities?.length) out.push({ step: 2, key: 'activities', text: 'Choose at least one audition activity.' });
+      return out;
+    }
+
+    function field(label, key, value, type = 'text', extra = '') {
+      return `<label class="ap-setup-field">${label}<input type="${type}" data-field="${key}" value="${e(value || '')}" ${extra}></label>`;
+    }
+    function multiChoice(label, key, value, checked) {
+      return `<label class="ap-setup-choice"><input type="checkbox" role="checkbox" aria-checked="${checked}" data-multi="${key}" value="${value}" ${checked ? 'checked' : ''}><span class="ap-setup-radio-mark" aria-hidden="true"></span><span>${label}</span></label>`;
+    }
+    function dayHTML(record, day, index) {
+      const uid = escapeId(record.id + '-' + index);
+      const dayField = (label, key, value, type) => `<label class="ap-setup-field">${label}<input type="${type}" data-day="${index}" data-day-field="${key}" value="${e(value || '')}"></label>`;
+      return `<section class="ap-setup-day"><header><strong>Day ${index + 1}</strong>${index ? `<button type="button" data-remove-day="${index}">Remove day</button>` : ''}</header><div class="ap-setup-date-row">${dayField('Date','date',day.date,'date')}${dayField('Start','start',day.start,'time')}${dayField('Finish','end',day.end,'time')}</div>${record.methods.includes('in_person') ? `<div class="ap-setup-location"><strong>Location <span class="ap-setup-required" data-venue-required="${index}"></span></strong><div class="ap-setup-venue-summary">${day.venue?.name ? `<span><b>${e(day.venue.name)}</b><small>${e(day.venue.address || '')}</small></span><a href="${mapLink(day.venue)}" target="_blank" rel="noopener noreferrer">Map ↗</a>` : '<span><b>Choose a venue</b><small>Find the venue and confirm its full address.</small></span>'}<button type="button" data-venue-toggle="${index}">${day.venue?.name ? 'Change' : 'Find venue'}</button></div><div class="ap-setup-venue-picker" id="ap-setup-venue-${uid}" hidden></div><details><summary>Room & location instructions (optional)</summary><div class="ap-setup-grid"><label class="ap-setup-field">Room or studio<input type="text" data-day="${index}" data-day-field="room" value="${e(day.room || '')}"></label><label class="ap-setup-field ap-setup-wide">Location instructions<textarea data-day="${index}" data-day-field="locationNotes" rows="2" placeholder="For example: use the side entrance. Studio 1 is upstairs.">${e(day.locationNotes || '')}</textarea></label></div></details></div>` : ''}${record.methods.includes('video_call') ? `<label class="ap-setup-field ap-setup-extra">Video-call joining instructions<textarea data-day="${index}" data-day-field="videoInstructions" rows="2">${e(day.videoInstructions || '')}</textarea></label>` : ''}</section>`;
+    }
+    function editor(record) {
+      const step = state.step;
+      const accent = colour(record);
+      let body = '';
+      if (step === 0) body = `<div class="ap-setup-grid">${field('Audition name', 'name', record.name)}<fieldset class="ap-setup-full"><legend>Audition type</legend><div class="ap-setup-types">${types.map(type => `<label class="ap-setup-type" style="--type-colour:${type.colour}"><input type="radio" data-field="type" name="type-${e(record.id)}" value="${type.value}" ${record.type === type.value ? 'checked' : ''}><span><img src="/ASSETS/Images/Icons/${type.icon}" alt=""><strong>${type.label}</strong></span></label>`).join('')}</div></fieldset><fieldset class="ap-setup-full"><legend>How can people take part?</legend><p>Select all that apply. You can choose more than one.</p><div class="ap-setup-pills">${methods.map(([key,label]) => multiChoice(label, 'methods', key, record.methods.includes(key))).join('')}</div></fieldset><fieldset class="ap-setup-full"><legend>Who attends?</legend><div class="ap-setup-pills">${record.type === 'callback' ? '<label class="ap-setup-choice ap-setup-choice-selected"><input type="radio" checked disabled><span class="ap-setup-radio-mark"></span><span>People we invite</span></label><p>Your team chooses who gets a callback.</p>' : `<label class="ap-setup-choice ${record.audience !== 'invited' ? 'ap-setup-choice-selected' : ''}"><input type="radio" data-field="audience" name="audience-${e(record.id)}" value="open" ${record.audience !== 'invited' ? 'checked' : ''}><span class="ap-setup-radio-mark"></span><span>Anyone who meets the requirements</span></label><label class="ap-setup-choice ${record.audience === 'invited' ? 'ap-setup-choice-selected' : ''}"><input type="radio" data-field="audience" name="audience-${e(record.id)}" value="invited" ${record.audience === 'invited' ? 'checked' : ''}><span class="ap-setup-radio-mark"></span><span>People we invite</span></label>`}</div></fieldset></div>`;
+      else if (step === 1) {
+        const tape = record.methods.length === 1 && record.methods.includes('self_tape');
+        body = tape ? `<div class="ap-setup-grid">${field('Submission deadline', 'deadline', record.deadline, 'datetime-local')}<p>People submit a recording by this deadline. They do not book a live appointment.</p></div>` : `<fieldset><legend>How should people book?</legend><div class="ap-setup-booking-grid">${modes.map(([value,label,desc,icon]) => `<label class="ap-setup-booking ${record.mode === value ? 'selected' : ''}"><input type="radio" data-field="mode" name="mode-${e(record.id)}" value="${value}" ${record.mode === value ? 'checked' : ''}><img src="${encodeURI('/ASSETS/Images/Icons/' + icon)}" alt=""><span><strong>${label}</strong><small>${desc}</small></span></label>`).join('')}</div></fieldset><section class="ap-setup-days"><h3>Dates & locations</h3>${ensureDays(record).map((day,index) => dayHTML(record,day,index)).join('')}<div class="ap-setup-more-dates"><strong>Need more audition times?</strong><p>Add another date to offer more appointments for this audition. Each person books one appointment across the available dates.</p><p>For callbacks, dance calls or a different audition, use <b>Add audition</b> to create a separate card.</p><button type="button" data-add-day>+ Add another date</button></div></section><div class="ap-setup-grid">${record.mode === 'appointment' ? field('Minutes per person', 'slot', record.slot, 'number', 'min="1" max="180"') : ['group','arrival'].includes(record.mode) ? field('Places in this session', 'capacity', record.capacity, 'number', 'min="1" max="200"') : record.mode === 'walkin' ? field('Last check-in time', 'arrivalClose', record.arrivalClose, 'time') : '<p>The team sends each invited person their time.</p>'}${record.mode === 'appointment' ? field('Minutes between appointments', 'gap', record.gap, 'number', 'min="0" max="60"') : ''}${record.mode === 'arrival' ? '<p class="ap-setup-note">A shared arrival time does not mean people perform together. Add arrival and leaving instructions under Preparation.</p>' : ''}${record.methods.includes('self_tape') ? field('Self-tape deadline', 'deadline', record.deadline, 'datetime-local') : ''}</div>`;
+      } else if (step === 2) body = `<fieldset><legend>What does this audition include?</legend><div class="ap-setup-grid">${activities.map(([key,label]) => multiChoice(label,'activities',key,record.activities.includes(key))).join('')}</div></fieldset>`;
+      else if (step === 3) body = `<div class="ap-setup-grid"><label class="ap-setup-field ap-setup-full">What should they prepare?<textarea data-field="prep" rows="3">${e(record.prep)}</textarea></label><label class="ap-setup-field ap-setup-full">What should they bring?<textarea data-field="bring" rows="2">${e(record.bring)}</textarea></label><label class="ap-setup-field">When can they leave?<select data-field="finish"><option ${record.finish==='After their appointment'?'selected':''}>After their appointment</option><option ${record.finish==='After the whole session'?'selected':''}>After the whole session</option><option ${record.finish==='When released by the team'?'selected':''}>When released by the team</option></select></label><label class="ap-setup-field ap-setup-full">Extra information (optional)<textarea data-field="access" rows="2" placeholder="For example: check in with our producer at the welcome desk, then wait to be called.">${e(record.access)}</textarea></label><p class="ap-setup-full">Attach songs, scenes and other files under Materials. You can link them to a particular audition or role.</p></div>`;
+      else body = applicantView(record);
+      return `<div class="ap-setup-editor" style="--ap-accent:${accent}"><nav class="ap-setup-tabs" aria-label="Audition details">${sections.map((name,index)=>`<button type="button" data-step="${index}" aria-pressed="${step===index}">${name}${missing(record).some(item=>item.step===index)?'<span class="ap-setup-star" aria-hidden="true">✱</span>':''}</button>`).join('')}</nav><div class="ap-setup-fields">${body}</div><footer><span data-save-status>${state.saving[record.id] ? 'Saving draft…' : 'Draft saves automatically. Nothing is published.'}</span><button type="button" data-close-editor>Done</button></footer></div>`;
+    }
+
+    function applicantView(record) {
+      const attendance = record.type === 'callback' || record.audience === 'invited' ? 'Your team will send you an invitation with booking details.' : record.mode === 'appointment' ? 'Book one audition time from the available dates.' : record.mode === 'arrival' ? 'Book an arrival time. You will audition individually within the session.' : record.mode === 'group' ? 'Book a place in the group session.' : record.mode === 'walkin' ? 'Join the queue during the advertised audition hours.' : 'The team will send you your audition time.';
+      return `<article class="ap-setup-applicant" style="--ap-accent:${colour(record)}"><header><b>${e(prod?.name || 'Production')}</b><h2>${e(record.name)}</h2><span>${e(record.audience === 'invited' || record.type === 'callback' ? 'People we invite' : 'Anyone who meets the requirements')}</span></header><div><h3>Taking part</h3><p>${e(record.methods.map(key=>({in_person:'In person',video_call:'Live video call',self_tape:'Self-tape'})[key]).join(' · '))}</p><p>${e(record.activities.map(key=>activities.find(item=>item[0]===key)?.[1]||key).join(' · '))}</p>${record.methods.length===1&&record.methods[0]==='self_tape'?`<section><h3>Submission deadline</h3><p>${e(record.deadline || 'To be confirmed')}</p></section>`:`<section><h3>Dates & locations</h3>${ensureDays(record).map(day=>`<div class="ap-setup-app-day"><strong>${e(niceDate(day.date))} · ${e(niceTime(day.start))}–${e(niceTime(day.end))}</strong>${record.methods.includes('in_person')?`<p>${e(day.venue?.name||'Venue to be confirmed')}${day.room?' · '+e(day.room):''}</p><p>${e(day.venue?.address||'Full address to be added')}</p>${day.venue?.address?`<a href="${mapLink(day.venue)}" target="_blank" rel="noopener noreferrer">Open in maps ↗</a>`:''}${day.locationNotes?`<p>${e(day.locationNotes)}</p>`:''}`:''}${record.methods.includes('video_call')?`<p>${e(day.videoInstructions||'Joining details will be sent with your booking confirmation.')}</p>`:''}</div>`).join('')}</section><section><h3>Booking & arrival</h3><p>${e(attendance)}</p>${record.mode==='appointment'?`<p>Appointments last ${e(record.slot)} minutes.</p>`:''}${record.mode==='walkin'&&record.arrivalClose?`<p>Last check-in: ${e(niceTime(record.arrivalClose))}.</p>`:''}<p>${e(record.finish)}.</p></section>`}<section><h3>What to prepare</h3><p>${e(record.prep||'No preparation needed.')}</p></section>${record.bring?`<section><h3>What to bring</h3><p>${e(record.bring)}</p></section>`:''}${record.access?`<section><h3>Extra information</h3><p>${e(record.access)}</p></section>`:''}</div></article>`;
+    }
+
+    function completion(record) {
+      const issues = missing(record);
+      return issues.length ? `<button type="button" class="ap-setup-needs" data-needs="${e(record.id)}"><span>✱</span> Needs details (${issues.length})</button>` : '<span class="ap-setup-ready">Draft · Ready to review</span>';
+    }
+
+    function render() {
+      const host = document.getElementById('aud-sessions-list');
+      if (!host || !state.loaded) return;
+      const countBadge = document.getElementById('aud-session-count-badge');
+      if (countBadge) countBadge.textContent = String(state.records.length);
+      host.replaceChildren();
+      state.records.forEach(record => {
+        const template = document.createElement('template');
+        template.innerHTML = buildAudSessionCardHTML({ id: record.id, name: record.name, type: record.type, date: record.days?.[0]?.date || '', start_time: record.days?.[0]?.start || '', end_time: record.days?.[0]?.end || '', format: record.methods.includes('in_person') ? 'in_person' : 'virtual', booking_mode: 'appointment', show_to_applicants: false });
+        const card = template.content.firstElementChild;
+        card.classList.remove('collapsed');
+        card.style.setProperty('--aud-card-accent', colour(record));
+        card.querySelector('.aud-card-body')?.remove();
+        card.querySelectorAll('[onclick]').forEach(node => node.removeAttribute('onclick'));
+        card.querySelector('.aud-collapse-chevron')?.remove();
+        card.querySelector('.aud-card-vis-badge')?.remove();
+        const head = card.querySelector('.aud-session-header');
+        head?.setAttribute('role','group');
+        card.querySelector('.aud-card-name').textContent = record.name || sessionTypeLabel(record.type);
+        const chips=card.querySelector('.aud-card-chips');
+        const firstDay=ensureDays(record)[0];
+        if(chips) chips.innerHTML=`<span>${e(firstDay.date?niceDate(firstDay.date):'Dates to come')}${firstDay.start?' · '+e(niceTime(firstDay.start)):''}${firstDay.end?'–'+e(niceTime(firstDay.end)):''}</span><span>${e(record.methods.map(key=>({in_person:'In person',video_call:'Video call',self_tape:'Self-tape'})[key]).join(' · '))}</span>`;
+        const img = card.querySelector('.aud-card-type-pill img');
+        if (img) { img.src = '/ASSETS/Images/Icons/' + (types.find(type=>type.value===record.type)?.icon || 'Auditions.svg'); img.style.filter = 'brightness(0) invert(1)'; }
+        const deleteButton = card.querySelector('.aud-action-btn.danger');
+        deleteButton?.remove();
+        const edit = document.createElement('button'); edit.type='button'; edit.className='ap-setup-edit'; edit.textContent=state.openId===record.id?'Close':'Edit'; edit.setAttribute('aria-expanded',String(state.openId===record.id)); edit.onclick=()=>{state.openId=state.openId===record.id?null:record.id;state.step=0;render();}; head?.append(edit);
+        const attendance = document.createElement('div'); attendance.className='ap-setup-attendance'; attendance.innerHTML=record.type==='callback'?'<strong>Who attends?</strong><span>People we invite</span><small>Your team chooses who gets a callback.</small>':`<strong>Who attends?</strong><label><input type="radio" name="audience-${e(record.id)}" value="open" ${record.audience!=='invited'?'checked':''}>Anyone who meets the requirements</label><label><input type="radio" name="audience-${e(record.id)}" value="invited" ${record.audience==='invited'?'checked':''}>People we invite</label>${record.audience==='invited'?'<small>Attending another audition does not add anyone here.</small>':''}`;
+        card.append(attendance);
+        attendance.querySelectorAll('input').forEach(input=>input.onchange=()=>{record.audience=input.value;save(record);render();});
+        const caption=document.createElement('div');caption.className='ap-setup-caption';caption.innerHTML=`<span>${e(record.activities.map(key=>activities.find(item=>item[0]===key)?.[1]||key).join(' · ')||'Choose audition activities')}</span>${completion(record)}`;card.append(caption);
+        caption.querySelector('[data-needs]')?.addEventListener('click',()=>{state.openId=record.id;state.step=missing(record)[0]?.step||0;render();});
+        if(state.openId===record.id) card.insertAdjacentHTML('beforeend',editor(record));
+        host.append(card);
+        if(state.openId===record.id) bind(card.querySelector('.ap-setup-editor'),record);
+        updateMissing(card,record);
+      });
+      const add=document.createElement('button');add.type='button';add.className='ap-setup-add';add.textContent='+ Add audition';add.onclick=addAudition;host.append(add);
+      const status=document.getElementById('aud-error');if(status)status.textContent=state.error;
+    }
+
+    function bind(root, record) {
+      root.querySelectorAll('[data-step]').forEach(button=>button.onclick=()=>{state.step=Number(button.dataset.step);render();});
+      root.querySelector('[data-close-editor]')?.addEventListener('click',()=>{save(record);state.openId=null;render();});
+      root.querySelectorAll('[data-field]').forEach(input=>input.addEventListener(input.type==='radio'||input.tagName==='SELECT'?'change':'input',()=>{
+        const key=input.dataset.field;
+        if(key==='type') { const old=types.find(type=>type.value===record.type)?.name; if(!record.customName || record.name===old) record.name=types.find(type=>type.value===input.value)?.name||'General audition'; record.type=input.value; if(record.type==='callback')record.audience='invited'; }
+        else if(key==='name'){record.name=input.value;record.customName=true;}
+        else record[key]=input.value;
+        if(key==='type'||key==='mode') {
+          state.step=key==='type'?0:1;
+          save(record);
+          render();
+        } else {
+          const title=document.querySelector(`.aud-session-card[data-session-id="${CSS.escape(record.id)}"] .aud-card-name`);
+          if(key==='name'&&title)title.textContent=record.name||types.find(type=>type.value===record.type)?.name;
+          save(record);
+          updateMissing(root.closest('.aud-session-card'),record);
+        }
+      }));
+      root.querySelectorAll('[data-multi]').forEach(input=>input.addEventListener('change',()=>{const key=input.dataset.multi;record[key]=[...root.querySelectorAll(`[data-multi="${key}"]:checked`)].map(item=>item.value);save(record);render();}));
+      root.querySelectorAll('[data-day-field]').forEach(input=>input.addEventListener('input',()=>{ensureDays(record)[Number(input.dataset.day)][input.dataset.dayField]=input.value;save(record);updateMissing(root.closest('.aud-session-card'),record);}));
+      root.querySelectorAll('[data-add-day]').forEach(button=>button.onclick=()=>{const first=ensureDays(record)[0];record.days.push({...structuredClone(first),id:'day-'+crypto.randomUUID(),date:''});state.step=1;save(record);render();});
+      root.querySelectorAll('[data-remove-day]').forEach(button=>button.onclick=()=>{record.days.splice(Number(button.dataset.removeDay),1);save(record);render();});
+      root.querySelectorAll('[data-venue-toggle]').forEach(button=>button.onclick=()=>{
+        const index=Number(button.dataset.venueToggle),day=ensureDays(record)[index],pickerId='ap-setup-venue-'+escapeId(record.id+'-'+index),picker=root.querySelector('#'+CSS.escape(pickerId));
+        picker.hidden=!picker.hidden;
+        if(!picker.hidden && window.VenuePicker){VenuePicker.render(pickerId,day.venue?.name||'Choose a venue',(name,venueId)=>{if(name==='TBD')return;const venue=VenuePicker.getVenues?.().find(item=>String(item.id)===String(venueId));day.venue=venue?{id:venue.id,name:venue.name||venue.nickname,address:venue.address||'',lat:venue.lat,lng:venue.lng}:{name,address:''};save(record);render();});}
+      });
+    }
+
+    function updateMissing(card, record) {
+      if(!card)return;
+      card.querySelectorAll('.ap-setup-missing-note').forEach(node=>node.remove());
+      const issues=missing(record);
+      const badge=card.querySelector('[data-needs]');if(badge){badge.innerHTML=`<span>✱</span> Needs details (${issues.length})`;}
+      const editorRoot=card.querySelector('.ap-setup-editor');if(!editorRoot)return;
+      const visibleIssues=issues.filter(issue=>issue.step===state.step);
+      visibleIssues.forEach(issue=>{
+        let target;
+        if(issue.day!==undefined){target=issue.key==='venue'?editorRoot.querySelector(`[data-venue-toggle="${issue.day}"]`):editorRoot.querySelector(`[data-day="${issue.day}"][data-field="${issue.key}"]`);}
+        else target=editorRoot.querySelector(`[data-field="${issue.key}"]`)||editorRoot.querySelector(`[data-multi="${issue.key}"]`);
+        const group=target?.closest('.ap-setup-field')||target?.closest('fieldset')||target?.parentElement;
+        if(group){const note=document.createElement('small');note.className='ap-setup-missing-note';note.innerHTML=`<span>✱</span> ${e(issue.text)}`;group.append(note);target?.setAttribute('aria-invalid','true');}
+      });
+    }
+
+    function save(record, immediate=false) {
+      clearTimeout(state.timers[record.id]);
+      const card=document.querySelector(`.aud-session-card[data-session-id="${CSS.escape(record.id)}"]`);
+      const status=card?.querySelector('[data-save-status]');if(status)status.textContent='Saving draft…';
+      state.saving[record.id]=true;
+      const delay=immediate?0:450;
+      state.timers[record.id]=setTimeout(()=>{
+        state.queues ||= {};
+        state.queues[record.id]=(state.queues[record.id]||Promise.resolve()).then(async()=>{
+          try {
+            const {data,error}=await sb.rpc('bts_audition_setup_save',{p_session_id:record.id,p_expected_revision:state.revisions[record.id]||0,p_draft:record});
+            if(error)throw error;
+            state.revisions[record.id]=Number(data?.revision ?? state.revisions[record.id]+1);state.saving[record.id]=false;
+            const statusEl=document.querySelector(`.aud-session-card[data-session-id="${CSS.escape(record.id)}"] [data-save-status]`);if(statusEl)statusEl.textContent='Draft saved automatically. Nothing is published.';
+          } catch(error) {
+            console.error('[BTS] audition draft save failed',error);state.saving[record.id]=false;
+            const statusEl=document.querySelector(`.aud-session-card[data-session-id="${CSS.escape(record.id)}"] [data-save-status]`);if(statusEl)statusEl.textContent='Could not save this draft. Your changes are still on screen. Try again.';
+          }
+        });
+      },delay);
+    }
+
+    function addAudition() {
+      (async()=>{
+        try {
+          const id=crypto.randomUUID();
+          const {data,error}=await sb.rpc('bts_audition_setup_create',{p_production_id:prodId,p_session_id:id,p_initial:false});
+          if(error)throw error;
+          const record=_audSetupDefault(String(data.id));state.revisions[record.id]=Number(data.revision||0);state.records.push(record);state.openId=record.id;state.step=0;state.loaded=true;render();save(record,true);
+          const card=document.querySelector(`.aud-session-card[data-session-id="${CSS.escape(record.id)}"]`);card?.scrollIntoView({behavior:'smooth',block:'start'});card?.querySelector('[data-field="name"]')?.focus({preventScroll:true});
+        }catch(error){state.error=error?.message||'Could not add this audition.';render();}
+      })();
+    }
+
+    return { state, render, load, addAudition, retry:()=>{state.loading=false;state.loaded=false;state.error='';load();} };
+  }
+
+  window.BTSAuditionSetupAdd = () => _audSetupController?.addAudition();
+  window.BTSAuditionSetupRetry = () => _audSetupController?.retry();
+
   function renderAudSessions() {
     const container = document.getElementById('aud-sessions-list');
     const countBadge = document.getElementById('aud-session-count-badge');
@@ -27144,8 +27432,22 @@ See you soon!
     renderAuditionsSidebarSubmenu();
     if (countBadge) countBadge.textContent = String(audSessions.length || 0);
 
-    const hdr        = document.getElementById('aud-settings-header');
-    const divider    = document.getElementById('aud-settings-divider');
+    const hdr = document.getElementById('aud-settings-header');
+    const divider = document.getElementById('aud-settings-divider');
+
+    if (!_audSetupController) _audSetupController = _createAudSetupController();
+    if (!_audSetupController.state.loaded) {
+      if (!_audSetupController.state.loading) {
+        container.innerHTML = '<div class="aud-sessions-empty">Loading your private audition drafts…</div>';
+        _audSetupController.load();
+      }
+      return;
+    }
+    _audSetupController.render();
+    if (hdr) hdr.style.display = '';
+    if (divider) divider.style.display = 'none';
+    if (footerAddBtn) footerAddBtn.style.display = 'none';
+    return;
 
     if (!audSessions.length) {
       if (hdr)     hdr.style.display     = 'none';
@@ -27397,13 +27699,8 @@ See you soon!
   }
 
   function openAddAuditionWizard() {
-    const _now = new Date();
-    _audWiz = { step: 1, type: null, date: '', endDate: '', multiDay: false, startTime: '', endTime: '', slotMode: 'appointment', slotDuration: 15, selfTape: false, location: '', prepNotes: '', calYear: _now.getFullYear(), calMonth: _now.getMonth(), calEvents: {}, zeusEvents: [], saving: false, editingSessionId: null };
-    _ensureAudWizShell();
-    _renderAudWiz();
-    const titleEl = document.getElementById('add-wiz-title');
-    if (titleEl) titleEl.textContent = 'Add Audition';
-    document.getElementById('add-aud-wiz-overlay').classList.add('open');
+    if (!_audSetupController?.state.loaded) { renderAudSessions(); return; }
+    _audSetupController.addAudition();
   }
 
   function openEditAuditionWizard(sessionId) {
@@ -30773,11 +31070,11 @@ See you soon!
 
   const ROLE_TYPE_CLASSES = {
     'Principal':  '#572e88',
-    'Supporting': '#c2487a',
-    'Cameo':      '#be185d',
-    'Group':      '#6b7280',
-    'Featured':   '#0891b2',
-    'Ensemble':   '#6b7280',
+    'Supporting': '#476aaa',
+    'Cameo':      '#ca7ea7',
+    'Group':      '#74a2b4',
+    'Featured':   '#efab45',
+    'Ensemble':   '#769e7b',
   };
 
   function characterLooksLikeEnsemble(c = {}) {
@@ -30963,10 +31260,17 @@ See you soon!
         </div>`);
       };
       if (c.role_type && !isEnsemble) fact('Role Type', c.role_type, ROLE_TYPE_CLASSES[c.role_type] || '#572e88');
-      if (c.age_range) fact('Age Range', c.age_range, '#d97706');
-      if (c.gender) fact('Pronouns', displayGender(c.gender), '#7c3aed');
-      if (c.vocal_type) fact('Vocal Type', c.vocal_type, '#2563eb');
-      if (effectiveUsage) fact('Vocal Usage', effectiveUsage, ensOverride ? '#572e88' : '#16a34a');
+      if (c.age_range) fact('Age Range', c.age_range, '#efab45');
+      const characterGender = c.written_as;
+      if (characterGender) fact('Character gender', displayGender(characterGender), '#572e88');
+      if (c.casting_eligibility === 'open') fact('Who may audition', 'Performers of any gender', '#476aaa');
+      else if (c.casting_eligibility === 'character_gender') fact('Who may audition', 'Match the character gender', '#476aaa');
+      else if (c.casting_eligibility === 'specific') fact('Who may audition', c.casting_notes || 'Specific requirement', '#476aaa');
+      else if (c.casting_eligibility === 'unspecified') fact('Who may audition', 'Decide later', '#efab45');
+      if (Array.isArray(c.performance_disciplines) && c.performance_disciplines.length) fact('Performance skills', c.performance_disciplines.join(' · '), '#74a2b4');
+      if (c.vocal_type) fact('Vocal Type', c.vocal_type, '#476aaa');
+      if (c.dancing_strength) fact('Movement Requirement', c.dancing_strength, '#dd8233');
+      if (effectiveUsage) fact('Vocal Usage', effectiveUsage, ensOverride ? '#572e88' : '#769e7b');
       const factsHTML = facts.length ? `<div class="char-card-facts">${facts.join('')}</div>` : '';
       const countBadge = c.performer_count > 1 ? `<span class="char-card-count">${c.performer_count} performers</span>` : '';
       const desc       = c.description ? `<div class="char-card-desc">${esc(c.description)}</div>` : '';
@@ -31086,7 +31390,10 @@ See you soon!
       production_id:     prodId,
       name:              (src.name || '') + ' (Copy)',
       role_type:         src.role_type,
-      gender:            src.gender,
+      written_as:        src.written_as,
+      casting_eligibility: src.casting_eligibility || 'unspecified',
+      casting_notes:     src.casting_notes,
+      performance_disciplines: Array.isArray(src.performance_disciplines) ? [...src.performance_disciplines] : [],
       age_range:         src.age_range,
       description:       src.description,
       performer_count:   src.performer_count,
@@ -31098,9 +31405,15 @@ See you soon!
       show_on_public_page: src.show_on_public_page,
       sort_order:        (src.sort_order ?? 0) + 1,
     };
-    const { data, error } = await sb.from('production_characters').insert(copy).select();
+    const { data, fields, error } = await persistCharacterFields(copy, { insert: true });
     if (error) { showToast('Could not duplicate character: ' + error.message, true); return; }
-    if (data) characters.push(...data);
+    try {
+      confirmCharacterCastingFieldsSaved(fields);
+    } catch (saveError) {
+      showToast(saveError.message, true);
+      return;
+    }
+    if (data) characters.push(data);
     renderCharacters(); renderMaterialsList(); updateCharInnerCount();
   }
 
@@ -31863,21 +32176,40 @@ See you soon!
     document.getElementById('char-name').value             = c?.name || '';
     document.getElementById('char-count').value            = c?.performer_count || 1;
     document.getElementById('char-role-type').value        = c?.role_type || '';
-    document.getElementById('char-gender').value           = c?.gender || '';
+    const genderSelect = document.getElementById('char-written-as');
+    genderSelect.querySelectorAll('[data-legacy-gender]').forEach(option => option.remove());
+    const savedGender = c?.written_as || '';
+    if (savedGender && ![...genderSelect.options].some(option => option.value === savedGender)) {
+      const legacyOption = document.createElement('option');
+      legacyOption.value = savedGender;
+      legacyOption.textContent = 'Previously saved: ' + savedGender;
+      legacyOption.dataset.legacyGender = 'true';
+      genderSelect.append(legacyOption);
+    }
+    genderSelect.value = savedGender;
+    const savedEligibility = c?.casting_eligibility || 'open';
+    document.getElementById('char-casting-eligibility').value = savedEligibility;
+    document.getElementById('char-casting-notes').value = c?.casting_notes || '';
+    toggleCharacterEligibilityNote(savedEligibility);
+    const savedSkills = Array.isArray(c?.performance_disciplines) ? [...c.performance_disciplines] : [];
+    if (!c?.performance_disciplines?.length && (c?.vocal_type || c?.vocal_range || c?.vocal_usage)) savedSkills.push('Singing');
+    if (!c?.performance_disciplines?.length && c?.dancing_strength) savedSkills.push('Dance / movement');
+    document.querySelectorAll('input[name="char-performance-skill"]').forEach(input => { input.checked = savedSkills.includes(input.value); });
     document.getElementById('char-age-range').value        = c?.age_range || '';
     document.getElementById('char-description').value      = c?.description || '';
     document.getElementById('char-vocal').value            = c?.vocal_type || '';
     document.getElementById('char-vocal-range').value      = c?.vocal_range || '';
     document.getElementById('char-vocal-usage').value      = c?.vocal_usage || '';
-    document.getElementById('char-dancing-strength').value = c?.dancing_strength || '';
+    const movementAliases = { 'No Dance': 'No Movement', 'Beginner Friendly': 'Light Movement', 'Performer Level': 'Moderate Movement', 'Dance-Focused': 'Dance Required' };
+    document.getElementById('char-dancing-strength').value = movementAliases[c?.dancing_strength] || c?.dancing_strength || '';
     document.getElementById('char-cast-later').checked     = c?.cast_later === true;
     document.getElementById('char-show-public').checked    = c?.show_on_public_page !== false;
   }
 
   function openAddCharacterModal() {
     editingCharId = null;
-    document.getElementById('char-modal-title').textContent = 'Add Character';
-    document.getElementById('char-save-btn').textContent = 'Save Character';
+    document.getElementById('char-modal-title').textContent = 'Add Role';
+    document.getElementById('char-save-btn').textContent = 'Save Role';
     document.getElementById('char-error').textContent = '';
     document.getElementById('char-error').classList.remove('visible');
     charModalFields(null);
@@ -31890,7 +32222,7 @@ See you soon!
     const c = characters.find(x => x.id === id);
     if (!c) return;
     editingCharId = id;
-    document.getElementById('char-modal-title').textContent = 'Edit Character';
+    document.getElementById('char-modal-title').textContent = 'Edit Role';
     document.getElementById('char-save-btn').textContent = 'Save Changes';
     document.getElementById('char-error').textContent = '';
     document.getElementById('char-error').classList.remove('visible');
@@ -31909,35 +32241,51 @@ See you soon!
     const roleType = (document.getElementById('char-role-type') || {}).value || '';
     const name = (document.getElementById('char-name') || {}).value || '';
     const isEnsemble = roleType === 'Ensemble' || /\bensemble\b/i.test(name);
-    const hide = roleType === 'Group';
-    const section = document.getElementById('char-vocal-section');
-    if (section) section.style.display = hide ? 'none' : '';
+    const skills = [...document.querySelectorAll('input[name="char-performance-skill"]:checked')].map(input => input.value);
+    const voiceFields = document.getElementById('char-voice-fields');
+    const movementFields = document.getElementById('char-movement-fields');
+    if (voiceFields) voiceFields.hidden = !skills.includes('Singing');
+    if (movementFields) movementFields.hidden = !skills.includes('Dance / movement');
     const descLabel = document.getElementById('char-description-label');
     const descInput = document.getElementById('char-description');
     if (descLabel) descLabel.innerHTML = isEnsemble
       ? 'Ensemble Breakdown <span class="opt">(optional)</span>'
       : 'Description <span class="opt">(optional)</span>';
     if (descInput) descInput.placeholder = isEnsemble
-      ? 'Describe who is in the ensemble, any groups/features, and what they do in the show...'
+      ? 'Describe who is in the ensemble, any groups/features, and what they do in the production...'
       : 'Brief role description for performers...';
   }
 
   function readCharModal() {
+    const disciplines = [...document.querySelectorAll('input[name="char-performance-skill"]:checked')].map(input => input.value);
+    const includesVoice = disciplines.includes('Singing');
+    const includesMovement = disciplines.includes('Dance / movement');
     return {
       name:             document.getElementById('char-name').value.trim(),
       performer_count:  parseInt(document.getElementById('char-count').value) || 1,
       role_type:        document.getElementById('char-role-type').value || null,
-      gender:           document.getElementById('char-gender').value || null,
+      written_as:       document.getElementById('char-written-as').value || null,
+      casting_eligibility: document.getElementById('char-casting-eligibility').value || 'open',
+      casting_notes:    document.getElementById('char-casting-notes').value.trim() || null,
+      performance_disciplines: disciplines,
       age_range:        document.getElementById('char-age-range').value.trim() || null,
       description:      document.getElementById('char-description').value.trim() || null,
-      vocal_type:       document.getElementById('char-vocal').value || null,
-      vocal_range:      document.getElementById('char-vocal-range').value.trim() || null,
-      vocal_usage:      document.getElementById('char-vocal-usage').value || null,
-      dancing_strength: document.getElementById('char-dancing-strength').value || null,
+      vocal_type:       includesVoice ? (document.getElementById('char-vocal').value || null) : null,
+      vocal_range:      includesVoice ? (document.getElementById('char-vocal-range').value.trim() || null) : null,
+      vocal_usage:      includesVoice ? (document.getElementById('char-vocal-usage').value || null) : null,
+      dancing_strength: includesMovement ? (document.getElementById('char-dancing-strength').value || null) : null,
       cast_later:       document.getElementById('char-cast-later').checked,
       show_on_public_page: document.getElementById('char-show-public').checked,
       show_on_form: true,
     };
+  }
+
+  function toggleCharacterEligibilityNote(value) {
+    const notes = document.getElementById('char-casting-notes');
+    if (notes) {
+      notes.hidden = value !== 'specific';
+      notes.required = value === 'specific';
+    }
   }
 
   async function persistCharacterFields(fields, options = {}) {
@@ -31953,30 +32301,42 @@ See you soon!
       lastError = error;
       const missingColumn = String(error?.message || '').match(/Could not find the '([^']+)' column/i)?.[1];
       if (!missingColumn || !(missingColumn in attempt)) break;
+      if (['written_as', 'casting_eligibility', 'casting_notes', 'performance_disciplines'].includes(missingColumn)) break;
       delete attempt[missingColumn];
     }
     return { data: null, fields: attempt, error: lastError };
+  }
+
+  function confirmCharacterCastingFieldsSaved(fields) {
+    const required = ['written_as', 'casting_eligibility', 'casting_notes', 'performance_disciplines'];
+    if (required.some(field => !(field in fields))) {
+      throw new Error('Character casting details need a database update before they can be saved. Apply the character casting SQL from the setup checklist, then try again.');
+    }
   }
 
   async function submitCharacter() {
     const fields = readCharModal();
     const errEl  = document.getElementById('char-error');
     const btn    = document.getElementById('char-save-btn');
-    const defaultLabel = editingCharId ? 'Save Changes' : 'Save Character';
+    const defaultLabel = editingCharId ? 'Save Changes' : 'Save Role';
     errEl.textContent = '';
     errEl.classList.remove('visible');
-    if (!fields.name) { errEl.textContent = 'Character name is required.'; errEl.classList.add('visible'); return; }
+    if (!fields.name) { errEl.textContent = 'Role name is required.'; errEl.classList.add('visible'); return; }
+    if (fields.casting_eligibility === 'specific' && !fields.casting_notes) { errEl.textContent = 'Add the specific casting requirement so performers know who this role is for.'; errEl.classList.add('visible'); document.getElementById('char-casting-notes').focus(); return; }
+    if (fields.casting_eligibility === 'character_gender' && (!fields.written_as || fields.written_as === 'Any Gender')) { errEl.textContent = 'Choose a specific character gender before matching audition eligibility to it.'; errEl.classList.add('visible'); document.getElementById('char-written-as').focus(); return; }
     btn.disabled = true; btn.textContent = 'Saving…';
     try {
       if (editingCharId) {
         const { fields: savedFields, error } = await persistCharacterFields(fields, { id: editingCharId });
         if (error) throw error;
+        confirmCharacterCastingFieldsSaved(savedFields);
         const c = characters.find(x => x.id === editingCharId);
         if (c) Object.assign(c, savedFields);
       } else {
         const payload = { ...fields, production_id: prodId, sort_order: characters.length };
-        const { data, error } = await persistCharacterFields(payload, { insert: true });
+        const { data, fields: savedFields, error } = await persistCharacterFields(payload, { insert: true });
         if (error) throw error;
+        confirmCharacterCastingFieldsSaved(savedFields);
         if (data) characters.push(data);
       }
       if (characterLooksLikeEnsemble(fields)) {
@@ -32032,7 +32392,7 @@ See you soon!
   }
 
   async function saveCharDisplaySettings() {
-    const fields = ['role_type','gender','age_range','description','vocal_range','vocal_type','vocal_usage','dancing_strength'];
+    const fields = ['role_type','written_as','casting_eligibility','age_range','description','vocal_range','vocal_type','vocal_usage','dancing_strength','performance_disciplines'];
     const vals = {};
     fields.forEach(f => { const el = document.getElementById('cd-' + f); if(el) vals[f] = el.checked; });
     const btn = document.querySelector('[onclick="saveCharDisplaySettings()"]');
@@ -32059,7 +32419,8 @@ See you soon!
     if (!auditionConfig?.char_display_fields) return;
     const vals = auditionConfig.char_display_fields;
     Object.keys(vals).forEach(f => {
-      const el = document.getElementById('cd-' + f);
+      const key = f === 'gender' && !('written_as' in vals) ? 'written_as' : f;
+      const el = document.getElementById('cd-' + key);
       if (el) el.checked = vals[f];
     });
   }
@@ -44592,18 +44953,26 @@ See you soon!
   function displayGender(raw) {
     if (!raw) return '';
     const map = {
-      'male':                      'He/Him',
-      'Male':                      'He/Him',
-      'MALE':                      'He/Him',
-      'Man / Boy':                 'He/Him',
-      'female':                    'She/Her',
-      'Female':                    'She/Her',
-      'FEMALE':                    'She/Her',
-      'Woman / Girl':              'She/Her',
-      'Non-binary / Gender-neutral': 'They/Them',
-      'any':                       'Any',
-      'Any':                       'Any',
-      'ANY':                       'Any',
+      'male':                      'Man / boy',
+      'Male':                      'Man / boy',
+      'MALE':                      'Man / boy',
+      'Man / Boy':                 'Man / boy',
+      'Man / boy':                 'Man / boy',
+      'Man':                       'Man',
+      'Boy':                       'Boy',
+      'female':                    'Woman / girl',
+      'Female':                    'Woman / girl',
+      'FEMALE':                    'Woman / girl',
+      'Woman / Girl':              'Woman / girl',
+      'Woman / girl':              'Woman / girl',
+      'Woman':                     'Woman',
+      'Girl':                      'Girl',
+      'Non-binary / Gender-neutral': 'Nonbinary',
+      'Nonbinary':                  'Nonbinary',
+      'any':                       'Any Gender',
+      'Any':                       'Any Gender',
+      'ANY':                       'Any Gender',
+      'Any Gender':                'Any Gender',
     };
     return map[raw] ?? raw;
   }

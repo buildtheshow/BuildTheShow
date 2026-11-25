@@ -2,6 +2,12 @@
 
 The live schema was inspected on 2026-11-15 without reading personal records.
 
+## Character casting eligibility and performance skills (2026-11-25)
+
+Migration: `supabase/migrations/20261125183000_character_casting_eligibility.sql`.
+
+Reuses the script breakdown’s existing `written_as` character field, then adds casting eligibility, its specific requirement note, and performance disciplines to the same `production_characters` record. Existing characters remain unset until someone chooses who may audition, so the migration does not guess at old casting intent. New characters start open to performers of any gender. The character gender stays separate from who may audition. Older `gender` values are preserved and not guessed into the new character-gender field. The public `bts_visible_characters` projection exposes these fields only with the same visibility rules already applied to character cards. The Auditions > Characters editor saves them with each role. Run this migration before saving the new fields in the app.
+
 ## Member profile editor (2026-11-21)
 
 No SQL needs to be run. The four-tab editor reuses `profiles.bio`, `profiles.headshot_url`, `profiles.headshot_urls` and the existing `profiles.sections` JSONB. Volunteer and Creative History use `sections.volunteer.history` and `sections.creative.history`; training, skills and private portfolio/media references stay under the corresponding existing section. Uploads reuse the private `profile-headshots` bucket and `bts_bind_profile_file`. Existing row and storage policies remain in force; saving grants no public access. See `docs/security/member-profile-editor.md` for the save and privacy checks.
@@ -108,6 +114,18 @@ Hosted authentication correction: Supabase CLI v3.1.0 sparse config diff reviewe
 
 2026-11-16 unified-account release verified: implementation `fb496b69`; migration `20261116170000` applied with exact source recorded atomically, checksum verified. Hosted rollback rehearsal, twelve local security suites, isolated browser journeys, 338 script parses, thirteen live API denials/checks and fourteen live route/asset markers pass. Functions active: send-email v35, retired send-invite v20, household-mail v2. All 128 historical volunteer records and 44 current/ten legacy payment rows preserved; zero exact rehearsal accounts remain. Private schema/table/service grants remain closed; scheduler successful, outbox empty. Hosted Auth minimum raised from six to twelve; email verification enabled; double email-change confirmation verified; SMTP/MFA preserved. Branded recovery subject/body installed in the in-app dashboard and persisted after reload. Real receiving-account reset/invitation completion, operator MFA enrolment and wider international privacy/legal/retention review are not certified by these automated checks. See `docs/security/unified-account-rollout.md` for the full user map, workflow and remaining acceptance conditions.
 
+## Transactional audition booking — 2026-11-16
+
+Migration: `supabase/migrations/20261116190000_transactional_audition_booking.sql`.
+
+Adds private `bts_private.audition_holds` as the actual reservation ledger (adult account, slot ID, created/expiry timestamps and one-extension state). This is new reservation state, not a second copy of auditions or people. Existing single hold columns remain inert historical compatibility fields. Public availability exposes occupied/reserved counts only; other adults' reservation IDs are never public. Holds last fifteen minutes, allow one five-minute extension, expire by server time without waiting for a cleanup job, and are bounded by account request/active-hold limits. The caller's expired records older than two days are cleaned opportunistically; the wider retention policy remains a separate launch item.
+
+Final capacity checks run in database triggers across participant, legacy and staff entrances, with a shared short production lock and ordered slot locks. Existing applications/bookings and explicit profile/booking links determine occupancy; names/email addresses never deduplicate across adults. Booking/application/extra-session writes use an invoker-rights transaction retaining existing guardian, profile and field guards. Request references make retries idempotent and a self-scoped receipt supports retry after the original response is lost. Confirmed saves release the adult's reservations. Cancellation and rescheduling synchronise linked receipts. No historical bookings are rewritten during migration.
+
+Matching frontend changes retain the current audition form, slot picker, timer, expired/full overlays, typography and styling. The browser stops modifying slot rows, uses server reservation actions and sends one final save RPC. Form data is retained when a hold expires. Confirmation delivery remains the existing server outbox; the browser does not send a second copy or claim provider/inbox success.
+
+Required rollout: all local security/browser suites; exact hosted migration/fixtures with ROLLBACK; atomic application/history recording; controlled synthetic hosted concurrency checks with outbox jobs removed in the same test transactions before commit; matching website publication; live ACL/source/count/fixture checks. Use only known synthetic accounts/productions, and remove test records after the race. Do not send real emails or change any real account password. Katie's existing design must be preserved; major visual/layout changes require her approval.
+
 ## Correct mistaken member/organisation profile setup — 2026-11-16
 
 Migration: `supabase/migrations/20261116210000_profile_type_corrections.sql`. Adds a private correction decision ledger and `organizations.profile_archived_at`; reuses the existing adult account, member profile, organisation, consent, ownership and audit records. A type correction creates or reuses the correct domain record and archives the unused mistaken record. It never changes login identity or grants roles from metadata. Linked records/other people require a protected review; the CLI operator resolver cannot bypass unresolved dependencies. Original records and organisation addresses remain retained. Shared Settings control preserves the existing design. Operator instructions and validation: `docs/security/profile-type-corrections.md`.
@@ -143,6 +161,10 @@ Account settings deployment: exact-source hosted rollback rehearsal passed; appl
 `supabase/migrations/20261121170000_member_production_payments.sql` reuses the existing tracker ledger and account activity API, adds safe organisation/production payment instructions, accepted own-profile team participation and a narrow profile-access projection. No new tables or historical record reassignment. Old implementations become private helpers with browser execution revoked. Local SQL/browser checks and exact-source hosted rollback rehearsal pass. Only this migration has been applied and recorded; the matching Activities/profile UI is included in this release. The unrelated transactional-booking migration remains separate. See `docs/security/member-production-payments.md`.
 
 Member production payments deployment: applied and recorded only version `20261121170000` after the exact-source rollback rehearsal. Checksum and grants verified; zero rehearsal accounts remain. No existing payment/instruction records changed and no email sent. Matching frontend publication is part of the same release.
+
+## Private audition setup drafts — 2026-11-25
+
+`supabase/migrations/20261125170000_audition_setup_drafts.sql` adds revisioned private audition setup drafts to the existing audition session rows and explicit private load/create/save plus publication RPCs. Draft edits do not change the public audition session or its booking slots. Publication is a separate explicit database action; no publication action is exposed by the current setup editor. Existing booked slots are checked and never silently rebuilt. The setup UI uses the existing audition card renderer and the new booking arrangement icons. This migration has not been applied to the hosted database. Before any application, complete the exact-source hosted rollback rehearsal and local SQL/browser checks, then apply only this migration and verify grants, public view exclusion, and fixture cleanup. Do not publish auditions as part of the draft UI rollout.
 
 
 ## Member production details (2026-11-22)
