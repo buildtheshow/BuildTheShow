@@ -27310,20 +27310,20 @@ See you soon!
     }
 
     function field(label, key, value, type = 'text', extra = '') {
-      return `<label class="ap-setup-field">${label}<input type="${type}" data-field="${key}" value="${e(value || '')}" ${extra}></label>`;
+      return `<label class="ap-setup-field"><span class="ap-setup-field-title">${label}</span><input type="${type}" data-field="${key}" value="${e(value || '')}" ${extra}></label>`;
     }
     function multiChoice(label, key, value, checked) {
       return `<label class="ap-setup-choice ${checked ? 'ap-setup-choice-selected' : ''}"><input type="checkbox" role="checkbox" aria-checked="${checked}" data-multi="${key}" value="${value}" ${checked ? 'checked' : ''}><span class="ap-setup-radio-mark" aria-hidden="true"></span><span>${label}</span></label>`;
     }
     function dayHTML(record, day, index) {
       const uid = escapeId(record.id + '-' + index);
-      const dayField = (label, key, value, type) => `<label class="ap-setup-field">${label}<input type="${type}" data-day="${index}" data-day-field="${key}" value="${e(value || '')}"></label>`;
+      const dayField = (label, key, value, type) => `<label class="ap-setup-field"><span class="ap-setup-field-title">${label}</span><input type="${type}" data-day="${index}" data-day-field="${key}" value="${e(value || '')}"></label>`;
       const venues = window.VenuePicker?.getVenues?.() || [];
       const currentVenueId = day.venue?.id ? String(day.venue.id) : '';
       const venueExists = venues.some(venue => String(venue.id) === currentVenueId);
       const currentVenueOption = day.venue?.name && !venueExists ? `<option value="${e(currentVenueId || day.venue.name)}" selected>${e(day.venue.name)}${day.venue.address ? ' · ' + e(day.venue.address) : ''}</option>` : '';
       const venueOptions = venues.map(venue => `<option value="${e(venue.id)}" ${currentVenueId && String(venue.id) === currentVenueId || !currentVenueId && day.venue?.name === (venue.nickname || venue.name) ? 'selected' : ''}>${e(venue.nickname || venue.name)}${venue.address ? ' · ' + e(venue.address) : ''}</option>`).join('');
-      return `<section class="ap-setup-daypanel"><div class="ap-setup-date-row">${dayField('Date','date',day.date,'date')}${dayField('Start Time','start',day.start,'time')}${dayField('Finish Time','end',day.end,'time')}</div>${record.methods.includes('in_person') ? `<div class="ap-setup-location"><div class="ap-setup-venue-row"><label class="ap-setup-field">Venue<select data-venue-select="${index}"><option value="">Choose a venue...</option>${currentVenueOption}${venueOptions}</select></label><button type="button" data-venue-search="${index}">Find venue</button></div>${day.venue?.name ? `<p class="ap-setup-venue-address">${e(day.venue.address || '')}${day.venue.address ? ` · <a href="${mapLink(day.venue)}" target="_blank" rel="noopener noreferrer">Open in maps</a>` : ''}</p>` : ''}<div class="ap-setup-venue-picker" id="ap-setup-venue-${uid}" ${state.openVenue === `${record.id}:${index}` ? '' : 'hidden'}></div><details><summary>Room & location instructions (optional)</summary><div class="ap-setup-instructions"><label class="ap-setup-field">Room or studio<input type="text" data-day="${index}" data-day-field="room" value="${e(day.room || '')}"></label><label class="ap-setup-field">Location instructions<textarea data-day="${index}" data-day-field="locationNotes" rows="2" placeholder="For example: use the side entrance. Studio 1 is upstairs.">${e(day.locationNotes || '')}</textarea></label></div></details></div>` : ''}</section>`;
+      return `<section class="ap-setup-daypanel"><div class="ap-setup-date-row">${dayField('Date','date',day.date,'date')}${dayField('Start Time','start',day.start,'time')}${dayField('Finish Time','end',day.end,'time')}</div>${record.methods.includes('in_person') ? `<div class="ap-setup-location"><div class="ap-setup-venue-row"><label class="ap-setup-field"><span class="ap-setup-field-title">Venue</span><select data-venue-select="${index}"><option value="">Choose a venue...</option>${currentVenueOption}${venueOptions}</select></label><button type="button" data-venue-search="${index}">Find venue</button></div>${day.venue?.name ? `<p class="ap-setup-venue-address">${e(day.venue.address || '')}${day.venue.address ? ` · <a href="${mapLink(day.venue)}" target="_blank" rel="noopener noreferrer">Open in maps</a>` : ''}</p>` : ''}<div class="ap-setup-venue-picker" id="ap-setup-venue-${uid}" ${state.openVenue === `${record.id}:${index}` ? '' : 'hidden'}></div><details><summary>Room & location instructions (optional)</summary><div class="ap-setup-instructions"><label class="ap-setup-field">Room or studio<input type="text" data-day="${index}" data-day-field="room" value="${e(day.room || '')}"></label><label class="ap-setup-field">Location instructions<textarea data-day="${index}" data-day-field="locationNotes" rows="2" placeholder="For example: use the side entrance. Studio 1 is upstairs.">${e(day.locationNotes || '')}</textarea></label></div></details></div>` : ''}</section>`;
     }
     function editor(record) {
       const step = state.step;
@@ -27432,8 +27432,10 @@ See you soon!
         save(record);updateMissing(root.closest('.aud-session-card'),record);
       }));
       root.querySelectorAll('[data-add-day]').forEach(button=>button.onclick=()=>{
-        const first=ensureDays(record)[0],index=record.days.length;
-        const newDay={...structuredClone(first),id:'day-'+crypto.randomUUID(),date:''};
+        const days=ensureDays(record),first=days[0],previous=days[days.length-1],index=days.length;
+        let nextDate='';
+        if(previous.date){const date=new Date(previous.date+'T12:00:00');date.setDate(date.getDate()+1);nextDate=[date.getFullYear(),String(date.getMonth()+1).padStart(2,'0'),String(date.getDate()).padStart(2,'0')].join('-');}
+        const newDay={...structuredClone(first),id:'day-'+crypto.randomUUID(),date:nextDate};
         record.days.push(newDay);
         state.activeDay[record.id]=index;state.step=2;save(record);render();
       });
@@ -27469,7 +27471,7 @@ See you soon!
         if(issue.day!==undefined){target=issue.key==='venue'?editorRoot.querySelector(`[data-venue-select="${issue.day}"]`):editorRoot.querySelector(`[data-day="${issue.day}"][data-day-field="${issue.key}"]`);}
         else target=editorRoot.querySelector(`[data-field="${issue.key}"]`)||editorRoot.querySelector(`[data-multi="${issue.key}"]`);
         const group=target?.closest('.ap-setup-field')||target?.closest('fieldset')||target?.parentElement;
-        if(group){const note=document.createElement('small');note.className='ap-setup-missing-note';note.innerHTML=`<span>✱</span> ${e(issue.text)}`;group.append(note);target?.setAttribute('aria-invalid','true');}
+        if(group){const note=document.createElement('small');note.className='ap-setup-missing-note';note.innerHTML=`<span>✱</span> ${e(issue.text)}`;const title=group.querySelector(':scope > .ap-setup-field-title');(title||group).append(note);target?.setAttribute('aria-invalid','true');}
       });
     }
 
