@@ -4,7 +4,7 @@ create table if not exists public.production_proposal_intakes (
   title text not null,
   season_label text,
   description text,
-  access_token text not null default encode(gen_random_bytes(12), 'hex'),
+  access_token text not null default left(replace(gen_random_uuid()::text, '-', ''), 24),
   access_code text not null,
   is_open boolean not null default true,
   closes_at timestamptz,

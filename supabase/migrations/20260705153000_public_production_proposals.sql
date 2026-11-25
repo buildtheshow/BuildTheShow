@@ -2,7 +2,7 @@ alter table public.organizations
   add column if not exists proposal_submission_token text;
 
 alter table public.organizations
-  alter column proposal_submission_token set default encode(gen_random_bytes(12), 'hex');
+  alter column proposal_submission_token set default left(replace(gen_random_uuid()::text, '-', ''), 24);
 
 create unique index if not exists organizations_proposal_submission_token_idx
   on public.organizations (proposal_submission_token)
