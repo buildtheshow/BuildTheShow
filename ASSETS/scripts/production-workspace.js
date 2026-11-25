@@ -27182,7 +27182,7 @@ See you soon!
   let _audSetupController = null;
 
   function _audSetupDefault(id, name = 'General audition') {
-    return { id, name, type: 'audition', audience: 'open', methods: ['in_person'], mode: 'appointment', days: [{ id: 'day-' + crypto.randomUUID(), date: '', start: '', end: '', venue: null, room: '', locationNotes: '' }], slot: '10', gap: '2', capacity: '1', activities: [], prep: '', bring: '', access: '', finish: 'After their appointment', registration: 'Book in advance', arrivalClose: '', deadline: '', customName: false };
+    return { id, name, type: 'audition', audience: 'open', methods: ['in_person'], mode: 'appointment', days: [{ id: 'day-' + crypto.randomUUID(), date: '', start: '', end: '', venue: null, room: '', locationNotes: '' }], slot: '10', gap: '2', capacity: '1', activities: [], prep: '', bring: '', access: '', finish: 'After their appointment', registration: 'Book in advance', deadline: '', customName: false };
   }
 
   function _audSetupFromPublished(id, published, fallback) {
@@ -27224,7 +27224,7 @@ See you soon!
       { value: 'callback', label: 'Callback', name: 'Callback', colour: '#769e7b', icon: 'Star.svg' },
       { value: 'other', label: 'Another audition', name: 'Other audition', colour: '#d1523d', icon: 'Auditions.svg' },
     ];
-    const methods = [['in_person', 'In person', 'navprofile.svg'], ['video_call', 'Video call', 'VideoCall.svg'], ['self_tape', 'Self-tape', 'SelfTape.svg']];
+    const methods = [['in_person', 'In person', 'navprofile.svg', 'Meet performers at your venue.'], ['video_call', 'Video call', 'VideoCall.svg', 'Audition live by video call.'], ['self_tape', 'Self-tape', 'SelfTape.svg', 'Performers submit a recording by a deadline.']];
     const modes = [
       ['appointment', 'Individual Appointment', 'Individual audition time. Performers choose their own time slot and audition individually.', 'audition-booking-type-owntime.svg'],
       ['arrival', 'Shared Appointment', 'Shared arrival time. Performers book the same arrival time, then take turns auditioning individually.', 'audition-booking-type-sharedarrival.svg'],
@@ -27333,12 +27333,12 @@ See you soon!
       else if (step === 1) {
         const tape = record.methods.length === 1 && record.methods.includes('self_tape');
         const bookingMethods = tape ? '' : `<fieldset><legend>How should people book?</legend><p>Choose how performers will reserve or receive their audition time.</p><div class="ap-setup-booking-grid">${modes.map(([value,label,desc,icon]) => `<label class="ap-setup-booking ${record.mode === value ? 'selected' : ''}"><input type="radio" data-field="mode" name="mode-${e(record.id)}" value="${value}" ${record.mode === value ? 'checked' : ''}><span class="ap-setup-booking-icon" aria-hidden="true" style="--booking-icon:url('${encodeURI('/ASSETS/Images/Icons/' + icon)}')"></span><span><strong>${label}</strong><small>${desc}</small></span></label>`).join('')}</div></fieldset>`;
-        const additionalOptions = `<fieldset class="ap-setup-additional-options"><legend>How can people take part?</legend><p>Select all the ways performers can audition.</p><div class="ap-setup-method-list">${methods.map(([key,label])=>`<label><input type="checkbox" data-multi="methods" value="${key}" ${record.methods.includes(key)?'checked':''}><span><strong>${label}</strong>${key==='video_call'?'<small>Run auditions by video call, such as Zoom or Teams.</small>':key==='self_tape'?'<small>Let performers submit a recorded audition by a set deadline.</small>':'<small>Meet performers at the venue in Dates & location.</small>'}</span></label>`).join('')}</div></fieldset>`;
+        const additionalOptions = `<fieldset class="ap-setup-additional-options"><legend>How can people take part?</legend><p>Select all that apply. Performers can choose more than one.</p><div class="ap-setup-method-list">${methods.map(([key,label,icon,description])=>`<label class="ap-setup-method-card ${record.methods.includes(key)?'selected':''}"><input type="checkbox" data-multi="methods" value="${key}" ${record.methods.includes(key)?'checked':''}><span class="ap-setup-method-icon" aria-hidden="true" style="--method-icon:url('${encodeURI('/ASSETS/Images/Icons/' + icon)}')"></span><span class="ap-setup-method-copy"><strong>${label}</strong><small>${description}</small></span></label>`).join('')}</div></fieldset>`;
         const tapeDeadline = record.methods.includes('self_tape') ? `<section class="ap-setup-deadline"><h3>Self-tape deadline</h3><p>Performers submit their recording by this date and time.</p>${field('Submission deadline', 'deadline', record.deadline, 'datetime-local')}</section>` : '';
         const modeSettings = tape ? '<p class="ap-setup-note">People submit a recording. They do not book a live audition time.</p>' : `<div class="ap-setup-grid">${record.mode === 'appointment' ? field('Minutes per person', 'slot', record.slot, 'number', 'min="1" max="180"') : ['group','arrival'].includes(record.mode) ? field('Places in this session', 'capacity', record.capacity, 'number', 'min="1" max="200"') : record.mode === 'walkin' ? '<p class="ap-setup-note">Performers arrive during the advertised hours, check in, and wait their turn.</p>' : '<p>The team sends each invited person their time.</p>'}${record.mode === 'appointment' ? field('Minutes between appointments', 'gap', record.gap, 'number', 'min="0" max="60"') : ''}${record.mode === 'arrival' ? '<p class="ap-setup-note">A shared arrival time does not mean people audition together. Add arrival and leaving instructions under Preparation.</p>' : ''}</div>`;
         const days = ensureDays(record);
         const onlineInstructions = record.methods.includes('video_call') ? `<section class="ap-setup-online-instructions"><h3>Online audition joining instructions</h3><p>Add the video link or joining details performers need for each day.</p>${days.map((day,index)=>`<label class="ap-setup-field">Day ${index+1} joining instructions<textarea data-day="${index}" data-day-field="videoInstructions" rows="2" placeholder="Add a video call link or joining details.">${e(day.videoInstructions || '')}</textarea></label>`).join('')}</section>` : '';
-        body = `${additionalOptions}${onlineInstructions}${bookingMethods}${modeSettings}${tapeDeadline}`;
+        body = `${bookingMethods}${additionalOptions}${onlineInstructions}${modeSettings}${tapeDeadline}`;
       } else if (step === 2) {
         const tape = record.methods.length === 1 && record.methods.includes('self_tape');
         const days = ensureDays(record);
