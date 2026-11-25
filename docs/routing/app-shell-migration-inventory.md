@@ -297,7 +297,9 @@ Use a strangler migration: old pages continue to work until their replacement is
 5. **Production routes:** dashboard and plan first, then auditions/characters/casting, volunteer and creative work, ticketing, finance, communications, and wrap-up. Preserve the approved sidebar and each existing page until its replacement is ready.
 6. **Retire duplicate implementations:** only after routes and actions have a single owner and compatibility links are accounted for.
 
-### Architecture decision before code migration
+### Cloudflare deployment facts
 
-The current repository is deployed as static files plus Pages Functions, with no checked-in root build command or framework. The route inventory is ready; the remaining deployment fact to establish is the Cloudflare Pages project's configured build command and output directory. A new framework should not be chosen or wired to production until that is known. This avoids creating a second app that works locally but is not what Cloudflare deploys.
+Katie's Cloudflare Pages screenshot shows the connected `buildtheshow/BuildTheShow` Git repository, production branch `main`, and automatic deployments enabled. Build command, build output directory, and root directory appear unset. The current deployment therefore has no configured framework build step and uses the repository's static Pages delivery. Do not change these production settings as part of the inventory or route audit.
+
+Before introducing a framework build, prepare a preview branch/build that preserves every current static path and Pages Function. Confirm that the preview contains the existing `/ASSETS`, `/PUBLIC`, `/SYSTEM`, `/SHARED`, root HTML, `_headers`, `_redirects`, and `_routes.json` surfaces, and that dynamic Pages Functions still deploy from the repository root. Only then update the Pages build command/output directory. This prevents a new app bundle from accidentally replacing the existing live site.
 - This inventory is a baseline, not approval to rename or remove a page.
