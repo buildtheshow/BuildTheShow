@@ -305,6 +305,7 @@ Do not casually reintroduce `Applicants` in user-facing audition flows when we m
 
 - Boxes that hold information must always be 100% filled with a real colour.
 - Information boxes must never be transparent, frosted, glassy, or see-through.
+- Use solid colours for interface surfaces. Do not use gradients or backdrop blur as part of Build The Show branding.
 - The page wallpaper or grid may show around information boxes, but must not show through them.
 - Containers and layout wrappers should be 0% filled by default unless a filled surface is specifically requested.
 - Containers may control spacing, borders, grouping, section collapse, and layout without becoming another filled card.

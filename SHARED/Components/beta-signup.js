@@ -10,7 +10,7 @@
   function mount() {
     if (overlay) return;
     const holder = document.createElement('div');
-    holder.innerHTML = `<div id="beta-signup-overlay" role="dialog" aria-modal="true" aria-labelledby="beta-signup-title" onclick="BTSBetaSignup.hide()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);backdrop-filter:blur(6px);z-index:9999;align-items:center;justify-content:center;">
+    holder.innerHTML = `<div id="beta-signup-overlay" role="dialog" aria-modal="true" aria-labelledby="beta-signup-title" onclick="BTSBetaSignup.hide()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:9999;align-items:center;justify-content:center;">
     <div onclick="event.stopPropagation()" style="background:#fff;border-radius:20px;padding:2.5rem 2rem;max-width:420px;width:90%;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,0.28);">
       <div style="font-size:2rem;margin-bottom:0.75rem;">🎭</div>
       <h2 id="beta-signup-title" style="font-family:var(--bts-font);font-size:1.4rem;font-weight:900;color:#000000;margin:0 0 0.6rem;text-transform:uppercase;letter-spacing:0.02em;">We're in Beta Testing</h2>
