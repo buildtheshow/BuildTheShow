@@ -27216,7 +27216,7 @@ See you soon!
   }
 
   function _createAudSetupController() {
-    const state = { loaded: false, loading: false, records: [], revisions: {}, openId: null, step: 0, timers: {}, saving: {}, error: '' };
+    const state = { loaded: false, loading: false, records: [], revisions: {}, openId: null, step: 0, activeDay: {}, openVenue: '', timers: {}, saving: {}, error: '' };
     const sections = ['Details', 'Booking & times', 'Activities', 'Preparation', 'Review'];
     const types = [
       { value: 'audition', label: 'General audition', name: 'General audition', colour: '#476aaa', icon: 'Auditions.svg' },
@@ -27224,7 +27224,7 @@ See you soon!
       { value: 'callback', label: 'Callback', name: 'Callback', colour: '#769e7b', icon: 'Star.svg' },
       { value: 'other', label: 'Another audition', name: 'Other audition', colour: '#d1523d', icon: 'Auditions.svg' },
     ];
-    const methods = [['in_person', 'In person', 'navprofile.svg'], ['video_call', 'Live video call', 'VideoCall.svg'], ['self_tape', 'Self-tape', 'SelfTape.svg']];
+    const methods = [['in_person', 'In person', 'navprofile.svg'], ['video_call', 'Online audition', 'VideoCall.svg'], ['self_tape', 'Self-tape', 'SelfTape.svg']];
     const modes = [
       ['appointment', 'Individual Appointment', 'Individual audition time. Performers choose their own time slot and audition individually.', 'audition-booking-type-owntime.svg'],
       ['arrival', 'Shared Appointment', 'Shared arrival time. Performers book the same arrival time, then take turns auditioning individually.', 'audition-booking-type-sharedarrival.svg'],
@@ -27239,7 +27239,10 @@ See you soon!
     const niceDate = value => { if (!value) return 'Date to be added'; const date = new Date(value + 'T12:00:00'); return Number.isNaN(date.getTime()) ? 'Date to be added' : date.toLocaleDateString('en-CA', { weekday: 'long', day: 'numeric', month: 'long' }); };
     const niceTime = value => value ? new Date('2000-01-01T' + value).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' }) : 'Time to be confirmed';
     const mapLink = venue => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([venue?.name, venue?.address].filter(Boolean).join(', '));
-    const ensureDays = record => { if (!Array.isArray(record.days) || !record.days.length) record.days = [{ id: 'day-' + crypto.randomUUID(), date: '', start: '', end: '', venue: null, room: '', locationNotes: '' }]; return record.days; };
+    const ensureDays = record => {
+      if (!Array.isArray(record.days) || !record.days.length) record.days = [{ id: 'day-' + crypto.randomUUID(), date: '', start: '', end: '', venue: null, room: '', locationNotes: '' }];
+      return record.days;
+    };
 
     async function load() {
       if (state.loading) return;
@@ -27288,7 +27291,7 @@ See you soon!
     function missing(record) {
       const out = [];
       if (!record.name?.trim()) out.push({ step: 0, key: 'name', text: 'Add an audition name.' });
-      if (!record.methods?.length) out.push({ step: 0, key: 'methods', text: 'Choose at least one way people can take part.' });
+      if (!record.methods?.length) out.push({ step: 1, key: 'methods', text: 'Choose at least one way people can take part.' });
       const tape = record.methods?.length === 1 && record.methods.includes('self_tape');
       if (record.methods?.includes('self_tape') && !record.deadline) out.push({ step: 1, key: 'deadline', text: 'Add a submission deadline.' });
       if (!tape) {
@@ -27315,17 +27318,31 @@ See you soon!
     function dayHTML(record, day, index) {
       const uid = escapeId(record.id + '-' + index);
       const dayField = (label, key, value, type) => `<label class="ap-setup-field">${label}<input type="${type}" data-day="${index}" data-day-field="${key}" value="${e(value || '')}"></label>`;
-      return `<section class="ap-setup-day"><header><strong>Day ${index + 1}</strong>${index ? `<button type="button" data-remove-day="${index}">Remove day</button>` : ''}</header><div class="ap-setup-date-row">${dayField('Date','date',day.date,'date')}${dayField('Start','start',day.start,'time')}${dayField('Finish','end',day.end,'time')}</div>${record.methods.includes('in_person') ? `<div class="ap-setup-location"><strong>Location <span class="ap-setup-required" data-venue-required="${index}"></span></strong><div class="ap-setup-venue-summary">${day.venue?.name ? `<span><b>${e(day.venue.name)}</b><small>${e(day.venue.address || '')}</small></span><a href="${mapLink(day.venue)}" target="_blank" rel="noopener noreferrer">Map ↗</a>` : '<span><b>Choose a venue</b><small>Find the venue and confirm its full address.</small></span>'}<button type="button" data-venue-toggle="${index}">${day.venue?.name ? 'Change' : 'Find venue'}</button></div><div class="ap-setup-venue-picker" id="ap-setup-venue-${uid}" hidden></div><details><summary>Room & location instructions (optional)</summary><div class="ap-setup-grid"><label class="ap-setup-field">Room or studio<input type="text" data-day="${index}" data-day-field="room" value="${e(day.room || '')}"></label><label class="ap-setup-field ap-setup-wide">Location instructions<textarea data-day="${index}" data-day-field="locationNotes" rows="2" placeholder="For example: use the side entrance. Studio 1 is upstairs.">${e(day.locationNotes || '')}</textarea></label></div></details></div>` : ''}${record.methods.includes('video_call') ? `<label class="ap-setup-field ap-setup-extra">Video-call joining instructions<textarea data-day="${index}" data-day-field="videoInstructions" rows="2">${e(day.videoInstructions || '')}</textarea></label>` : ''}</section>`;
+      const venues = window.VenuePicker?.getVenues?.() || [];
+      const currentVenueId = day.venue?.id ? String(day.venue.id) : '';
+      const venueExists = venues.some(venue => String(venue.id) === currentVenueId);
+      const currentVenueOption = day.venue?.name && !venueExists ? `<option value="${e(currentVenueId || day.venue.name)}" selected>${e(day.venue.name)}${day.venue.address ? ' · ' + e(day.venue.address) : ''}</option>` : '';
+      const venueOptions = venues.map(venue => `<option value="${e(venue.id)}" ${currentVenueId && String(venue.id) === currentVenueId || !currentVenueId && day.venue?.name === (venue.nickname || venue.name) ? 'selected' : ''}>${e(venue.nickname || venue.name)}${venue.address ? ' · ' + e(venue.address) : ''}</option>`).join('');
+      return `<section class="ap-setup-daypanel"><div class="ap-setup-date-row">${dayField('Date','date',day.date,'date')}${dayField('Start Time','start',day.start,'time')}${dayField('Finish Time','end',day.end,'time')}</div>${record.methods.includes('in_person') ? `<div class="ap-setup-location"><div class="ap-setup-venue-row"><label class="ap-setup-field">Venue<select data-venue-select="${index}"><option value="">Choose a venue...</option>${currentVenueOption}${venueOptions}</select></label><button type="button" data-venue-search="${index}">Find venue</button></div>${day.venue?.name ? `<p class="ap-setup-venue-address">${e(day.venue.address || '')}${day.venue.address ? ` · <a href="${mapLink(day.venue)}" target="_blank" rel="noopener noreferrer">Open in maps</a>` : ''}</p>` : ''}<div class="ap-setup-venue-picker" id="ap-setup-venue-${uid}" ${state.openVenue === `${record.id}:${index}` ? '' : 'hidden'}></div><details open><summary>Room & location instructions (optional)</summary><div class="ap-setup-instructions"><label class="ap-setup-field">Room or studio<input type="text" data-day="${index}" data-day-field="room" value="${e(day.room || '')}"></label><label class="ap-setup-field">Location instructions<textarea data-day="${index}" data-day-field="locationNotes" rows="2" placeholder="For example: use the side entrance. Studio 1 is upstairs.">${e(day.locationNotes || '')}</textarea></label></div></details></div>` : ''}${record.methods.includes('video_call') ? `<label class="ap-setup-field ap-setup-extra">Online audition joining instructions<textarea data-day="${index}" data-day-field="videoInstructions" rows="2">${e(day.videoInstructions || '')}</textarea></label>` : ''}</section>`;
     }
     function editor(record) {
       const step = state.step;
       const accent = colour(record);
       let body = '';
-      if (step === 0) body = `<div class="ap-setup-grid">${field('Audition name', 'name', record.name)}<fieldset class="ap-setup-full"><legend>Audition type</legend><div class="ap-setup-types">${types.map(type => `<label class="ap-setup-type ${record.type === type.value ? 'selected' : ''}" style="--type-colour:${type.colour}"><input type="radio" data-field="type" name="type-${e(record.id)}" value="${type.value}" ${record.type === type.value ? 'checked' : ''}><span><img src="/ASSETS/Images/Icons/${type.icon}" alt=""><strong>${type.label}</strong></span></label>`).join('')}</div></fieldset><fieldset class="ap-setup-full"><legend>How can people take part?</legend><p>Select all that apply. You can choose more than one.</p><div class="ap-setup-pills">${methods.map(([key,label]) => multiChoice(label, 'methods', key, record.methods.includes(key))).join('')}</div></fieldset></div>`;
+      if (step === 0) body = `<div class="ap-setup-grid">${field('Audition name', 'name', record.name)}<fieldset class="ap-setup-full"><legend>Audition type</legend><div class="ap-setup-types">${types.map(type => `<label class="ap-setup-type ${record.type === type.value ? 'selected' : ''}" style="--type-colour:${type.colour}"><input type="radio" data-field="type" name="type-${e(record.id)}" value="${type.value}" ${record.type === type.value ? 'checked' : ''}><span><img src="/ASSETS/Images/Icons/${type.icon}" alt=""><strong>${type.label}</strong></span></label>`).join('')}</div></fieldset></div>`;
       else if (step === 1) {
         const tape = record.methods.length === 1 && record.methods.includes('self_tape');
+        const days = ensureDays(record);
+        const dayIndex = Math.min(state.activeDay[record.id] || 0, days.length - 1);
+        const activeDay = days[dayIndex];
+        const bookingMethods = tape ? '' : `<fieldset><legend>How should people book?</legend><p>Choose how performers will reserve or receive their audition time.</p><div class="ap-setup-booking-grid">${modes.map(([value,label,desc,icon]) => `<label class="ap-setup-booking ${record.mode === value ? 'selected' : ''}"><input type="radio" data-field="mode" name="mode-${e(record.id)}" value="${value}" ${record.mode === value ? 'checked' : ''}><img src="${encodeURI('/ASSETS/Images/Icons/' + icon)}" alt=""><span><strong>${label}</strong><small>${desc}</small></span></label>`).join('')}</div></fieldset>`;
+        const dateTitle = record.methods.includes('in_person') ? 'Dates & Locations' : 'Dates & Times';
+        const dateHelp = record.methods.includes('in_person') ? 'Set when and where your in-person auditions will take place.' : 'Set when your online auditions will take place.';
+        const datePanel = tape ? '' : `<section class="ap-setup-date-section"><header><span class="ap-setup-date-icon"><img src="/ASSETS/Images/Icons/calendar-date.svg" alt=""></span><span><h3>${dateTitle}</h3><p>${dateHelp}</p></span></header><div class="ap-setup-days"><nav class="ap-setup-day-tabs" aria-label="Audition dates">${days.map((day,index)=>`<button type="button" data-day-tab="${index}" aria-selected="${dayIndex===index}">Day ${index+1}</button>`).join('')}<button type="button" class="ap-setup-add-day" data-add-day>+ Add day</button>${days.length>1&&dayIndex>0?`<button type="button" class="ap-setup-remove-day" data-remove-day="${dayIndex}">Remove day</button>`:''}</nav>${dayHTML(record,activeDay,dayIndex)}</div></section>`;
+        const additionalOptions = `<fieldset class="ap-setup-additional-options"><legend>Additional Audition Options (Optional)</legend><p>Include online auditions or a self-tape option if you need them.</p><div class="ap-setup-method-list">${methods.map(([key,label])=>`<label><input type="checkbox" data-multi="methods" value="${key}" ${record.methods.includes(key)?'checked':''}><span><strong>${label}</strong>${key==='video_call'?'<small>Run auditions by video call, such as Zoom or Teams.</small>':key==='self_tape'?'<small>Let performers submit a recorded audition by a set deadline.</small>':'<small>Meet performers in person at the venue above.</small>'}</span></label>`).join('')}</div></fieldset>`;
         const tapeDeadline = record.methods.includes('self_tape') ? `<section class="ap-setup-deadline"><h3>Self-tape deadline</h3><p>Performers submit their recording by this date and time.</p>${field('Submission deadline', 'deadline', record.deadline, 'datetime-local')}</section>` : '';
-        body = tape ? `${tapeDeadline}<p class="ap-setup-note">People send a recording. They do not book a live appointment.</p>` : `<fieldset><legend>How should people book?</legend><p>Choose how performers will reserve or receive their audition time.</p><div class="ap-setup-booking-grid">${modes.map(([value,label,desc,icon]) => `<label class="ap-setup-booking ${record.mode === value ? 'selected' : ''}"><input type="radio" data-field="mode" name="mode-${e(record.id)}" value="${value}" ${record.mode === value ? 'checked' : ''}><img src="${encodeURI('/ASSETS/Images/Icons/' + icon)}" alt=""><span><strong>${label}</strong><small>${desc}</small></span></label>`).join('')}</div></fieldset><section class="ap-setup-days"><h3>Dates & locations</h3>${ensureDays(record).map((day,index) => dayHTML(record,day,index)).join('')}<div class="ap-setup-more-dates"><strong>Need more audition times?</strong><p>Add another date to offer more appointments for this audition. Each person books one appointment across the available dates.</p><p>For callbacks, dance calls or a different audition, use <b>Add audition</b> to create a separate card.</p><button type="button" data-add-day>+ Add another date</button></div></section><div class="ap-setup-grid">${record.mode === 'appointment' ? field('Minutes per person', 'slot', record.slot, 'number', 'min="1" max="180"') : ['group','arrival'].includes(record.mode) ? field('Places in this session', 'capacity', record.capacity, 'number', 'min="1" max="200"') : record.mode === 'walkin' ? field('Last check-in time', 'arrivalClose', record.arrivalClose, 'time') : '<p>The team sends each invited person their time.</p>'}${record.mode === 'appointment' ? field('Minutes between appointments', 'gap', record.gap, 'number', 'min="0" max="60"') : ''}${record.mode === 'arrival' ? '<p class="ap-setup-note">A shared arrival time does not mean people perform together. Add arrival and leaving instructions under Preparation.</p>' : ''}</div>${tapeDeadline}`;
+        const modeSettings = tape ? '<p class="ap-setup-note">People submit a recording. They do not book a live audition time.</p>' : `<div class="ap-setup-grid">${record.mode === 'appointment' ? field('Minutes per person', 'slot', record.slot, 'number', 'min="1" max="180"') : ['group','arrival'].includes(record.mode) ? field('Places in this session', 'capacity', record.capacity, 'number', 'min="1" max="200"') : record.mode === 'walkin' ? field('Last check-in time', 'arrivalClose', record.arrivalClose, 'time') : '<p>The team sends each invited person their time.</p>'}${record.mode === 'appointment' ? field('Minutes between appointments', 'gap', record.gap, 'number', 'min="0" max="60"') : ''}${record.mode === 'arrival' ? '<p class="ap-setup-note">A shared arrival time does not mean people audition together. Add arrival and leaving instructions under Preparation.</p>' : ''}</div>`;
+        body = `${bookingMethods}${datePanel}${modeSettings}${additionalOptions}${tapeDeadline}`;
       } else if (step === 2) body = `<fieldset><legend>What does this audition include?</legend><div class="ap-setup-grid">${activities.map(([key,label]) => multiChoice(label,'activities',key,record.activities.includes(key))).join('')}</div></fieldset>`;
       else if (step === 3) body = `<div class="ap-setup-grid"><label class="ap-setup-field ap-setup-full">What should they prepare?<textarea data-field="prep" rows="3">${e(record.prep)}</textarea></label><label class="ap-setup-field ap-setup-full">What should they bring?<textarea data-field="bring" rows="2">${e(record.bring)}</textarea></label><label class="ap-setup-field">When can they leave?<select data-field="finish"><option ${record.finish==='After their appointment'?'selected':''}>After their appointment</option><option ${record.finish==='After the whole session'?'selected':''}>After the whole session</option><option ${record.finish==='When released by the team'?'selected':''}>When released by the team</option></select></label><label class="ap-setup-field ap-setup-full">Extra information (optional)<textarea data-field="access" rows="2" placeholder="For example: check in with our producer at the welcome desk, then wait to be called.">${e(record.access)}</textarea></label><p class="ap-setup-full">Attach songs, scenes and other files under Materials. You can link them to a particular audition or role.</p></div>`;
       else body = applicantView(record);
@@ -27373,7 +27390,7 @@ See you soon!
         card.append(attendance);
         attendance.querySelectorAll('input').forEach(input=>input.onchange=()=>{record.audience=input.value;save(record);render();});
         const caption=document.createElement('div');caption.className='ap-setup-caption';const chosenActivities=record.activities.map(key=>activities.find(item=>item[0]===key)?.[1]||key).join(' · ');caption.innerHTML=`${chosenActivities?`<span>${e(chosenActivities)}</span>`:''}${completion(record)}`;card.append(caption);
-        caption.querySelector('[data-needs]')?.addEventListener('click',()=>{state.openId=record.id;state.step=missing(record)[0]?.step||0;render();});
+        caption.querySelector('[data-needs]')?.addEventListener('click',()=>{const firstIssue=missing(record)[0];state.openId=record.id;state.step=firstIssue?.step||0;if(firstIssue?.day!==undefined)state.activeDay[record.id]=firstIssue.day;render();});
         if(state.openId===record.id) card.insertAdjacentHTML('beforeend',editor(record));
         host.append(card);
         if(state.openId===record.id) bind(card.querySelector('.ap-setup-editor'),record);
@@ -27403,13 +27420,35 @@ See you soon!
         }
       }));
       root.querySelectorAll('[data-multi]').forEach(input=>input.addEventListener('change',()=>{const key=input.dataset.multi;record[key]=[...root.querySelectorAll(`[data-multi="${key}"]:checked`)].map(item=>item.value);save(record);render();}));
-      root.querySelectorAll('[data-day-field]').forEach(input=>input.addEventListener('input',()=>{ensureDays(record)[Number(input.dataset.day)][input.dataset.dayField]=input.value;save(record);updateMissing(root.closest('.aud-session-card'),record);}));
-      root.querySelectorAll('[data-add-day]').forEach(button=>button.onclick=()=>{const first=ensureDays(record)[0];record.days.push({...structuredClone(first),id:'day-'+crypto.randomUUID(),date:''});state.step=1;save(record);render();});
-      root.querySelectorAll('[data-remove-day]').forEach(button=>button.onclick=()=>{record.days.splice(Number(button.dataset.removeDay),1);save(record);render();});
-      root.querySelectorAll('[data-venue-toggle]').forEach(button=>button.onclick=()=>{
-        const index=Number(button.dataset.venueToggle),day=ensureDays(record)[index],pickerId='ap-setup-venue-'+escapeId(record.id+'-'+index),picker=root.querySelector('#'+CSS.escape(pickerId));
-        picker.hidden=!picker.hidden;
-        if(!picker.hidden && window.VenuePicker){VenuePicker.render(pickerId,day.venue?.name||'Choose a venue',(name,venueId)=>{if(name==='TBD')return;const venue=VenuePicker.getVenues?.().find(item=>String(item.id)===String(venueId));day.venue=venue?{id:venue.id,name:venue.name||venue.nickname,address:venue.address||'',lat:venue.lat,lng:venue.lng}:{name,address:''};save(record);render();});}
+      root.querySelectorAll('[data-day-tab]').forEach(button=>button.onclick=()=>{state.activeDay[record.id]=Number(button.dataset.dayTab);render();});
+      root.querySelectorAll('[data-day-field]').forEach(input=>input.addEventListener('input',()=>{
+        const index=Number(input.dataset.day),key=input.dataset.dayField,day=ensureDays(record)[index];
+        day[key]=input.value;
+        save(record);updateMissing(root.closest('.aud-session-card'),record);
+      }));
+      root.querySelectorAll('[data-add-day]').forEach(button=>button.onclick=()=>{
+        const first=ensureDays(record)[0],index=record.days.length;
+        const newDay={...structuredClone(first),id:'day-'+crypto.randomUUID(),date:''};
+        record.days.push(newDay);
+        state.activeDay[record.id]=index;state.step=1;save(record);render();
+      });
+      root.querySelectorAll('[data-remove-day]').forEach(button=>button.onclick=()=>{
+        const index=Number(button.dataset.removeDay);if(index<1||record.days.length<2)return;
+        record.days.splice(index,1);state.activeDay[record.id]=Math.max(0,index-1);save(record);render();
+      });
+      root.querySelectorAll('[data-venue-select]').forEach(select=>select.addEventListener('change',()=>{
+        const index=Number(select.dataset.venueSelect),id=select.value,venue=window.VenuePicker?.getVenues?.().find(item=>String(item.id)===String(id));
+        const day=ensureDays(record)[index];day.venue=venue?{id:venue.id,name:venue.nickname||venue.name,address:venue.address||'',lat:venue.lat,lng:venue.lng}:null;
+        save(record);render();
+      }));
+      root.querySelectorAll('[data-venue-search]').forEach(button=>button.onclick=()=>{
+        const index=Number(button.dataset.venueSearch),day=ensureDays(record)[index],pickerId='ap-setup-venue-'+escapeId(record.id+'-'+index);
+        state.openVenue=`${record.id}:${index}`;render();
+        if(window.VenuePicker)VenuePicker.render(pickerId,day.venue?.name||'',(name,venueId)=>{
+          if(name==='TBD')return;
+          const venue=VenuePicker.getVenues?.().find(item=>String(item.id)===String(venueId));day.venue=venue?{id:venue.id,name:venue.nickname||venue.name,address:venue.address||'',lat:venue.lat,lng:venue.lng}:{name,address:''};
+          state.openVenue='';save(record);render();
+        });
       });
     }
 
@@ -27422,7 +27461,7 @@ See you soon!
       const visibleIssues=issues.filter(issue=>issue.step===state.step);
       visibleIssues.forEach(issue=>{
         let target;
-        if(issue.day!==undefined){target=issue.key==='venue'?editorRoot.querySelector(`[data-venue-toggle="${issue.day}"]`):editorRoot.querySelector(`[data-day="${issue.day}"][data-field="${issue.key}"]`);}
+        if(issue.day!==undefined){target=issue.key==='venue'?editorRoot.querySelector(`[data-venue-select="${issue.day}"]`):editorRoot.querySelector(`[data-day="${issue.day}"][data-day-field="${issue.key}"]`);}
         else target=editorRoot.querySelector(`[data-field="${issue.key}"]`)||editorRoot.querySelector(`[data-multi="${issue.key}"]`);
         const group=target?.closest('.ap-setup-field')||target?.closest('fieldset')||target?.parentElement;
         if(group){const note=document.createElement('small');note.className='ap-setup-missing-note';note.innerHTML=`<span>✱</span> ${e(issue.text)}`;group.append(note);target?.setAttribute('aria-invalid','true');}
