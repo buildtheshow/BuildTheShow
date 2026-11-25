@@ -594,10 +594,10 @@
     const parts = teamPortalPathParts();
     if (!parts.org || !parts.show) return '';
     try {
-      const { data, error } = await sb.rpc('resolve_team_portal', {
+      const { data, error } = await withStartupTimeout(sb.rpc('resolve_team_portal', {
         p_org_abbrev: parts.org,
         p_show_slug: parts.show,
-      });
+      }), 7500, 'Team production URL lookup');
       if (error) throw error;
       return data || '';
     } catch (error) {
@@ -610,16 +610,21 @@
     const parts = adminProductionPathParts();
     if (!parts.org || !parts.show) return '';
     try {
-      const { data, error } = await sb.rpc('resolve_team_portal', {
+      const { data, error } = await withStartupTimeout(sb.rpc('resolve_team_portal', {
         p_org_abbrev: parts.org,
         p_show_slug: parts.show,
-      });
+      }), 2500, 'Production URL match');
       if (error) throw error;
       if (data) return data;
-      return await resolveAdminProductionIdDirect(parts);
+      return await withStartupTimeout(resolveAdminProductionIdDirect(parts), 5200, 'Direct production lookup');
     } catch (error) {
-      console.error('[BTS] production lookup failed', error);
-      return await resolveAdminProductionIdDirect(parts);
+      console.error('[BTS] production lookup failed; trying direct URL match', error);
+      try {
+        return await withStartupTimeout(resolveAdminProductionIdDirect(parts), 5200, 'Direct production lookup');
+      } catch (fallbackError) {
+        console.error('[BTS] direct production lookup timed out', fallbackError);
+        return '';
+      }
     }
   }
 
