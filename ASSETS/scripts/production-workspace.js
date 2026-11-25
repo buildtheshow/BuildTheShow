@@ -49509,5 +49509,8 @@ See you soon!
 
   init().catch(function(err) {
     console.error('[BTS] workspace boot failed', err);
-    if (window.PageLoader) window.PageLoader.showError("Couldn't load the workspace. Try refreshing.");
+    showRouteBlocked(
+      "Couldn't load this production",
+      'Try refreshing. If this keeps happening, return to the dashboard and open the production again.'
+    );
   });
