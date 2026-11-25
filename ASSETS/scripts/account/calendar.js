@@ -1,5 +1,6 @@
+import {ensureOwnProfile} from './basic-profile.js?v=20261125-basic-profile';
 import {supabase as client} from '/ASSETS/scripts/supabase.js';
-import {homeScope} from './member-home.js?v=20261125-my-circle-icon';
+import {homeScope} from './member-home.js?v=20261125-basic-profile';
 import {enrichActivityMedia,renderActivityPicker,syncActivitySidebar,imageUrl} from './member-activities.js?v=20261125-my-circle-icon';
 import {EVENT_COLOURS,calendarDateKey,validCalendarDate,eventColour,formatCalendarRange,normaliseCalendarRows} from './calendar-data.js?v=20261122-approved-calendar';
 const root=document.getElementById('member-calendar-page'),q=s=>root.querySelector(s);
@@ -61,7 +62,7 @@ q('#calendar-nav-open').onclick=()=>menu(true);q('#calendar-nav-close').onclick=
 root.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.view&&calendar){calendar.changeView(b.dataset.view);save();}if((b.dataset.activityProfile||b.dataset.activityCircle)&&model){selection={kind:b.dataset.activityCircle?'circle':'profile',id:b.dataset.activityCircle||b.dataset.activityProfile};syncScope();updateUrl();fetchRange();}});
 q('#ac-prev').onclick=()=>calendar?.prev();q('#ac-next').onclick=()=>calendar?.next();q('#ac-today').onclick=()=>{selectedDate=calendarDateKey(new Date());calendar?.today();renderAgenda();save();};q('#calendar-retry').onclick=()=>calendar?fetchRange():location.reload();q('#home-logout').onclick=async()=>{await client.auth.signOut();sessionStorage.clear();location.replace('/login');};
 try{
- window.renderMemberSidebar?.('calendar');if(await BTSAccountSecurity.requireAdultLogin(client)){const {data}=await client.auth.getUser();if(!data?.user)throw Error();userId=data.user.id;q('#sidebar-email').textContent=data.user.email||'';
+ window.renderMemberSidebar?.('calendar');if(await BTSAccountSecurity.requireAdultLogin(client)){const {data}=await client.auth.getUser();if(!data?.user)throw Error();await ensureOwnProfile(client);userId=data.user.id;q('#sidebar-email').textContent=data.user.email||'';
  const [home,circle]=await Promise.all([client.rpc('bts_my_home',{p_production_id:production}),client.rpc('bts_circle',{p_action:'snapshot',p_data:{}})]);if(home.error||circle.error)throw home.error||circle.error;model={...home.data,circles:circle.data.circles||circle.data.households||[],profiles:circle.data.profiles||home.data.profiles};await enrichActivityMedia(client,model);
  try{const stored=JSON.parse(sessionStorage.getItem('bts_member_home_selection')||'null');if(stored?.user_id===userId)selection=stored.selection;saved=JSON.parse(sessionStorage.getItem('bts_member_calendar_view')||'{}');if(saved.user_id!==userId)saved={};}catch{}
  if(params.has('profile')||params.has('circle'))selection={kind:params.has('circle')?'circle':'profile',id:params.get('circle')||params.get('profile')};

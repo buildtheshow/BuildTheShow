@@ -1,4 +1,4 @@
-import {mountProfileAccess} from './profile-access.js?v=20261121-production-payments';
+import {mountProfileAccess} from './profile-access.js?v=20261125-basic-profile';
 import {supabase as client} from '/ASSETS/scripts/supabase.js';
 import {clone, readPath, collectProfile, validateUpload, safeMediaLink, ROLE_KEYS} from './profile-data.js?v=20261121-profile-editor';
 import '/SHARED/Components/private-profile-media.js?v=20261116-private-routes';

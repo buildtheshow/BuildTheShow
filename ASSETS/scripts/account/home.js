@@ -1,7 +1,8 @@
+import {ensureOwnProfile} from './basic-profile.js?v=20261125-basic-profile';
 import {mountMemberProduction} from './member-production.js?v=20261125-my-circle-icon';
 import {mountProductionPayments} from './member-payments.js?v=20261121-production-payments';
 import {supabase as client} from '/ASSETS/scripts/supabase.js';
-import {updateMemberHome,syncMemberHomeSidebar,homeScope} from './member-home.js?v=20261125-my-circle-icon';
+import {updateMemberHome,syncMemberHomeSidebar,homeScope} from './member-home.js?v=20261125-basic-profile';
 import {enrichActivityMedia,renderActivityPicker,renderActivityShows,syncActivitySidebar} from './member-activities.js?v=20261125-my-circle-icon';
 const $=id=>document.getElementById(id);
 const productionView=mountMemberProduction(client,$('production-details'));
@@ -89,7 +90,7 @@ await work(async()=>{
  const token=sessionStorage.getItem(tokenKey);
  if(token){try{const invitation=await call('bts_production_invitation',{p_token:token,p_accept:false});$('membership-invitation').hidden=false;$('membership-copy').textContent=invitation.production+': '+invitation.position+'. Accept using '+invitation.email+'.';$('membership-accept').onclick=event=>work(async()=>{if(!await BTSAccountSecurity.requireAdultLogin(client,'/member/home'))return;await call('bts_production_invitation',{p_token:token,p_accept:true});sessionStorage.removeItem(tokenKey);$('membership-invitation').hidden=true;status('Production membership accepted.');await load();},event.target);}catch(error){sessionStorage.removeItem(tokenKey);throw error;}}
  if(typeof renderMemberSidebar==='function')renderMemberSidebar(mode==='home'?'profile-select':mode);
- const {data}=await client.auth.getUser();if(!data?.user&&(token||historyToken)){if(historyToken){$('history-accept').textContent='Sign in to confirm';$('history-accept').onclick=()=>BTSAccountSecurity.requireAdultLogin(client,'/member/home');}return;}if(!await BTSAccountSecurity.requireAdultLogin(client))return;signedInUserId=data.user.id;$('home-logout').hidden=false;$('sidebar-email').textContent=data.user.email||'';await load();if(historyToken)$('history-profile').innerHTML='<option value="">Choose the correct profile</option>'+state.profiles.filter(p=>p.can_volunteer).map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+ const {data}=await client.auth.getUser();if(!data?.user&&(token||historyToken)){if(historyToken){$('history-accept').textContent='Sign in to confirm';$('history-accept').onclick=()=>BTSAccountSecurity.requireAdultLogin(client,'/member/home');}return;}if(!await BTSAccountSecurity.requireAdultLogin(client))return;await ensureOwnProfile(client);signedInUserId=data.user.id;$('home-logout').hidden=false;$('sidebar-email').textContent=data.user.email||'';await load();if(historyToken)$('history-profile').innerHTML='<option value="">Choose the correct profile</option>'+state.profiles.filter(p=>p.can_volunteer).map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
 });
 setInterval(()=>{if(document.visibilityState==='visible'&&state)work(load);},30000);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&state)work(load);});

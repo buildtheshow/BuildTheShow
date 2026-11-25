@@ -86,6 +86,7 @@
 
     .profile-card-actions {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 0.4rem;
       padding: 0.6rem 0.85rem;
@@ -93,6 +94,8 @@
       margin-top: 0.5rem;
     }
     .profile-action-btn {
+      white-space: nowrap;
+      flex-shrink: 0;
       display: inline-flex;
       align-items: center;
       gap: 0.3rem;
@@ -244,16 +247,16 @@
               ${typeBadgesHTML(p.sections)}
             </div>
             <div class="profile-card-actions" onclick="event.stopPropagation()">
-              <button class="enter-btn" onclick="enterAsProfile(${JSON.stringify(p).replace(/"/g, '&quot;')})">Enter →</button>
+              ${p.can_manage===false?'<a href="/member/circles" class="profile-action-btn">Review profile access</a>':`<button class="enter-btn" onclick="enterAsProfile(${JSON.stringify(p).replace(/"/g, '&quot;')})">Enter →</button>
               <a href="/member/profiles/${esc(p.id)}" class="profile-action-btn">View</a>
-              <a href="/member/profiles/${esc(p.id)}/edit" class="profile-action-btn">Edit</a>
+              <a href="/member/profiles/${esc(p.id)}/edit" class="profile-action-btn">Edit</a>`}
             </div>
           </div>`;
       }).join('');
 
       main.innerHTML = `
         <h1 class="page-title">Profiles</h1>
-        <p class="page-subtitle">Each profile is one person. Authorised adults can have separate keys to the same profile. <a href="/member/circles">Households and access</a></p>
+        <p class="page-subtitle">Each profile holds one person’s details, photo and production history. <a href="/member/circles">My Circle</a></p>
         <div class="profiles-grid">
           ${cardsHTML}
           <a href="/member/circles?action=create-profile" class="profile-card profile-card--add">
@@ -288,11 +291,13 @@
 
       const profileId = sessionStorage.getItem('bts_active_profile_id');
 
+      const own=await sb.rpc('bts_ensure_own_profile');if(own.error){document.getElementById('profiles-main').textContent=own.error.message;return;}
       const { data: profiles } = await sb.from('profiles')
         .select('id, credit_name, headshot_url, date_of_birth, pronouns, sections, profile_display_id')
 
         .order('created_at');
 
+      if(profiles?.length===1 && own.data===profiles[0].id){location.replace('/member/profiles/'+encodeURIComponent(profiles[0].id)+'/edit');return;}
       // Update sidebar with active profile context
       const activeProfile = profiles?.find(p => p.id === profileId) || profiles?.[0];
       if (activeProfile) {
@@ -302,7 +307,7 @@
       }
 
       renderMemberSidebar('profiles');
-      renderProfiles(profiles || []);
+      const scope=await sb.rpc('bts_circle',{p_action:'snapshot',p_data:{}});if(scope.error){document.getElementById('profiles-main').textContent='Profile access could not load. Please try again.';return;}renderProfiles((profiles||[]).map(p=>({...p,can_manage:scope.data?.profiles?.find(row=>row.id===p.id)?.can_manage===true})));
     }
 
     init();

@@ -532,6 +532,14 @@
         return;
       }
       const age = getAge(dobValue);
+      if (age < 18 && /^\d{4}-\d{2}-\d{2}$/.test(dobValue) && new Date(dobValue+'T12:00:00') <= new Date()) {
+        sessionStorage.setItem('bts_basic_profile_draft',JSON.stringify({first_name:firstName,last_name:lastName,date_of_birth:dobValue,created_at:Date.now()}));
+        for(const id of ['first-name','last-name','dob','email','password'])document.getElementById(id).value='';
+        document.querySelector('input[name="signup-purpose"][value="household"]').checked=true;
+        document.getElementById('signup-subtitle').textContent='Create your adult login first. We’ve kept the additional profile’s name and date of birth for the next step.';
+        showError('These details are for someone under 18. Enter your own name, date of birth and email as their parent or guardian. After sign-in, you’ll name your circle and finish creating the additional profile.');
+        document.getElementById('first-name').focus();return;
+      }
       if (!BTSAccountSecurity.validAdultBirthDate(dobValue)) {
         showError('Account holders must be 18 or over. Enter your own birth date; a parent or legal guardian manages children through their own account.');
         return;
@@ -567,6 +575,7 @@
       const confirmationDestination=new URL('/login',window.location.origin);
       confirmationDestination.searchParams.set('return',BTSAccountSecurity.safeReturnPath(signupQuery.get('return')||setupDestinations[signupPurpose]));
       if(signupQuery.get('invite'))confirmationDestination.searchParams.set('invite',signupQuery.get('invite'));
+      try{const draft=JSON.parse(sessionStorage.getItem('bts_basic_profile_draft')||'null');if(draft&&(!draft.owner_email||draft.owner_email===email.toLowerCase())){draft.owner_email=email.toLowerCase();sessionStorage.setItem('bts_basic_profile_draft',JSON.stringify(draft));}else if(draft){sessionStorage.removeItem('bts_basic_profile_draft');}}catch{}
       const { data, error } = await sb.auth.signUp({
         email,
         password,
@@ -574,6 +583,7 @@
           emailRedirectTo: confirmationDestination.href,
           data: {
             signup_purpose: signupPurpose,
+            additional_profile_draft: (()=>{try{return JSON.parse(sessionStorage.getItem('bts_basic_profile_draft')||'null');}catch{return null;}})(),
             beta_code: betaCode,
             first_name: firstName,
             last_name: lastName,

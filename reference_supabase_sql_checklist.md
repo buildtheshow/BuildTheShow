@@ -152,3 +152,7 @@ Member production payments deployment: applied and recorded only version `202611
 ## Member calendar (2026-11-25)
 
 `supabase/migrations/20261122150000_member_calendar.sql` adds `bts_member_calendar(uuid[],date,date,uuid)`, a read-only date-range RPC over existing production events, audition bookings and volunteer signups. No tables are created. Every selected profile needs explicit management access; call lists and account-bound team permissions still apply. Anonymous execution is denied. Local and hosted rollback rehearsals cover historic calls, exact timed audition duration, volunteer dates, private notes and outsider denial. Applied and recorded only this migration after the hosted rollback rehearsal passed. See `docs/security/member-calendar.md`.
+
+## Member setup and profile transfer (2026-11-25)
+
+`20261125120000_member_setup.sql` adds protected own-profile setup, circle-bound basic profile creation and recipient-bound adult profile transfers over existing records. `20261125123000_setup_draft_resume.sql` clears the private signup draft atomically after creation. No tables are added. Both exact sources passed hosted rollback rehearsals and were applied and recorded separately; unrelated booking work remains pending. See `docs/security/member-setup.md`.

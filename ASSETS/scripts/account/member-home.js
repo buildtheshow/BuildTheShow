@@ -78,7 +78,7 @@ function renderHome(){
   const members=(model.profiles||[]).filter(p=>p.can_manage&&!p.needs_adult_claim&&(c.profiles||[]).includes(p.id));const selected=selection?.kind==='circle'&&selection.id===c.id;
   return `<button type="button" class="home-circle-card" data-home-circle="${esc(c.id)}" aria-pressed="${selected}"><img src="${icon('my-circle.svg')}" alt=""><div><strong>${esc(c.name)}</strong><span>${esc(members.map(p=>p.name).join(', ')||'No members shared with you yet')}${members.length?' · '+members.length+' '+(members.length===1?'member':'members'):''}</span></div>${selected?'<small>Selected</small>':''}</button>`;
  }).join('');
- $('home-viewing').textContent=scope.circle?'Showing '+scope.circle.name+'’s dates, shows and updates. Includes the members shared with you.':scope.members.length?'Showing '+(scope.members[0].is_subject?'your':scope.members[0].name+'’s')+' dates, shows and updates.':'Choose a profile or circle to see their dates, shows and updates.';
+ $('home-viewing').textContent=scope.circle?'Showing '+scope.circle.name+'’s dates, productions and updates. Includes the members shared with you.':scope.members.length?'Showing '+(scope.members[0].is_subject?'your':scope.members[0].name+'’s')+' dates, productions and updates.':'Choose a profile or circle to see their dates, productions and updates.';
  $('home-selected-profile-link').hidden=!scope.members.length||!!scope.circle;
  if(scope.members.length)$('home-selected-profile-link').href='/member/profiles/'+encodeURIComponent(scope.members[0].id);
  const actions=[];
@@ -101,8 +101,8 @@ function renderHome(){
  $('home-unlinked-note').hidden=!legacy;
  $('home-productions').innerHTML=scope.productions.map(show=>{
   const names=scope.members.filter(p=>[...scope.activities,...scope.volunteers].some(a=>active(a)&&a.production_id===show.id&&a.profile_id===p.id)).map(p=>p.name);
-  return `<article class="position-card"><img class="position-card-icon" src="${icon('Performer.svg')}" alt=""><h3 class="position-card-title">${esc(show.title)}</h3><p class="member-note">${esc(names.join(', '))}</p><a class="member-action" href="${esc(viewUrl(show.id))}">View show</a></article>`;
- }).join('')||'<div class="member-empty"><img class="position-card-icon" src="'+icon('Performer.svg')+'" alt=""><div><strong>No shows yet</strong><p class="member-note">Shows appear here when you or someone you manage auditions, registers or volunteers.</p></div></div>';
+  return `<article class="position-card"><img class="position-card-icon" src="${icon('Performer.svg')}" alt=""><h3 class="position-card-title">${esc(show.title)}</h3><p class="member-note">${esc(names.join(', '))}</p><a class="member-action" href="${esc(viewUrl(show.id))}">View production</a></article>`;
+ }).join('')||'<div class="member-empty"><img class="position-card-icon" src="'+icon('Performer.svg')+'" alt=""><div><strong>No productions yet</strong><p class="member-note">Productions appear here when you or someone you manage auditions, registers or volunteers.</p></div></div>';
  renderCalendar(scope);$('home-content').hidden=false;$('home-retry').hidden=true;syncMemberHomeSidebar();
 }
 function showName(id){return (model.productions||[]).find(p=>p.id===id)?.title||'Production';}
