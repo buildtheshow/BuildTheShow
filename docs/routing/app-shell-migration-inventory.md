@@ -242,6 +242,31 @@ For Production, separate true destinations from local tabs, modal states, and th
 
 Build The Show should grow as a **modular monolith**: one product, one deployable application, and one authoritative Supabase data layer, with clear boundaries between areas. The platform can support a large sidebar and many destinations without splitting every feature into its own service or duplicating its own data.
 
+### Startup and navigation findings from the current source
+
+- **Organisation home waits for calendar data.** In `SYSTEM/Organisations/org-dashboard.html`, `init()` awaits `hydrateCronusPlanningEvents()` before setting `orgDashboardReady`, rendering the organisation, and dismissing the full-screen loader. That hydration queries `organization_planning_events` and can also persist migrated seed rows. A later `window.load` handler hydrates the same planning events again before loading production calendar data. This is work the home page does not need before it can appear.
+- **Production entry has a security-critical gate and a large startup bundle.** `production-workspace.html` loads `ASSETS/scripts/production-workspace.js` (49,518 lines). The startup sequence checks the session, resolves a production slug when there is no ID query parameter, loads the production, confirms organisation access, and loads detailed team page permissions before it clears the loader. Authentication and authorisation must stay fail-closed; unrelated page data should not hold up the first usable screen.
+- **The full-screen loader has no real fail-open behaviour.** `SHARED/Components/page-loader.js` labels its 9-second timer `FAIL_OPEN_MS`, but the timer only changes the message. `showError()` also only changes the text; the full-screen element continues to intercept clicks until some other code calls `hide()`. If startup errors before a hide path, the user can remain trapped behind the loading overlay.
+- These are source-confirmed bottlenecks and a loader error-state defect. They make the reported delay/stuck screen plausible, but do not by themselves identify which request failed in the live session. Preserve the loader's approved visual while giving every startup path a bounded, accessible end state.
+
+### Tiny execution steps and gates
+
+1. Freeze the current live source as the reference. Preserve its commit, all routes, the three existing navigation implementations, icons, responsive behaviour, and approved page markup.
+2. Finish the route-to-source map. For each sidebar item, record canonical URL, source page or in-page panel, required context, data loader, write actions, permission check, aliases, and whether the item is conditional on production features.
+3. Trace startup call chains for Member, Organisation, and Production from first HTML response to first usable content. Record awaited network calls, timers, duplicate reads, route changes, and which loader path ends each branch.
+4. Separate required gates from page data. Keep authentication, tenant membership, profile/circle access, production access, and action permission checks ahead of protected content. Move unrelated calendar, counts, summaries, and secondary feature data out of the shell's critical path.
+5. Correct the organisation path first: resolve auth and organisation; render the existing dashboard; load its production/team summaries with local loading states; load planning calendar data only when the calendar is opened; remove the duplicate hydration pass.
+6. Define loading states before building the persistent shell: shell starting, route loading, route ready, route empty, route error, retry, timeout, cancelled/stale request. Keep the branded loader appearance, but never leave its overlay blocking the app after a terminal failure.
+7. Verify the live Cloudflare static delivery contract and create a preview build that includes every existing asset, page, redirect/header file, and Pages Function. Production settings remain untouched until this preview works.
+8. Prepare a mockup from the exact existing source page and sidebar, including current feature gating and mobile drawer. Use real layout/content, no invented counts, no generic replacement cards, and no unapproved nav changes. Show it before implementation of the page shell.
+9. Build the route/context foundation beside the existing pages. URLs decide the active destination; route registry decides context, module, and capability. Legacy routes continue to serve their current pages until a replacement is complete.
+10. Choose one small route only after its dependencies are understood. Port the existing page structure and behavior into one module; do not paste a legacy document into the outlet or recreate its visual design from scratch.
+11. Check that route navigation preserves the shell, active nav, filters, scroll where appropriate, and browser back/forward. Check deep links and old aliases. Confirm protected data/actions still require server-side Supabase permission.
+12. Compare that one route in the Cloudflare preview against its current live page, including mobile. Fix differences there before selecting the next route.
+13. Repeat by context and domain: Member, Organisation, Production. Keep public pages and authentication separate. Migrate complex production areas only after the small pilot proves the route and data boundaries.
+14. Remove a legacy route only after its direct links, emails, invitations, public paths, and sidebar actions all target the replacement and have been accounted for.
+15. Promote the completed preview only after the full existing site still deploys, authenticated paths resolve, and fallback/error states end clearly. Keep rollback to the previous deployment available.
+
 ### 1. Keep three signed-in contexts
 
 - **Member:** a person, their profiles and circles, activities, calendar, and personal settings.
@@ -282,7 +307,7 @@ These are ownership boundaries within the application, not a proposal for new Su
 Use a strangler migration: old pages continue to work until their replacement is complete. Do not inject entire legacy HTML documents into a shared page outlet; their global CSS, inline scripts, event handlers, and Supabase setup would collide.
 
 1. Keep public/auth routes and all current URLs working.
-2. Add the app-shell/route foundation alongside the current page delivery. First determine the actual Cloudflare Pages build and deployment settings; this checkout has no root package manifest or build configuration, so do not silently switch the production build to Vite or React.
+2. Add the app-shell/route foundation alongside current page delivery. Cloudflare is currently configured with blank build command/output/root fields, so first prove the static-site-preserving preview build before changing production settings or introducing a framework.
 3. Select one contained, low-risk route as the pilot only after matching its current UI, data queries, writes, permissions, and deep links. Preserve its approved design and behaviour.
 4. Route that destination to a real page module in the persistent shell. Keep the old address as an alias to the same module. Leave neighbouring legacy pages untouched.
 5. Compare the pilot against its source page for visual behaviour, data, access, loading/error handling, and browser navigation. Then migrate one route at a time by domain.
