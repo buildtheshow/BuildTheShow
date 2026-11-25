@@ -236,7 +236,7 @@ function switchTab(tab) {
   }
   $('profile-tab-note').textContent = ({performer:'Fill in the sections you need. You can come back to the rest.',volunteer:'The productions you’ve helped with and what you did.',creative:'Your creative work, role by role. Add paid or volunteer work.',headshots:'One set of photos for auditions, volunteering and creative work.',contacts:'Contact and emergency details for this person. Kept private until you choose to share them.'})[tab];
   $('profile-preview-toggle').hidden=tab==='contacts';
-  $('profile-save').hidden=tab==='contacts';$('profile-privacy').hidden=tab==='contacts';
+  $('profile-save').hidden=tab==='contacts';$('profile-privacy').hidden=tab==='contacts';$('profile-save-status').hidden=tab==='contacts';
   if(tab==='contacts'&&previewing){previewing=false;$('profile-panels').hidden=false;$('profile-preview').hidden=true;$('profile-preview-toggle').textContent='Preview profile';$('profile-preview-toggle').setAttribute('aria-expanded','false');}
   if (previewing) renderPreview();
 }
