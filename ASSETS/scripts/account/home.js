@@ -1,5 +1,5 @@
 import {ensureOwnProfile} from './basic-profile.js?v=20261125-basic-profile';
-import {mountMemberProduction} from './member-production.js?v=20261125-my-circle-icon';
+import {mountMemberProduction} from './member-production.js?v=20261125-member-completion';
 import {mountProductionPayments} from './member-payments.js?v=20261121-production-payments';
 import {supabase as client} from '/ASSETS/scripts/supabase.js';
 import {updateMemberHome,syncMemberHomeSidebar,homeScope} from './member-home.js?v=20261125-basic-profile';

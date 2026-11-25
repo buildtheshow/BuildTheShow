@@ -14,6 +14,7 @@ const canonical='https://tkmaiktxpwqfbgeojbnf.supabase.co/storage/v1/object/publ
    window.testProfile=()=>profile;
    window.testClient={auth:{getSession:async()=>({data:{session:{user:{id:'account',email:'synthetic@example.invalid'}}}}),getUser:async()=>({data:{user:{id:'account'}}}),signOut:async()=>({})},rpc:async(name,args)=>{
     if(name==='bts_get_account_status')return {data:{active:true}};
+    if(name==='bts_member_contacts')return {data:{can_edit:true,manager_name:'Synthetic Parent',details:{contact_name:'Synthetic Parent'},version:1,shares:[]}};
     if(name==='bts_profile_access')return {data:!testState.denied};
     if(name==='bts_profile_identity_edit')return {data:true};
     if(name==='bts_circle')return {data:{profiles:[{id:'own',name:profile.credit_name,is_subject:true,can_manage:true}],circles:[]}};
@@ -32,7 +33,7 @@ const canonical='https://tkmaiktxpwqfbgeojbnf.supabase.co/storage/v1/object/publ
    return route.fulfill({contentType:file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.svg')?'image/svg+xml':file.endsWith('.png')?'image/png':'text/html',body:fs.readFileSync(file)});
   });
   await page.goto('http://bts.test/member/profiles/own/edit');await page.locator('#profile-form').waitFor({state:'visible'});
-  assert.equal(await page.getByRole('tab').count(),4);assert.equal(await page.locator('#field-bio').inputValue(),'Saved bio');
+  assert.equal(await page.getByRole('tab').count(),5);assert.equal(await page.locator('#field-bio').inputValue(),'Saved bio');
   await page.locator('#field-bio').fill('A new private bio');
   await page.getByRole('tab',{name:'Volunteer',exact:true}).click();
   let entry=page.locator('#panel-volunteer .pm-history-entry').first();
@@ -59,12 +60,12 @@ const canonical='https://tkmaiktxpwqfbgeojbnf.supabase.co/storage/v1/object/publ
   await page.locator('#panel-creative input[type=file]').setInputFiles({name:'cv.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4 synthetic')});await page.getByRole('button',{name:'Save profile',exact:true}).click();await page.locator('#profile-save-status').getByText('Saved. Nothing has been published or sent.',{exact:true}).waitFor();data=await page.evaluate(()=>testProfile());assert.ok(data.sections.creative.resume_url.endsWith('.pdf'));
   // Conflicting saves never replace another person's version.
   await page.evaluate(()=>testState.conflict=true);await page.getByRole('button',{name:'Save profile',exact:true}).click();await page.locator('#profile-save-status').getByText('This profile changed in another window, or your access changed. Copy your unsaved text before reloading.',{exact:true}).waitFor();await page.evaluate(()=>testState.conflict=false);
-  for(const tab of ['Audition Profile','Volunteer','Creative Team','Headshots']){await page.getByRole('tab',{name:tab,exact:true}).click();for(const width of [320,390,768,1280]){await page.setViewportSize({width,height:950});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Overflow '+tab+width);if(width===1280)await page.screenshot({path:'/tmp/bts-profile-editor-'+tab.replaceAll(' ','-')+'.png',fullPage:true});}}
+  for(const tab of ['Audition Profile','Volunteer','Creative Team','Headshots','Contact & emergency']){await page.getByRole('tab',{name:tab,exact:true}).click();for(const width of [320,390,768,1280]){await page.setViewportSize({width,height:950});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Overflow '+tab+width);if(width===320){await page.locator('#profile-nav-open').click();await page.locator('#profile-sidebar').waitFor({state:'visible'});await page.waitForFunction(()=>Math.abs(document.getElementById('profile-sidebar').getBoundingClientRect().x)<1);assert.ok(Math.abs((await page.locator('#profile-sidebar').boundingBox()).width-220)<.1);await page.locator('#profile-nav-close').click();}if(width===1280)await page.screenshot({path:'/tmp/bts-profile-editor-'+tab.replaceAll(' ','-')+'.png',fullPage:true});}}
   await page.getByRole('tab',{name:'Volunteer',exact:true}).click();await page.getByRole('button',{name:'Preview profile',exact:true}).click();assert.ok(await page.locator('#profile-preview').textContent().then(t=>t.includes('Synthetic Circus')));
   await page.getByRole('button',{name:'Keep editing',exact:true}).click();
   await page.evaluate(()=>testState.denied=true);await page.getByRole('button',{name:'Save profile',exact:true}).click();await page.locator('#profile-save-status').getByText('You no longer have permission to edit this profile. Your changes have not been saved.',{exact:true}).waitFor();
   await page.goto('http://bts.test/member/profiles/own/edit?denied=1');await page.locator('#profile-load-status').getByText('This profile is not available to edit with your account.',{exact:true}).waitFor();assert.equal(await page.locator('#profile-form').isVisible(),false);assert.equal(await page.evaluate(()=>testState.reads),0);
   assert.deepEqual(errors,[]);
-  console.log('PASS: four tabs, history save/reload, preserved legacy fields, private signed photos, uploads and binding failures, immutable PDF/photo paths, conflicts, revoked edit access, preview and responsive widths. Synthetic data only.');
+  console.log('PASS: five tabs, history save/reload, preserved legacy fields, private signed photos, uploads and binding failures, immutable PDF/photo paths, conflicts, revoked edit access, preview and responsive widths. Synthetic data only.');
  }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

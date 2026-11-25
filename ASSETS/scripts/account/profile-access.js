@@ -1,4 +1,4 @@
-import {mountProfileTransfer} from './profile-transfer.js?v=20261125-basic-profile';
+import {mountProfileTransfer} from './profile-transfer.js?v=20261125-member-completion';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};
 function button(text,action,cls='pa-button'){const b=el('button',text,cls);b.type='button';b.onclick=action;return b;}
 function field(parent,label,type='text'){const l=el('label',label),i=el(type==='textarea'?'textarea':type==='select'?'select':'input');if(i.tagName==='INPUT')i.type=type;if(type==='textarea')i.rows=3;l.append(i);parent.append(l);return i;}

@@ -34,7 +34,8 @@ export function familyMessage(job:FamilyJob) {
   let subject='A shared performer record changed';
   let text='An authorised person updated a booking, registration, payment tracker or access permission for '+name+'. Sign in to review the change history.';
   let link=base;let label='Open My Circle';
-  if(job.kind==='circle_access_request') {
+  if(job.kind==='absence_report'){subject=(job.payload.state==='withdrawn'?'Absence report withdrawn: ':'Absence reported: ')+name;text=name+' has '+(job.payload.state==='withdrawn'?'withdrawn an absence report':'reported '+(({whole:'missing the whole event',late:'arriving late',early:'leaving early'} as Record<string,string>)[String(job.payload.absence_type)]||'an absence'))+' for '+String(job.payload.event_title||'a scheduled event')+' in '+String(job.payload.production||'the production')+'. Sign in to review the report and acknowledge it. The event schedule has not changed.';link='https://buildtheshow.com/org/'+encodeURIComponent(String(job.payload.org_slug||''))+'/productions/'+encodeURIComponent(String(job.payload.production_slug||job.payload.production_id||''))+'/tools/plan-calendar?id='+encodeURIComponent(String(job.payload.production_id||''));label='Review absence reports';
+  } else if(job.kind==='circle_access_request') {
     subject=String(job.payload.inviter||'An adult member')+' asked to help in '+String(job.payload.circle||'a circle');
     text=String(job.payload.inviter||'An adult member')+' is asking to help with someone whose profile you manage, in '+String(job.payload.circle||'their circle')+'. Sign in using the email that received this request. You choose which member, if any, to share. No profile access has been added.';
     link=base+'?request='+encodeURIComponent(String(job.payload.request_id));label='Review access request';

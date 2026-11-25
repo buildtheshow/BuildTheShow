@@ -1,4 +1,4 @@
-import {mountProfileTransfer} from '/ASSETS/scripts/account/profile-transfer.js?v=20261125-basic-profile';
+import {mountProfileTransfer} from '/ASSETS/scripts/account/profile-transfer.js?v=20261125-member-completion';
 import {ensureOwnProfile,mountBasicProfile} from '/ASSETS/scripts/account/basic-profile.js?v=20261125-basic-profile';
 import {supabase as client} from '/ASSETS/scripts/supabase.js';
 import '/SHARED/Components/private-profile-media.js?v=20261116-private-routes';

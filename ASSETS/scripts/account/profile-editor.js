@@ -1,4 +1,4 @@
-import {mountProfileAccess} from './profile-access.js?v=20261125-basic-profile';
+import {mountPrivateContacts} from './profile-contacts.js?v=20261125-member-completion';
 import {supabase as client} from '/ASSETS/scripts/supabase.js';
 import {clone, readPath, collectProfile, validateUpload, safeMediaLink, ROLE_KEYS} from './profile-data.js?v=20261121-profile-editor';
 import '/SHARED/Components/private-profile-media.js?v=20261116-private-routes';
@@ -69,7 +69,7 @@ function field(parent, path, label, options = {}) {
   input.maxLength = options.rows ? 10000 : 1000;
   const identity = ['credit_name'].includes(path);
   input.disabled = path === 'date_of_birth' || (identity && !identityEditable);
-  if (path === 'date_of_birth') wrapper.append(el('small', 'Kept with this person’s private account details.'));
+  if (path === 'date_of_birth') wrapper.append(el('small', 'Kept with this person’s private profile details.'));
   input.addEventListener('input', () => changed(path));
   input.addEventListener('change', () => changed(path));
   wrapper.append(input);
@@ -130,7 +130,7 @@ function resume(parent, path) {
 function renderFields() {
   let area = block('performer', 'Basics', 'Name, pronouns and date of birth');
   area.classList.add('pm-two');
-  field(area, 'credit_name', 'Programme / credit name');
+  field(area, 'credit_name', 'Name used on programmes and credits');
   field(area, 'pronouns', 'Pronouns', {placeholder:'Optional'});
   field(area, 'date_of_birth', 'Date of birth', {type:'date'});
   field(area, 'nickname', 'Preferred name', {placeholder:'Optional'});
@@ -234,7 +234,10 @@ function switchTab(tab) {
     node.classList.toggle('chosen', selected); node.setAttribute('aria-selected', String(selected)); node.tabIndex = selected ? 0 : -1;
     $('panel-' + node.dataset.tab).hidden = !selected;
   }
-  $('profile-tab-note').textContent = ({performer:'Add what fits. Keep it ready for your next audition.',volunteer:'The productions you’ve helped with and what you did.',creative:'Your creative work, role by role. Add paid or volunteer work.',headshots:'One set of photos for auditions, volunteering and creative work.'})[tab];
+  $('profile-tab-note').textContent = ({performer:'Fill in the sections you need. You can come back to the rest.',volunteer:'The productions you’ve helped with and what you did.',creative:'Your creative work, role by role. Add paid or volunteer work.',headshots:'One set of photos for auditions, volunteering and creative work.',contacts:'Contact and emergency details for this person. Kept private until you choose to share them.'})[tab];
+  $('profile-preview-toggle').hidden=tab==='contacts';
+  $('profile-save').hidden=tab==='contacts';$('profile-privacy').hidden=tab==='contacts';
+  if(tab==='contacts'&&previewing){previewing=false;$('profile-panels').hidden=false;$('profile-preview').hidden=true;$('profile-preview-toggle').textContent='Preview profile';$('profile-preview-toggle').setAttribute('aria-expanded','false');}
   if (previewing) renderPreview();
 }
 function renderPreview() {
@@ -337,6 +340,7 @@ async function init() {
     const match = location.pathname.match(/^\/member\/profiles\/([^/]+)\/edit$/);
     profileId = match?.[1] || new URLSearchParams(location.search).get('id') || sessionStorage.getItem('bts_active_profile_id');
     if (!profileId) { location.replace('/member/profiles'); return; }
+    if(location.hash==='#profile-settings'){location.replace('/member/settings?section=profiles&profile='+encodeURIComponent(profileId));return;}
     const access = await client.rpc('bts_profile_access',{p_profile_id:profileId,p_manage:true});
     if (access.error || access.data !== true) throw new Error('This profile is not available to edit with your account.');
     const result = await client.from('profiles').select('id,credit_name,nickname,pronouns,date_of_birth,bio,headshot_url,headshot_urls,sections,profile_display_id').eq('id',profileId).single();
@@ -353,13 +357,8 @@ async function init() {
     $('sidebar-email').textContent = user.email || '';
     document.title = 'My Profile | Build The Show';
     renderFields(); renderPhotos(); switchTab('performer');
-    $('profile-settings-title').textContent=(profile.credit_name||'This member')+'’s profile settings';
-    $('profile-settings-note').textContent='These controls apply to this person’s profile. Your login and email preferences are in Account settings.';
-    mountProfileAccess(client,$('profile-access-panel'),profileId);
-    $('profile-settings').hidden=false;
-    // Only the selected adult subject can be offered conversion; children and delegated profiles never inherit another source.
-    try{const scope=await client.rpc('bts_circle',{p_action:'snapshot',p_data:{}});if(!scope.error&&scope.data?.profiles?.some(p=>p.id===profileId&&p.is_subject)){$('profile-type-settings').hidden=false;window.BTSProfileTypeCorrection?.mount(client,$('profile-type-correction'),{type:'member',id:profileId,selectedOnly:true});}}catch{}
-    ready = true; form.hidden = false; $('profile-load-status').hidden = true;if(location.hash==='#profile-settings')$('profile-settings').open=true;
+    mountPrivateContacts(client,$('profile-private-contacts'),profileId);
+    ready = true; form.hidden = false; $('profile-load-status').hidden = true;
   } catch (error) { $('profile-load-status').textContent = error.message; $('profile-retry').hidden = false; }
 }
 form.addEventListener('submit',save);
@@ -391,13 +390,8 @@ $('profile-preview-toggle').addEventListener('click',()=>{
   $('profile-preview-toggle').textContent=previewing?'Keep editing':'Preview profile';$('profile-preview-toggle').setAttribute('aria-expanded',String(previewing));
   if(previewing)renderPreview();
 });
-$('profile-archive').addEventListener('click',async()=>{
- const status=$('profile-settings-status');if(saving){status.textContent='Wait for your profile to finish saving.';return;}
- if(dirty){status.textContent='Save or reload your profile changes before archiving.';return;}
- if(!confirm('Archive '+(profile.credit_name||'this profile')+'? This hides the profile and retains its history. Your account stays active.'))return;
- const b=$('profile-archive');b.disabled=true;
- try{const result=await client.rpc('bts_family',{p_action:'archive_profile',p_data:{profile_id:profileId}});if(result.error)throw result.error;for(const key of ['id','name','sections','num','custom_id'])sessionStorage.removeItem('bts_active_profile_'+key);location.assign('/member/profiles');}catch(error){status.textContent=error.message||'This profile could not be archived. Please try again.';status.setAttribute('role','alert');b.disabled=false;}
-});
 $('profile-logout').addEventListener('click',async()=>{if(dirty&&!confirm('Leave without saving your profile changes?'))return;dirty=false;await client.auth.signOut();location.replace('/login');});
 window.addEventListener('beforeunload',event=>{if(dirty||saving){event.preventDefault();event.returnValue='';}});
+function menu(open){const narrow=matchMedia('(max-width:850px)').matches;document.body.classList.toggle('member-profile-nav-open',open&&narrow);$('profile-nav-shade').hidden=!open||!narrow;$('profile-nav-open').setAttribute('aria-expanded',String(open&&narrow));$('profile-sidebar').inert=narrow&&!open;}
+$('profile-nav-open').onclick=()=>{menu(true);$('profile-nav-close').focus();};$('profile-nav-close').onclick=()=>{menu(false);$('profile-nav-open').focus();};$('profile-nav-shade').onclick=()=>menu(false);window.addEventListener('resize',()=>menu(false));document.addEventListener('keydown',e=>{if(e.key==='Escape')menu(false);});menu(false);
 init();

@@ -1,3 +1,4 @@
+import {mountProfileManagement} from './profile-management.js?v=20261125-member-completion';
 import {supabase as sb} from '/ASSETS/scripts/supabase.js';
 const $=id=>document.getElementById(id),root=$('account-settings');
 let currentUser,busy=false,closing=false;
@@ -26,8 +27,9 @@ $('download-data').onclick=event=>{event.preventDefault();action(event.currentTa
  const me=await user(),snapshot=await sb.rpc('bts_circle',{p_action:'snapshot',p_data:{}});if(snapshot.error)throw snapshot.error;
  const ids=(snapshot.data?.profiles||[]).filter(profile=>profile.can_manage).map(profile=>profile.id);
  let profiles=[];if(ids.length){const result=await sb.from('profiles').select('*').in('id',ids);if(result.error)throw result.error;profiles=result.data||[];}
+ const privateContacts=[];for(const id of ids){const result=await sb.rpc('bts_member_contacts',{p_profile_id:id,p_action:'read',p_data:{}});if(result.error)throw new Error('Private contacts could not be included. Please try the download again.');if(result.data?.can_edit)privateContacts.push({profile_id:id,...result.data});}
  const metadata=me.user_metadata||{};
- const data={exported_at:new Date().toISOString(),account:{email:me.email,created_at:me.created_at,first_name:metadata.first_name,last_name:metadata.last_name,marketing_consent:metadata.marketing_consent,notification_preferences:metadata.notification_preferences},managed_profiles:profiles};
+ const data={exported_at:new Date().toISOString(),account:{email:me.email,created_at:me.created_at,first_name:metadata.first_name,last_name:metadata.last_name,marketing_consent:metadata.marketing_consent,notification_preferences:metadata.notification_preferences},managed_profiles:profiles,private_contacts:privateContacts};
  const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})),link=document.createElement('a');link.href=url;link.download='buildtheshow-my-data.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);message('Your account and managed-profile download is ready. For other personal information, use “Request my information”.');
 });};
 $('logout-btn').onclick=async()=>{const result=await sb.auth.signOut();if(result.error){message('You could not be signed out. Please try again.',true);return;}sessionStorage.clear();location.replace('/login');};
@@ -94,6 +96,8 @@ async function init(){
   $('account-name').textContent=name;$('account-identity-email').textContent=currentUser.email;$('account-email').textContent=currentUser.email;$('sidebar-email').textContent=currentUser.email;
   keys.forEach((key,index)=>$('notification-'+index).checked=metadata.notification_preferences?.[key]!==false);$('notification-3').checked=metadata.marketing_consent===true;
   window.sb=sb;window.renderMemberSidebar('settings');await window.loadMemberSidebarProfile(sb);
+  await mountProfileManagement(sb,$('settings-profile-management'));
+  const requested=new URLSearchParams(location.search).get('section');if(requested==='profiles')tab('profiles');
   $('settings-load-status').hidden=true;$('settings-controls').hidden=false;
   if(currentUser.new_email)message('An email change is waiting for confirmation. Check your inbox, including junk or spam.');
  }catch(error){$('settings-load-status').textContent='Your account settings could not load. Please try again.';$('settings-retry').hidden=false;message(error.message,true);}

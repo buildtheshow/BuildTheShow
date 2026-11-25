@@ -1,3 +1,4 @@
+import {mountMemberAbsence} from './member-absence.js?v=20261125-member-completion';
 import {ensureOwnProfile} from './basic-profile.js?v=20261125-basic-profile';
 import {supabase as client} from '/ASSETS/scripts/supabase.js';
 import {homeScope} from './member-home.js?v=20261125-basic-profile';
@@ -34,7 +35,7 @@ function openEvent(event){
  q('#ac-detail-title').textContent=event.title;q('#ac-detail-type').textContent=typeNames[event.event_type]||event.event_type.replaceAll('_',' ');q('#ac-detail-dot').style.setProperty('--event-colour',eventColour(event.event_type));q('#ac-detail-date').textContent=periodDate(event.start_time);q('#ac-detail-time').textContent=formatCalendarRange(event);q('#ac-detail-venue').textContent=[event.venue,event.address].filter(Boolean).join(' · ');
  const people=q('#calendar-detail-members');people.replaceChildren();for(const member of event.members){const row=text('div','ac-detail-member'),copy=text('div','');copy.append(text('strong','',member.name),text('span','',event.production),text('span','',callLabels[member.call_status]||'Check with the production team.'));row.append(photo(member),copy);people.append(row);}
  for(const [key,id] of [['arrive_note','ac-detail-arrival'],['bring_note','ac-detail-bring'],['know_note','calendar-detail-prepare']]){const node=q('#'+id);node.textContent=plain(event[key]);node.parentElement.hidden=!event[key];}
- const link=q('#calendar-production-link');link.href='/member/activities?'+new URLSearchParams({production:event.production_id,profile:event.members[0]?.id||''});q('#ac-detail').showModal();
+ const link=q('#calendar-production-link');link.href='/member/activities?'+new URLSearchParams({production:event.production_id,profile:event.members[0]?.id||''});let absence=q('#calendar-absence');if(!absence){absence=document.createElement('div');absence.id='calendar-absence';q('#ac-detail').append(absence);}mountMemberAbsence(client,absence,event,event.members);q('#ac-detail').showModal();
 }
 function eventContent(arg){
  const event=arg.event.extendedProps.memberEvent,colour=eventColour(event.event_type);

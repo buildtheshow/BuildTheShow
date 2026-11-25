@@ -1,0 +1,13 @@
+import {mountProfileAccess} from './profile-access.js?v=20261125-member-completion';
+export async function mountProfileManagement(client,root){
+ let profileId='',record=null;const el=(tag,text)=>{const n=document.createElement(tag);if(text)n.textContent=text;return n;};
+ const label=el('label','Choose a profile'),select=el('select');label.className='field';label.append(select);const panel=el('div'),status=el('p');status.className='note';status.setAttribute('role','status');root.replaceChildren(label,panel,status);
+ try{const result=await client.rpc('bts_circle',{p_action:'snapshot',p_data:{}});if(result.error)throw result.error;const people=(result.data?.profiles||[]).filter(p=>p.can_manage);select.add(new Option('Choose a profile',''));for(const p of people)select.add(new Option(p.name,p.id));const requested=new URLSearchParams(location.search).get('profile');if(people.some(p=>p.id===requested))select.value=requested;
+ async function render(){profileId=select.value;record=people.find(p=>p.id===profileId);panel.replaceChildren();if(!record)return;
+ const details=el('details');details.id='profile-settings';details.open=true;const summary=el('summary',record.name+'’s profile settings'),access=el('div');access.id='profile-access-panel';const archive=el('details');archive.id='profile-archive-settings';archive.hidden=true;archive.append(el('summary','Archive this profile'),el('p','This hides this profile and retains its history. Your login stays active.'));const archiveButton=el('button','Archive profile');archiveButton.type='button';archiveButton.className='action danger';archive.append(archiveButton);details.append(summary,access,archive);panel.append(details);mountProfileAccess(client,access,profileId);
+ if(record.is_subject){const type=el('details');type.append(el('summary','Change profile type'));const host=el('div');type.append(host);details.append(type);window.BTSProfileTypeCorrection?.mount(client,host,{type:'member',id:profileId,selectedOnly:true});}
+ archiveButton.onclick=async()=>{const id=profileId;if(!confirm('Archive '+record.name+'? This hides the profile and retains its history.'))return;archiveButton.disabled=true;try{const r=await client.rpc('bts_family',{p_action:'archive_profile',p_data:{profile_id:id}});if(r.error)throw r.error;location.assign('/member/settings?section=profiles');}catch(e){status.textContent=e.message||'This profile could not be archived.';archiveButton.disabled=false;}};
+ }
+ select.onchange=render;await render();status.textContent=people.length?'Access, transfers and profile changes apply to the person selected above.':'There are no profiles you can manage.';
+ }catch{status.textContent='Profile settings could not load. Please reload this page.';}
+}
