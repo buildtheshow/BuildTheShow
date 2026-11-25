@@ -1,5 +1,5 @@
 // The production tile opens these details. All sensitive data comes from a profile-bound RPC.
-import {showInvolvement,imageUrl} from './member-activities.js?v=20261122-production-details';
+import {showInvolvement,imageUrl} from './member-activities.js?v=20261125-my-circle-icon';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const icon=name=>'/ASSETS/Images/Icons/'+name;
 const active=v=>!['cancelled','canceled','declined','rejected','withdrawn','archived'].includes(v.status);

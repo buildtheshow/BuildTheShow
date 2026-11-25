@@ -148,3 +148,7 @@ Member production payments deployment: applied and recorded only version `202611
 ## Member production details (2026-11-22)
 
 `supabase/migrations/20261122110000_member_production_details.sql` adds a profile-bound read-only RPC for existing production contacts, cast calls, event instructions, venues and permitted files. It creates no tables and grants no blanket access to staff files or notes. Tests cover cast/volunteer/mixed roles, legacy and pending calls, private notes/files and outsider/profile/production boundaries. Applied and recorded only this migration after its exact-source hosted rollback rehearsal passed; the unrelated transactional audition booking migration remains separate. See `docs/security/member-production-details.md`.
+
+## Member calendar (2026-11-25)
+
+`supabase/migrations/20261122150000_member_calendar.sql` adds `bts_member_calendar(uuid[],date,date,uuid)`, a read-only date-range RPC over existing production events, audition bookings and volunteer signups. No tables are created. Every selected profile needs explicit management access; call lists and account-bound team permissions still apply. Anonymous execution is denied. Local and hosted rollback rehearsals cover historic calls, exact timed audition duration, volunteer dates, private notes and outsider denial. Applied and recorded only this migration after the hosted rollback rehearsal passed. See `docs/security/member-calendar.md`.

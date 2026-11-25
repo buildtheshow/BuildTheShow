@@ -1,8 +1,8 @@
-import {mountMemberProduction} from './member-production.js?v=20261122-production-details';
+import {mountMemberProduction} from './member-production.js?v=20261125-my-circle-icon';
 import {mountProductionPayments} from './member-payments.js?v=20261121-production-payments';
 import {supabase as client} from '/ASSETS/scripts/supabase.js';
-import {updateMemberHome,syncMemberHomeSidebar,homeScope} from './member-home.js?v=20261122-separate-calendar';
-import {enrichActivityMedia,renderActivityPicker,renderActivityShows,syncActivitySidebar} from './member-activities.js?v=20261122-production-details';
+import {updateMemberHome,syncMemberHomeSidebar,homeScope} from './member-home.js?v=20261125-my-circle-icon';
+import {enrichActivityMedia,renderActivityPicker,renderActivityShows,syncActivitySidebar} from './member-activities.js?v=20261125-my-circle-icon';
 const $=id=>document.getElementById(id);
 const productionView=mountMemberProduction(client,$('production-details'));
 const paymentView=mountProductionPayments(client,$('production-payments'));

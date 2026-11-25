@@ -54,7 +54,7 @@ export function syncMemberHomeSidebar(){
  const number=$('sidebar-profile-num');if(number)number.textContent='';
  const hint=document.querySelector('.sidebar-profile-switcher-hint');if(hint)hint.textContent=scope.circle?'My Circle':person.is_subject?'My Profile':'Member';
  const switcher=$('sidebar-profile-switcher');switcher.href='/member/home#home-spaces';switcher.setAttribute('aria-label','Choose a profile or circle');
- const placeholder=$('sidebar-avatar-placeholder');if(placeholder){placeholder.hidden=false;placeholder.innerHTML=`<img src="${icon(scope.circle?'Home.svg':'performer2.svg')}" alt="" style="width:30px;height:32px;object-fit:contain">`;}
+ const placeholder=$('sidebar-avatar-placeholder');if(placeholder){placeholder.hidden=false;placeholder.innerHTML=`<img src="${icon(scope.circle?'my-circle.svg':'performer2.svg')}" alt="" style="width:30px;height:32px;object-fit:contain">`;}
  document.querySelectorAll('.sidebar-profile-avatar').forEach(image=>image.hidden=true);
 }
 
@@ -76,7 +76,7 @@ function renderHome(){
  $('home-own-profile-note').hidden=!!own||!(model.profiles||[]).length;
  $('home-circle-options').innerHTML=circles.map(c=>{
   const members=(model.profiles||[]).filter(p=>p.can_manage&&!p.needs_adult_claim&&(c.profiles||[]).includes(p.id));const selected=selection?.kind==='circle'&&selection.id===c.id;
-  return `<button type="button" class="home-circle-card" data-home-circle="${esc(c.id)}" aria-pressed="${selected}"><img src="${icon('Home.svg')}" alt=""><div><strong>${esc(c.name)}</strong><span>${esc(members.map(p=>p.name).join(', ')||'No members shared with you yet')}${members.length?' · '+members.length+' '+(members.length===1?'member':'members'):''}</span></div>${selected?'<small>Selected</small>':''}</button>`;
+  return `<button type="button" class="home-circle-card" data-home-circle="${esc(c.id)}" aria-pressed="${selected}"><img src="${icon('my-circle.svg')}" alt=""><div><strong>${esc(c.name)}</strong><span>${esc(members.map(p=>p.name).join(', ')||'No members shared with you yet')}${members.length?' · '+members.length+' '+(members.length===1?'member':'members'):''}</span></div>${selected?'<small>Selected</small>':''}</button>`;
  }).join('');
  $('home-viewing').textContent=scope.circle?'Showing '+scope.circle.name+'’s dates, shows and updates. Includes the members shared with you.':scope.members.length?'Showing '+(scope.members[0].is_subject?'your':scope.members[0].name+'’s')+' dates, shows and updates.':'Choose a profile or circle to see their dates, shows and updates.';
  $('home-selected-profile-link').hidden=!scope.members.length||!!scope.circle;

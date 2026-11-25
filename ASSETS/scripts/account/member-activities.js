@@ -41,7 +41,7 @@ export function renderActivityPicker(model,scope){
  const profiles=model.profiles.filter(p=>p.can_manage&&!p.needs_adult_claim);
  const avatar=(name,fallback)=>`<span class="activity-avatar"><img src="${icon(fallback)}" class="activity-avatar-fallback" alt=""></span><span class="activity-person-name">${esc(name)}</span>`;
  document.getElementById('activity-profile-options').innerHTML=profiles.map(p=>`<button type="button" class="activity-person" data-activity-profile="${esc(p.id)}" aria-pressed="${scope.selected?.kind==='profile'&&scope.selected.id===p.id}">${avatar(p.name,'performer2.svg')}</button>`).join('')||'<a class="member-action" href="/member/profiles/new">Create My Profile</a>';
- document.getElementById('activity-circle-options').innerHTML=(model.circles||[]).map(c=>`<button type="button" class="activity-person" data-activity-circle="${esc(c.id)}" aria-pressed="${scope.selected?.kind==='circle'&&scope.selected.id===c.id}">${avatar(c.name,'Home.svg')}</button>`).join('');
+ document.getElementById('activity-circle-options').innerHTML=(model.circles||[]).map(c=>`<button type="button" class="activity-person" data-activity-circle="${esc(c.id)}" aria-pressed="${scope.selected?.kind==='circle'&&scope.selected.id===c.id}">${avatar(c.name,'my-circle.svg')}</button>`).join('');
  document.getElementById('activity-circle-options').hidden=!(model.circles||[]).length;
  document.getElementById('activity-selection-status').textContent=scope.circle?'Showing '+scope.circle.name+'’s activities.':scope.members.length?'Showing '+scope.members[0].name+'’s activities.':'Choose a profile to view activities.';
  document.getElementById('activity-media-note').hidden=!model.activityMediaError;
@@ -59,7 +59,7 @@ export function syncActivitySidebar(scope){
  const number=document.getElementById('sidebar-profile-num');if(number)number.textContent='';
  const hint=document.querySelector('.sidebar-profile-switcher-hint');if(hint)hint.textContent=scope.circle?'My Circle':person.is_subject?'My Profile':'Member';
  const switcher=document.getElementById('sidebar-profile-switcher');switcher.href=(location.pathname==='/member/calendar'?'/member/calendar':'/member/activities')+'#activity-scope-picker';switcher.setAttribute('aria-label','Choose a profile or circle');
- const placeholder=document.getElementById('sidebar-avatar-placeholder');if(placeholder){placeholder.hidden=false;placeholder.innerHTML=`<img src="${icon(scope.circle?'Home.svg':'performer2.svg')}" alt="" style="width:24px;height:28px;object-fit:contain">`;}
+ const placeholder=document.getElementById('sidebar-avatar-placeholder');if(placeholder){placeholder.hidden=false;placeholder.innerHTML=`<img src="${icon(scope.circle?'my-circle.svg':'performer2.svg')}" alt="" style="width:24px;height:28px;object-fit:contain">`;}
  document.querySelectorAll('.sidebar-profile-avatar').forEach(image=>image.hidden=true);
  if(!scope.circle&&person){sessionStorage.setItem('bts_active_profile_id',person.id);sessionStorage.setItem('bts_active_profile_name',person.name);}
  // Applications currently open a single profile. Circle users choose a member first.

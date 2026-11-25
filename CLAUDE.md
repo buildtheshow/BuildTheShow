@@ -36,6 +36,8 @@ Before writing ANY rendering code, READ the template test page first.
 
 - Before writing user-facing copy, read the Platform Voice section in `SHARED/CODEBASE_RULES.md` and use it as the source of truth.
 
+- My Circle uses `my-circle.svg` in navigation, circle cards, and circle selectors.
+
 - Signup icons chosen by Katie: Organisation uses `organisation-members.svg`, Member uses `performer2.svg`, Household uses `Home.svg`. Preserve these mappings.
 
 - Brand colours ONLY — 10 official colours: `#000000 #572e88 #efab45 #efefef #769e7b #dd8233 #d1523d #74a2b4 #476aaa #ca7ea7`

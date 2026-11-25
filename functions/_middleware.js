@@ -74,7 +74,7 @@ const PAGES = new Map([
   ],
   [
     "/member/calendar",
-    "/PUBLIC/my-home.html"
+    "/SYSTEM/Members/Dashboard/member-calendar.html"
   ],
   [
     "/member/households",

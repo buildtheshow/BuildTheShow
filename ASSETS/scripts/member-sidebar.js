@@ -63,7 +63,7 @@
   }
 
   // ── Build a plain nav link ───────────────────────────────────────
-  const navIcons={'My Home':'navoverview.svg','My Activities':'Performer.svg','My Calendar':'navproductioncalendar.svg','My Profile':'performer2.svg','My Circle':'Home.svg','Settings':'navsettings.svg'};
+  const navIcons={'My Home':'navoverview.svg','My Activities':'Performer.svg','My Calendar':'navproductioncalendar.svg','My Profile':'performer2.svg','My Circle':'my-circle.svg','Settings':'navsettings.svg'};
   function navLink(href, label, isActive) {
     return `<a href="${href}" class="sidebar-nav-item${isActive ? ' active' : ''}"${isActive ? ' aria-current="page"' : ''}>
       ${navIcons[label]?`<img class="sidebar-nav-icon" src="/ASSETS/Images/Icons/${navIcons[label]}" alt="" aria-hidden="true">`:""}<span>${label}</span>
