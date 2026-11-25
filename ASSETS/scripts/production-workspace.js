@@ -706,15 +706,10 @@
       </main>`;
   }
 
-  async function showProductionPathNotFound() {
+  function showProductionPathNotFound() {
     const parts = adminProductionPathParts();
-    const org = await findOrganizationForPath(parts.org);
-    if (!org) {
-      showWorkspaceNotFound('Organisation not found', 'That organisation URL does not match a Build The Show organisation.', '/', 'Back to Build The Show');
-      return;
-    }
-    const orgPath = org.slug || org.abbreviation || parts.org;
-    showWorkspaceNotFound('Production not found', 'That production URL does not exist for this organisation.', `/${encodeURIComponent(orgPath)}`, 'View organisation profile');
+    const orgPath = parts.org ? `/${encodeURIComponent(parts.org)}` : '/';
+    showWorkspaceNotFound('Production not found', 'That production URL does not exist for this organisation.', orgPath, parts.org ? 'View organisation profile' : 'Back to Build The Show');
   }
 
   function showTeamAccessLogin(message = '') {
