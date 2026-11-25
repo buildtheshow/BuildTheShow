@@ -27364,6 +27364,17 @@ See you soon!
       return issues.length ? `<button type="button" class="ap-setup-needs" data-needs="${e(record.id)}"><span>✱</span> Needs details (${issues.length})</button>` : '<span class="ap-setup-ready">Draft · Ready to review</span>';
     }
 
+    function bindNeedsAction(container, record) {
+      container?.querySelector('[data-needs]')?.addEventListener('click', event=>{
+        event.stopPropagation();
+        const firstIssue=missing(record)[0];
+        state.openId=record.id;
+        state.step=firstIssue?.step||0;
+        if(firstIssue?.day!==undefined)state.activeDay[record.id]=firstIssue.day;
+        render();
+      });
+    }
+
     function render() {
       const host = document.getElementById('aud-sessions-list');
       if (!host || !state.loaded) return;
@@ -27382,7 +27393,11 @@ See you soon!
         card.querySelector('.aud-card-vis-badge')?.remove();
         const head = card.querySelector('.aud-session-header');
         head?.setAttribute('role','group');
-        card.querySelector('.aud-card-name').textContent = record.name || sessionTypeLabel(record.type);
+        const nameNode=card.querySelector('.aud-card-name');
+        nameNode.textContent = record.name || sessionTypeLabel(record.type);
+        const titleRow=document.createElement('div');titleRow.className='ap-setup-title-row';
+        nameNode.replaceWith(titleRow);titleRow.append(nameNode);
+        const headerStatus=document.createElement('div');headerStatus.className='ap-setup-header-status';headerStatus.innerHTML=completion(record);titleRow.append(headerStatus);bindNeedsAction(headerStatus,record);
         const chips=card.querySelector('.aud-card-chips');
         const firstDay=ensureDays(record)[0];
         if(chips) chips.innerHTML=`<span>${e(firstDay.date?niceDate(firstDay.date):'Dates to come')}${firstDay.start?' · '+e(niceTime(firstDay.start)):''}${firstDay.end?'–'+e(niceTime(firstDay.end)):''}</span><span>${e(record.methods.map(key=>({in_person:'In person',video_call:'Video call',self_tape:'Self-tape'})[key]).join(' · '))}</span>`;
@@ -27394,8 +27409,7 @@ See you soon!
         const attendance = document.createElement('div'); attendance.className='ap-setup-attendance'; attendance.style.setProperty('--ap-accent',colour(record)); attendance.innerHTML=record.type==='callback'?`<strong>Who attends?</strong><label><input type="radio" name="audience-${e(record.id)}" value="invited" checked disabled>People we invite</label><small>Your team chooses who gets a callback.</small>`:`<strong>Who attends?</strong><label><input type="radio" name="audience-${e(record.id)}" value="open" ${record.audience!=='invited'?'checked':''}>Anyone who meets the requirements</label><label><input type="radio" name="audience-${e(record.id)}" value="invited" ${record.audience==='invited'?'checked':''}>People we invite</label>${record.audience==='invited'?'<small>Attending another audition does not add anyone here.</small>':''}`;
         card.append(attendance);
         attendance.querySelectorAll('input').forEach(input=>input.onchange=()=>{record.audience=input.value;save(record);render();});
-        const caption=document.createElement('div');caption.className='ap-setup-caption';const chosenActivities=record.activities.map(key=>activities.find(item=>item[0]===key)?.[1]||key).join(' · ');caption.innerHTML=`${chosenActivities?`<span>${e(chosenActivities)}</span>`:''}${completion(record)}`;card.append(caption);
-        caption.querySelector('[data-needs]')?.addEventListener('click',()=>{const firstIssue=missing(record)[0];state.openId=record.id;state.step=firstIssue?.step||0;if(firstIssue?.day!==undefined)state.activeDay[record.id]=firstIssue.day;render();});
+        const caption=document.createElement('div');caption.className='ap-setup-caption';const chosenActivities=record.activities.map(key=>activities.find(item=>item[0]===key)?.[1]||key).join(' · ');caption.innerHTML=chosenActivities?`<span>${e(chosenActivities)}</span>`:'';card.append(caption);
         if(state.openId===record.id) card.insertAdjacentHTML('beforeend',editor(record));
         host.append(card);
         if(state.openId===record.id) bind(card.querySelector('.ap-setup-editor'),record);
@@ -27464,6 +27478,7 @@ See you soon!
       card.querySelectorAll('.ap-setup-missing-note').forEach(node=>node.remove());
       const issues=missing(record);
       const badge=card.querySelector('[data-needs]');if(badge){badge.innerHTML=`<span>✱</span> Needs details (${issues.length})`;}
+      const headerStatus=card.querySelector('.ap-setup-header-status');if(headerStatus){headerStatus.innerHTML=completion(record);bindNeedsAction(headerStatus,record);}
       const editorRoot=card.querySelector('.ap-setup-editor');if(!editorRoot)return;
       const visibleIssues=issues.filter(issue=>issue.step===state.step);
       visibleIssues.forEach(issue=>{
