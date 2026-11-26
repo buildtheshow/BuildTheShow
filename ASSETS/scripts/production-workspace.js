@@ -27222,7 +27222,7 @@ See you soon!
       { value: 'audition', label: 'General audition', name: 'General audition', colour: '#476aaa', icon: 'Auditions.svg' },
       { value: 'dance_call', label: 'Dance call', name: 'Dance call', colour: '#dd8233', icon: 'Choreography.svg' },
       { value: 'callback', label: 'Callback', name: 'Callback', colour: '#769e7b', icon: 'Star.svg' },
-      { value: 'other', label: 'Another audition', name: 'Other audition', colour: '#d1523d', icon: 'Auditions.svg' },
+      { value: 'other', label: 'Another audition', name: 'Other audition', colour: '#d1523d', icon: 'CreativeTeam-Director.svg' },
     ];
     const methods = [['in_person', 'In person', 'Department-production-and-rehearsal-support.svg', 'Performers attend an audition at your chosen venue and audition in front of your team.'], ['video_call', 'Video call', 'VideoCall.svg', 'Performers audition live with your team over a video call, without needing to attend in person.'], ['self_tape', 'Self-tape', 'SelfTape.svg', 'Performers record their audition in their own time and submit it for your team to review by a deadline you set.']];
     const modes = [
