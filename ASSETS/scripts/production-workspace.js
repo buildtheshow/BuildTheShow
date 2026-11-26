@@ -25995,6 +25995,10 @@ See you soon!
     return `${h12}:${m} ${ampm}`;
   }
 
+  function formatAuditionCardTime(t) {
+    return formatSlotTime(t).replace(/\s+(AM|PM)$/i, (_, period) => period.toLowerCase());
+  }
+
   function buildSlotPillsHTML(slots, sessionId) {
     if (!slots.length) return '<span class="aud-slots-empty-msg">No slots yet.</span>';
     return slots.map(slot => `
@@ -26506,7 +26510,7 @@ See you soon!
       chips.push({ icon:null, label:dc });
     }
     if (session.start_time) {
-      const tc = `${formatSlotTime(session.start_time)}${session.end_time ? ` – ${formatSlotTime(session.end_time)}` : ''}`;
+      const tc = `${formatAuditionCardTime(session.start_time)}${session.end_time ? ` - ${formatAuditionCardTime(session.end_time)}` : ''}`;
       chips.push({ icon:'time.svg', label:tc });
     }
     const fmtOpts = { in_person:{ label:'In Person', icon:'Location2.svg' }, video_call:{ label:'Video Call', icon:'VideoCall.svg' }, self_tape:{ label:'Self Tape', icon:'SelfTape.svg' } };
@@ -26534,7 +26538,7 @@ See you soon!
           : formatAuditionScheduleSessionDate(session.date))
       : 'No date booked';
     const collapsedTime = session.start_time
-      ? `${formatSlotTime(session.start_time)}${session.end_time ? ` - ${formatSlotTime(session.end_time)}` : ''}`
+      ? `${formatAuditionCardTime(session.start_time)}${session.end_time ? ` - ${formatAuditionCardTime(session.end_time)}` : ''}`
       : 'No time set';
     const collapsedMeta = `${collapsedDate}${collapsedTime ? ` · ${collapsedTime}` : ''}`;
     const _modeLabels = { appointment:'Individual Appointment', group_session:'Group Session', open_call:'Open Call' };
