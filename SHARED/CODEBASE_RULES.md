@@ -961,7 +961,7 @@ These rules cover hierarchy, spacing, labels, and how interface elements should 
 4. Audition highlight colours follow the audition type: General audition `#476aaa`, Dance call `#dd8233`, Callback `#769e7b`, and Another audition `#d1523d`.
 5. Selected cards and radio/checkbox controls use the current audition highlight. Selected card text and icons turn white; unselected card text stays black and icons use the highlight colour.
 6. Selected multi-select cards may use a compact outlined circular check mark (`✓`) in the upper-right. On a selected, colour-filled card, the circle outline and check are white.
-7. Keep options within the same choice set equal in size. Align their icons, titles, and descriptions consistently, and size each card to avoid excessive empty space around its content.
+7. Keep audition option cards square (1:1) and equal in size within each choice set. Align their icons, titles, and descriptions consistently, and size each card to avoid excessive empty space around its content.
 8. Preserve Katie's approved audition icon mappings: In person `Department-production-and-rehearsal-support.svg`; Video call `VideoCall.svg`; Self-tape `SelfTape.svg`; Another audition `CreativeTeam-Director.svg`.
 
 ### Hierarchy

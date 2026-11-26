@@ -46,7 +46,7 @@ Before writing ANY rendering code, READ the template test page first.
 - Audition selection accents follow type: General audition `#476aaa`; Dance call `#dd8233`; Callback `#769e7b`; Another audition `#d1523d`.
 - Selected cards and radio/checkbox controls use the current audition highlight; selected card text and icons turn white, while unselected card text stays black and icons use the highlight colour.
 - Selected multi-select cards may show a compact outlined circular `✓` at the upper-right; use a white outline and check on the filled highlight colour.
-- Keep option cards in the same set equal in size, with consistent icon sizing and aligned title/description positions.
+- Keep audition option cards square (1:1), equal in size within each choice set, with consistent icon sizing and aligned title/description positions.
 - Approved audition method icons: In person `Department-production-and-rehearsal-support.svg`; Video call `VideoCall.svg`; Self-tape `SelfTape.svg`. “Another audition” uses `CreativeTeam-Director.svg`.
 - No horizontal scroll — ever
 - No left border accent bars
