@@ -100,31 +100,6 @@
       color: #c8bad7;
     }
 
-    .login-options {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 0.55rem;
-      margin: -0.15rem 0 1.15rem;
-    }
-
-    .keep-signed-in {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.55rem;
-      color: #4a3d6b;
-      font-size: 0.875rem;
-      cursor: pointer;
-    }
-
-    .keep-signed-in input {
-      width: 1rem;
-      height: 1rem;
-      margin: 0;
-      accent-color: #572e88;
-    }
-
     .form-input:focus {
       border-color: rgba(87, 46, 136, 0.6);
       box-shadow: 0 0 0 3px rgba(87, 46, 136, 0.12);
@@ -217,7 +192,6 @@
       background: #f0ecf8;
     }
   </style>
-  <script src="/SHARED/Components/auth-storage.js?v=20261126-keep-signed-in"></script>
 </head>
 <body>
 
@@ -251,16 +225,11 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="password">Password</label>
+          <div class="form-label-row">
+            <label class="form-label" for="password">Password</label>
+            <a href="/forgot-password" class="forgot-link">Forgot password?</a>
+          </div>
           <input class="form-input" type="password" id="password" name="password" placeholder="Your password" autocomplete="current-password" required />
-        </div>
-
-        <div class="login-options">
-          <label class="keep-signed-in" for="keep-signed-in">
-            <input type="checkbox" id="keep-signed-in" />
-            <span>Keep me signed in</span>
-          </label>
-          <a href="/forgot-password" class="forgot-link">Forgot password?</a>
         </div>
 
         <button type="submit" class="btn--accent" id="submit-btn">Log In</button>
@@ -278,53 +247,13 @@
   <script src="/SHARED/Components/account-security.js?v=20261117-canonical-urls"></script>
   <script>
     const { createClient } = supabase;
-    const SUPABASE_URL = 'https://tkmaiktxpwqfbgeojbnf.supabase.co';
-    const SIGN_IN_FETCH_TIMEOUT_MS = 18000;
-    let signInRequestTimedOut = false;
-
-    // Supabase's auth client owns the fetch promise. A UI-only Promise.race
-    // timeout leaves that request running and can keep the auth lock held,
-    // causing every later sign-in attempt from this page to stall as well.
-    function createLoginFetch() {
-      const nativeFetch = window.fetch.bind(window);
-      return async function loginFetch(input, init = {}) {
-        const requestUrl = input instanceof Request ? input.url : String(input);
-        const parsedUrl = new URL(requestUrl, window.location.href);
-        const isPasswordSignIn = parsedUrl.origin === SUPABASE_URL
-          && parsedUrl.pathname === '/auth/v1/token'
-          && parsedUrl.searchParams.get('grant_type') === 'password';
-        if (!isPasswordSignIn) return nativeFetch(input, init);
-
-        const controller = new AbortController();
-        const originalSignal = init.signal || (input instanceof Request ? input.signal : null);
-        const forwardAbort = () => controller.abort(originalSignal.reason);
-        if (originalSignal?.aborted) forwardAbort();
-        else originalSignal?.addEventListener('abort', forwardAbort, { once: true });
-
-        const timeout = setTimeout(() => {
-          signInRequestTimedOut = true;
-          controller.abort(new DOMException('Sign-in request timed out.', 'TimeoutError'));
-        }, SIGN_IN_FETCH_TIMEOUT_MS);
-
-        try {
-          return await nativeFetch(input, { ...init, signal: controller.signal });
-        } finally {
-          clearTimeout(timeout);
-          originalSignal?.removeEventListener('abort', forwardAbort);
-        }
-      };
-    }
-
     const sb = createClient(
-      SUPABASE_URL,
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8',
-      { global: { fetch: createLoginFetch() } }
+      'https://tkmaiktxpwqfbgeojbnf.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRrbWFpa3R4cHdxZmJnZW9qYm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3MzE4MTcsImV4cCI6MjA4OTMwNzgxN30.TkTZBNWUatk3Y6Vmfv1hIRR3DfVjgwauwa76Pf00J_8'
     );
 
     const errorMsg = document.getElementById('error-msg');
     const submitBtn = document.getElementById('submit-btn');
-    const keepSignedIn = document.getElementById('keep-signed-in');
-    keepSignedIn.checked = localStorage.getItem(BTSAuthStorage.modeKey) === 'persistent';
 
     function showError(msg) {
       errorMsg.textContent = msg;
@@ -364,7 +293,6 @@
 
       submitBtn.disabled = true;
       submitBtn.textContent = 'Logging in...';
-      localStorage.setItem(BTSAuthStorage.modeKey, keepSignedIn.checked ? 'persistent' : 'session');
 
       let signInResult;
       try {
@@ -374,10 +302,7 @@
           'Sign-in is taking longer than expected. Check your connection and try again.'
         );
       } catch (error) {
-        showError(signInRequestTimedOut
-          ? 'The sign-in service did not respond in time. Check your connection and try again.'
-          : error?.message || 'We could not reach sign-in. Please try again.');
-        signInRequestTimedOut = false;
+        showError(error?.message || 'We could not reach sign-in. Please try again.');
         resetLoginButton();
         return;
       }
@@ -385,10 +310,7 @@
       const { data, error } = signInResult;
 
       if (error) {
-        showError(signInRequestTimedOut
-          ? 'The sign-in service did not respond in time. Check your connection and try again.'
-          : error.message || 'We could not sign you in. Please try again.');
-        signInRequestTimedOut = false;
+        showError(error.message || 'We could not sign you in. Please try again.');
         resetLoginButton();
         return;
       }
@@ -425,9 +347,8 @@
         return;
       }
 
-      // Organisation owners and admins should return to their workspace after
-      // a fresh login. The member Home is the fallback for accounts without
-      // organisation access.
+      // Organisation accounts should reopen their workspace on a fresh login.
+      // The member home is only the fallback for accounts without organisation access.
       try {
         const { data: home, error: homeError } = await waitForRequest(
           sb.rpc('bts_my_home', { p_production_id: null }),
@@ -448,7 +369,7 @@
         return;
       }
 
-      // A new member login opens Home with the account's own profile selected.
+      // A new login opens Home with the account's own profile selected.
       sessionStorage.removeItem('bts_member_home_selection');
       sessionStorage.removeItem('bts_member_context');
       sessionStorage.removeItem('bts_user_display_id');
