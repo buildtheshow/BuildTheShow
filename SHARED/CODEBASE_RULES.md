@@ -955,7 +955,7 @@ These rules cover hierarchy, spacing, labels, and how interface elements should 
 
 ### Build The Show Brand Rules
 
-1. Use only the ten official brand colours listed in `CLAUDE.md`.
+1. Use only these ten official brand colours: `#000000`, `#572e88`, `#efab45`, `#efefef`, `#769e7b`, `#dd8233`, `#d1523d`, `#74a2b4`, `#476aaa`, and `#ca7ea7`.
 2. Use solid colour fills for branded surfaces. Do not use gradients, glass, frosted effects, translucent colour overlays, or pastel/lavender tints.
 3. Use black text on white or neutral `#efefef` surfaces. Use white text on every coloured brand surface.
 4. Audition highlight colours follow the audition type: General audition `#476aaa`, Dance call `#dd8233`, Callback `#769e7b`, and Another audition `#d1523d`.
@@ -963,6 +963,11 @@ These rules cover hierarchy, spacing, labels, and how interface elements should 
 6. Selected multi-select cards may use a compact outlined circular check mark (`✓`) in the upper-right. On a selected, colour-filled card, the circle outline and check are white.
 7. Keep audition option cards square (1:1) and equal in size within each choice set. Align their icons, titles, and descriptions consistently, and size each card to avoid excessive empty space around its content.
 8. Preserve Katie's approved audition icon mappings: In person `Department-production-and-rehearsal-support.svg`; Video call `VideoCall.svg`; Self-tape `SelfTape.svg`; Another audition `CreativeTeam-Director.svg`.
+9. My Circle uses `my-circle.svg` in navigation, circle cards, and circle selectors.
+10. Preserve Katie's signup icon mappings: Organisation `organisation-members.svg`, Member `performer2.svg`, and Household `Home.svg`.
+11. Never allow horizontal page scrolling.
+12. Do not use left border accent bars.
+13. Do not use em dashes in user-facing copy.
 
 ### Hierarchy
 
