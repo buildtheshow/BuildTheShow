@@ -20,8 +20,8 @@ assert.equal(validAdultBirthDate('2014-01-01',today),false);
 assert.equal(validAdultBirthDate('2000-02-30',today),false);
 assert.equal(validAdultBirthDate('not-a-date',today),false);
 assert.equal(validAdultBirthDate('2027-01-01',today),false);
-assert.equal(safeReturnPath('//example.com'),'/member');
-assert.equal(safeReturnPath('/\\example.com'),'/member');
+assert.equal(safeReturnPath('//example.com'),'/member/home');
+assert.equal(safeReturnPath('/\\example.com'),'/member/home');
 assert.equal(safeReturnPath('/member/profile/create?edit=123'),'/member/profile/create?edit=123');
 (async () => {
   const availability=context.window.BTSAuditionAccess;

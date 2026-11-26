@@ -1002,7 +1002,7 @@ async function page(context, asset) {
     response=await context.env.ASSETS.fetch(next);
   }
   if(response.status>=300 && response.status<400) return new Response('Page unavailable',{status:502});
-  if((response.headers.get('Content-Type') || '').includes('text/html')) {
+  if(typeof HTMLRewriter !== 'undefined' && (response.headers.get('Content-Type') || '').includes('text/html')) {
     response = new HTMLRewriter().on('head', {
       element(element) {
         element.prepend('<script src="/SHARED/Components/auth-storage.js?v=20261126-keep-signed-in"></script>', { html: true });

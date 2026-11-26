@@ -9,8 +9,13 @@
       return target.getItem(key);
     },
     setItem(key, value) {
-      const target = localStorage.getItem(MODE_KEY) === 'session' ? sessionStorage : localStorage;
+      const useSessionStorage = localStorage.getItem(MODE_KEY) === 'session';
+      const target = useSessionStorage ? sessionStorage : localStorage;
+      const other = useSessionStorage ? localStorage : sessionStorage;
       target.setItem(key, value);
+      // A previous login may have used the other persistence choice. Remove
+      // its copy so changing the checkbox cannot resurrect an older session.
+      other.removeItem(key);
     },
     removeItem(key) {
       localStorage.removeItem(key);
