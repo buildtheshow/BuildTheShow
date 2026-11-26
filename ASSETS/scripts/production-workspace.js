@@ -26770,6 +26770,7 @@ See you soon!
       const noteEl = section.querySelector('.aud-slot-count-note-total');
       if (noteEl) noteEl.textContent = slots.length + ' slot' + (slots.length !== 1 ? 's' : '') + ' generated total';
     }
+    if (_audSetupController?.state.openId === sessionId) _audSetupController.render();
   }
 
   function addBlock(sessionId) {
@@ -27376,7 +27377,33 @@ See you soon!
       const days = isTapeOnly ? [] : ensureDays(record);
       const duration = `${e(record.slot || '10')} minutes per person${Number(record.gap) ? ` · ${e(record.gap)} minutes between appointments` : ''}`;
       const format = record.mode === 'appointment' ? duration : record.mode === 'group' ? `${e(record.capacity || '1')} places in each group session · ${duration}` : record.mode === 'arrival' ? `${e(record.capacity || '1')} performers per shared arrival time · ${duration}` : record.mode === 'walkin' ? 'Arrive any time during the advertised hours and wait your turn.' : `Your team will assign your audition time · ${duration}`;
-      return `<section class="ap-setup-performer-schedule"><header><span>${e(typeLabel)}</span><h2>${e(record.name)}</h2><p>${e(modeLabel)} · ${e(record.methods.map(method => methodLabels[method]).join(' · '))}</p></header>${isTapeOnly ? `<article class="ap-setup-performer-day"><h3>Submission deadline</h3><strong>${e(record.deadline ? new Date(record.deadline).toLocaleString(undefined, { dateStyle: 'long', timeStyle: 'short' }) : 'To be confirmed')}</strong><p>Your team will review submissions by this deadline.</p></article>` : days.map((day,index)=>`<article class="ap-setup-performer-day"><h3>${e(days.length > 1 ? `Day ${index + 1}` : typeLabel)}</h3><strong>${e(niceDate(day.date))}</strong><p>${e(niceTime(day.start))}–${e(niceTime(day.end))}</p>${record.methods.includes('in_person')?`<p><b>Location:</b> ${e(day.venue?.name||'Venue to be confirmed')}${day.room?' · '+e(day.room):''}</p>${day.venue?.address?`<p>${e(day.venue.address)}</p>`:''}`:''}${record.methods.includes('video_call')?`<p><b>Video call:</b> ${e(day.videoInstructions||'Joining details will be sent with your booking confirmation.')}</p>`:''}<div class="ap-setup-performer-slots"><b>${e(modeLabel)}</b><span>${format}</span></div></article>`).join('')}</section>`;
+      const dayCards = days.map((day, index) => {
+        const daySlots = (audSlots[record.id] || [])
+          .filter(slot => slot.block_id === day.id || (day.date && (slot.slot_date || record.days?.[0]?.date) === day.date))
+          .slice()
+          .sort((a, b) => String(a.slot_time || '').localeCompare(String(b.slot_time || '')));
+        const bookedBySlot = {};
+        (allApplicants || []).forEach(app => {
+          const assignments = Array.isArray(app?.slot_assignments) && app.slot_assignments.length
+            ? app.slot_assignments
+            : (app?.slot_id ? [{ slot_id: app.slot_id }] : []);
+          assignments.forEach(item => {
+            if (item.slot_id) bookedBySlot[item.slot_id] = (bookedBySlot[item.slot_id] || 0) + 1;
+          });
+        });
+        const slotsHtml = daySlots.length
+          ? `<div class="ap-setup-public-slot-list">${daySlots.map(slot => {
+              const [hour, minute] = String(slot.slot_time || '').split(':').map(Number);
+              const time = Number.isFinite(hour) ? `${hour % 12 || 12}:${String(minute || 0).padStart(2, '0')} ${hour >= 12 ? 'PM' : 'AM'}` : String(slot.slot_time || 'Time to be confirmed');
+              const capacity = Number(slot.capacity || record.capacity || 1);
+              const booked = bookedBySlot[slot.id] || 0;
+              const full = capacity > 0 && booked >= capacity;
+              return `<span class="ap-setup-public-slot${full ? ' is-full' : ''}">${e(time)}${capacity > 1 && !full ? `<small>${booked}/${capacity}</small>` : ''}</span>`;
+            }).join('')}</div>`
+          : `<p class="ap-setup-public-slots-empty">Slots not yet published</p>`;
+        return `<article class="ap-setup-performer-day"><h3>${e(days.length > 1 ? `Day ${index + 1}` : typeLabel)}</h3><strong>${e(niceDate(day.date))}</strong><p>${e(niceTime(day.start))}–${e(niceTime(day.end))}</p>${record.methods.includes('in_person')?`<p><b>Location:</b> ${e(day.venue?.name||'Venue to be confirmed')}${day.room?' · '+e(day.room):''}</p>${day.venue?.address?`<p>${e(day.venue.address)}</p>`:''}${day.locationNotes?`<p>${e(day.locationNotes)}</p>`:''}`:''}${record.methods.includes('video_call')?`<p><b>Video call:</b> ${e(day.videoInstructions||'Joining details will be sent with your booking confirmation.')}</p>`:''}<div class="ap-setup-performer-slots"><b>${e(modeLabel)}</b><span>${format}</span></div>${slotsHtml}</article>`;
+      }).join('');
+      return `<section class="ap-setup-performer-schedule"><header><span>${e(typeLabel)}</span><h2>${e(record.name)}</h2><p>${e(modeLabel)} · ${e(record.methods.map(method => methodLabels[method]).join(' · '))}</p></header>${isTapeOnly ? `<article class="ap-setup-performer-day"><h3>Submission deadline</h3><strong>${e(record.deadline ? new Date(record.deadline).toLocaleString(undefined, { dateStyle: 'long', timeStyle: 'short' }) : 'To be confirmed')}</strong><p>Your team will review submissions by this deadline.</p></article>` : dayCards}<button class="ap-setup-public-book" type="button" disabled>Book Audition</button></section>`;
     }
 
     function completion(record) {
