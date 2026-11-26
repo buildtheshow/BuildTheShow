@@ -13492,7 +13492,10 @@ See you soon!
       const el = document.getElementById('aud-inner-' + i);
       if (el) el.style.display = (i === inner) ? '' : 'none';
     });
-    if (inner === 'materials') renderMaterialsList();
+    if (inner === 'materials') {
+      materialsEntryChoiceConfirmed = false;
+      renderMaterialsList();
+    }
     if (inner === 'characters') {
       const list = document.getElementById('characters-list');
       if (list && !isWorkspaceDataReady('characters')) {
@@ -31681,7 +31684,68 @@ See you soon!
     return settings;
   }
 
+  function getMaterialOrganization(type) {
+    const saved = prod?.wizard_data?.materials_organization || {};
+    if (saved[type]) return saved[type];
+    return hasMaterialForType(type) ? 'by_role' : 'packet';
+  }
+
+  function sharedMaterialFiles(type) {
+    const tag = `shared-material:${materialPrefixForType(type)}`;
+    return (prodFiles || []).filter(file => Array.isArray(file.tags) && file.tags.includes(tag));
+  }
+
+  async function setMaterialOrganization(type, organization) {
+    const wizardData = { ...(prod?.wizard_data || {}) };
+    wizardData.materials_organization = { ...(wizardData.materials_organization || {}), [type]: organization };
+    const { error } = await sb.from('productions').update({ wizard_data: wizardData }).eq('id', prodId);
+    if (error) { showToast('Could not save materials setup: ' + error.message, true); return; }
+    prod.wizard_data = wizardData;
+    materialsEntryChoiceConfirmed = true;
+    renderMaterialsList();
+  }
+
+  async function addSharedMaterialLink(type, format, urlId, nameId) {
+    const urlInput = document.getElementById(urlId);
+    const nameInput = document.getElementById(nameId);
+    let url;
+    try {
+      url = new URL((urlInput?.value || '').trim());
+      if (url.protocol !== 'https:') throw new Error('Use a secure https link.');
+    } catch (error) {
+      showToast(error.message || 'Enter a valid shared link.', true);
+      urlInput?.focus();
+      return;
+    }
+    const stageLabel = prefix === 'callback' ? 'callback' : 'audition';
+    const formatLabel = format === 'folder' ? `Shared ${stageLabel} materials folder` : `${stageLabel[0].toUpperCase()}${stageLabel.slice(1)} packet`;
+    const name = (nameInput?.value || '').trim() || formatLabel;
+    const prefix = materialPrefixForType(type);
+    const row = {
+      production_id: prodId, folder_id: null, name, file_url: url.href, file_path: null,
+      file_type: 'external-link', file_size: null,
+      tags: [`${prefix} material`, `shared-material:${prefix}`, `shared-format:${format}`, 'external link'],
+    };
+    const { data, error } = await sb.from('production_files').insert(row).select().single();
+    if (error) { showToast('Could not add shared link: ' + error.message, true); return; }
+    if (data) prodFiles.unshift(data);
+    materialFilesLoadedOnce = true;
+    if (urlInput) urlInput.value = '';
+    if (nameInput) nameInput.value = '';
+    showToast('Shared link added. Check that performers can view it.');
+    renderMaterialsList();
+  }
+
+  async function removeSharedMaterialLink(fileId) {
+    if (!confirm('Remove this shared materials link?')) return;
+    const { error } = await sb.from('production_files').delete().eq('id', fileId);
+    if (error) { showToast('Could not remove link: ' + error.message, true); return; }
+    prodFiles = prodFiles.filter(file => String(file.id) !== String(fileId));
+    renderMaterialsList();
+  }
+
   let activeMaterialsType = 'audition';
+  let materialsEntryChoiceConfirmed = false;
   let materialFilesLoadPromise = null;
   let materialFilesLoadedOnce = false;
 
@@ -31717,9 +31781,9 @@ See you soon!
       typesField: `${p}_material_types`,
       placeholder: p === 'callback' ? 'Callback notes or additional instructions' : 'Additional notes or instructions',
       slots: [
-        { key: 'side',    label: 'Sides',    urlField: `${p}_side_url`,    pathField: `${p}_side_path`,    nameField: `${p}_side_name`,    notesField: `${p}_side_notes`,    placeholder: 'e.g. Scene 3, pages 12–14'           },
-        { key: 'songcut', label: 'Music',    urlField: `${p}_songcut_url`, pathField: `${p}_songcut_path`, nameField: `${p}_songcut_name`, notesField: `${p}_songcut_notes`, placeholder: 'e.g. 16 bars from the top, key of G'  },
-        { key: 'other',   label: 'Other',    urlField: `${p}_other_url`,   pathField: `${p}_other_path`,   nameField: `${p}_other_name`,   notesField: `${p}_other_notes`,   placeholder: 'Any other prep notes or instructions' },
+        { key: 'side',    label: 'Audition sides',    urlField: `${p}_side_url`,    pathField: `${p}_side_path`,    nameField: `${p}_side_name`,    notesField: `${p}_side_notes`,    placeholder: 'e.g. Scene 3, pages 12–14'           },
+        { key: 'songcut', label: 'Vocal cuts & music', urlField: `${p}_songcut_url`, pathField: `${p}_songcut_path`, nameField: `${p}_songcut_name`, notesField: `${p}_songcut_notes`, placeholder: 'Sheet music, lyrics, or accompaniment track'  },
+        { key: 'other',   label: 'Dance combination / other',   urlField: `${p}_other_url`,   pathField: `${p}_other_path`,   nameField: `${p}_other_name`,   notesField: `${p}_other_notes`,   placeholder: 'Dance combination video or other prep instructions' },
       ],
     };
   }
@@ -31729,6 +31793,7 @@ See you soon!
     const nextType = materialPrefixForType(type);
     if (activeMaterialsType === nextType) return;
     activeMaterialsType = nextType;
+    materialsEntryChoiceConfirmed = Boolean(prod?.wizard_data?.materials_organization?.[nextType]);
     renderMaterialsList({ deferRows: true });
   }
 
@@ -31783,7 +31848,7 @@ See you soon!
           mode: 'settings',
           color: tileColor,
           ink: '#ffffff',
-          kicker: materialLabelForType(type),
+          kicker: type === 'audition' ? 'Audition materials' : materialLabelForType(type),
           title: c.name || 'Unnamed role',
           helper: 'Add a shared link to files hosted in Google Drive, Dropbox, or another service.',
           inputHtml,
@@ -31794,7 +31859,7 @@ See you soon!
       return `<div class="template-brand-card template-brand-card--portrait template-brand-card--settings mat-brand-form-tile" style="--brand-tile-bg:${esc(tileColor)};--brand-tile-ink:#ffffff;">
         <div class="template-brand-card-inner">
           <div class="template-brand-tile-content">
-            <div class="template-brand-tile-container template-brand-tile-container--header"><div class="template-brand-tile-kicker">${esc(materialLabelForType(type))}</div></div>
+            <div class="template-brand-tile-container template-brand-tile-container--header"><div class="template-brand-tile-kicker">${esc(type === 'audition' ? 'Audition materials' : materialLabelForType(type))}</div></div>
             <div class="template-brand-tile-container template-brand-tile-container--title"><div class="template-brand-tile-settings-label">${esc(c.name || 'Unnamed role')}</div></div>
             <div class="template-brand-tile-container template-brand-tile-container--body">${inputHtml}</div>
             <div class="template-brand-tile-container template-brand-tile-container--footer"><div class="template-brand-tile-settings-helper">Add a shared link to files hosted in Google Drive, Dropbox, or another service.</div></div>
@@ -31832,7 +31897,7 @@ See you soon!
       });
     };
 
-    if (settings.audition) {
+    if (settings.audition && getMaterialOrganization('audition') === 'by_role') {
       const auditionMeta = materialTypeMeta('audition');
       visibleCharacters.forEach(char => {
         auditionMeta.slots.forEach(slot => {
@@ -31850,23 +31915,27 @@ See you soon!
       });
     }
 
-    if (settings.callback) {
+    if (settings.callback && getMaterialOrganization('callback') === 'by_role') {
       const callbackMeta = materialTypeMeta('callback');
       visibleCharacters.forEach(char => {
         callbackMeta.slots.forEach(slot => {
           const notes = char[slot.notesField] || '';
           materialFileRecordsForSlot(char, 'callback', slot).forEach(file => addFile({
-            type: 'callback',
-            role: char.name || 'Callback role',
-            characterId: char.id || '',
-            kind: slot.label,
-            url: file.url,
-            name: file.name,
-            notes,
+            type: 'callback', role: char.name || 'Callback role', characterId: char.id || '',
+            kind: slot.label, url: file.url, name: file.name, notes,
           }));
         });
       });
     }
+
+    ['audition', 'callback'].forEach(type => {
+      if (!settings[type] || !['packet', 'folder'].includes(getMaterialOrganization(type))) return;
+      sharedMaterialFiles(type).forEach(file => {
+        const formatTag = (file.tags || []).find(tag => String(tag).startsWith('shared-format:')) || '';
+        const format = formatTag.split(':')[1] || 'packet';
+        addFile({ type, role: 'All roles', kind: format === 'folder' ? 'Shared materials folder' : 'Audition packet', url: file.file_url, name: file.name });
+      });
+    });
 
     return files;
   }
@@ -31888,11 +31957,13 @@ See you soon!
     if (header && window.BTSAuditionTemplates?.renderTemplateById) {
       const headerFiles = window._auditionPublicFiles || collectPublicAuditionFiles();
       const characterCount = auditionPublicCharacterCount(headerFiles);
+      const publicTypes = new Set(headerFiles.map(file => file.type));
+      const publicTitle = publicTypes.has('audition') && publicTypes.has('callback') ? 'Audition & Callback Materials' : publicTypes.has('audition') ? 'Audition Materials' : 'Callback Materials';
       header.innerHTML = window.BTSAuditionTemplates.renderTemplateById('auditions.page-header', {
         esc,
         kicker: 'Auditions',
-        title: 'Callback Sides',
-        copy: 'A public-view version of the callback material performers can access for visible roles.',
+        title: publicTitle,
+        copy: 'Shared links to the audition and callback materials performers need.',
         statValue: String(characterCount || 0),
         statLabel: characterCount === 1 ? 'character' : 'characters',
       });
@@ -32080,7 +32151,7 @@ See you soon!
       return `<button type="button" class="materials-type-item${isActive ? ' active' : ''}" style="--mat-type-color:${esc(color)};" onclick="switchMaterialsType('${esc(type)}')">
         <span class="materials-type-dot"></span>
         <span class="materials-type-copy">
-          <span class="materials-type-title">${esc(materialLabelForType(type))}</span>
+          <span class="materials-type-title">${esc(type === 'audition' ? 'Audition materials' : materialLabelForType(type))}</span>
           <span class="materials-type-status">${isOn ? 'Materials on' : 'Materials off'}</span>
         </span>
         ${isActive ? `<label class="materials-type-toggle" for="materials-toggle-${esc(type)}" onclick="event.stopPropagation()">
@@ -32099,10 +32170,41 @@ See you soon!
   }
 
   function renderMaterialsContent(type, settings) {
-    if (!characters.length) return '<div class="materials-empty">Add characters in Audition Settings first.</div>';
-    return settings[type]
-      ? materialRows(type)
-      : `<div class="materials-empty">${esc(materialDisabledMessage(type))}</div>`;
+    if (!settings[type]) return `<div class="materials-empty">${esc(materialDisabledMessage(type))}</div>`;
+    const organization = getMaterialOrganization(type);
+    const stage = type === 'callback' ? 'callback' : 'audition';
+    let detailHtml = '';
+    if (organization === 'packet' || organization === 'folder') {
+      const stageTitle = type === 'callback' ? 'Callback' : 'Audition';
+      const formatLabel = organization === 'folder' ? `Shared ${stage} materials folder link` : `${stageTitle} packet link`;
+      const files = sharedMaterialFiles(type);
+      const ids = `mat-shared-${type}`;
+      detailHtml = `<div class="mat-shared-link-panel"><h4>${formatLabel}</h4><p>Link to your own Google Drive, Dropbox, or other storage. Set access so performers with the link can view it.</p><div class="mat-shared-link-form"><label class="sr-only" for="${ids}-url">${formatLabel}</label><input id="${ids}-url" type="url" inputmode="url" placeholder="Paste a viewable https link"/><label class="sr-only" for="${ids}-name">Link name</label><input id="${ids}-name" type="text" placeholder="Link name (optional)"/><button type="button" class="mat-upload-btn" onclick="addSharedMaterialLink('${esc(type)}','${organization}','${ids}-url','${ids}-name')">Add link</button></div>${files.length ? `<ul class="mat-shared-link-list">${files.map(file => `<li><a href="${esc(file.file_url)}" target="_blank" rel="noopener">${esc(file.name || 'View materials')}</a><button type="button" onclick="removeSharedMaterialLink('${esc(file.id)}')">Remove</button></li>`).join('')}</ul>` : '<div class="mat-file-missing">No shared link added yet.</div>'}</div>`;
+    } else if (organization === 'by_role') {
+      detailHtml = characters.length ? materialRows(type) : '<div class="materials-empty">Add roles in Characters &amp; Roles before adding role-specific sides or music.</div>';
+    } else {
+      detailHtml = '<div class="mat-shared-link-panel"><strong>Nothing to link here.</strong><p>Performers will receive their sides or other preparation materials at the audition.</p></div>';
+    }
+    return `<section class="mat-organization">${detailHtml}</section>`;
+  }
+
+  function renderMaterialsChoicePrompt(type) {
+    const stage = type === 'callback' ? 'callback' : 'audition';
+    const stageTitle = type === 'callback' ? 'Callback' : 'Audition';
+    const choices = [
+      ['packet', `One ${stage} packet`, `A single packet or link with the ${stage} information and prep materials.`],
+      ['folder', `Shared ${stage} materials folder`, `One folder with sides, vocal cuts or music, and dance materials.`],
+      ['by_role', 'Role-specific sides or music', 'Use this when performers need different material for different roles.'],
+      ['at_audition', 'Provided at the audition', 'No advance link; sides or other materials are provided in the room.'],
+    ];
+    const icons = {
+      packet: 'Materials-Audition-packet.svg',
+      folder: 'Materials-shared-folder.svg',
+      by_role: 'Materials-Role-specific.svg',
+      at_audition: 'Materials-provided-at-audition.svg',
+    };
+    const options = choices.map(([value, title, copy]) => `<button type="button" class="mat-org-choice" onclick="setMaterialOrganization('${esc(type)}','${value}')"><span class="mat-org-choice-icon"><img src="/ASSETS/Images/Icons/${icons[value]}" alt="" aria-hidden="true"></span><span class="mat-org-choice-copy"><strong>${title}</strong><span>${copy}</span></span></button>`).join('');
+    return `<section class="mat-entry-prompt"><div class="mat-entry-prompt-heading"><span>Step 4 · ${stageTitle} materials</span><h2>How would you like to share ${stage} materials?</h2><p>Choose one to continue. Performers can audition for several roles without memorizing a separate set of sides for each one; tell them which side to prepare if needed.</p></div><div class="mat-organization-options">${options}</div></section>`;
   }
 
   function renderMaterialsList(options = {}) {
@@ -32118,6 +32220,10 @@ See you soon!
     if (!materialTypes.includes(activeMaterialsType)) activeMaterialsType = materialTypes[0] || 'audition';
     const settings = getMaterialsSettings();
     const renderType = activeMaterialsType;
+    if (!materialsEntryChoiceConfirmed) {
+      el.innerHTML = `<div class="materials-theme materials-theme--${renderType}">${renderMaterialsChoicePrompt(renderType)}</div>`;
+      return;
+    }
     const toolbar = renderMaterialsToolbar(materialTypes, settings);
     el.innerHTML = `<div class="materials-theme materials-theme--${renderType}">${toolbar}<div id="materials-content">${options.deferRows ? '<div class="materials-loading">Loading materials...</div>' : renderMaterialsContent(renderType, settings)}</div></div>`;
     if (!options.deferRows) return;
