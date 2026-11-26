@@ -27370,7 +27370,7 @@ See you soon!
         const datePanel = tape ? '<p class="ap-setup-note">Self-tape auditions do not need live dates or a venue. Set the submission deadline under Booking type.</p>' : `<section class="ap-setup-date-section"><header><span class="ap-setup-date-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="16" rx="2"></rect><path d="M7.5 3v4M16.5 3v4M3.5 9h17"></path></svg></span><span><h3>${dateTitle}</h3><p>${dateHelp}</p></span></header><div class="ap-setup-days"><nav class="ap-setup-day-tabs" aria-label="Audition dates">${days.map((day,index)=>`<button type="button" data-day-tab="${index}" aria-selected="${dayIndex===index}">Day ${index+1}</button>`).join('')}${days.length>1&&dayIndex>0?`<button type="button" class="ap-setup-remove-day" data-remove-day="${dayIndex}">Remove day</button>`:''}</nav>${dayHTML(record,activeDay,dayIndex)}</div><aside class="ap-setup-more-dates"><div class="ap-setup-more-dates-copy"><strong>Need more time to see everyone?</strong><p>If you're expecting more performers than you can audition in one day, or want to give performers a choice of dates, add another day here. Each performer will only need to attend one of these days.</p></div><button type="button" data-add-day>+ Add another day</button><p class="ap-setup-more-dates-note">If performers need to attend more than one audition (for example, a singing audition and a separate dance call), use <strong>Add audition</strong> instead.</p></aside></section>`;
         body = datePanel;
       } else if (step === 3) body = `<fieldset><legend>What does this audition include?</legend><div class="ap-setup-grid">${activities.map(([key,label]) => multiChoice(label,'activities',key,record.activities.includes(key))).join('')}</div></fieldset>`;
-      else if (step === 4) body = `<div class="ap-setup-grid"><label class="ap-setup-field ap-setup-full">What should they prepare?<textarea data-field="prep" rows="3">${e(record.prep)}</textarea></label><label class="ap-setup-field ap-setup-full">What should they bring?<textarea data-field="bring" rows="2">${e(record.bring)}</textarea></label><label class="ap-setup-field">When can they leave?<select data-field="finish"><option ${record.finish==='After their appointment'?'selected':''}>After their appointment</option><option ${record.finish==='After the whole session'?'selected':''}>After the whole session</option><option ${record.finish==='When released by the team'?'selected':''}>When released by the team</option></select></label><label class="ap-setup-field ap-setup-full">Arrival instructions (sent after booking)<textarea data-field="access" rows="2" placeholder="For example: check in with our producer at the welcome desk, then wait to be called.">${e(record.access)}</textarea><span class="ap-setup-field-help">These instructions go in the booking confirmation email and do not appear on the public audition page.</span></label><p class="ap-setup-full">Attach songs, scenes and other files under Materials. You can link them to a particular audition or role.</p></div>`;
+      else if (step === 4) body = `<div class="ap-setup-grid"><label class="ap-setup-field ap-setup-full">What should they prepare?<textarea data-field="prep" rows="3">${e(record.prep)}</textarea></label><label class="ap-setup-field ap-setup-full">What should they bring?<textarea data-field="bring" rows="2">${e(record.bring)}</textarea></label><label class="ap-setup-field">When can they leave?<select data-field="finish"><option ${record.finish==='After their appointment'?'selected':''}>After their appointment</option><option ${record.finish==='After the whole session'?'selected':''}>After the whole session</option><option ${record.finish==='When released by the team'?'selected':''}>When released by the team</option></select></label><label class="ap-setup-field ap-setup-full">Arrival instructions (sent after booking)<textarea data-field="access" rows="2" placeholder="For example: check in with our producer at the welcome desk, then wait to be called.">${e(record.access)}</textarea><span class="ap-setup-field-help">These instructions go in the booking confirmation email and do not appear on the public audition page.</span></label><p class="ap-setup-full">Add shared links to audition materials under Materials. Files stay in your own storage; set links so anyone with the link can view.</p></div>`;
       else body = applicantView(record);
       return `<div class="ap-setup-editor" style="--ap-accent:${accent}"><nav class="ap-setup-tabs" aria-label="Audition details">${sections.map((name,index)=>`<button type="button" data-step="${index}" aria-pressed="${step===index}">${name}${missing(record).some(item=>item.step===index)?'<span class="ap-setup-star" aria-hidden="true">✱</span>':''}</button>`).join('')}</nav><div class="ap-setup-fields">${body}</div><footer><span data-save-status>${state.saving[record.id] ? 'Saving draft…' : 'Draft saves automatically. Nothing is published.'}</span><button type="button" data-close-editor>Done</button></footer></div>`;
     }
@@ -31750,20 +31750,14 @@ See you soon!
       const slotsHTML = meta.slots.map(slot => {
         const fileId  = `${meta.fileIdPrefix}-${slot.key}-${c.id}`;
         const files = materialFileRecordsForSlot(c, type, slot);
-        const potFiles = materialPotFilesForSlot(c, type, slot);
-        const potHTML = `<select class="form-select" aria-label="Use uploaded ${esc(slot.label)} file" onchange="attachMaterialFileFromPot('${esc(c.id)}','${esc(type)}','${esc(slot.key)}',this)">
-          <option value="">Use uploaded file...</option>
-          ${potFiles.length
-            ? potFiles.map(file => `<option value="${esc(file.id)}">${esc(file.name)}</option>`).join('')
-            : '<option value="" disabled>No matching uploads yet</option>'}
-        </select>`;
+        const linkId = `${fileId}-url`;
+        const nameId = `${fileId}-name`;
         const fileHTML = files.length
           ? `<div class="mat-file-list">${files.map(file => `
               <div class="mat-file-item">
                 <span class="mat-file-name" title="${esc(file.name)}">${esc(file.name)}</span>
                 <div class="mat-file-actions">
-                  <button type="button" class="mat-file-action" onclick="previewMaterialFile('${esc(file.url)}','${esc(file.name)}')">Preview</button>
-                  <a class="mat-file-link" href="${esc(file.url)}" target="_blank" download="${esc(file.name)}">Download</a>
+                  <a class="mat-file-link" href="${esc(file.url)}" target="_blank" rel="noopener">View link</a>
                   <button type="button" class="mat-file-action" onclick="deleteMaterialFile('${esc(c.id)}','${esc(type)}','${esc(slot.key)}','${esc(file.id)}','${esc(file.path)}','${esc(file.url)}')">Remove</button>
                 </div>
               </div>`).join('')}</div>`
@@ -31774,18 +31768,19 @@ See you soon!
           </div>
           <div class="mat-slot-body">
             <div class="mat-file-row">
-              <div class="mat-file-picker">
-                ${potHTML}
-                <button class="mat-upload-btn" onclick="document.getElementById('${esc(fileId)}').click()">Upload new</button>
+              <div class="mat-external-link-form">
+                <label for="${esc(linkId)}">Shared link</label>
+                <input id="${esc(linkId)}" type="url" inputmode="url" placeholder="Paste a Google Drive, Dropbox, or other view link" />
+                <label for="${esc(nameId)}">Link name</label>
+                <input id="${esc(nameId)}" type="text" placeholder="e.g. Audition sides" />
+                <button type="button" class="mat-upload-btn" onclick="addExternalMaterialLink('${esc(c.id)}','${esc(type)}','${esc(slot.key)}','${esc(linkId)}','${esc(nameId)}')">Add link</button>
               </div>
-              <input type="file" id="${esc(fileId)}" style="display:none;" multiple
-                     onchange="uploadMatFile('${esc(c.id)}','${esc(type)}','${esc(slot.key)}',this)" />
               ${fileHTML}
             </div>
           </div>
         </div>`;
       }).join('');
-      const inputHtml = `<div class="mat-brand-form-fields"><div class="mat-slots-panel">${slotsHTML}</div></div>`;
+      const inputHtml = `<div class="mat-brand-form-fields"><p class="mat-sharing-note">Paste a share link. Set it to “Anyone with the link can view” in Google Drive, Dropbox, or your storage provider.</p><div class="mat-slots-panel">${slotsHTML}</div></div>`;
       if (renderer) {
         return renderer('brand.tile.form', {
           esc,
@@ -31795,7 +31790,7 @@ See you soon!
           ink: '#ffffff',
           kicker: materialLabelForType(type),
           title: c.name || 'Unnamed role',
-          helper: 'Upload new files or choose from existing uploads.',
+          helper: 'Add a shared link to files hosted in Google Drive, Dropbox, or another service.',
           inputHtml,
           className: 'mat-brand-form-tile',
           ariaLabel: `${c.name || 'Role'} materials`
@@ -31807,7 +31802,7 @@ See you soon!
             <div class="template-brand-tile-container template-brand-tile-container--header"><div class="template-brand-tile-kicker">${esc(materialLabelForType(type))}</div></div>
             <div class="template-brand-tile-container template-brand-tile-container--title"><div class="template-brand-tile-settings-label">${esc(c.name || 'Unnamed role')}</div></div>
             <div class="template-brand-tile-container template-brand-tile-container--body">${inputHtml}</div>
-            <div class="template-brand-tile-container template-brand-tile-container--footer"><div class="template-brand-tile-settings-helper">Upload new files or choose from existing uploads.</div></div>
+            <div class="template-brand-tile-container template-brand-tile-container--footer"><div class="template-brand-tile-settings-helper">Add a shared link to files hosted in Google Drive, Dropbox, or another service.</div></div>
           </div>
         </div>
       </div>`;
@@ -31924,7 +31919,7 @@ See you soon!
     const downloadBtn = document.getElementById('aud-files-download-all-btn');
     if (downloadBtn) downloadBtn.disabled = !files.length;
     if (!files.length) {
-      host.innerHTML = '<div class="materials-empty">No public audition files yet. Use Manage Uploads to add files to visible roles, then turn on the relevant material tab.</div>';
+      host.innerHTML = '<div class="materials-empty">No public audition links yet. Add shared links to visible roles and turn on the relevant material tab.</div>';
       return;
     }
     const byType = files.reduce((acc, file) => {
@@ -31961,9 +31956,7 @@ See you soon!
                   <div class="template-brand-tile-title">${esc(role)}</div>
                 </div>
                 <div class="template-brand-tile-container template-brand-tile-container--body">
-                  <div class="template-brand-tile-body">
-                    <button type="button" class="template-brand-tile-button" onclick="downloadAuditionCharacterFromTile(this)">Download</button>
-                  </div>
+                  <div class="template-brand-tile-body">${roleFiles.map(file => `<a class="template-brand-tile-button" href="${esc(file.url)}" target="_blank" rel="noopener">View ${esc(auditionPublicFileKindLabel(file.kind))}</a>`).join(' ')}</div>
                 </div>
                 <div class="template-brand-tile-container template-brand-tile-container--footer">
                   <div class="aud-file-brand-summary" title="${esc(kindsSummary)}">${esc(kindsSummary)}</div>
@@ -32156,6 +32149,62 @@ See you soon!
     renderMaterialsList();
   }
 
+  async function addExternalMaterialLink(charId, type, slot, urlInputId, nameInputId) {
+    const urlInput = document.getElementById(urlInputId);
+    const nameInput = document.getElementById(nameInputId);
+    const rawUrl = (urlInput?.value || '').trim();
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(rawUrl);
+      if (parsedUrl.protocol !== 'https:') throw new Error('Use a secure https link.');
+    } catch (error) {
+      showToast(error.message || 'Enter a valid shared link.', true);
+      urlInput?.focus();
+      return;
+    }
+    const meta = materialTypeMeta(type);
+    const slotMeta = meta.slots.find(item => item.key === slot);
+    const char = characters.find(item => String(item.id) === String(charId));
+    if (!slotMeta || !char) return;
+    const name = (nameInput?.value || '').trim() || `${char.name || 'Role'} — ${slotMeta.label}`;
+    const fileRow = {
+      production_id: prodId,
+      folder_id: null,
+      name,
+      file_url: parsedUrl.href,
+      file_path: null,
+      file_type: 'external-link',
+      file_size: null,
+      tags: [type === 'callback' ? 'callback material' : 'audition material', slot, `character:${charId}`, 'external link'],
+    };
+    const addButton = urlInput?.parentElement?.querySelector('button');
+    if (addButton) { addButton.disabled = true; addButton.textContent = 'Adding…'; }
+    try {
+      const { data: savedFile, error } = await sb.from('production_files').insert(fileRow).select().single();
+      if (error) throw error;
+      if (savedFile) prodFiles.unshift(savedFile);
+      const legacyUrlField = `${materialPrefixForType(type)}_file_url`;
+      const legacyNameField = `${materialPrefixForType(type)}_file_name`;
+      const updates = {
+        [slotMeta.urlField]: parsedUrl.href,
+        [slotMeta.pathField]: null,
+        [slotMeta.nameField]: name,
+        ...(!char[legacyUrlField] ? { [legacyUrlField]: parsedUrl.href, [legacyNameField]: name } : {}),
+      };
+      const { error: characterError } = await sb.from('production_characters').update(updates).eq('id', charId);
+      if (characterError) throw characterError;
+      Object.assign(char, updates);
+      if (urlInput) urlInput.value = '';
+      if (nameInput) nameInput.value = '';
+      showToast('Shared link added. Make sure its sharing settings let performers view it.');
+      renderMaterialsList();
+    } catch (error) {
+      showToast('Could not add shared link: ' + (error?.message || 'Unknown error'), true);
+    } finally {
+      if (addButton) { addButton.disabled = false; addButton.textContent = 'Add link'; }
+    }
+  }
+
   async function uploadMatFile(charId, type, slot, inputEl) {
     const files = Array.from(inputEl.files || []);
     if (!files.length) return;
@@ -32301,6 +32350,12 @@ See you soon!
       const updates = replacement
         ? { [slotMeta.urlField]: replacement.url, [slotMeta.pathField]: replacement.path || null, [slotMeta.nameField]: replacement.name || null }
         : { [slotMeta.urlField]: null, [slotMeta.pathField]: null, [slotMeta.nameField]: null };
+      const prefix = materialPrefixForType(type);
+      if (c[`${prefix}_file_url`] === fileUrl) {
+        const otherSlot = meta.slots.map(slot => slotMeta.urlField === slot.urlField ? null : c[slot.urlField]).find(Boolean) || null;
+        updates[`${prefix}_file_url`] = replacement?.url || otherSlot;
+        updates[`${prefix}_file_name`] = replacement?.name || (otherSlot ? c[`${prefix}_file_name`] : null);
+      }
       const { error: updateErr } = await sb.from('production_characters').update(updates).eq('id', charId);
       if (updateErr) error = updateErr;
       else Object.assign(c, updates);
