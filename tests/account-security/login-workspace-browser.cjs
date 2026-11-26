@@ -12,8 +12,27 @@ const root = path.resolve(__dirname, '../..');
     await page.addInitScript(() => {
       const variant = new URLSearchParams(location.search).get('fixture');
       window.testCalls = [];
-      window.supabase = {createClient: () => ({
-        auth: {signInWithPassword: async () => variant==='offline'?({data:null,error:{message:'Synthetic connection failure'}}):({data: {user: {id: 'synthetic-adult', user_metadata: {account_type: 'organization'}}}})},
+      if (variant === 'timeout') {
+        const nativeSetTimeout = window.setTimeout.bind(window);
+        window.setTimeout = (callback, delay, ...args) => nativeSetTimeout(callback, delay === 18000 ? 20 : delay, ...args);
+        window.loginFetchAborted = 0;
+        window.fetch = (_input, init = {}) => new Promise((resolve, reject) => {
+          const abort = () => { window.loginFetchAborted += 1; reject(init.signal.reason || new DOMException('Aborted', 'AbortError')); };
+          if (init.signal.aborted) abort();
+          else init.signal.addEventListener('abort', abort, {once: true});
+        });
+      }
+      window.supabase = {createClient: (_url, _key, options = {}) => ({
+        auth: {signInWithPassword: async () => {
+          if (variant === 'offline') return {data:null,error:{message:'Synthetic connection failure'}};
+          if (variant === 'timeout') {
+            try {
+              await options.global.fetch('https://tkmaiktxpwqfbgeojbnf.supabase.co/auth/v1/token?grant_type=password', {method:'POST'});
+              return {data: null, error: null};
+            } catch (error) { return {data: null, error: {message: error.message}}; }
+          }
+          return {data: {user: {id: 'synthetic-adult', user_metadata: {account_type: 'organization'}}}};
+        }},
         rpc: async (name, args) => {
           window.testCalls.push({name, args});
           if (name === 'bts_get_account_status') return {data: {active: true}};
@@ -59,7 +78,17 @@ const root = path.resolve(__dirname, '../..');
     await page.getByText('Synthetic connection failure', {exact: true}).waitFor();
     assert.equal(new URL(page.url()).pathname, '/login');
     assert.equal(await page.locator('#submit-btn').isEnabled(), true);
+    await page.goto('http://bts.test/login?fixture=timeout');
+    await page.locator('#email').fill('synthetic@example.invalid');
+    await page.locator('#password').fill('synthetic-password-only');
+    await page.locator('#submit-btn').click();
+    await page.getByText('The sign-in service did not respond in time. Check your connection and try again.', {exact: true}).waitFor();
+    assert.equal(await page.evaluate(() => window.loginFetchAborted), 1);
+    assert.equal(await page.locator('#submit-btn').isEnabled(), true);
+    await page.locator('#submit-btn').click();
+    await page.getByText('The sign-in service did not respond in time. Check your connection and try again.', {exact: true}).waitFor();
+    assert.equal(await page.evaluate(() => window.loginFetchAborted), 2, 'a timed-out auth request is aborted so another attempt can start');
     assert.deepEqual(errors, []);
-    console.log('PASS: ordinary login opens Home for owners/admins/staff/members/viewers; explicit returns and invitations are preserved; sign-in errors remain visible. Synthetic sign-ins only.');
+    console.log('PASS: ordinary login opens Home for owners/admins/staff/members/viewers; explicit returns and invitations are preserved; sign-in errors remain visible; hung auth fetches abort and retries remain available. Synthetic sign-ins only.');
   } finally { await browser.close(); }
 })().catch(error => {console.error(error); process.exitCode = 1;});
