@@ -953,6 +953,17 @@ Payment tiles inside registration status cards use the brand tile visual languag
 
 These rules cover hierarchy, spacing, labels, and how interface elements should compete for attention.
 
+### Build The Show Brand Rules
+
+1. Use only the ten official brand colours listed in `CLAUDE.md`.
+2. Use solid colour fills for branded surfaces. Do not use gradients, glass, frosted effects, translucent colour overlays, or pastel/lavender tints.
+3. Use black text on white or neutral `#efefef` surfaces. Use white text on every coloured brand surface.
+4. Audition highlight colours follow the audition type: General audition `#476aaa`, Dance call `#dd8233`, Callback `#769e7b`, and Another audition `#d1523d`.
+5. Selected cards and radio/checkbox controls use the current audition highlight. Selected card text and icons turn white; unselected card text stays black and icons use the highlight colour.
+6. Selected multi-select cards may use a compact outlined circular check mark (`✓`) in the upper-right. On a selected, colour-filled card, the circle outline and check are white.
+7. Keep options within the same choice set equal in size. Align their icons, titles, and descriptions consistently, and size each card to avoid excessive empty space around its content.
+8. Preserve Katie's approved audition icon mappings: In person `Department-production-and-rehearsal-support.svg`; Video call `VideoCall.svg`; Self-tape `SelfTape.svg`; Another audition `CreativeTeam-Director.svg`.
+
 ### Hierarchy
 
 1. Not all elements are equal.
