@@ -180,6 +180,7 @@
   // Must be declared before the sidebar IIFE so initProdSidebarEvents() can reference it
   // even when the sidebar is loaded from sessionStorage cache.
   let _pendingNavModules = null;
+  const DEPT_SUBMENU_SECTIONS = ['dept-front-of-house', 'dept-backstage', 'dept-technical', 'dept-design', 'dept-costume', 'dept-hair', 'dept-marketing-publicity', 'dept-stage-management'];
 
   // ── Load shared sidebar ───────────────────────────────
   (function () {
@@ -235,8 +236,6 @@
       + '&section=' + encodeURIComponent(section || '')
       + '&tab=' + encodeURIComponent(tab || 'dashboard');
   }
-
-  const DEPT_SUBMENU_SECTIONS = ['dept-front-of-house', 'dept-backstage', 'dept-technical', 'dept-design', 'dept-costume', 'dept-hair', 'dept-marketing-publicity', 'dept-stage-management'];
 
   function syncDeptSidebarMenuA11y() {
     DEPT_SUBMENU_SECTIONS.forEach(section => {
