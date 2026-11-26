@@ -25621,7 +25621,10 @@ See you soon!
 
     let error;
     try {
-      ({ error } = await sb.from('productions').update({ page_status: chosen }).eq('id', prodId));
+      ({ error } = await sb.from('productions').update({
+        page_status: chosen,
+        is_public: chosen !== 'draft',
+      }).eq('id', prodId));
     } catch (err) {
       error = err;
     } finally {
@@ -28980,7 +28983,10 @@ See you soon!
   async function toggleAuditions() {
     const current = currentPublicPageStatus();
     const next = current === 'live' ? 'hidden' : 'live';
-    const { error } = await sb.from('productions').update({ page_status: next }).eq('id', prodId);
+    const { error } = await sb.from('productions').update({
+      page_status: next,
+      is_public: next !== 'draft',
+    }).eq('id', prodId);
     if (!error) {
       prod.page_status = next;
       renderAuditionConfig();
