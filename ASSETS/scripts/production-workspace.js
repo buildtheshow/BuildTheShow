@@ -27257,6 +27257,8 @@ See you soon!
     const colour = record => types.find(item => item.value === record.type)?.colour || '#476aaa';
     const niceDate = value => { if (!value) return 'Date to be added'; const date = new Date(value + 'T12:00:00'); return Number.isNaN(date.getTime()) ? 'Date to be added' : date.toLocaleDateString('en-CA', { weekday: 'long', day: 'numeric', month: 'long' }); };
     const niceTime = value => value ? new Date('2000-01-01T' + value).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' }) : 'Time to be confirmed';
+    const compactTime = value => { const match = String(value || '').match(/(?:T)?(\d{1,2}):(\d{2})/); if (!match) return ''; const hour = Number(match[1]); const minute = match[2]; return `${hour % 12 || 12}:${minute}${hour >= 12 ? 'pm' : 'am'}`; };
+    const compactTimeRange = (start, end) => [compactTime(start), compactTime(end)].filter(Boolean).join(' - ');
     const mapLink = venue => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([venue?.name, venue?.address].filter(Boolean).join(', '));
     const ensureDays = record => {
       if (!Array.isArray(record.days) || !record.days.length) record.days = [{ id: 'day-' + crypto.randomUUID(), date: '', start: '', end: '', venue: null, room: '', locationNotes: '' }];
@@ -27461,7 +27463,7 @@ See you soon!
         const headerStatus=document.createElement('div');headerStatus.className='ap-setup-header-status';headerStatus.innerHTML=completion(record);titleRow.append(headerStatus);bindNeedsAction(headerStatus,record);
         const chips=card.querySelector('.aud-card-chips');
         const firstDay=ensureDays(record)[0];
-        if(chips) chips.innerHTML=`<span>${e(firstDay.date?niceDate(firstDay.date):'Dates to come')}${firstDay.start?' · '+e(niceTime(firstDay.start)):''}${firstDay.end?'–'+e(niceTime(firstDay.end)):''}</span><span>${e(record.methods.map(key=>({in_person:'In person',video_call:'Video call',self_tape:'Self-tape'})[key]).join(' · '))}</span>`;
+        if(chips) chips.innerHTML=`<span>${e(firstDay.date?niceDate(firstDay.date):'Dates to come')}${firstDay.start||firstDay.end?' · '+e(compactTimeRange(firstDay.start,firstDay.end)):''}</span><span>${e(record.methods.map(key=>({in_person:'In person',video_call:'Video call',self_tape:'Self-tape'})[key]).join(' · '))}</span>`;
         const img = card.querySelector('.aud-card-type-pill img');
         if (img) { img.src = '/ASSETS/Images/Icons/' + (types.find(type=>type.value===record.type)?.icon || 'Auditions.svg'); img.style.filter = 'brightness(0) invert(1)'; }
         const deleteButton = card.querySelector('.aud-action-btn.danger');
