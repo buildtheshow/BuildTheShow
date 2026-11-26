@@ -34,6 +34,7 @@ Before writing ANY rendering code, READ the template test page first.
 
 - Preserve Katie's existing design. For the canonical brand palette, approved icon mappings, visual rules, and platform voice, follow `SHARED/CODEBASE_RULES.md` as the single source of truth.
 - Reuse established layouts, visual components, colours, and styling. Use judgement for small matching adjustments; explain and ask Katie before major visual or layout edits.
+- **Grid and row containment is mandatory across the entire product.** Every card, field, chip, icon, label, and other child must stay inside its assigned grid column, flex row, and parent bounds at every supported screen size. Use `minmax(0, 1fr)` for shrinkable tracks, `min-width: 0`/`min-height: 0` for shrinkable children, and wrapping or responsive stacking for long content. Never solve overflow by shrinking text until it is unreadable or by clipping meaningful content. Check narrow and wide layouts whenever changing a grid or row.
 
 ## Git
 
