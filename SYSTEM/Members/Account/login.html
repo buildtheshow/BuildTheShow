@@ -264,6 +264,21 @@
       errorMsg.classList.remove('visible');
     }
 
+    function waitForRequest(promise, timeoutMs, timeoutMessage) {
+      let timer;
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+        }),
+      ]).finally(() => clearTimeout(timer));
+    }
+
+    function resetLoginButton() {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Log In';
+    }
+
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       clearError();
@@ -279,21 +294,40 @@
       submitBtn.disabled = true;
       submitBtn.textContent = 'Logging in...';
 
-      const { data, error } = await sb.auth.signInWithPassword({ email, password });
+      let signInResult;
+      try {
+        signInResult = await waitForRequest(
+          sb.auth.signInWithPassword({ email, password }),
+          20000,
+          'Sign-in is taking longer than expected. Check your connection and try again.'
+        );
+      } catch (error) {
+        showError(error?.message || 'We could not reach sign-in. Please try again.');
+        resetLoginButton();
+        return;
+      }
+
+      const { data, error } = signInResult;
 
       if (error) {
-        showError(error.message);
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Log In';
+        showError(error.message || 'We could not sign you in. Please try again.');
+        resetLoginButton();
         return;
       }
 
       try {
         const requestedNext = new URLSearchParams(window.location.search).get('return');
         const pendingInvite = new URLSearchParams(window.location.search).get('invite');
-        if (!await BTSAccountSecurity.ensureAdultAccount(sb, requestedNext || (pendingInvite ? '/invite?token=' + encodeURIComponent(pendingInvite) : '/member/home'))) return;
+        const accountIsActive = await waitForRequest(
+          BTSAccountSecurity.ensureAdultAccount(sb, requestedNext || (pendingInvite ? '/invite?token=' + encodeURIComponent(pendingInvite) : '/member/home')),
+          20000,
+          'Your sign-in worked, but account verification is taking too long. Please try again.'
+        );
+        if (!accountIsActive) return;
       } catch (error) {
-        showError(error.message); submitBtn.disabled = false; submitBtn.textContent = 'Log In'; return;
+        showError(error?.message || 'We could not verify your account. Please try again.');
+        resetLoginButton();
+        return;
       }
 
       // If an invite token is in the URL, accept it first
