@@ -13475,10 +13475,8 @@ See you soon!
   if (tab === 'files') renderAuditionFilesPage();
   if (tab === 'setup') {
     const inner = document.querySelector('#aud-panel-setup .aud-inner-btn.active');
-    if (!inner) {
-      const savedNav = loadWorkspaceNavState();
-      switchAudInner(savedNav.auditionSetupInnerTab || 'settings');
-    }
+    const savedNav = loadWorkspaceNavState();
+    switchAudInner(inner?.dataset.inner || savedNav.auditionSetupInnerTab || 'settings');
   }
   renderAuditionHeaderFrame(tab);
 }
@@ -13492,6 +13490,7 @@ See you soon!
       const el = document.getElementById('aud-inner-' + i);
       if (el) el.style.display = (i === inner) ? '' : 'none';
     });
+    if (inner === 'settings') renderAuditionMaterialsToggle();
     if (inner === 'materials') {
       materialsEntryChoiceConfirmed = false;
       renderMaterialsList();
@@ -31597,7 +31596,7 @@ See you soon!
   }
 
   function materialTypesForProduction() {
-    return ['audition', 'callback'];
+    return ['audition'];
   }
 
   function hasMaterialForType(type) {
@@ -31676,7 +31675,7 @@ See you soon!
   function getMaterialsSettings() {
     const saved = prod?.wizard_data?.materials_enabled || {};
     const settings = {};
-    materialTypesForProduction().forEach(type => {
+    ['audition', 'callback'].forEach(type => {
       settings[type] = saved[type] !== undefined
         ? saved[type] !== false
         : (type === 'audition' ? true : hasMaterialForType(type));
@@ -31717,10 +31716,10 @@ See you soon!
       urlInput?.focus();
       return;
     }
+    const prefix = materialPrefixForType(type);
     const stageLabel = prefix === 'callback' ? 'callback' : 'audition';
     const formatLabel = format === 'folder' ? `Shared ${stageLabel} materials folder` : `${stageLabel[0].toUpperCase()}${stageLabel.slice(1)} packet`;
     const name = (nameInput?.value || '').trim() || formatLabel;
-    const prefix = materialPrefixForType(type);
     const row = {
       production_id: prodId, folder_id: null, name, file_url: url.href, file_path: null,
       file_type: 'external-link', file_size: null,
@@ -32143,66 +32142,59 @@ See you soon!
     document.body.appendChild(frame);
   }
 
-  function renderMaterialsToolbar(materialTypes, settings) {
-    const typeNav = materialTypes.map(type => {
-      const color = getAuditionScheduleSidebarMarkerColor(type);
-      const isActive = activeMaterialsType === type;
-      const isOn = settings[type] === true;
-      return `<button type="button" class="materials-type-item${isActive ? ' active' : ''}" style="--mat-type-color:${esc(color)};" onclick="switchMaterialsType('${esc(type)}')">
-        <span class="materials-type-dot"></span>
-        <span class="materials-type-copy">
-          <span class="materials-type-title">${esc(type === 'audition' ? 'Audition materials' : materialLabelForType(type))}</span>
-          <span class="materials-type-status">${isOn ? 'Materials on' : 'Materials off'}</span>
-        </span>
-        ${isActive ? `<label class="materials-type-toggle" for="materials-toggle-${esc(type)}" onclick="event.stopPropagation()">
-          <span>${isOn ? 'On' : 'Off'}</span>
-          <input id="materials-toggle-${esc(type)}" type="checkbox" ${isOn ? 'checked' : ''} onchange="toggleMaterialsSection('${esc(type)}', this.checked)" />
-          <span class="materials-type-toggle-track"></span>
-        </label>` : ''}
-      </button>`;
-    }).join('');
-    return `<div class="materials-toolbar">
-      <div class="materials-type-panel">
-        <div class="materials-type-head">Material Tabs</div>
-        <div class="materials-type-list" role="tablist" aria-label="Material type">${typeNav}</div>
-      </div>
-    </div>`;
-  }
-
   function renderMaterialsContent(type, settings) {
-    if (!settings[type]) return `<div class="materials-empty">${esc(materialDisabledMessage(type))}</div>`;
     const organization = getMaterialOrganization(type);
-    const stage = type === 'callback' ? 'callback' : 'audition';
     let detailHtml = '';
-    if (organization === 'packet' || organization === 'folder') {
-      const stageTitle = type === 'callback' ? 'Callback' : 'Audition';
-      const formatLabel = organization === 'folder' ? `Shared ${stage} materials folder link` : `${stageTitle} packet link`;
+    if (!settings[type]) {
+      detailHtml = `<div class="materials-empty">${esc(materialDisabledMessage(type))} Turn materials on in Auditions settings when you are ready.</div>`;
+    } else if (organization === 'folder') {
+      const formatLabel = 'Shared audition materials folder';
       const files = sharedMaterialFiles(type);
       const ids = `mat-shared-${type}`;
-      detailHtml = `<div class="mat-shared-link-panel"><h4>${formatLabel}</h4><p>Link to your own Google Drive, Dropbox, or other storage. Set access so performers with the link can view it.</p><div class="mat-shared-link-form"><label class="sr-only" for="${ids}-url">${formatLabel}</label><input id="${ids}-url" type="url" inputmode="url" placeholder="Paste a viewable https link"/><label class="sr-only" for="${ids}-name">Link name</label><input id="${ids}-name" type="text" placeholder="Link name (optional)"/><button type="button" class="mat-upload-btn" onclick="addSharedMaterialLink('${esc(type)}','${organization}','${ids}-url','${ids}-name')">Add link</button></div>${files.length ? `<ul class="mat-shared-link-list">${files.map(file => `<li><a href="${esc(file.file_url)}" target="_blank" rel="noopener">${esc(file.name || 'View materials')}</a><button type="button" onclick="removeSharedMaterialLink('${esc(file.id)}')">Remove</button></li>`).join('')}</ul>` : '<div class="mat-file-missing">No shared link added yet.</div>'}</div>`;
+      detailHtml = `<div class="mat-shared-link-panel"><h4>${formatLabel}</h4><p>Paste one viewable link to your shared folder. Set access so anyone with the link can view it.</p><div class="mat-shared-link-form"><label class="sr-only" for="${ids}-url">${formatLabel}</label><input id="${ids}-url" type="url" inputmode="url" placeholder="Paste a Google Drive, Dropbox, or other folder link"/><label class="sr-only" for="${ids}-name">Link name</label><input id="${ids}-name" type="text" placeholder="Folder name (optional)"/><button type="button" class="mat-upload-btn" onclick="addSharedMaterialLink('${esc(type)}','${organization}','${ids}-url','${ids}-name')">Add folder link</button></div>${files.length ? `<ul class="mat-shared-link-list">${files.map(file => `<li><a href="${esc(file.file_url)}" target="_blank" rel="noopener">${esc(file.name || 'View materials')}</a><button type="button" onclick="removeSharedMaterialLink('${esc(file.id)}')">Remove</button></li>`).join('')}</ul>` : '<div class="mat-file-missing">No folder link added yet.</div>'}</div>`;
     } else if (organization === 'by_role') {
       detailHtml = characters.length ? materialRows(type) : '<div class="materials-empty">Add roles in Characters &amp; Roles before adding role-specific sides or music.</div>';
     } else {
-      detailHtml = '<div class="mat-shared-link-panel"><strong>Nothing to link here.</strong><p>Performers will receive their sides or other preparation materials at the audition.</p></div>';
+      detailHtml = '<div class="mat-shared-link-panel mat-provided-panel"><h4>Materials provided in the room</h4><p>No link is needed. Have sides, music, or dance instructions ready to hand out at the audition.</p></div>';
     }
-    return `<section class="mat-organization">${detailHtml}</section>`;
+    const setup = organization === 'folder'
+      ? { title: 'Shared audition materials folder', copy: 'Add one link to the folder performers should use for their audition preparation.' }
+      : organization === 'by_role'
+        ? { title: 'Role-specific sides or music', copy: 'Add the sides, music, or other preparation for each role. If someone is reading for several roles, you can tell them which material to prepare.' }
+        : { title: 'Provided at the audition', copy: 'Performers will receive their material when they arrive. There are no advance links to add.' };
+    return `<section class="mat-setup-page" aria-label="${esc(setup.title)}">
+      <button type="button" class="mat-back-to-choices" onclick="showMaterialChoices()">← Change setup</button>
+      <header class="mat-setup-heading"><div class="mat-setup-kicker">AUDITION MATERIALS</div><h2>${esc(setup.title)}</h2><p>${esc(setup.copy)}</p></header>
+      <div class="mat-setup-content">${detailHtml}</div>
+    </section>`;
+  }
+
+  function showMaterialChoices() {
+    materialsEntryChoiceConfirmed = false;
+    renderMaterialsList();
+  }
+
+  function renderAuditionMaterialsToggle() {
+    const host = document.getElementById('audition-materials-setting');
+    if (!host) return;
+    const enabled = getMaterialsSettings().audition !== false;
+    host.innerHTML = `<div class="aud-materials-setting-copy"><strong>Audition materials</strong><span>${enabled ? 'Performers can see the materials you share.' : 'No audition materials will be shared with performers.'}</span></div><label class="aud-materials-setting-toggle"><span>${enabled ? 'On' : 'Off'}</span><input id="audition-materials-enabled" type="checkbox" ${enabled ? 'checked' : ''} aria-label="Audition materials ${enabled ? 'on' : 'off'}"><span class="aud-materials-setting-track" aria-hidden="true"></span></label>`;
+    host.querySelector('#audition-materials-enabled')?.addEventListener('change', event => toggleMaterialsSection('audition', event.currentTarget.checked));
   }
 
   function renderMaterialsChoicePrompt(type) {
-    const stage = type === 'callback' ? 'callback' : 'audition';
     const choices = [
-      ['folder', `Shared ${stage} materials folder`, `One folder with sides, vocal cuts or music, and dance materials.`],
+      ['folder', 'Shared audition materials folder', 'One folder with sides, vocal cuts or music, and dance materials.'],
       ['by_role', 'Role-specific sides or music', 'Use this when performers need different material for different roles.'],
       ['at_audition', 'Provided at the audition', 'No advance link; sides or other materials are provided in the room.'],
     ];
     const icons = {
-      packet: 'Materials-Audition-packet.svg',
       folder: 'Materials-shared-folder.svg',
       by_role: 'Materials-Role-specific.svg',
       at_audition: 'Materials-provided-at-audition.svg',
     };
     const options = choices.map(([value, title, copy]) => `<button type="button" class="mat-org-choice" data-material-choice="${value}" aria-label="Choose ${esc(title)}"><span class="mat-org-choice-icon" aria-hidden="true"><img src="/ASSETS/Images/Icons/${icons[value]}" alt=""></span><span class="mat-org-choice-copy"><strong>${esc(title)}</strong><small>${esc(copy)}</small></span></button>`).join('');
-    return `<section class="mat-entry-prompt" aria-label="Choose how to share ${stage} materials"><div class="mat-organization-options">${options}</div></section>`;
+    return `<section class="mat-entry-prompt" aria-label="Choose how to share audition materials"><div class="mat-organization-options">${options}</div></section>`;
   }
 
   function renderMaterialsList(options = {}) {
@@ -32226,8 +32218,7 @@ See you soon!
       requestAnimationFrame(() => requestAnimationFrame(() => { try { fitBrandTileTitles(el); } catch (_) {} }));
       return;
     }
-    const toolbar = renderMaterialsToolbar(materialTypes, settings);
-    el.innerHTML = `<div class="materials-theme materials-theme--${renderType}">${toolbar}<div id="materials-content">${options.deferRows ? '<div class="materials-loading">Loading materials...</div>' : renderMaterialsContent(renderType, settings)}</div></div>`;
+    el.innerHTML = `<div class="materials-theme materials-theme--${renderType}"><div id="materials-content">${options.deferRows ? '<div class="materials-loading">Loading materials...</div>' : renderMaterialsContent(renderType, settings)}</div></div>`;
     if (!options.deferRows) return;
 
     if (materialsRenderFrame) cancelAnimationFrame(materialsRenderFrame);
@@ -32241,14 +32232,16 @@ See you soon!
 
   async function toggleMaterialsSection(type, checked) {
     const wizardData = { ...(prod?.wizard_data || {}) };
-    wizardData.materials_enabled = { ...getMaterialsSettings(), [type]: checked === true };
+    wizardData.materials_enabled = { ...(wizardData.materials_enabled || {}), [type]: checked === true };
     const { error } = await sb.from('productions').update({ wizard_data: wizardData }).eq('id', prodId);
     if (error) {
       showToast('Could not save material settings: ' + error.message, true);
+      if (type === 'audition') renderAuditionMaterialsToggle();
       renderMaterialsList();
       return;
     }
     prod.wizard_data = wizardData;
+    if (type === 'audition') renderAuditionMaterialsToggle();
     renderMaterialsList();
   }
 
