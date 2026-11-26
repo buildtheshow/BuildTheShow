@@ -32191,7 +32191,6 @@ See you soon!
   function renderMaterialsChoicePrompt(type) {
     const stage = type === 'callback' ? 'callback' : 'audition';
     const choices = [
-      ['packet', `One ${stage} packet`, `A single packet or link with the ${stage} information and prep materials.`],
       ['folder', `Shared ${stage} materials folder`, `One folder with sides, vocal cuts or music, and dance materials.`],
       ['by_role', 'Role-specific sides or music', 'Use this when performers need different material for different roles.'],
       ['at_audition', 'Provided at the audition', 'No advance link; sides or other materials are provided in the room.'],
