@@ -41,11 +41,11 @@
     });
   }
 
-  function render(containerId, currentText, onChange) {
+  function render(containerId, currentText, onChange, options = {}) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
-    const isTbd = !currentText || currentText.trim().toLowerCase() === 'tbd';
+    const isTbd = !options.hideTbd && (!currentText || currentText.trim().toLowerCase() === 'tbd');
 
     // Inject styles once
     if (!document.getElementById('vp-tbd-style')) {
@@ -60,7 +60,7 @@
           width: 14px; height: 14px; accent-color: #572e88; cursor: pointer; flex-shrink: 0;
         }
         .vp-tbd-row label {
-          font-size: 0.75rem; font-weight: 700; color: #c8bad7;
+          font-size: 0.75rem; font-weight: 700; color: #000;
           text-transform: uppercase; letter-spacing: 0.06em; cursor: pointer;
           user-select: none;
         }
@@ -84,7 +84,7 @@
             </select>
           </div>
           <div class="venue-picker-new-wrap" id="vp-new-${containerId}" style="display:none;">
-            <div style="font-size:0.72rem;font-weight:700;color:#c8bad7;text-transform:uppercase;letter-spacing:0.05em;margin:0.6rem 0 0.3rem;">Search for venue or address</div>
+            <div style="font-size:0.72rem;font-weight:700;color:#000;margin:0.6rem 0 0.3rem;">Search for venue or address</div>
             <div style="position:relative;">
               <input class="form-input" id="vp-search-${containerId}" type="text"
                      placeholder="Start typing a name or address..." autocomplete="off" />
@@ -107,11 +107,11 @@
           </div>
         </div>
 
-        <div class="vp-tbd-row">
+        ${options.hideTbd ? '' : `<div class="vp-tbd-row">
           <input type="checkbox" id="vp-tbd-${containerId}" ${isTbd ? 'checked' : ''}
                  onchange="VenuePicker._toggleTbd('${containerId}')" />
           <label for="vp-tbd-${containerId}">TBD</label>
-        </div>
+        </div>`}
 
       </div>`;
 
@@ -122,6 +122,10 @@
     }
 
     const select = document.getElementById(`vp-select-${containerId}`);
+    if (options.searchImmediately) {
+      document.getElementById(`vp-new-${containerId}`).style.display = 'block';
+      _initSearch(containerId);
+    }
     select.addEventListener('change', () => {
       const val = select.value;
       if (val === '__new__') {
@@ -201,7 +205,7 @@
   async function _fetchSuggestions(pickerId, query) {
     const dropdown = document.getElementById(`vp-dropdown-${pickerId}`);
     if (!dropdown) return;
-    dropdown.innerHTML = '<div style="padding:0.5rem 0.75rem;font-size:0.8rem;color:#c8bad7;">Searching...</div>';
+    dropdown.innerHTML = '<div style="padding:0.5rem 0.75rem;font-size:0.8rem;color:#000;">Searching...</div>';
     dropdown.style.display = 'block';
 
     try {
@@ -210,7 +214,7 @@
       const data = await res.json();
 
       if (!data || !data.length) {
-        dropdown.innerHTML = '<div style="padding:0.5rem 0.75rem;font-size:0.8rem;color:#c8bad7;">No results found.</div>';
+        dropdown.innerHTML = '<div style="padding:0.5rem 0.75rem;font-size:0.8rem;color:#000;">No results found.</div>';
         return;
       }
 
@@ -223,11 +227,11 @@
                      onmouseout="this.style.background=''"
                      onclick="VenuePicker._selectSuggestion('${pickerId}', ${JSON.stringify({ name, address, lat: r.lat, lng: r.lon, place_id: String(r.place_id) }).replace(/"/g, '&quot;')})">
                   <div style="font-weight:700;color:#000000;">${_esc(name)}</div>
-                  <div style="font-size:0.72rem;color:#c8bad7;margin-top:0.1rem;">${_esc(address)}</div>
+                  <div style="font-size:0.72rem;color:#000;margin-top:0.1rem;">${_esc(address)}</div>
                 </div>`;
       }).join('');
     } catch {
-      dropdown.innerHTML = '<div style="padding:0.5rem 0.75rem;font-size:0.8rem;color:#dc2626;">Search failed. Check your connection.</div>';
+      dropdown.innerHTML = '<div style="padding:0.5rem 0.75rem;font-size:0.8rem;color:#d1523d;">Search failed. Check your connection.</div>';
     }
   }
 

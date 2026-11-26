@@ -27216,7 +27216,7 @@ See you soon!
   }
 
   function _createAudSetupController() {
-    const state = { loaded: false, loading: false, records: [], revisions: {}, openId: null, step: 0, activeDay: {}, openVenue: '', timers: {}, saving: {}, error: '' };
+    const state = { loaded: false, loading: false, records: [], revisions: {}, openId: null, step: 0, activeDay: {}, timers: {}, saving: {}, error: '' };
     const sections = ['Details', 'Booking type', 'Dates & location', 'Activities', 'Preparation', 'Review'];
     const types = [
       { value: 'audition', label: 'General audition', name: 'General audition', colour: '#476aaa', icon: 'Auditions.svg' },
@@ -27318,12 +27318,7 @@ See you soon!
     function dayHTML(record, day, index) {
       const uid = escapeId(record.id + '-' + index);
       const dayField = (label, key, value, type) => `<label class="ap-setup-field"><span class="ap-setup-field-title">${label}</span><input type="${type}" data-day="${index}" data-day-field="${key}" value="${e(value || '')}"></label>`;
-      const venues = window.VenuePicker?.getVenues?.() || [];
-      const currentVenueId = day.venue?.id ? String(day.venue.id) : '';
-      const venueExists = venues.some(venue => String(venue.id) === currentVenueId);
-      const currentVenueOption = day.venue?.name && !venueExists ? `<option value="${e(currentVenueId || day.venue.name)}" selected>${e(day.venue.name)}${day.venue.address ? ' · ' + e(day.venue.address) : ''}</option>` : '';
-      const venueOptions = venues.map(venue => `<option value="${e(venue.id)}" ${currentVenueId && String(venue.id) === currentVenueId || !currentVenueId && day.venue?.name === (venue.nickname || venue.name) ? 'selected' : ''}>${e(venue.nickname || venue.name)}${venue.address ? ' · ' + e(venue.address) : ''}</option>`).join('');
-      const inPersonDetails = record.methods.includes('in_person') ? `<div class="ap-setup-location"><div class="ap-setup-venue-row"><label class="ap-setup-field"><span class="ap-setup-field-title">Venue</span><select data-venue-select="${index}"><option value="">Choose a venue...</option>${currentVenueOption}${venueOptions}</select></label><button type="button" data-venue-search="${index}">Find venue</button></div>${day.venue?.name ? `<p class="ap-setup-venue-address">${e(day.venue.address || '')}${day.venue.address ? ` · <a href="${mapLink(day.venue)}" target="_blank" rel="noopener noreferrer">Open in maps</a>` : ''}</p>` : ''}<div class="ap-setup-venue-picker" id="ap-setup-venue-${uid}" ${state.openVenue === `${record.id}:${index}` ? '' : 'hidden'}></div><details><summary>Room & location instructions (optional)</summary><div class="ap-setup-instructions"><label class="ap-setup-field"><span class="ap-setup-field-title">Room or studio</span><input type="text" data-day="${index}" data-day-field="room" value="${e(day.room || '')}"></label><label class="ap-setup-field"><span class="ap-setup-field-title">Location instructions</span><textarea data-day="${index}" data-day-field="locationNotes" rows="2" placeholder="For example: use the side entrance. Studio 1 is upstairs.">${e(day.locationNotes || '')}</textarea></label></div></details></div>` : '';
+      const inPersonDetails = record.methods.includes('in_person') ? `<div class="ap-setup-location"><label class="ap-setup-field"><span class="ap-setup-field-title">Venue</span><div class="ap-setup-venue-picker" id="ap-setup-venue-${uid}" data-audition-venue="${index}"></div></label>${day.venue?.name ? `<p class="ap-setup-venue-address">${e(day.venue.address || '')}${day.venue.address ? ` · <a href="${mapLink(day.venue)}" target="_blank" rel="noopener noreferrer">Open in maps</a>` : ''}</p>` : ''}<details><summary>Room & location instructions (optional)</summary><div class="ap-setup-instructions"><label class="ap-setup-field"><span class="ap-setup-field-title">Room or studio</span><input type="text" data-day="${index}" data-day-field="room" value="${e(day.room || '')}"></label><label class="ap-setup-field"><span class="ap-setup-field-title">Location instructions</span><textarea data-day="${index}" data-day-field="locationNotes" rows="2" placeholder="For example: use the side entrance. Studio 1 is upstairs.">${e(day.locationNotes || '')}</textarea></label></div></details></div>` : '';
       const onlineDetails = record.methods.includes('video_call') ? `<details class="ap-setup-online-day"><summary>Online audition joining instructions (optional)</summary><div class="ap-setup-online-day-content"><p>Add the video link or joining details performers need for this day.</p><label class="ap-setup-field"><span class="ap-setup-field-title">Video link or joining details</span><textarea data-day="${index}" data-day-field="videoInstructions" rows="2" placeholder="Add a video call link or joining details.">${e(day.videoInstructions || '')}</textarea></label></div></details>` : '';
       return `<section class="ap-setup-daypanel"><div class="ap-setup-date-row">${dayField('Date','date',day.date,'date')}${dayField('Start Time','start',day.start,'time')}${dayField('Finish Time','end',day.end,'time')}</div>${inPersonDetails}${onlineDetails}</section>`;
     }
@@ -27445,6 +27440,16 @@ See you soon!
         day[key]=input.value;
         save(record);updateMissing(root.closest('.aud-session-card'),record);
       }));
+      root.querySelectorAll('[data-audition-venue]').forEach(container=>{
+        const index=Number(container.dataset.auditionVenue),day=ensureDays(record)[index];
+        if(typeof VenuePicker==='undefined')return;
+        VenuePicker.render(container.id,day.venue?.name||'',(name,venueId)=>{
+          if(name==='TBD')return;
+          const venue=VenuePicker.getVenues?.().find(item=>String(item.id)===String(venueId));
+          day.venue=venue?{id:venue.id,name:venue.nickname||venue.name,address:venue.address||'',lat:venue.lat,lng:venue.lng}:null;
+          save(record);render();
+        },{searchImmediately:true,hideTbd:true});
+      });
       root.querySelectorAll('[data-add-day]').forEach(button=>button.onclick=()=>{
         const days=ensureDays(record),first=days[0],previous=days[days.length-1],index=days.length;
         let nextDate='';
@@ -27456,20 +27461,6 @@ See you soon!
       root.querySelectorAll('[data-remove-day]').forEach(button=>button.onclick=()=>{
         const index=Number(button.dataset.removeDay);if(index<1||record.days.length<2)return;
         record.days.splice(index,1);state.activeDay[record.id]=Math.max(0,index-1);save(record);render();
-      });
-      root.querySelectorAll('[data-venue-select]').forEach(select=>select.addEventListener('change',()=>{
-        const index=Number(select.dataset.venueSelect),id=select.value,venue=window.VenuePicker?.getVenues?.().find(item=>String(item.id)===String(id));
-        const day=ensureDays(record)[index];day.venue=venue?{id:venue.id,name:venue.nickname||venue.name,address:venue.address||'',lat:venue.lat,lng:venue.lng}:null;
-        save(record);render();
-      }));
-      root.querySelectorAll('[data-venue-search]').forEach(button=>button.onclick=()=>{
-        const index=Number(button.dataset.venueSearch),day=ensureDays(record)[index],pickerId='ap-setup-venue-'+escapeId(record.id+'-'+index);
-        state.openVenue=`${record.id}:${index}`;render();
-        if(window.VenuePicker)VenuePicker.render(pickerId,day.venue?.name||'',(name,venueId)=>{
-          if(name==='TBD')return;
-          const venue=VenuePicker.getVenues?.().find(item=>String(item.id)===String(venueId));day.venue=venue?{id:venue.id,name:venue.nickname||venue.name,address:venue.address||'',lat:venue.lat,lng:venue.lng}:{name,address:''};
-          state.openVenue='';save(record);render();
-        });
       });
     }
 
@@ -27483,7 +27474,7 @@ See you soon!
       const visibleIssues=issues.filter(issue=>issue.step===state.step);
       visibleIssues.forEach(issue=>{
         let target;
-        if(issue.day!==undefined){target=issue.key==='venue'?editorRoot.querySelector(`[data-venue-select="${issue.day}"]`):editorRoot.querySelector(`[data-day="${issue.day}"][data-day-field="${issue.key}"]`);}
+        if(issue.day!==undefined){target=issue.key==='venue'?editorRoot.querySelector(`[data-audition-venue="${issue.day}"]`):editorRoot.querySelector(`[data-day="${issue.day}"][data-day-field="${issue.key}"]`);}
         else target=editorRoot.querySelector(`[data-field="${issue.key}"]`)||editorRoot.querySelector(`[data-multi="${issue.key}"]`);
         const group=target?.closest('.ap-setup-field')||target?.closest('fieldset')||target?.parentElement;
         if(group){const note=document.createElement('small');note.className='ap-setup-missing-note';note.innerHTML=`<span>✱</span> ${e(issue.text)}`;const title=group.querySelector(':scope > .ap-setup-field-title');(title||group).append(note);target?.setAttribute('aria-invalid','true');}
