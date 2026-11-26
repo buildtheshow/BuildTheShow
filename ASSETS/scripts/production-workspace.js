@@ -32203,17 +32203,7 @@ See you soon!
       by_role: 'Materials-Role-specific.svg',
       at_audition: 'Materials-provided-at-audition.svg',
     };
-    const renderTile = window.BTSAuditionTemplates?.renderTemplateById;
-    const options = choices.map(([value, title, copy]) => {
-      const bodyHtml = `<div class="mat-choice-tile-body"><img src="/ASSETS/Images/Icons/${icons[value]}" alt="" aria-hidden="true"><p>${esc(copy)}</p></div>`;
-      return renderTile ? renderTile('brand.tile.square', {
-        esc, tagName: 'button', type: 'button', variant: 'square', mode: 'content',
-        color: '#efefef', ink: '#000000', className: 'mat-org-choice',
-        attrs: `data-material-choice=${value}`,
-        ariaLabel: `Choose ${title}`,
-        kicker: `${stageTitle} materials`, title, bodyHtml, buttonLabel: 'Choose this option'
-      }) : '';
-    }).join('');
+    const options = choices.map(([value, title, copy]) => `<button type="button" class="mat-org-choice" data-material-choice="${value}" aria-label="Choose ${esc(title)}"><span class="mat-org-choice-icon" aria-hidden="true" style="--method-icon:url('${encodeURI('/ASSETS/Images/Icons/' + icons[value])}')"></span><span class="mat-org-choice-copy"><strong>${esc(title)}</strong><small>${esc(copy)}</small></span></button>`).join('');
     return `<section class="mat-entry-prompt"><div class="mat-entry-prompt-heading"><span>Step 4 · ${stageTitle} materials</span><h2>How would you like to share ${stage} materials?</h2><p>Choose one to continue. Performers can audition for several roles without memorizing a separate set of sides for each one; tell them which side to prepare if needed.</p></div><div class="mat-organization-options">${options}</div></section>`;
   }
 
