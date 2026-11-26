@@ -27216,7 +27216,7 @@ See you soon!
   }
 
   function _createAudSetupController() {
-    const state = { loaded: false, loading: false, records: [], revisions: {}, openId: null, step: 0, activeDay: {}, timers: {}, saving: {}, error: '' };
+    const state = { loaded: false, loading: false, records: [], revisions: {}, openId: null, step: 0, activeDay: {}, reviewTab: 'audition', timers: {}, saving: {}, error: '' };
     const sections = ['Details', 'Booking type', 'Dates & location', 'Activities', 'Preparation', 'Review'];
     const types = [
       { value: 'audition', label: 'General audition', name: 'General audition', colour: '#476aaa', icon: 'Auditions.svg' },
@@ -27359,8 +27359,23 @@ See you soon!
     }
 
     function applicantView(record) {
+      const activeTab = state.reviewTab === 'schedule' ? 'schedule' : 'audition';
+      return `<div class="ap-setup-live-preview" style="--ap-accent:${colour(record)}"><nav class="ap-setup-live-tabs" aria-label="Performer page preview"><button type="button" data-review-tab="audition" aria-selected="${activeTab === 'audition'}">Audition</button><button type="button" data-review-tab="schedule" aria-selected="${activeTab === 'schedule'}">Schedule</button></nav><div class="ap-setup-live-panel" role="tabpanel">${activeTab === 'audition' ? applicantAuditionPreview(record) : applicantSchedulePreview(record)}</div></div>`;
+    }
+
+    function applicantAuditionPreview(record) {
       const attendance = record.type === 'callback' || record.audience === 'invited' ? 'Your team will send you an invitation with booking details.' : (modes.find(mode => mode[0] === record.mode)?.[2] || modes.find(mode => mode[0] === 'assigned')[2]);
       return `<article class="ap-setup-applicant" style="--ap-accent:${colour(record)}"><header><b>${e(prod?.name || 'Production')}</b><h2>${e(record.name)}</h2><span>${e(record.audience === 'invited' || record.type === 'callback' ? 'People we invite' : 'Anyone who meets the requirements')}</span></header><div><h3>Taking part</h3><p>${e(record.methods.map(key=>({in_person:'In person',video_call:'Live video call',self_tape:'Self-tape'})[key]).join(' · '))}</p><p>${e(record.activities.map(key=>activities.find(item=>item[0]===key)?.[1]||key).join(' · '))}</p>${record.methods.length===1&&record.methods[0]==='self_tape'?`<section><h3>Submission deadline</h3><p>${e(record.deadline || 'To be confirmed')}</p></section>`:`<section><h3>Dates & locations</h3>${ensureDays(record).map(day=>`<div class="ap-setup-app-day"><strong>${e(niceDate(day.date))} · ${e(niceTime(day.start))}–${e(niceTime(day.end))}</strong>${record.methods.includes('in_person')?`<p>${e(day.venue?.name||'Venue to be confirmed')}${day.room?' · '+e(day.room):''}</p><p>${e(day.venue?.address||'Full address to be added')}</p>${day.venue?.address?`<a href="${mapLink(day.venue)}" target="_blank" rel="noopener noreferrer">Open in maps ↗</a>`:''}${day.locationNotes?`<p>${e(day.locationNotes)}</p>`:''}`:''}${record.methods.includes('video_call')?`<p>${e(day.videoInstructions||'Joining details will be sent with your booking confirmation.')}</p>`:''}</div>`).join('')}</section><section><h3>Booking & arrival</h3><p>${e(attendance)}</p>${record.mode==='appointment'?`<p>Appointments last ${e(record.slot)} minutes.`:''}<p>${e(record.finish)}.</p></section>`}<section><h3>What to prepare</h3><p>${e(record.prep||'No preparation needed.')}</p></section>${record.bring?`<section><h3>What to bring</h3><p>${e(record.bring)}</p></section>`:''}${record.access?`<section><h3>Extra information</h3><p>${e(record.access)}</p></section>`:''}</div></article>`;
+    }
+
+    function applicantSchedulePreview(record) {
+      const typeLabel = types.find(type => type.value === record.type)?.label || 'Audition';
+      const modeLabel = modes.find(mode => mode[0] === record.mode)?.[1] || 'Assigned Appointment';
+      const methodLabels = { in_person: 'In person', video_call: 'Video call', self_tape: 'Self-tape' };
+      const isTapeOnly = record.methods.length === 1 && record.methods[0] === 'self_tape';
+      const days = isTapeOnly ? [] : ensureDays(record);
+      const format = record.mode === 'appointment' ? `${e(record.slot || '10')} minute appointments${Number(record.gap) ? ` · ${e(record.gap)} minute gap` : ''}` : record.mode === 'group' ? `${e(record.capacity || '1')} places in each group session` : record.mode === 'arrival' ? `${e(record.capacity || '1')} performers per shared arrival time` : record.mode === 'walkin' ? 'Arrive any time during the advertised hours and wait your turn.' : 'Your team will assign your audition time.';
+      return `<section class="ap-setup-performer-schedule"><header><span>${e(typeLabel)}</span><h2>${e(record.name)}</h2><p>${e(modeLabel)} · ${e(record.methods.map(method => methodLabels[method]).join(' · '))}</p></header>${isTapeOnly ? `<article class="ap-setup-performer-day"><h3>Submission deadline</h3><strong>${e(record.deadline ? new Date(record.deadline).toLocaleString(undefined, { dateStyle: 'long', timeStyle: 'short' }) : 'To be confirmed')}</strong><p>Your team will review submissions by this deadline.</p></article>` : days.map((day,index)=>`<article class="ap-setup-performer-day"><h3>${e(days.length > 1 ? `Day ${index + 1}` : typeLabel)}</h3><strong>${e(niceDate(day.date))}</strong><p>${e(niceTime(day.start))}–${e(niceTime(day.end))}</p>${record.methods.includes('in_person')?`<p><b>Location:</b> ${e(day.venue?.name||'Venue to be confirmed')}${day.room?' · '+e(day.room):''}</p>${day.venue?.address?`<p>${e(day.venue.address)}</p>`:''}`:''}${record.methods.includes('video_call')?`<p><b>Video call:</b> ${e(day.videoInstructions||'Joining details will be sent with your booking confirmation.')}</p>`:''}<div class="ap-setup-performer-slots"><b>${e(modeLabel)}</b><span>${format}</span></div></article>`).join('')}</section>`;
     }
 
     function completion(record) {
@@ -27425,6 +27440,7 @@ See you soon!
 
     function bind(root, record) {
       root.querySelectorAll('[data-step]').forEach(button=>button.onclick=()=>{state.step=Number(button.dataset.step);render();});
+      root.querySelectorAll('[data-review-tab]').forEach(button=>button.onclick=()=>{state.reviewTab=button.dataset.reviewTab;render();});
       root.querySelector('[data-close-editor]')?.addEventListener('click',()=>{save(record);state.openId=null;render();});
       root.querySelectorAll('[data-field]').forEach(input=>input.addEventListener(input.type==='radio'||input.tagName==='SELECT'?'change':'input',()=>{
         const key=input.dataset.field;
