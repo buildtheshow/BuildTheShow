@@ -115,7 +115,7 @@ serve(async (req) => {
         ? sb.from('productions').select('title,subtitle,venue,org_name,org_email,director,start_date,end_date,wizard_data').eq('id', prodIdTest).maybeSingle()
         : Promise.resolve({ data: null }),
       prodIdTest
-        ? sb.from('audition_sessions').select('id,name,type,date,start_time,location,prepare_text').eq('production_id', prodIdTest).order('sort_order', { ascending: true })
+        ? sb.from('audition_sessions').select('id,name,type,date,start_time,location,instructions,prepare_text').eq('production_id', prodIdTest).order('sort_order', { ascending: true })
         : Promise.resolve({ data: [] }),
       prodIdTest
         ? sb.from('production_events').select('title,start_time,end_time,venue,event_type').eq('production_id', prodIdTest).eq('event_type', 'performance').order('start_time', { ascending: true })
@@ -162,6 +162,7 @@ serve(async (req) => {
       '{{audition_date}}':         primarySess?.date        ? fmtDate(String(primarySess.date))        : '',
       '{{audition_time}}':         primarySess?.start_time  ? fmtTime(String(primarySess.start_time))  : '10:00 AM',
       '{{audition_venue}}':        String(primarySess?.location || p.venue || ''),
+      '{{audition_instructions}}': primarySess?.instructions ? String(primarySess.instructions) : '',
       '{{what_to_prepare}}':       'Please prepare 16 bars of a song in the style of the show.',
       '{{booking_link}}':          `https://buildtheshow.com/audition-info?prod=${prodIdTest}`,
       '{{all_audition_sessions}}': sessions.map(s => `${s.name || 'Session'}: ${s.date ? fmtDate(String(s.date)) : 'TBC'}${s.start_time ? ' at ' + fmtTime(String(s.start_time)) : ''}`).join('\n'),
@@ -553,7 +554,7 @@ serve(async (req) => {
 
   const [{ data: sessions }, { data: slots }, { data: allProductionSessions }, { data: productionEvents }] = await Promise.all([
     sessionIds.length
-      ? sb.from('audition_sessions').select('id,name,session_date,date,start_time,location,prepare_text').in('id', [...new Set(sessionIds)])
+      ? sb.from('audition_sessions').select('id,name,session_date,date,start_time,location,instructions,prepare_text').in('id', [...new Set(sessionIds)])
       : Promise.resolve({ data: [] }),
     slotIds.length
       ? sb.from('audition_time_slots').select('id,slot_time,slot_date,label').in('id', [...new Set(slotIds)])
@@ -744,6 +745,9 @@ serve(async (req) => {
     String(customAnswers['What to Prepare'] || ''),
     String(customAnswers['what_to_prepare'] || ''),
   );
+  const auditionInstructions = String(
+    (primarySession as Record<string, unknown> | null)?.instructions || directContext.audition_instructions || ''
+  ).trim();
   const showDates = productionRecord.start_date && productionRecord.end_date
     ? `${fmtDate(String(productionRecord.start_date))} – ${fmtDate(String(productionRecord.end_date))}`
     : (productionRecord.start_date ? fmtDate(String(productionRecord.start_date)) : '');
@@ -803,6 +807,7 @@ serve(async (req) => {
     '{{audition_date}}':         sessionDate,
     '{{audition_time}}':         slotTime,
     '{{audition_venue}}':        audVenue,
+    '{{audition_instructions}}': auditionInstructions,
     '{{audition_notes}}':        whatToPrepare,
     '{{what_to_prepare}}':       whatToPrepare,
     '{{booking_link}}':          bookingLink,
@@ -995,7 +1000,12 @@ serve(async (req) => {
     return String(value || '').trim();
   }
   const sourceSubject = reviewedSubject || template?.subject || CATEGORY_SUBJECTS[category] || `Update from ${showName || 'Build The Show'}`;
-  const sourceBody=normalizeTemplateBody(reviewedBody||template?.body||'').replace(/<p\b[^>]*>[^<]*(?:Production Code|Access code)[^<]*{{\s*(?:volunteer_passcode|team_access_code)\s*}}[^<]*<\/p>/gi,'').replace(/^.*{{\s*(?:volunteer_passcode|team_access_code)\s*}}.*$/gm,'');
+  let sourceBody=normalizeTemplateBody(reviewedBody||template?.body||'').replace(/<p\b[^>]*>[^<]*(?:Production Code|Access code)[^<]*{{\s*(?:volunteer_passcode|team_access_code)\s*}}[^<]*<\/p>/gi,'').replace(/^.*{{\s*(?:volunteer_passcode|team_access_code)\s*}}.*$/gm,'');
+  if (category === 'booking_confirmation' && auditionInstructions && !sourceBody.includes('{{audition_instructions}}')) {
+    sourceBody += /<[a-z][\s\S]*>/i.test(sourceBody)
+      ? '\n<p><strong>Session instructions</strong><br>{{audition_instructions}}</p>'
+      : '\n\nSession instructions:\n{{audition_instructions}}';
+  }
   const sourceBodyText = htmlToPlainText(String(sourceBody || ''));
 
   if (!sourceBodyText.trim()) {
