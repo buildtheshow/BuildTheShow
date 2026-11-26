@@ -46,6 +46,7 @@
     if (!container) return;
 
     const isTbd = !options.hideTbd && (!currentText || currentText.trim().toLowerCase() === 'tbd');
+    const showAddressInSavedOptions = options.showAddressInSavedOptions !== false;
 
     // Inject styles once
     if (!document.getElementById('vp-tbd-style')) {
@@ -73,13 +74,14 @@
     container.innerHTML = `
       <div data-venue-picker="${containerId}"
            data-venue-current-text="${(currentText || '').replace(/"/g, '&quot;')}"
+           data-show-saved-venue-address="${showAddressInSavedOptions}"
            data-venue-onchange="__vp_cb_${containerId}">
 
         <div id="vp-picker-${containerId}"${isTbd ? ' class="vp-picker-disabled"' : ''}>
           <div class="venue-picker-row">
             <select class="form-select venue-picker-select" id="vp-select-${containerId}">
               <option value="">Select a venue...</option>
-              ${_venues.map(v => { const lbl = v.nickname || v.name; return `<option value="${v.id}" data-name="${lbl.replace(/"/g, '&quot;')}" ${!isTbd && (currentText === lbl || currentText === v.name) ? 'selected' : ''}>${lbl}${v.address ? ' — ' + v.address : ''}</option>`; }).join('')}
+              ${_venues.map(v => { const lbl = v.nickname || v.name; return `<option value="${v.id}" data-name="${lbl.replace(/"/g, '&quot;')}" ${!isTbd && (currentText === lbl || currentText === v.name) ? 'selected' : ''}>${lbl}${showAddressInSavedOptions && v.address ? ' — ' + v.address : ''}</option>`; }).join('')}
               <option value="__new__">+ Add new venue...</option>
             </select>
           </div>
@@ -172,9 +174,10 @@
     const select = document.getElementById(`vp-select-${id}`);
     if (!select) return;
     const existing = select.value;
+    const showAddress = select.closest('[data-venue-picker]')?.dataset.showSavedVenueAddress !== 'false';
     select.innerHTML = `
       <option value="">Select a venue...</option>
-      ${_venues.map(v => { const lbl = v.nickname || v.name; return `<option value="${v.id}" data-name="${lbl.replace(/"/g, '&quot;')}" ${currentText === lbl || currentText === v.name ? 'selected' : ''}>${lbl}${v.address ? ' — ' + v.address : ''}</option>`; }).join('')}
+      ${_venues.map(v => { const lbl = v.nickname || v.name; return `<option value="${v.id}" data-name="${lbl.replace(/"/g, '&quot;')}" ${currentText === lbl || currentText === v.name ? 'selected' : ''}>${lbl}${showAddress && v.address ? ' — ' + v.address : ''}</option>`; }).join('')}
       <option value="__new__">+ Add new venue...</option>`;
     if (existing && existing !== '__new__') {
       const match = _venues.find(v => v.id === existing);
