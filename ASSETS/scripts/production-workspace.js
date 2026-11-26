@@ -31417,52 +31417,48 @@ See you soon!
     }
 
     el.innerHTML = '<div class="char-grid">' + filtered.map(c => {
-      const isEnsemble = c.role_type === 'Ensemble';
-      const ensOverride = effectiveCharacterVocalUsage(c) === 'Ensemble Vocals' && (!displayVocalUsage(c.vocal_usage) || displayVocalUsage(c.vocal_usage) === 'Non-Singing');
       const effectiveUsage = effectiveCharacterVocalUsage(c);
+      const iconPath = name => `/ASSETS/Images/Icons/${name}`;
+      const roleIcons = { person: iconPath('Performer.svg'), voice: iconPath('script-music-songs.svg'), movement: iconPath('Choreography.svg'), skills: iconPath('Auditions.svg') };
+      const movementDescriptions = { 'No Movement': 'No planned dance or movement beyond everyday stage directions.', 'Light Movement': 'Simple, occasional movement.', 'Moderate Movement': 'Regular movement or simple choreography.', 'Strong Movement': 'Frequent or physically demanding movement.', 'Dance Required': 'Choreography is a core part of the role.', 'No Dance': 'No planned choreography.', 'Beginner Friendly': 'Simple, guided movement.', 'Performer Level': 'Regular choreography.', 'Dance-Focused': 'Frequent choreography requiring strong dance ability.' };
       const facts = [];
-      const fact = (label, value, color = '#572e88') => {
+      const fact = (label, value, icon, color, note = '') => {
         if (!value) return;
-        facts.push(`<div class="char-card-fact" style="--dot-color:${esc(color)};">
-          <span class="char-card-fact-dot"></span>
-          <span><span class="char-card-fact-label">${esc(label)}:</span> ${esc(value)}</span>
-        </div>`);
+        facts.push(`<div class="char-card-fact" style="--fact-bg:${esc(color)};--fact-icon-url:url('${esc(roleIcons[icon])}');"><span class="char-card-fact-icon" aria-hidden="true"></span><span><span class="char-card-fact-label">${esc(label)}:</span> ${esc(value)}${note ? `<span class="char-card-fact-note">${esc(note)}</span>` : ''}</span></div>`);
       };
-      if (c.role_type && !isEnsemble) fact('Role Type', c.role_type, ROLE_TYPE_CLASSES[c.role_type] || '#572e88');
-      if (c.age_range) fact('Age Range', c.age_range, '#efab45');
-      const characterGender = c.written_as;
-      if (characterGender) fact('Character gender', displayGender(characterGender), '#572e88');
-      if (c.casting_eligibility === 'open') fact('Who may audition', 'Performers of any gender', '#476aaa');
-      else if (c.casting_eligibility === 'character_gender') fact('Who may audition', 'Match the character gender', '#476aaa');
-      else if (c.casting_eligibility === 'specific') fact('Who may audition', c.casting_notes || 'Specific requirement', '#476aaa');
-      else if (c.casting_eligibility === 'unspecified') fact('Who may audition', 'Decide later', '#efab45');
-      if (Array.isArray(c.performance_disciplines) && c.performance_disciplines.length) fact('Performance skills', c.performance_disciplines.join(' · '), '#74a2b4');
-      if (c.vocal_type) fact('Vocal Type', c.vocal_type, '#476aaa');
-      if (c.dancing_strength) fact('Movement Requirement', c.dancing_strength, '#dd8233');
-      if (effectiveUsage) fact('Vocal Usage', effectiveUsage, ensOverride ? '#572e88' : '#769e7b');
+      if (c.age_range) fact('Playable age', c.age_range, 'person', '#efab45');
+      if (c.casting_eligibility === 'open') fact('Who can audition', 'Open to any performer', 'skills', '#769e7b');
+      else if (c.casting_eligibility === 'character_gender') fact('Who can audition', 'Performers who match the character requirements', 'skills', '#769e7b');
+      else if (c.casting_eligibility === 'specific') fact('Who can audition', c.casting_notes || 'See the production’s casting requirements', 'skills', '#769e7b');
+      if (Array.isArray(c.performance_disciplines) && c.performance_disciplines.length) fact('Performance skills', c.performance_disciplines.join(' · '), 'skills', '#769e7b');
+      const voiceDetails = [c.vocal_type ? `<span><b>Vocal Type:</b> ${esc(c.vocal_type)}</span>` : '', c.vocal_range ? `<span><b>Vocal Range:</b> ${esc(c.vocal_range)}</span>` : '', effectiveUsage ? `<span><b>Vocal Usage:</b> ${esc(effectiveUsage)}</span>` : ''].filter(Boolean);
+      if (voiceDetails.length) facts.push(`<div class="char-card-fact char-card-fact--voice" style="--fact-bg:#74a2b4;--fact-icon-url:url('${esc(roleIcons.voice)}');"><span class="char-card-fact-icon" aria-hidden="true"></span><span class="char-card-fact-voice">${voiceDetails.join(' <span aria-hidden="true">|</span> ')}</span></div>`);
+      if (c.dancing_strength && c.dancing_strength !== 'None' && c.dancing_strength !== 'Non-Dancing') fact('Movement', c.dancing_strength, 'movement', '#dd8233', movementDescriptions[c.dancing_strength] || '');
       const factsHTML = facts.length ? `<div class="char-card-facts">${facts.join('')}</div>` : '';
-      const countBadge = c.performer_count > 1 ? `<span class="char-card-count">${c.performer_count} performers</span>` : '';
-      const desc       = c.description ? `<div class="char-card-desc">${esc(c.description)}</div>` : '';
+      const desc = c.description ? `<div class="char-card-desc">${esc(c.description)}</div>` : '';
       const showPublic = c.show_on_public_page !== false;
+      const pronounRaw = c.pronouns || c.gender || c.written_as || '';
+      const pronounKey = String(pronounRaw).trim().toLowerCase();
+      const pronouns = ({ male: 'He/Him', 'man / boy': 'He/Him', man: 'He/Him', boy: 'He/Him', female: 'She/Her', 'woman / girl': 'She/Her', woman: 'She/Her', girl: 'She/Her', 'non-binary / gender-neutral': 'They/Them', nonbinary: 'They/Them', any: 'Any pronouns', 'any gender': 'Any pronouns' })[pronounKey] || pronounRaw;
       const isSelected = charSelected.has(c.id);
       const bulkCheck  = charBulkMode
         ? `<input type="checkbox" class="char-card-bulk-check" ${isSelected ? 'checked' : ''} onchange="toggleSelectChar('${c.id}', this.checked)" onclick="event.stopPropagation()" />`
         : '';
       const cardClass  = `char-card${isSelected ? ' bulk-selected' : ''}`;
       const cardClick  = charBulkMode ? `onclick="toggleSelectChar('${c.id}', !charSelected.has('${c.id}'))"` : '';
-      return `<div class="${cardClass}" ${cardClick} style="${charBulkMode ? 'cursor:pointer;' : ''}">
+      return `<div class="${cardClass} char-card--public-preview" ${cardClick} style="${charBulkMode ? 'cursor:pointer;' : ''}">
         ${bulkCheck}
         <div class="char-card-head">
-          <div class="char-card-name">${esc(c.name)}</div>
-          ${countBadge}
+          <div class="char-card-title"><div class="char-card-name">${esc(c.name)}</div>${pronouns ? `<span class="char-card-pronouns">${esc(pronouns)}</span>` : ''}</div>
+          ${c.role_type ? `<span class="char-card-role-type">${esc(c.role_type)}</span>` : ''}
         </div>
         ${factsHTML}
         ${desc}
         <div class="char-card-footer">
-          ${charBulkMode ? '' : `<label class="aud-toggle-wrap" title="Show on public audition page">
+          ${charBulkMode ? '' : `<label class="aud-toggle-wrap" title="Show this role on the public audition page">
             <input type="checkbox" ${showPublic ? 'checked' : ''} onchange="toggleCharPublic('${c.id}', this.checked)" />
             <div class="aud-toggle-track"><div class="aud-toggle-thumb"></div></div>
-            <span class="aud-toggle-label">${showPublic ? 'Visible' : 'Casting Later'}</span>
+            <span class="aud-toggle-label">${showPublic ? 'Visible' : 'Hidden'}</span>
           </label>`}
           ${charBulkMode ? `<span style="font-size:0.72rem;color:rgba(87,46,136,0.5);">${isSelected ? 'Selected' : 'Click to select'}</span>` : ''}
           <div class="char-card-footer-actions">
