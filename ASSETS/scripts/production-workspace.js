@@ -27357,7 +27357,7 @@ See you soon!
 
     function completion(record) {
       const issues = missing(record);
-      return issues.length ? `<button type="button" class="ap-setup-needs" data-needs="${e(record.id)}"><span>✱</span> Needs details (${issues.length})</button>` : '<span class="ap-setup-ready">Draft · Ready to review</span>';
+      return issues.length ? `<button type="button" class="ap-setup-needs" data-needs="${e(record.id)}"><span>✱</span>Needs details (${issues.length})</button>` : '<span class="ap-setup-ready">Draft · Ready to review</span>';
     }
 
     function bindNeedsAction(container, record) {
@@ -27469,7 +27469,7 @@ See you soon!
       if(!card)return;
       card.querySelectorAll('.ap-setup-missing-note').forEach(node=>node.remove());
       const issues=missing(record);
-      const badge=card.querySelector('[data-needs]');if(badge){badge.innerHTML=`<span>✱</span> Needs details (${issues.length})`;}
+      const badge=card.querySelector('[data-needs]');if(badge){badge.innerHTML=`<span>✱</span>Needs details (${issues.length})`;}
       const headerStatus=card.querySelector('.ap-setup-header-status');if(headerStatus){headerStatus.innerHTML=completion(record);bindNeedsAction(headerStatus,record);}
       const editorRoot=card.querySelector('.ap-setup-editor');if(!editorRoot)return;
       const visibleIssues=issues.filter(issue=>issue.step===state.step);
