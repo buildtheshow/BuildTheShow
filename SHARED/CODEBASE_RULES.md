@@ -342,10 +342,10 @@ Do not casually reintroduce `Applicants` in user-facing audition flows when we m
 ### Audition Colour System
 
 - Audition UI should use one consistent colour system everywhere across production and public pages.
-- `General Audition` uses `#7FAF8B`.
-- `Dance Call` uses `#D68CB2`.
-- `Callback` uses `#E3A46F`.
-- `Other` audition types use `#B8AECF`.
+- `General Audition` uses `#476aaa`.
+- `Dance Call` uses `#dd8233`.
+- `Callback` uses `#769e7b`.
+- `Another audition` uses `#d1523d`.
 - When a page styles audition cards, schedule buttons, session pickers, badges, footers, tabs, toggles, or note accents by audition type, those colours should be the shared source of truth.
 - Do not reintroduce ad hoc purple accents for audition-type controls when a type colour should be shown instead.
 - If an audition control is stateful inside a type-specific card, the active state should inherit from that audition type colour before using any generic purple.
