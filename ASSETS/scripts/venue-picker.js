@@ -57,14 +57,14 @@
           margin-top: 0.45rem;
         }
         .vp-tbd-row input[type="checkbox"] {
-          width: 14px; height: 14px; accent-color: #572e88; cursor: pointer; flex-shrink: 0;
+          width: 14px; height: 14px; accent-color: var(--ap-accent, #572e88); cursor: pointer; flex-shrink: 0;
         }
         .vp-tbd-row label {
           font-size: 0.75rem; font-weight: 700; color: #000;
           text-transform: uppercase; letter-spacing: 0.06em; cursor: pointer;
           user-select: none;
         }
-        .vp-tbd-row input[type="checkbox"]:checked + label { color: #572e88; }
+        .vp-tbd-row input[type="checkbox"]:checked + label { color: var(--ap-accent, #572e88); }
         .vp-picker-disabled { opacity: 0.45; pointer-events: none; }
       `;
       document.head.appendChild(style);
@@ -88,7 +88,7 @@
             <div style="position:relative;">
               <input class="form-input" id="vp-search-${containerId}" type="text"
                      placeholder="Start typing a name or address..." autocomplete="off" />
-              <div id="vp-dropdown-${containerId}" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:#fff;border:1.5px solid rgba(87,46,136,0.2);border-top:none;border-radius:0 0 8px 8px;box-shadow:0 6px 18px rgba(0,0,0,0.1);max-height:220px;overflow-y:auto;"></div>
+              <div id="vp-dropdown-${containerId}" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:#fff;border:1.5px solid rgba(0,0,0,0.2);border-top:none;border-radius:0 0 8px 8px;box-shadow:0 6px 18px rgba(0,0,0,0.1);max-height:220px;overflow-y:auto;"></div>
             </div>
             <div id="vp-preview-${containerId}" style="display:none;margin-top:0.5rem;">
               <div class="venue-picker-preview">
@@ -222,9 +222,9 @@
         const name    = r.name || r.address?.amenity || r.address?.building || r.display_name.split(',')[0];
         const address = r.display_name;
         return `<div class="vp-suggestion" data-idx="${i}"
-                     style="padding:0.55rem 0.85rem;cursor:pointer;border-bottom:1px solid rgba(87,46,136,0.06);font-size:0.84rem;transition:background 0.12s;"
-                     onmouseover="this.style.background='rgba(87,46,136,0.05)'"
-                     onmouseout="this.style.background=''"
+                     style="padding:0.55rem 0.85rem;cursor:pointer;border-bottom:1px solid rgba(0,0,0,0.1);font-size:0.84rem;transition:background 0.12s;"
+                     onmouseover="this.style.background='#efefef'"
+                     onmouseout="this.style.background='#fff'"
                      onclick="VenuePicker._selectSuggestion('${pickerId}', ${JSON.stringify({ name, address, lat: r.lat, lng: r.lon, place_id: String(r.place_id) }).replace(/"/g, '&quot;')})">
                   <div style="font-weight:700;color:#000000;">${_esc(name)}</div>
                   <div style="font-size:0.72rem;color:#000;margin-top:0.1rem;">${_esc(address)}</div>
