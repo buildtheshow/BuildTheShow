@@ -32204,7 +32204,7 @@ See you soon!
       at_audition: 'Materials-provided-at-audition.svg',
     };
     const options = choices.map(([value, title, copy]) => `<button type="button" class="mat-org-choice" data-material-choice="${value}" aria-label="Choose ${esc(title)}"><span class="mat-org-choice-icon" aria-hidden="true"><img src="/ASSETS/Images/Icons/${icons[value]}" alt=""></span><span class="mat-org-choice-copy"><strong>${esc(title)}</strong><small>${esc(copy)}</small></span></button>`).join('');
-    return `<section class="mat-entry-prompt"><div class="mat-entry-prompt-heading"><span>Step 4 · ${stageTitle} materials</span><h2>How would you like to share ${stage} materials?</h2><p>Choose one to continue. Performers can audition for several roles without memorizing a separate set of sides for each one; tell them which side to prepare if needed.</p></div><div class="mat-organization-options">${options}</div></section>`;
+    return `<section class="mat-entry-prompt"><div class="mat-entry-prompt-heading"><span>Materials format · ${stageTitle}</span><h2>How would you like to share ${stage} materials?</h2><p>Choose one setup. If performers are reading for several roles, you can tell them which material to prepare.</p></div><div class="mat-organization-options">${options}</div></section>`;
   }
 
   function renderMaterialsList(options = {}) {
