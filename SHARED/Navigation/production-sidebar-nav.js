@@ -197,7 +197,18 @@
   };
 
   window.openAuditionsSubTab = function (sub) {
-    location.href = workspaceUrl('auditions', sub);
+    const routes = {
+      dashboard: 'auditions',
+      overview: 'auditions',
+      audschedule: 'auditions/schedule',
+      schedule: 'auditions/schedule',
+      allperformers: 'auditions/performers',
+      auditions: 'auditions/performers',
+      selftape: 'auditions/self-tapes',
+      setup: 'auditions/settings',
+    };
+    const route = routes[sub] || 'auditions';
+    location.href = productionBase() + '/' + route + '?id=' + encodeURIComponent(prodId());
   };
 
   window.navigateToRegistration = function (sub) {
@@ -589,7 +600,7 @@
   };
 
   window.loadProductionSidebar = function (activeGroup, activePage) {
-    const key = 'bts-prod-sidebar-v21';
+    const key = 'bts-prod-sidebar-v20';
     const storedSidebar = sessionStorage.getItem(key);
     const cached=storedSidebar?.includes('data-account-navigation="20261116-separate-profiles"')?storedSidebar:null;
     const host = document.getElementById('prod-sidebar-host');
@@ -621,11 +632,11 @@
 
     if (cached) applyAndInit(cached);
 
-    fetch('/SHARED/Navigation/production-sidebar.html?v=20261127-dashboard-only')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=20261127-auditions-routes')
       .then(function (res) { return res.text(); })
       .then(function (html) {
         sessionStorage.setItem(key, html);
-        if (!cached) applyAndInit(html);
+        applyAndInit(html);
       })
       .catch(function () {});
   };

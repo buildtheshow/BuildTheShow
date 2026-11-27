@@ -184,7 +184,7 @@
 
   // ── Load shared sidebar ───────────────────────────────
   (function () {
-    const _key = 'bts-prod-sidebar-v21';
+    const _key = 'bts-prod-sidebar-v20';
     for (let i = 0; i < sessionStorage.length; i++) { const k = sessionStorage.key(i); if (k && k.startsWith('bts-prod-sidebar-') && k !== _key) { sessionStorage.removeItem(k); i--; } }
     const _stored = sessionStorage.getItem(_key);
     const _cached = _stored?.includes('data-account-navigation="20261116-separate-profiles"') ? _stored : null;
@@ -193,15 +193,13 @@
       initProdSidebarEvents();
       try { console.info('[BTS lifecycle]', { timestamp: new Date().toISOString(), functionName: 'production-sidebar-shell', route: window.location.pathname + window.location.search + window.location.hash, reason: 'mounted-from-cache' }); } catch {}
     }
-    fetch('/SHARED/Navigation/production-sidebar.html?v=20261127-dashboard-only')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=20261127-auditions-routes')
       .then(res => res.text())
       .then(html => {
         sessionStorage.setItem(_key, html);
-        if (!_cached) {
-          document.getElementById('prod-sidebar-host').innerHTML = html;
-          initProdSidebarEvents();
-          try { console.info('[BTS lifecycle]', { timestamp: new Date().toISOString(), functionName: 'production-sidebar-shell', route: window.location.pathname + window.location.search + window.location.hash, reason: 'mounted-from-fetch' }); } catch {}
-        }
+        document.getElementById('prod-sidebar-host').innerHTML = html;
+        initProdSidebarEvents();
+        try { console.info('[BTS lifecycle]', { timestamp: new Date().toISOString(), functionName: 'production-sidebar-shell', route: window.location.pathname + window.location.search + window.location.hash, reason: 'mounted-from-fetch' }); } catch {}
       })
       .catch(() => {});
   })();
@@ -3420,6 +3418,7 @@
       'setup',
       'schedule',
       'performers',
+      'self-tapes',
       'checkin',
       'check-in',
       'in-the-room',
@@ -3562,6 +3561,9 @@
       schedule: 'audschedule',
       audschedule: 'audschedule',
       performers: 'auditions',
+      'self-tapes': 'selftape',
+      selftape: 'selftape',
+      allperformers: 'auditions',
       checkin: 'checkin',
       'check-in': 'checkin',
       'in-the-room': 'inroom',
@@ -3591,6 +3593,8 @@
         schedule: 'auditions/schedule',
         audschedule: 'auditions/schedule',
         auditions: 'auditions/performers',
+        allperformers: 'auditions/performers',
+        selftape: 'auditions/self-tapes',
         checkin: 'auditions/check-in',
         inroom: 'auditions/in-the-room',
         callbacks: 'auditions/callback',
