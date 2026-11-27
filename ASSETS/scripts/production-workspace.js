@@ -27470,7 +27470,10 @@ See you soon!
         if (img) { img.src = '/ASSETS/Images/Icons/' + (types.find(type=>type.value===record.type)?.icon || 'Auditions.svg'); img.style.filter = 'brightness(0) invert(1)'; }
         const deleteButton = card.querySelector('.aud-action-btn.danger');
         deleteButton?.remove();
-        const edit = document.createElement('button'); edit.type='button'; edit.className='ap-setup-edit'; edit.textContent=state.openId===record.id?'Done':'Edit'; edit.setAttribute('aria-expanded',String(state.openId===record.id)); edit.onclick=()=>{state.openId=state.openId===record.id?null:record.id;state.step=0;render();}; head?.append(edit);
+        const actions = document.createElement('div'); actions.className='ap-setup-actions';
+        const edit = document.createElement('button'); edit.type='button'; edit.className='ap-setup-edit'; edit.textContent=state.openId===record.id?'Done':'Edit'; edit.setAttribute('aria-expanded',String(state.openId===record.id)); edit.onclick=()=>{state.openId=state.openId===record.id?null:record.id;state.step=0;render();}; actions.append(edit);
+        const remove = document.createElement('button'); remove.type='button'; remove.className='ap-setup-delete'; remove.textContent='×'; remove.setAttribute('aria-label',`Delete ${record.name || sessionTypeLabel(record.type)}`); remove.title='Delete audition'; remove.onclick=event=>{event.stopPropagation();deleteAudition(record);}; actions.append(remove);
+        head?.append(actions);
         const attendance = document.createElement('div'); attendance.className='ap-setup-attendance'; attendance.style.setProperty('--ap-accent',colour(record)); attendance.innerHTML=record.type==='callback'?`<strong>Who attends?</strong><label><input type="radio" name="audience-${e(record.id)}" value="invited" checked disabled>People we invite</label><small>Your team chooses who gets a callback.</small>`:`<strong>Who attends?</strong><label><input type="radio" name="audience-${e(record.id)}" value="open" ${record.audience!=='invited'?'checked':''}>Anyone who meets the requirements</label><label><input type="radio" name="audience-${e(record.id)}" value="invited" ${record.audience==='invited'?'checked':''}>People we invite</label>${record.audience==='invited'?'<small>Attending another audition does not add anyone here.</small>':''}`;
         card.append(attendance);
         attendance.querySelectorAll('input').forEach(input=>input.onchange=()=>{record.audience=input.value;save(record);render();});
@@ -27592,6 +27595,39 @@ See you soon!
           const card=document.querySelector(`.aud-session-card[data-session-id="${CSS.escape(record.id)}"]`);card?.scrollIntoView({behavior:'smooth',block:'start'});card?.querySelector('[data-field="name"]')?.focus({preventScroll:true});
         }catch(error){state.error=error?.message||'Could not add this audition.';render();}
       })();
+    }
+
+    async function deleteAudition(record) {
+      const name = record.name?.trim() || sessionTypeLabel(record.type);
+      if (!window.confirm(`Delete “${name}”? This will permanently remove the audition setup and its time slots. This cannot be undone.`)) return;
+      clearTimeout(state.timers[record.id]);
+      try {
+        await state.queues?.[record.id];
+        const { data, error } = await sb.from('audition_sessions')
+          .delete().eq('id', record.id).eq('production_id', prodId).select('id');
+        if (error) throw error;
+        if (!data?.length) throw new Error('You do not have permission to delete this audition.');
+
+        if (prod?.wizard_data?.audition_session_access) delete prod.wizard_data.audition_session_access[record.id];
+        if (prod?.wizard_data?.audition_session_prepare) delete prod.wizard_data.audition_session_prepare[record.id];
+        if (prod?.wizard_data) {
+          const { error: cleanupError } = await sb.from('productions').update({ wizard_data: prod.wizard_data }).eq('id', prodId);
+          if (cleanupError) console.warn('[BTS] legacy audition settings cleanup failed', cleanupError);
+        }
+        state.records = state.records.filter(item => item.id !== record.id);
+        delete state.revisions[record.id]; delete state.timers[record.id]; delete state.queues?.[record.id];
+        delete state.saving[record.id]; delete state.activeDay[record.id];
+        if (state.openId === record.id) state.openId = null;
+        audSessions = audSessions.filter(item => String(item.id) !== String(record.id));
+        delete audSlots[record.id]; delete audBlocks[record.id];
+        state.error = '';
+        render(); renderAuditionsSidebarSubmenu();
+      } catch (error) {
+        console.error('[BTS] audition delete failed', error);
+        state.error = error?.message || 'Could not delete this audition.';
+        save(record, true);
+        render();
+      }
     }
 
     return { state, render, load, addAudition, retry:()=>{state.loading=false;state.loaded=false;state.error='';load();} };
