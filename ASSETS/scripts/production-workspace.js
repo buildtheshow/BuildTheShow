@@ -8945,10 +8945,12 @@ See you soon!
       const day     = dd || 1;
       const ap      = hh >= 12 ? 'pm' : 'am';
       const timeStr = timePart ? `${hh % 12 || 12}:${String(mn).padStart(2,'0')}${ap}` : '';
+      const eventType = String(ev.event_type || '').trim().toLowerCase();
+      const colour = EVENT_COLOURS[eventType] || '#572e88';
       return `
         <div class="ov-upnext-event" onclick="goToCalendarDate('${datePart}')">
           <div class="cal-badge">
-            <div class="cal-badge-month">${month}</div>
+            <div class="cal-badge-month" style="background-color:${colour};">${month}</div>
             <div class="cal-badge-day">${day}</div>
           </div>
           <div class="ov-upnext-info">
@@ -9027,34 +9029,34 @@ See you soon!
     dance_call:      '#572e88',
     callback:        '#572e88',
     other_audition:  '#572e88',
-    rehearsal:       '#78bbd4',
-    music_rehearsal: '#78bbd4',
-    choreography:    '#78bbd4',
-    tech:            '#78bbd4',
-    dress:           '#476aaa',
-    performance:     '#476aaa',
+    rehearsal:       '#74a2b4',
+    music_rehearsal: '#74a2b4',
+    choreography:    '#74a2b4',
+    tech:            '#5b9fc0',
+    dress:           '#4f78a8',
+    performance:     '#446aa4',
     strike:          '#d45239',
     costume_moveout: '#d17431',
     cast_party:      '#aa2943',
     event:           '#6c956f',
     meeting:         '#efab45',
-    crew:             '#572e88',
-    crew_set:         '#572e88',
-    crew_set_painting:'#572e88',
-    crew_set_dressing:'#572e88',
-    crew_costumes:    '#572e88',
-    crew_props:       '#572e88',
-    crew_hair_makeup: '#572e88',
-    crew_wigs:        '#572e88',
-    crew_lighting:    '#572e88',
-    crew_sound:       '#572e88',
+    crew:             '#986fc8',
+    crew_set:         '#986fc8',
+    crew_set_painting:'#986fc8',
+    crew_set_dressing:'#986fc8',
+    crew_costumes:    '#986fc8',
+    crew_props:       '#986fc8',
+    crew_hair_makeup: '#986fc8',
+    crew_wigs:        '#986fc8',
+    crew_lighting:    '#986fc8',
+    crew_sound:       '#986fc8',
+    programme_ads:    '#c976a5',
+    programme_ads_booking: '#c976a5',
+    programme_ads_artwork: '#c976a5',
+    sponsors:         '#c976a5',
+    sponsors_confirmation: '#c976a5',
+    sponsors_assets:  '#c976a5',
     deadline:        '#c976a5',
-    programme_ads:          '#c976a5',
-    programme_ads_booking:  '#c976a5',
-    programme_ads_artwork:  '#c976a5',
-    sponsors:               '#c976a5',
-    sponsors_confirmation:  '#c976a5',
-    sponsors_assets:        '#c976a5',
   };
 
   const EVENT_LABELS = {
