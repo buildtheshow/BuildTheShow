@@ -1326,6 +1326,11 @@
       background:#fff; color:#572e88; font:700 0.68rem var(--bts-font); cursor:pointer;
     }
     .step3-mark-all-btn:hover { background:rgba(87,46,136,0.06); border-color:rgba(87,46,136,0.4); }
+    .step3-delete-all-btn {
+      border:1px solid rgba(214,77,57,0.3); border-radius:7px; padding:0.35rem 0.55rem;
+      background:#fff; color:#c94736; font:700 0.68rem var(--bts-font); cursor:pointer;
+    }
+    .step3-delete-all-btn:hover { background:rgba(214,77,57,0.06); border-color:rgba(214,77,57,0.55); }
     .step3-events-header-label { margin-left:auto; }
     .step3-events-header-count {
       font-size: 0.95rem; font-weight: 700; color: #000000;
@@ -2053,8 +2058,7 @@
       localStorage.setItem('bts_wizard_state', JSON.stringify(wizardData));
       if (prodId) localStorage.setItem('bts_wizard_prod_id', prodId);
       localStorage.setItem('bts_wizard_step', String(currentStep));
-      if (step3Events.length) localStorage.setItem('bts_wizard_events', JSON.stringify(step3Events));
-      else localStorage.removeItem('bts_wizard_events');
+      localStorage.setItem('bts_wizard_events', JSON.stringify(step3Events));
     }
 
     function loadFromLocalStorage() {
@@ -2663,7 +2667,8 @@
       _refreshStep3List();
 
       // Load existing events from DB
-      if (prodId) {
+      const hasSavedSchedule = localStorage.getItem('bts_wizard_events') !== null;
+      if (prodId && !hasSavedSchedule) {
         const { data } = await sb.from('bts_visible_production_events')
           .select('*')
           .eq('production_id', prodId)
@@ -2709,6 +2714,7 @@
         <div class="step3-events-header-left">
           <span class="step3-events-header-count">Schedule</span>
           <button type="button" class="step3-mark-all-btn" onclick="step3ToggleAllMandatory()">${allMandatory ? 'Unmark all' : 'Mark all as mandatory'}</button>
+          <button type="button" class="step3-delete-all-btn" onclick="step3DeleteAllEvents()">Delete all</button>
         </div>
         <span class="step3-events-header-label">
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="3" width="12" height="11" rx="2"/><line x1="5" y1="1.5" x2="5" y2="4.5"/><line x1="11" y1="1.5" x2="11" y2="4.5"/><line x1="2" y1="6.5" x2="14" y2="6.5"/></svg>
@@ -3050,6 +3056,15 @@
     function step3ToggleAllMandatory() {
       const markAll = !step3Events.every(event => !!event.mandatory);
       step3Events.forEach(event => { event.mandatory = markAll; });
+      _refreshStep3List();
+    }
+
+    function step3DeleteAllEvents() {
+      if (!step3Events.length) return;
+      if (!window.confirm(`Delete all ${step3Events.length} schedule events from this setup draft? This cannot be undone, but you can add events again before continuing.`)) return;
+      step3Events = [];
+      _step3PastedEvents = [];
+      saveToLocalStorage();
       _refreshStep3List();
     }
 
