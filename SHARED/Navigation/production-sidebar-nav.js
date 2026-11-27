@@ -28,13 +28,26 @@
   function productionBase(){const parts=location.pathname.split('/').filter(Boolean);return parts[0]==='org'&&parts[2]==='productions'&&parts[3]?'/'+parts.slice(0,4).join('/'):canonicalProductionBase||'/org/production';}
   function workspaceUrl(tab, sub) {
     const id = prodId();
-    let url = productionBase()+'/workspace?id=' + encodeURIComponent(id) + '&tab=' + encodeURIComponent(tab);
-    if (sub) url += '&sub=' + encodeURIComponent(sub);
-    return url;
+    const routes = {
+      overview: { '': '' }, calendar: { '': 'calendar' }, team: { '': 'team' },
+      auditions: { '': 'auditions', dashboard: 'auditions', overview: 'auditions', audschedule: 'auditions/schedule', schedule: 'auditions/schedule', allperformers: 'auditions/performers', auditions: 'auditions/performers', selftape: 'auditions/self-tapes', setup: 'auditions/settings' },
+      casting: { '': 'auditions/casting-board', castingboard: 'auditions/casting-board', offers: 'auditions/final-casting' },
+      castlist: { '': 'cast-list' },
+      registration: { '': 'registration', dashboard: 'registration', publicview: 'registration/form', form: 'registration/form', payments: 'registration/payments', settings: 'registration/settings' },
+      marketing: { '': 'marketing', dashboard: 'marketing', sponsors: 'marketing/sponsors', programmeads: 'marketing/programme-ad-placements', showsponsors: 'marketing/show-sponsors', sponsorssettings: 'marketing/sponsor-settings', assets: 'marketing/assets', programme: 'marketing/programme', media: 'marketing/media', calendar: 'marketing/calendar', tasks: 'marketing/tasks' },
+      budget: { '': 'budget', dashboard: 'budget', breakdown: 'budget/breakdown', receipts: 'budget/receipts', collect: 'budget/collect' },
+      volunteers: { '': 'volunteers', calendar: 'volunteers', plan: 'volunteers/plan', suggestions: 'volunteers/suggestions', roles: 'volunteers/internal-roles', publish: 'volunteers/publish', share: 'volunteers/share', requests: 'volunteers/requests' },
+      ticketing: { '': 'ticketing', dashboard: 'ticketing', build: 'ticketing/build', orders: 'ticketing/orders', checkin: 'ticketing/checkin', reports: 'ticketing/reports', settings: 'ticketing/settings' },
+      settings: { '': 'settings' }, emails: { '': 'email-templates' }, test: { '': 'templates' },
+    };
+    const route = routes[tab]?.[sub || ''] ?? routes[tab]?.[''];
+    if (route === undefined) return productionBase() + '?id=' + encodeURIComponent(id);
+    return productionBase() + (route ? '/' + route : '') + '?id=' + encodeURIComponent(id);
   }
 
   function pageUrl(file) {
     const id = prodId();
+    if (file.replace(/\.html$/,'') === 'production-overview') return productionBase() + '?id=' + encodeURIComponent(id);
     return productionBase()+'/tools/' + file.replace(/\.html$/,'') + '?id=' + encodeURIComponent(id);
   }
 
@@ -197,18 +210,7 @@
   };
 
   window.openAuditionsSubTab = function (sub) {
-    const routes = {
-      dashboard: 'auditions',
-      overview: 'auditions',
-      audschedule: 'auditions/schedule',
-      schedule: 'auditions/schedule',
-      allperformers: 'auditions/performers',
-      auditions: 'auditions/performers',
-      selftape: 'auditions/self-tapes',
-      setup: 'auditions/settings',
-    };
-    const route = routes[sub] || 'auditions';
-    location.href = productionBase() + '/' + route + '?id=' + encodeURIComponent(prodId());
+    location.href = workspaceUrl('auditions', sub);
   };
 
   window.navigateToRegistration = function (sub) {
@@ -632,7 +634,7 @@
 
     if (cached) applyAndInit(cached);
 
-    fetch('/SHARED/Navigation/production-sidebar.html?v=20261127-production-navigation')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=20261127-standard-production-urls')
       .then(function (res) { return res.text(); })
       .then(function (html) {
         sessionStorage.setItem(key, html);

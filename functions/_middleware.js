@@ -1028,6 +1028,10 @@ export async function onRequest(context) {
   }
   if(PAGES.has(path)) return page(context,PAGES.get(path));
   const parts=path.split('/').filter(Boolean);
+  if(parts[0]==='org' && parts[2]==='productions' && parts[3] && parts.length===4 && url.searchParams.has('tab')) {
+    const next=new URL(url);next.pathname=path+'/workspace';
+    return new Response(null,{status:302,headers:{Location:next.href,'Cache-Control':'no-store'}});
+  }
   if(parts[0]==='member' && parts[1]==='profiles' && parts[2] && parts[2]!=='new' && parts.length<=4) {
     if(parts.length===4 && parts[3]!=='edit') return new Response('Not found',{status:404});
     return page(context,parts[3]==='edit'?'/SYSTEM/Members/Profiles/profile-sections.html':'/SYSTEM/Members/Profiles/profile-view.html');
