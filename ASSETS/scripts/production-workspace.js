@@ -13490,6 +13490,8 @@ See you soon!
       const el = document.getElementById('aud-inner-' + i);
       if (el) el.style.display = (i === inner) ? '' : 'none';
     });
+    const changeSetupButton = document.getElementById('materials-change-setup');
+    if (changeSetupButton) changeSetupButton.style.display = 'none';
     if (inner === 'settings') renderAuditionMaterialsToggle();
     if (inner === 'materials') {
       materialsEntryChoiceConfirmed = false;
@@ -32158,13 +32160,11 @@ See you soon!
       detailHtml = '<div class="mat-shared-link-panel mat-provided-panel"><h4>Materials provided in the room</h4><p>No link is needed. Have sides, music, or dance instructions ready to hand out at the audition.</p></div>';
     }
     const setup = organization === 'folder'
-      ? { title: 'Shared audition materials folder', copy: 'Add one link to the folder performers should use for their audition preparation.' }
+      ? { title: 'Shared audition materials folder' }
       : organization === 'by_role'
-        ? { title: 'Role-specific sides or music', copy: 'Add the sides, music, or other preparation for each role. If someone is reading for several roles, you can tell them which material to prepare.' }
-        : { title: 'Provided at the audition', copy: 'Performers will receive their material when they arrive. There are no advance links to add.' };
+        ? { title: 'Role-specific sides or music' }
+        : { title: 'Provided at the audition' };
     return `<section class="mat-setup-page" aria-label="${esc(setup.title)}">
-      <button type="button" class="mat-back-to-choices" onclick="showMaterialChoices()">← Change setup</button>
-      <header class="mat-setup-heading"><div class="mat-setup-kicker">AUDITION MATERIALS</div><h2>${esc(setup.title)}</h2><p>${esc(setup.copy)}</p></header>
       <div class="mat-setup-content">${detailHtml}</div>
     </section>`;
   }
@@ -32210,6 +32210,8 @@ See you soon!
     if (!materialTypes.includes(activeMaterialsType)) activeMaterialsType = materialTypes[0] || 'audition';
     const settings = getMaterialsSettings();
     const renderType = activeMaterialsType;
+    const changeSetupButton = document.getElementById('materials-change-setup');
+    if (changeSetupButton) changeSetupButton.style.display = materialsEntryChoiceConfirmed && document.getElementById('aud-inner-materials')?.style.display !== 'none' ? '' : 'none';
     if (!materialsEntryChoiceConfirmed) {
       el.innerHTML = `<div class="materials-theme materials-theme--${renderType}">${renderMaterialsChoicePrompt(renderType)}</div>`;
       el.querySelectorAll('[data-material-choice]').forEach(tile => {
