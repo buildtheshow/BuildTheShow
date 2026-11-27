@@ -26569,6 +26569,10 @@ See you soon!
       other_audition: { colour: '#d1523d', icon: 'Auditions.svg' },
     };
     const typeStyle = AUD_TYPE_STYLE[session.type] || AUD_TYPE_STYLE.audition;
+    if (session?.id && !audCollapseInitialized.has(session.id)) {
+      audCollapsed.add(session.id);
+      audCollapseInitialized.add(session.id);
+    }
     const isCollapsed = audCollapsed.has(session.id);
     const sid = session.id;
     const activeTab = _audActiveTab[sid] || 'sdate';
