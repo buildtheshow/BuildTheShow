@@ -171,7 +171,7 @@
       <section class="setup-progress-section" id="ov-setup-progress-section" aria-labelledby="ov-setup-progress-title" hidden>
         <div class="setup-progress-heading">
           <h2 id="ov-setup-progress-title">Production setup</h2>
-          <p>Four clear steps for the tools you chose, broken into smaller actions.</p>
+          <p>Clear steps for the tools you chose, broken into smaller actions.</p>
         </div>
         <div class="setup-progress-grid" id="ov-setup-progress-grid"></div>
       </section>
@@ -259,10 +259,12 @@
 
     const OV_SETUP_CARDS = [
       { key:'auditions', name:'Auditions', colour:'#572e88', icon:'/ASSETS/Images/Icons/Auditions.svg', action:"openAuditionsSubTab('setup')", actionLabel:'Open audition setup', phases:[
-        { title:'Get the audition basics ready', tasks:['Choose open call or time slots','Set any applicant limits','Choose whether headshots are needed','Choose whether resumes or videos are needed'], ready:s=>s.auditionBasics },
-        { title:'Add the roles you are casting', tasks:['Add each role name','Add age guidance where useful','Add voice or movement notes where useful','Choose which roles appear on the audition form'], ready:s=>s.roles>0 },
-        { title:'Create audition sessions and spots', tasks:['Create an audition session in Audition Settings','Choose open call or appointment spots','Add the date, time, and location','For appointments, create the bookable time slots'], ready:s=>s.auditionSessionReady },
-        { title:'Get ready to meet performers', tasks:['Review the public audition information','Check the performer form','Decide who will check people in','Open auditions when you are ready'], ready:s=>s.roles>0&&s.auditionSessionReady&&s.auditionBasics },
+        { title:'Create audition cards', tasks:['Add a card for each audition round','Name each card so performers know what it is','Set the audition type and how people take part'], ready:s=>s.auditionCards },
+        { title:'Create the character list', tasks:['Add every character or role you are casting','Add useful age, voice, or movement guidance','Choose which roles performers can select'], ready:s=>s.roles>0 },
+        { title:'Create your questions', tasks:['Add the questions performers need to answer','Choose which answers are required','Review the form questions together'], ready:s=>s.auditionQuestions>0 },
+        { title:'Gather audition materials', tasks:['Add the sides, songs, or other materials performers need','Attach materials to the relevant roles or audition','Check that performers can access them'], ready:s=>s.auditionMaterials>0 },
+        { title:'Publish auditions', tasks:['Review the public audition page','Check the audition dates and booking details','Open auditions for performers'], ready:s=>s.auditionsPublished },
+        { title:'Cast the show', tasks:['Review performers for each role','Choose a performer for every role','Confirm each role in the casting board'], ready:s=>s.castRoles>0&&s.castRoles===s.confirmedCastRoles },
       ]},
       { key:'registration', name:'Registration', colour:'#476aaa', icon:'/ASSETS/Images/Icons/Applications.svg', action:"navigateToRegistration('settings')", actionLabel:'Open registration setup', phases:[
         { title:'Choose what to collect', tasks:['Review performer contact details','Choose emergency details to collect','Choose medical details to collect','List permissions and forms you need'], ready:s=>s.registrationSettings },
@@ -333,10 +335,8 @@
       const payment = settings.payment_settings || {};
       const templates = settings.form_templates || {};
       const plan = production.volunteer_staffing_plan && typeof production.volunteer_staffing_plan === 'object' ? production.volunteer_staffing_plan : {};
-      const wizardRoles = Array.isArray(wizard.roles) ? wizard.roles.filter(r => (r?.name || '').trim()).length : 0;
       const volunteerRoles = Array.isArray(plan.roles) ? plan.roles.length : (Array.isArray(plan) ? plan.length : Object.values(plan).filter(v => v && typeof v === 'object' && (v.roleName || Number(v.count)>0)).length);
-      const [auditionConfigCount, roles, budgetCategories, budgetSettings, milestones, tasks, datedTasks, sponsorPackages, sponsorBusinesses] = await Promise.all([
-        choices.auditions ? ovSetupCount('bts_visible_audition_configs') : 0,
+      const [roles, budgetCategories, budgetSettings, milestones, tasks, datedTasks, sponsorPackages, sponsorBusinesses] = await Promise.all([
         choices.auditions ? ovSetupCount('production_characters') : 0,
         choices.budget ? ovSetupCount('budget_categories') : 0,
         choices.budget ? ovSetupCount('budget_settings') : 0,
@@ -346,27 +346,38 @@
         choices.sponsors ? ovSetupCount('sponsor_packages') : 0,
         choices.sponsors ? ovSetupCount('sponsor_businesses') : 0,
       ]);
-      let auditionSessionReady = false;
+      let auditionCards = false;
+      let auditionsPublished = false;
+      let auditionConfigOpen = false;
+      let auditionQuestions = 0;
+      let auditionMaterials = 0;
+      let castRoles = 0;
+      let confirmedCastRoles = 0;
       if (choices.auditions) {
         try {
           const { data: sessions } = await sb.from('bts_visible_audition_sessions')
-            .select('id,booking_mode,is_visible,date').eq('production_id',prodId);
-          const visibleDated = (sessions || []).filter(session => session.is_visible !== false && session.date);
-          if (visibleDated.length) {
-            const { data: slots } = await sb.from('bts_visible_audition_time_slots')
-              .select('id,session_id').in('session_id',visibleDated.map(session => session.id));
-            const slotSessionIds = new Set((slots || []).map(slot => String(slot.session_id)));
-            auditionSessionReady = visibleDated.some(session => {
-              const mode = session.booking_mode || 'appointment';
-              return mode === 'open_call' || slotSessionIds.has(String(session.id));
-            });
-          }
-        } catch (_) { auditionSessionReady = false; }
+            .select('id,name,is_visible,show_to_applicants,date,prepare_text,location').eq('production_id',prodId);
+          const sessionRows = sessions || [];
+          const defaultNames = new Set(['general auditions','dance call','callback']);
+          auditionCards = sessionRows.some(session => {
+            const name = String(session.name || '').trim().toLowerCase();
+            return !!(session.date || session.is_visible || session.show_to_applicants || session.prepare_text || session.location || (name && !defaultNames.has(name)));
+          });
+          const { data: config } = await sb.from('bts_visible_audition_configs').select('is_open').eq('production_id',prodId).limit(1).maybeSingle();
+          auditionConfigOpen = config?.is_open === true;
+          auditionsPublished = sessionRows.some(session => session.is_visible === true && session.show_to_applicants !== false) && auditionConfigOpen;
+        } catch (_) {}
+        try { auditionQuestions = await ovSetupCount('bts_visible_audition_custom_questions'); } catch (_) {}
+        try { auditionMaterials = await ovSetupCount('production_files', q => q.contains('tags',['audition material'])); } catch (_) {}
+        try {
+          const { data: castData } = await sb.from('production_roles').select('id,status').eq('production_id',prodId);
+          castRoles = (castData || []).length;
+          confirmedCastRoles = (castData || []).filter(role => role.status === 'confirmed').length;
+        } catch (_) {}
       }
       const statuses = {
-        // Wizard defaults only record that Auditions was selected. Count real saved setup instead.
-        auditionBasics: auditionConfigCount > 0,
-        roles: Math.max(roles,wizardRoles), auditionSessionReady,
+        roles, auditionCards, auditionQuestions, auditionMaterials,
+        auditionsPublished, castRoles, confirmedCastRoles,
         registrationSettings: Object.keys(settings).length > 0,
         registrationForms: Object.keys(templates).length > 0,
         registrationPayments: Object.keys(payment).some(k => payment[k] !== '' && payment[k] !== null && payment[k] !== false),
@@ -379,10 +390,11 @@
       grid.innerHTML = cards.map(card => {
         const ready = card.phases.map(phase => !!phase.ready(statuses));
         const done = ready.filter(Boolean).length;
-        const pct = Math.round(done / 4 * 100);
+        const phaseCount = card.phases.length;
+        const pct = Math.round(done / phaseCount * 100);
         const next = Math.max(0, ready.findIndex(value => !value));
         const phases = card.phases.map((phase,index) => `<details class="setup-progress-phase" ${index === next ? 'open' : ''}><summary><span class="setup-phase-state" aria-hidden="true">${index+1}</span><span>${ovEsc(phase.title)}</span><span style="margin-left:auto;font-weight:600;opacity:.78;">${ready[index]?'Ready':'To do'}</span></summary><ul class="setup-progress-tasks">${phase.tasks.map(task=>`<li>${ovEsc(task)}</li>`).join('')}</ul></details>`).join('');
-        return `<article class="setup-progress-card" style="--setup-colour:${card.colour}"><div class="setup-progress-card-head"><img class="setup-progress-icon" src="${card.icon}" alt=""><h3 class="setup-progress-name">${ovEsc(card.name)}</h3></div><div class="setup-progress-summary"><span>${done} of 4 steps ready</span><span>${pct}%</span></div><div class="setup-progress-track" role="progressbar" aria-label="${ovEsc(card.name)} setup progress" aria-valuemin="0" aria-valuemax="4" aria-valuenow="${done}"><span class="setup-progress-fill" style="width:${pct}%"></span></div><div class="setup-progress-phases">${phases}</div><button class="setup-progress-action" type="button" onclick="${card.action}">${ovEsc(card.actionLabel)} <span aria-hidden="true">→</span></button></article>`;
+        return `<article class="setup-progress-card" style="--setup-colour:${card.colour}"><div class="setup-progress-card-head"><img class="setup-progress-icon" src="${card.icon}" alt=""><h3 class="setup-progress-name">${ovEsc(card.name)}</h3></div><div class="setup-progress-summary"><span>${done} of ${phaseCount} steps ready</span><span>${pct}%</span></div><div class="setup-progress-track" role="progressbar" aria-label="${ovEsc(card.name)} setup progress" aria-valuemin="0" aria-valuemax="${phaseCount}" aria-valuenow="${done}"><span class="setup-progress-fill" style="width:${pct}%"></span></div><div class="setup-progress-phases">${phases}</div><button class="setup-progress-action" type="button" onclick="${card.action}">${ovEsc(card.actionLabel)} <span aria-hidden="true">→</span></button></article>`;
       }).join('');
     }
 
