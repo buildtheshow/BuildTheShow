@@ -32845,9 +32845,10 @@ See you soon!
       </div>`).join('');
   }
 
-  function addFaqItem() {
-    _faqItems.push({ q: '', a: '' });
+  function addFaqItem(question = '') {
+    _faqItems.push({ q: question, a: '' });
     renderFaqList();
+    scheduleProdInfoSave();
     const inputs = document.querySelectorAll('#pi-faq-list input[type="text"]');
     if (inputs.length) inputs[inputs.length - 1].focus();
   }
