@@ -55,11 +55,16 @@
     .stat-sub { font-size: 0.7rem; color: rgba(87,46,136,0.5); margin-top: 0.25rem; }
     @media (max-width: 640px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
 
-    /* ── Production setup cards ── */
+    /* ── Project progress and task cards ── */
     .setup-progress-section { margin: 0 0 1.5rem; }
     .setup-progress-heading { display:flex; align-items:baseline; justify-content:space-between; gap:1rem; margin:0 0 0.85rem; }
     .setup-progress-heading h2 { margin:0; font-size:1.05rem; font-weight:800; color:#000; }
     .setup-progress-heading p { margin:0; color:#6a5a80; font-size:0.78rem; }
+    .project-progress-overview { margin:0 0 1rem; padding:1rem 1.15rem; color:#fff; background:#572e88; border-radius:14px; box-shadow:0 4px 14px rgba(42,24,64,0.12); }
+    .project-progress-summary { display:flex; align-items:baseline; justify-content:space-between; gap:1rem; margin-bottom:0.55rem; font-size:0.9rem; font-weight:800; }
+    .project-progress-percent { color:#fff; white-space:nowrap; }
+    .project-progress-track { height:12px; overflow:hidden; border-radius:99px; background:rgba(255,255,255,0.28); }
+    .project-progress-fill { display:block; width:0; height:100%; border-radius:inherit; background:#efab45; transition:width 0.25s ease; }
     .setup-progress-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1rem; }
     .setup-progress-card { --setup-colour:#572e88; min-width:0; color:#fff; background:var(--setup-colour); border:1px solid rgba(0,0,0,0.08); border-radius:14px; padding:1.05rem 1.1rem; box-shadow:0 4px 14px rgba(42,24,64,0.12); }
     .setup-progress-card-head { display:flex; align-items:center; gap:0.7rem; }
@@ -170,9 +175,10 @@
 
       <section class="setup-progress-section" id="ov-setup-progress-section" aria-labelledby="ov-setup-progress-title" hidden>
         <div class="setup-progress-heading">
-          <h2 id="ov-setup-progress-title">Production setup</h2>
-          <p>Clear steps for the tools you chose, broken into smaller actions.</p>
+          <h2 id="ov-setup-progress-title">Project progress</h2>
+          <p>One view of progress across the task cards for this production.</p>
         </div>
+        <div class="project-progress-overview" id="ov-project-progress-overview"></div>
         <div class="setup-progress-grid" id="ov-setup-progress-grid"></div>
       </section>
 
@@ -326,7 +332,8 @@
     async function ovLoadSetupCards(production) {
       const section = document.getElementById('ov-setup-progress-section');
       const grid = document.getElementById('ov-setup-progress-grid');
-      if (!section || !grid) return;
+      const overall = document.getElementById('ov-project-progress-overview');
+      if (!section || !grid || !overall) return;
       const choices = ovFeatureChoices(production);
       const cards = OV_SETUP_CARDS.filter(card => choices[card.key]);
       section.hidden = cards.length === 0;
@@ -389,15 +396,20 @@
         volunteerShifts: Object.values(plan).filter(v => v && typeof v === 'object' && (v.shiftStartMins || v.shiftEndMins || v.shiftStartAnchor || v.shiftEndAnchor)).length,
         sponsorPackages, sponsorBusinesses,
       };
-      grid.innerHTML = cards.map(card => {
+      const progress = cards.map(card => {
         const ready = card.phases.map(phase => !!phase.ready(statuses));
         const done = ready.filter(Boolean).length;
         const phaseCount = card.phases.length;
         const pct = Math.round(done / phaseCount * 100);
         const next = Math.max(0, ready.findIndex(value => !value));
         const phases = card.phases.map((phase,index) => `<details class="setup-progress-phase" ${index === next ? 'open' : ''}><summary><span class="setup-phase-state" aria-hidden="true">${index+1}</span><span>${ovEsc(phase.title)}</span><span style="margin-left:auto;font-weight:600;opacity:.78;">${ready[index]?'Ready':'To do'}</span></summary><ul class="setup-progress-tasks">${phase.tasks.map(task=>`<li>${ovEsc(task)}</li>`).join('')}</ul></details>`).join('');
-        return `<article class="setup-progress-card" style="--setup-colour:${card.colour}"><div class="setup-progress-card-head"><img class="setup-progress-icon" src="${card.icon}" alt=""><h3 class="setup-progress-name">${ovEsc(card.name)}</h3></div><div class="setup-progress-summary"><span>${done} of ${phaseCount} steps ready</span><span>${pct}%</span></div><div class="setup-progress-track" role="progressbar" aria-label="${ovEsc(card.name)} setup progress" aria-valuemin="0" aria-valuemax="${phaseCount}" aria-valuenow="${done}"><span class="setup-progress-fill" style="width:${pct}%"></span></div><div class="setup-progress-phases">${phases}</div><button class="setup-progress-action" type="button" onclick="${card.action}">${ovEsc(card.actionLabel)} <span aria-hidden="true">→</span></button></article>`;
-      }).join('');
+        return { html:`<article class="setup-progress-card" style="--setup-colour:${card.colour}"><div class="setup-progress-card-head"><img class="setup-progress-icon" src="${card.icon}" alt=""><h3 class="setup-progress-name">${ovEsc(card.name)}</h3></div><div class="setup-progress-summary"><span>${done} of ${phaseCount} steps ready</span><span>${pct}%</span></div><div class="setup-progress-track" role="progressbar" aria-label="${ovEsc(card.name)} setup progress" aria-valuemin="0" aria-valuemax="${phaseCount}" aria-valuenow="${done}"><span class="setup-progress-fill" style="width:${pct}%"></span></div><div class="setup-progress-phases">${phases}</div><button class="setup-progress-action" type="button" onclick="${card.action}">${ovEsc(card.actionLabel)} <span aria-hidden="true">→</span></button></article>`, done, phaseCount };
+      });
+      const totalDone = progress.reduce((sum, item) => sum + item.done, 0);
+      const totalSteps = progress.reduce((sum, item) => sum + item.phaseCount, 0);
+      const overallPct = totalSteps ? Math.round(totalDone / totalSteps * 100) : 0;
+      overall.innerHTML = `<div class="project-progress-summary"><span>${totalDone} of ${totalSteps} project steps ready</span><span class="project-progress-percent">${overallPct}%</span></div><div class="project-progress-track" role="progressbar" aria-label="Overall production progress" aria-valuemin="0" aria-valuemax="${totalSteps}" aria-valuenow="${totalDone}"><span class="project-progress-fill" style="width:${overallPct}%"></span></div>`;
+      grid.innerHTML = progress.map(item => item.html).join('');
     }
 
     function ovRenderHero(prod) {
