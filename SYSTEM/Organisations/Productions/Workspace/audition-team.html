@@ -22811,11 +22811,11 @@
                 <button type="button" onclick="toggleFaqBulk()" style="background:none;border:1.5px dashed rgba(87,46,136,0.3);border-radius:8px;padding:0.5rem 1rem;font-size:0.8rem;font-weight:700;color:rgba(87,46,136,0.5);cursor:pointer;font-family: var(--bts-font);transition:background 0.12s;white-space:nowrap;" onmouseover="this.style.background='rgba(87,46,136,0.04)'" onmouseout="this.style.background='none'">Paste in bulk</button>
               </div>
               <div id="faq-bulk-panel" style="display:none;margin-top:0.6rem;background:#faf9fd;border:1.5px solid rgba(87,46,136,0.15);border-radius:10px;padding:1rem;">
-                <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:rgba(87,46,136,0.5);margin-bottom:0.4rem;">Paste your Q&amp;As below</div>
-                <div style="font-size:0.75rem;color:#b0a8c4;margin-bottom:0.6rem;line-height:1.5;">Use this format, with one blank line between each pair:<br><span style="font-family: var(--bts-font);color:rgba(87,46,136,0.5);">Q: Your question here<br>A: Your answer here</span></div>
-                <textarea id="faq-bulk-input" class="form-input" rows="8" style="resize:vertical;font-family: var(--bts-font);font-size:0.82rem;" placeholder="Q: How long are rehearsals?&#10;A: Usually 2-3 hours on weekday evenings.&#10;&#10;Q: Do I need to prepare a song?&#10;A: Yes, 16 bars of something that shows your range."></textarea>
+                <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:rgba(87,46,136,0.5);margin-bottom:0.4rem;">Paste your FAQs below</div>
+                <div style="font-size:0.75rem;color:#b0a8c4;margin-bottom:0.6rem;line-height:1.5;">Paste a list of questions or Q&amp;As. Headings, bullets, numbering, and bold text are okay. Answers are optional.</div>
+                <textarea id="faq-bulk-input" class="form-input" rows="8" style="resize:vertical;font-family: var(--bts-font);font-size:0.82rem;" placeholder="Frequently Asked Questions&#10;&#10;What if we need to miss a rehearsal?&#10;Do we need to be available for all performances?&#10;&#10;Q: Is experience required?&#10;A: No previous experience is needed."></textarea>
                 <div style="display:flex;gap:0.5rem;margin-top:0.6rem;align-items:center;">
-                  <button type="button" onclick="importFaqBulk()" class="btn-primary" style="font-size:0.8rem;padding:0.45rem 1rem;">Import Q&amp;As</button>
+                  <button type="button" onclick="importFaqBulk()" class="btn-primary" style="font-size:0.8rem;padding:0.45rem 1rem;">Import FAQs</button>
                   <button type="button" onclick="toggleFaqBulk()" style="background:none;border:none;font-size:0.8rem;color:rgba(87,46,136,0.5);cursor:pointer;font-family: var(--bts-font);">Cancel</button>
                   <span id="faq-bulk-msg" style="font-size:0.78rem;color:#16a34a;margin-left:auto;"></span>
                 </div>
@@ -49884,22 +49884,52 @@ See you soon!
 
     const raw  = inp.value.trim();
     if (!raw) return;
-
-    // Split into blocks by blank lines
-    const blocks = raw.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
+    const cleanLine = line => String(line || '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;|&apos;/gi, "'")
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/__(.*?)__/g, '$1')
+      .replace(/^\s*(?:[-*•▪‣]+\s*|\d+[.)]\s*)/, '')
+      .trim();
+    const isFaqHeading = line => /^(?:frequently\s+asked\s+questions|faqs?|questions\s*(?:&|and)\s*answers)$/i.test(line);
+    const lines = raw.replace(/\r/g, '').split('\n').map(cleanLine);
+    const faqHeadingIndex = lines.findIndex(isFaqHeading);
+    const sourceLines = faqHeadingIndex >= 0 ? lines.slice(faqHeadingIndex + 1) : lines;
     const parsed = [];
+    let current = null;
+    let sawQuestionMarker = false;
+    const finishCurrent = () => {
+      if (current?.q) parsed.push({ q: current.q.trim(), a: current.a.trim() });
+      current = null;
+    };
 
-    blocks.forEach(block => {
-      const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
-      let q = '', a = '';
-      lines.forEach(line => {
-        if (/^q[:.\)]/i.test(line))      q += (q ? ' ' : '') + line.replace(/^q[:.\)]\s*/i, '').trim();
-        else if (/^a[:.\)]/i.test(line)) a += (a ? ' ' : '') + line.replace(/^a[:.\)]\s*/i, '').trim();
-        else if (!q)                      q = line;
-        else                              a += (a ? ' ' : '') + line;
-      });
-      if (q.trim()) parsed.push({ q: q.trim(), a: a.trim() });
+    sourceLines.forEach(line => {
+      if (!line || /^svg$/i.test(line)) return;
+      const qMatch = line.match(/^(?:q|question)\s*[:.)-]\s*(.*)$/i);
+      const aMatch = line.match(/^(?:a|answer)\s*[:.)-]\s*(.*)$/i);
+      if (qMatch) {
+        finishCurrent();
+        sawQuestionMarker = true;
+        current = { q: qMatch[1].trim(), a: '' };
+        return;
+      }
+      if (aMatch) {
+        if (current) current.a = [current.a, aMatch[1].trim()].filter(Boolean).join(' ');
+        return;
+      }
+      if (/[?？]$/.test(line)) {
+        finishCurrent();
+        current = { q: line, a: '' };
+        return;
+      }
+      if (current && (sawQuestionMarker || current.q)) {
+        current.a = [current.a, line].filter(Boolean).join(' ');
+      }
     });
+    finishCurrent();
 
     if (!parsed.length) {
       if (msg) msg.textContent = 'Nothing to import. Check your format and try again.';
