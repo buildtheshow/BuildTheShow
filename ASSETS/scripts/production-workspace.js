@@ -32912,21 +32912,7 @@ See you soon!
     setTimeout(toggleFaqBulk, 1200);
   }
 
-  // ── Production Info card toggle / rich text ──────────
-  function togglePiCard(cardId) {
-    const card = document.getElementById('pi-card-' + cardId);
-    if (!card) return;
-    const shouldOpen = card.classList.contains('collapsed');
-    document.querySelectorAll('#aud-inner-prodinfo .pi-card').forEach(item => {
-      item.classList.add('collapsed');
-      item.querySelector('.pi-card-header')?.setAttribute('aria-expanded','false');
-    });
-    if (shouldOpen) {
-      card.classList.remove('collapsed');
-      card.querySelector('.pi-card-header')?.setAttribute('aria-expanded','true');
-    }
-  }
-
+  // ── Production Info rich text ─────────────────────────
   function richCmd(editorId, command, value) {
     const el = document.getElementById(editorId);
     if (el) el.focus();
