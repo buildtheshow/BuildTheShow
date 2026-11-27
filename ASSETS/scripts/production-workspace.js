@@ -13492,7 +13492,6 @@ See you soon!
     });
     const changeSetupButton = document.getElementById('materials-change-setup');
     if (changeSetupButton) changeSetupButton.style.display = 'none';
-    if (inner === 'settings') renderAuditionMaterialsToggle();
     if (inner === 'materials') {
       materialsEntryChoiceConfirmed = false;
       renderMaterialsList();
@@ -27373,7 +27372,7 @@ See you soon!
         const datePanel = tape ? '<p class="ap-setup-note">Self-tape auditions do not need live dates or a venue. Set the submission deadline under Booking type.</p>' : `<section class="ap-setup-date-section"><header><span class="ap-setup-date-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="16" rx="2"></rect><path d="M7.5 3v4M16.5 3v4M3.5 9h17"></path></svg></span><span><h3>${dateTitle}</h3><p>${dateHelp}</p></span></header><div class="ap-setup-days"><nav class="ap-setup-day-tabs" aria-label="Audition dates">${days.map((day,index)=>`<button type="button" data-day-tab="${index}" aria-selected="${dayIndex===index}">Day ${index+1}</button>`).join('')}${days.length>1&&dayIndex>0?`<button type="button" class="ap-setup-remove-day" data-remove-day="${dayIndex}">Remove day</button>`:''}</nav>${dayHTML(record,activeDay,dayIndex)}</div><aside class="ap-setup-more-dates"><div class="ap-setup-more-dates-copy"><strong>Need more time to see everyone?</strong><p>If you're expecting more performers than you can audition in one day, or want to give performers a choice of dates, add another day here. Each performer will only need to attend one of these days.</p></div><button type="button" data-add-day>+ Add another day</button><p class="ap-setup-more-dates-note">If performers need to attend more than one audition (for example, a singing audition and a separate dance call), use <strong>Add audition</strong> instead.</p></aside></section>`;
         body = datePanel;
       } else if (step === 3) body = `<fieldset><legend>What does this audition include?</legend><div class="ap-setup-grid">${activities.map(([key,label]) => multiChoice(label,'activities',key,record.activities.includes(key))).join('')}</div></fieldset>`;
-      else if (step === 4) body = `<div class="ap-setup-grid"><label class="ap-setup-field ap-setup-full">What should they prepare?<textarea data-field="prep" rows="3">${e(record.prep)}</textarea></label><label class="ap-setup-field ap-setup-full">What should they bring?<textarea data-field="bring" rows="2">${e(record.bring)}</textarea></label><label class="ap-setup-field">When can they leave?<select data-field="finish"><option ${record.finish==='After their appointment'?'selected':''}>After their appointment</option><option ${record.finish==='After the whole session'?'selected':''}>After the whole session</option><option ${record.finish==='When released by the team'?'selected':''}>When released by the team</option></select></label><label class="ap-setup-field ap-setup-full">Arrival instructions (sent after booking)<textarea data-field="access" rows="2" placeholder="For example: check in with our producer at the welcome desk, then wait to be called.">${e(record.access)}</textarea><span class="ap-setup-field-help">These instructions go in the booking confirmation email and do not appear on the public audition page.</span></label><p class="ap-setup-full">Add shared links to audition materials under Materials. Files stay in your own storage; set links so anyone with the link can view.</p></div>`;
+      else if (step === 4) body = `<div class="ap-setup-grid">${record.type !== 'callback' ? `<section class="aud-materials-setting ap-setup-full"><div class="aud-materials-setting-copy"><strong>Audition materials</strong><span>${isAuditionSessionMaterialsEnabled(record.id) ? 'Performers can see the materials you share for this audition.' : 'No materials will be shared for this audition.'}</span></div><label class="aud-materials-setting-toggle"><span>${isAuditionSessionMaterialsEnabled(record.id) ? 'On' : 'Off'}</span><input type="checkbox" data-materials-session="${e(record.id)}" ${isAuditionSessionMaterialsEnabled(record.id) ? 'checked' : ''} aria-label="Audition materials for ${e(record.name)} ${isAuditionSessionMaterialsEnabled(record.id) ? 'on' : 'off'}"><span class="aud-materials-setting-track" aria-hidden="true"></span></label></section>` : ''}<label class="ap-setup-field ap-setup-full">What should they prepare?<textarea data-field="prep" rows="3">${e(record.prep)}</textarea></label><label class="ap-setup-field ap-setup-full">What should they bring?<textarea data-field="bring" rows="2">${e(record.bring)}</textarea></label><label class="ap-setup-field">When can they leave?<select data-field="finish"><option ${record.finish==='After their appointment'?'selected':''}>After their appointment</option><option ${record.finish==='After the whole session'?'selected':''}>After the whole session</option><option ${record.finish==='When released by the team'?'selected':''}>When released by the team</option></select></label><label class="ap-setup-field ap-setup-full">Arrival instructions (sent after booking)<textarea data-field="access" rows="2" placeholder="For example: check in with our producer at the welcome desk, then wait to be called.">${e(record.access)}</textarea><span class="ap-setup-field-help">These instructions go in the booking confirmation email and do not appear on the public audition page.</span></label><p class="ap-setup-full">Add shared links to audition materials under Materials. Files stay in your own storage; set links so anyone with the link can view.</p></div>`;
       else body = applicantView(record);
       return `<div class="ap-setup-editor" style="--ap-accent:${accent}"><nav class="ap-setup-tabs" aria-label="Audition details">${sections.map((name,index)=>`<button type="button" data-step="${index}" aria-pressed="${step===index}">${name}${missing(record).some(item=>item.step===index)?'<span class="ap-setup-star" aria-hidden="true">✱</span>':''}</button>`).join('')}</nav><div class="ap-setup-fields">${body}</div><footer><span data-save-status>${state.saving[record.id] ? 'Saving draft…' : 'Draft saves automatically. Nothing is published.'}</span><button type="button" data-close-editor>Done</button></footer></div>`;
     }
@@ -27486,6 +27485,14 @@ See you soon!
     }
 
     function bind(root, record) {
+      root.querySelectorAll('[data-materials-session]').forEach(input=>input.addEventListener('change',()=>{
+        const enabled=input.checked;
+        const label=input.closest('.aud-materials-setting-toggle')?.querySelector('span:first-child');
+        if(label) label.textContent=enabled?'On':'Off';
+        const copy=input.closest('.aud-materials-setting')?.querySelector('.aud-materials-setting-copy span');
+        if(copy) copy.textContent=enabled?'Performers can see the materials you share for this audition.':'No materials will be shared for this audition.';
+        toggleAuditionSessionMaterials(record.id,enabled);
+      }));
       root.querySelectorAll('[data-step]').forEach(button=>button.onclick=()=>{state.step=Number(button.dataset.step);render();});
       root.querySelectorAll('[data-review-tab]').forEach(button=>button.onclick=()=>{state.reviewTab=button.dataset.reviewTab;render();});
       root.querySelector('[data-close-editor]')?.addEventListener('click',()=>{save(record);state.openId=null;render();});
@@ -31682,7 +31689,36 @@ See you soon!
         ? saved[type] !== false
         : (type === 'audition' ? true : hasMaterialForType(type));
     });
+    const sessionSettings = saved.audition_sessions || {};
+    const materialSessions = (audSessions || []).filter(session => session.type !== 'callback');
+    if (materialSessions.some(session => Object.hasOwn(sessionSettings, session.id))) {
+      settings.audition = materialSessions.some(session => sessionSettings[session.id] !== undefined
+        ? sessionSettings[session.id] !== false
+        : saved.audition !== false);
+    }
     return settings;
+  }
+
+  function isAuditionSessionMaterialsEnabled(sessionId) {
+    const saved = prod?.wizard_data?.materials_enabled || {};
+    const perSession = saved.audition_sessions || {};
+    return Object.hasOwn(perSession, sessionId) ? perSession[sessionId] !== false : saved.audition !== false;
+  }
+
+  async function toggleAuditionSessionMaterials(sessionId, checked) {
+    const wizardData = { ...(prod?.wizard_data || {}) };
+    const materialsEnabled = { ...(wizardData.materials_enabled || {}) };
+    materialsEnabled.audition_sessions = { ...(materialsEnabled.audition_sessions || {}), [sessionId]: checked === true };
+    wizardData.materials_enabled = materialsEnabled;
+    const { error } = await sb.from('productions').update({ wizard_data: wizardData }).eq('id', prodId);
+    if (error) {
+      showToast('Could not save material settings: ' + error.message, true);
+      const input = document.querySelector(`[data-materials-session="${CSS.escape(String(sessionId))}"]`);
+      if (input) input.checked = !checked;
+      return;
+    }
+    prod.wizard_data = wizardData;
+    renderMaterialsList();
   }
 
   function getMaterialOrganization(type) {
@@ -32148,7 +32184,7 @@ See you soon!
     const organization = getMaterialOrganization(type);
     let detailHtml = '';
     if (!settings[type]) {
-      detailHtml = `<div class="materials-empty">${esc(materialDisabledMessage(type))} Turn materials on in Auditions settings when you are ready.</div>`;
+      detailHtml = `<div class="materials-empty">${esc(materialDisabledMessage(type))} Turn them on in each audition’s Preparation section when you are ready.</div>`;
     } else if (organization === 'folder') {
       const formatLabel = 'Shared audition materials folder';
       const files = sharedMaterialFiles(type);
@@ -32172,14 +32208,6 @@ See you soon!
   function showMaterialChoices() {
     materialsEntryChoiceConfirmed = false;
     renderMaterialsList();
-  }
-
-  function renderAuditionMaterialsToggle() {
-    const host = document.getElementById('audition-materials-setting');
-    if (!host) return;
-    const enabled = getMaterialsSettings().audition !== false;
-    host.innerHTML = `<div class="aud-materials-setting-copy"><strong>Audition materials</strong><span>${enabled ? 'Performers can see the materials you share.' : 'No audition materials will be shared with performers.'}</span></div><label class="aud-materials-setting-toggle"><span>${enabled ? 'On' : 'Off'}</span><input id="audition-materials-enabled" type="checkbox" ${enabled ? 'checked' : ''} aria-label="Audition materials ${enabled ? 'on' : 'off'}"><span class="aud-materials-setting-track" aria-hidden="true"></span></label>`;
-    host.querySelector('#audition-materials-enabled')?.addEventListener('change', event => toggleMaterialsSection('audition', event.currentTarget.checked));
   }
 
   function renderMaterialsChoicePrompt(type) {
@@ -32230,21 +32258,6 @@ See you soon!
       content.innerHTML = renderMaterialsContent(renderType, settings);
       materialsRenderFrame = null;
     });
-  }
-
-  async function toggleMaterialsSection(type, checked) {
-    const wizardData = { ...(prod?.wizard_data || {}) };
-    wizardData.materials_enabled = { ...(wizardData.materials_enabled || {}), [type]: checked === true };
-    const { error } = await sb.from('productions').update({ wizard_data: wizardData }).eq('id', prodId);
-    if (error) {
-      showToast('Could not save material settings: ' + error.message, true);
-      if (type === 'audition') renderAuditionMaterialsToggle();
-      renderMaterialsList();
-      return;
-    }
-    prod.wizard_data = wizardData;
-    if (type === 'audition') renderAuditionMaterialsToggle();
-    renderMaterialsList();
   }
 
   async function addExternalMaterialLink(charId, type, slot, urlInputId, nameInputId) {
