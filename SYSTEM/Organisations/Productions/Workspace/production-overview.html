@@ -65,6 +65,10 @@
     .project-progress-percent { color:#fff; white-space:nowrap; }
     .project-progress-track { height:12px; overflow:hidden; border-radius:99px; background:rgba(255,255,255,0.28); }
     .project-progress-fill { display:block; width:0; height:100%; border-radius:inherit; background:#efab45; transition:width 0.25s ease; }
+    .project-progress-next { display:flex; align-items:center; flex-wrap:wrap; gap:0.3rem; margin-top:0.75rem; font-size:0.78rem; }
+    .project-progress-next strong { font-weight:800; }
+    .project-progress-next button { padding:0; border:0; background:transparent; color:#fff; font:700 0.78rem var(--bts-font); text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
+    .project-progress-next button:hover { color:rgba(255,255,255,0.78); }
     .setup-progress-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1rem; }
     .setup-progress-card { --setup-colour:#572e88; min-width:0; color:#fff; background:var(--setup-colour); border:1px solid rgba(0,0,0,0.08); border-radius:14px; padding:0 1.1rem 1.05rem; box-shadow:0 4px 14px rgba(42,24,64,0.12); }
     .setup-progress-card-head { display:flex; align-items:center; gap:0.7rem; min-height:4.25rem; cursor:pointer; list-style:none; }
@@ -429,14 +433,20 @@
         const done = ready.filter(Boolean).length;
         const phaseCount = card.phases.length;
         const pct = Math.round(done / phaseCount * 100);
-        const next = Math.max(0, ready.findIndex(value => !value));
+        const nextIndex = ready.findIndex(value => !value);
+        const next = Math.max(0, nextIndex);
         const phases = card.phases.map((phase,index) => `<div class="setup-progress-phase"><details ${index === next ? 'open' : ''}><summary><span class="setup-phase-state" aria-hidden="true">${index+1}</span><span>${ovEsc(phase.title)}</span></summary><ul class="setup-progress-tasks">${phase.tasks.map(task=>`<li>${ovEsc(task)}</li>`).join('')}</ul></details>${ready[index] ? '<span class="setup-progress-phase-ready" role="img" aria-label="Complete">✓</span>' : `<button class="setup-progress-phase-action" type="button" onclick="${phase.action || card.action}">To do</button>`}</div>`).join('');
-        return { html:`<details class="setup-progress-card" style="--setup-colour:${card.colour}"><summary class="setup-progress-card-head"><img class="setup-progress-icon" src="${card.icon}" alt=""><span class="setup-progress-name">${ovEsc(card.name)}</span><span class="setup-progress-card-count">${done} of ${phaseCount} steps</span><span class="setup-progress-card-chevron" aria-hidden="true">⌄</span></summary><div class="setup-progress-card-body"><div class="setup-progress-summary"><span>${done} of ${phaseCount} steps ready</span><span>${pct}%</span></div><div class="setup-progress-track" role="progressbar" aria-label="${ovEsc(card.name)} setup progress" aria-valuemin="0" aria-valuemax="${phaseCount}" aria-valuenow="${done}"><span class="setup-progress-fill" style="width:${pct}%"></span></div><div class="setup-progress-phases">${phases}</div><button class="setup-progress-action" type="button" onclick="${card.action}">${ovEsc(card.actionLabel)} <span aria-hidden="true">→</span></button></div></details>`, done, phaseCount };
+        const nextStep = nextIndex >= 0 ? { card:card.name, title:card.phases[nextIndex].title, action:card.phases[nextIndex].action || card.action } : null;
+        return { html:`<details class="setup-progress-card" style="--setup-colour:${card.colour}"><summary class="setup-progress-card-head"><img class="setup-progress-icon" src="${card.icon}" alt=""><span class="setup-progress-name">${ovEsc(card.name)}</span><span class="setup-progress-card-count">${done} of ${phaseCount} steps</span><span class="setup-progress-card-chevron" aria-hidden="true">⌄</span></summary><div class="setup-progress-card-body"><div class="setup-progress-summary"><span>${done} of ${phaseCount} steps ready</span><span>${pct}%</span></div><div class="setup-progress-track" role="progressbar" aria-label="${ovEsc(card.name)} setup progress" aria-valuemin="0" aria-valuemax="${phaseCount}" aria-valuenow="${done}"><span class="setup-progress-fill" style="width:${pct}%"></span></div><div class="setup-progress-phases">${phases}</div><button class="setup-progress-action" type="button" onclick="${card.action}">${ovEsc(card.actionLabel)} <span aria-hidden="true">→</span></button></div></details>`, done, phaseCount, nextStep };
       });
       const totalDone = progress.reduce((sum, item) => sum + item.done, 0);
       const totalSteps = progress.reduce((sum, item) => sum + item.phaseCount, 0);
       const overallPct = totalSteps ? Math.round(totalDone / totalSteps * 100) : 0;
-      overall.innerHTML = `<div class="project-progress-summary"><span>${totalDone} of ${totalSteps} production setup steps ready</span><span class="project-progress-percent">${overallPct}%</span></div><div class="project-progress-track" role="progressbar" aria-label="Overall production setup progress" aria-valuemin="0" aria-valuemax="${totalSteps}" aria-valuenow="${totalDone}"><span class="project-progress-fill" style="width:${overallPct}%"></span></div>`;
+      const suggested = progress.find(item => item.nextStep)?.nextStep;
+      const suggestionHtml = suggested
+        ? `<div class="project-progress-next"><strong>Suggested next:</strong><span>${ovEsc(suggested.card)} —</span><button type="button" onclick="${suggested.action}">${ovEsc(suggested.title)} →</button></div>`
+        : '<div class="project-progress-next"><strong>Suggested next:</strong><span>All production setup steps are ready.</span></div>';
+      overall.innerHTML = `<div class="project-progress-summary"><span>${totalDone} of ${totalSteps} production setup steps ready</span><span class="project-progress-percent">${overallPct}%</span></div><div class="project-progress-track" role="progressbar" aria-label="Overall production setup progress" aria-valuemin="0" aria-valuemax="${totalSteps}" aria-valuenow="${totalDone}"><span class="project-progress-fill" style="width:${overallPct}%"></span></div>${suggestionHtml}`;
       grid.innerHTML = progress.map(item => item.html).join('');
     }
 
