@@ -589,7 +589,7 @@
   };
 
   window.loadProductionSidebar = function (activeGroup, activePage) {
-    const key = 'bts-prod-sidebar-v20';
+    const key = 'bts-prod-sidebar-v21';
     const storedSidebar = sessionStorage.getItem(key);
     const cached=storedSidebar?.includes('data-account-navigation="20261116-separate-profiles"')?storedSidebar:null;
     const host = document.getElementById('prod-sidebar-host');
@@ -621,7 +621,7 @@
 
     if (cached) applyAndInit(cached);
 
-    fetch('/SHARED/Navigation/production-sidebar.html?v=20261116-separate-profiles')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=20261127-dashboard-label')
       .then(function (res) { return res.text(); })
       .then(function (html) {
         sessionStorage.setItem(key, html);
