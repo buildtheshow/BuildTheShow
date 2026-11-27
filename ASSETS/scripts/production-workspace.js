@@ -32833,14 +32833,15 @@ See you soon!
     if (!list) return;
     if (!_faqItems.length) { list.innerHTML = ''; return; }
     list.innerHTML = _faqItems.map((item, i) => `
-      <div style="background:#faf9fd;border:1.5px solid rgba(87,46,136,0.12);border-radius:10px;padding:0.85rem 1rem;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;margin-bottom:0.5rem;">
-          <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:rgba(87,46,136,0.5);">Q${i + 1}</div>
-          <button type="button" onclick="removeFaqItem(${i})" style="background:none;border:none;cursor:pointer;color:rgba(87,46,136,0.5);font-size:1rem;padding:0;line-height:1;" title="Remove">&times;</button>
+      <div class="faq-editor-item">
+        <div class="faq-editor-question-row">
+          <div class="faq-editor-number">Q${i + 1}</div>
+          <input class="form-input faq-editor-question" type="text" placeholder="Question" value="${esc(item.q)}"
+                 oninput="_faqItems[${i}].q = this.value; scheduleProdInfoSave();" />
+          <button type="button" class="faq-editor-remove" onclick="removeFaqItem(${i})" aria-label="Remove question ${i + 1}" title="Remove question">&times;</button>
         </div>
-        <input class="form-input" style="margin-bottom:0.4rem;font-weight:700;" type="text" placeholder="Question" value="${esc(item.q)}"
-               oninput="_faqItems[${i}].q = this.value; scheduleProdInfoSave();" />
-        <textarea class="form-input" rows="2" placeholder="Answer" style="resize:vertical;"
+        <label class="faq-editor-answer-label" for="pi-faq-answer-${i}">Answer (optional)</label>
+        <textarea id="pi-faq-answer-${i}" class="form-input faq-editor-answer" rows="2" placeholder="Add an answer for performers"
                   oninput="_faqItems[${i}].a = this.value; scheduleProdInfoSave();">${esc(item.a)}</textarea>
       </div>`).join('');
   }
@@ -32877,40 +32878,95 @@ See you soon!
     const msg = document.getElementById('faq-bulk-msg');
     if (!inp) return;
 
-    const raw  = inp.value.trim();
+    const raw = inp.value.trim();
     if (!raw) return;
-
-    // Split into blocks by blank lines
-    const blocks = raw.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
+    const cleanLine = line => String(line || '')
+      .replace(/<[^>]*>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&')
+      .replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
+      .replace(/\*\*(.*?)\*\*/g, '$1').replace(/__(.*?)__/g, '$1')
+      .replace(/^\s*#{1,6}\s*/, '').replace(/^\s*(?:[-*•▪‣]+\s*|\d+[.)]\s*)/, '').trim();
+    const isFaqHeading = line => /^(?:frequently\s+asked\s+questions|faqs?|questions\s*(?:&|and)\s*answers)$/i.test(line.replace(/^#+\s*/, ''));
+    const lines = raw.replace(/\r/g, '').split('\n').map(cleanLine);
+    const headingIndex = lines.findIndex(isFaqHeading);
+    const sourceLines = headingIndex >= 0 ? lines.slice(headingIndex + 1) : lines;
     const parsed = [];
-
-    blocks.forEach(block => {
-      const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
-      let q = '', a = '';
-      lines.forEach(line => {
-        if (/^q[:.\)]/i.test(line))      q += (q ? ' ' : '') + line.replace(/^q[:.\)]\s*/i, '').trim();
-        else if (/^a[:.\)]/i.test(line)) a += (a ? ' ' : '') + line.replace(/^a[:.\)]\s*/i, '').trim();
-        else if (!q)                      q = line;
-        else                              a += (a ? ' ' : '') + line;
-      });
-      if (q.trim()) parsed.push({ q: q.trim(), a: a.trim() });
+    let current = null;
+    const finishCurrent = () => { if (current?.q) parsed.push({ q: current.q.trim(), a: current.a.trim() }); current = null; };
+    const isQuestionLine = line => {
+      if (/[?？]$/.test(line)) return true;
+      const normalized = line.toLowerCase().replace(/[.!,:;]+$/g, '').trim();
+      if (normalized === 'what to expect') return false;
+      return /^(?:what|when|where|who|why|how|which|can|could|will|would|should|do|does|did|is|are|was|were|have|has|had|may|might|must)\b\s+\S+/i.test(normalized);
+    };
+    sourceLines.forEach(line => {
+      if (!line || /^svg$/i.test(line)) return;
+      const qMatch = line.match(/^(?:q|question)\s*\d*\s*[:.)-]\s*(.*)$/i);
+      const aMatch = line.match(/^(?:a|answer)\s*\d*\s*[:.)-]\s*(.*)$/i);
+      if (qMatch) { finishCurrent(); current = { q: qMatch[1].trim(), a: '' }; return; }
+      if (aMatch) { if (current) current.a = [current.a, aMatch[1].trim()].filter(Boolean).join(' '); return; }
+      if (isQuestionLine(line)) { finishCurrent(); current = { q: line, a: '' }; return; }
+      if (current) current.a = [current.a, line].filter(Boolean).join(' ');
     });
+    finishCurrent();
 
     if (!parsed.length) {
       if (msg) msg.textContent = 'Nothing to import. Check your format and try again.';
       return;
     }
 
-    _faqItems.push(...parsed);
+    const questionKey = value => String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const existingQuestions = new Map();
+    _faqItems.forEach(item => { const key = questionKey(item.q); if (key && !existingQuestions.has(key)) existingQuestions.set(key, item); });
+    let questionsAdded = 0, answersFilled = 0, duplicatesSkipped = 0;
+    parsed.forEach(item => {
+      const key = questionKey(item.q);
+      if (!key) return;
+      const existing = existingQuestions.get(key);
+      if (existing) {
+        if (item.a.trim() && !String(existing.a || '').trim()) { existing.a = item.a.trim(); answersFilled++; }
+        else duplicatesSkipped++;
+        return;
+      }
+      const added = { q: item.q.trim(), a: item.a.trim() };
+      _faqItems.push(added); existingQuestions.set(key, added); questionsAdded++;
+    });
     renderFaqList();
     scheduleProdInfoSave();
 
     inp.value = '';
     if (msg) {
-      msg.textContent = `${parsed.length} question${parsed.length !== 1 ? 's' : ''} added!`;
+      const results = [];
+      if (questionsAdded) results.push(`${questionsAdded} question${questionsAdded !== 1 ? 's' : ''} added`);
+      if (answersFilled) results.push(`${answersFilled} existing answer${answersFilled !== 1 ? 's' : ''} filled in`);
+      if (duplicatesSkipped) results.push(`${duplicatesSkipped} duplicate${duplicatesSkipped !== 1 ? 's' : ''} skipped`);
+      msg.textContent = results.length ? `${results.join('; ')}.` : 'No FAQ questions found to import.';
       setTimeout(() => { msg.textContent = ''; }, 3000);
     }
     setTimeout(toggleFaqBulk, 1200);
+  }
+
+  function handleFaqPaste(event) {
+    const textarea = event.currentTarget;
+    const html = event.clipboardData?.getData('text/html');
+    if (!textarea || !html || !window.DOMParser) return;
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      doc.querySelectorAll('script,style,svg,meta,link').forEach(node => node.remove());
+      const blockTags = new Set(['ADDRESS','ARTICLE','BLOCKQUOTE','DIV','H1','H2','H3','H4','H5','H6','LI','P','PRE','SECTION']);
+      const toText = node => {
+        if (node.nodeType === Node.TEXT_NODE) return node.nodeValue || '';
+        if (node.nodeType !== Node.ELEMENT_NODE && node.nodeType !== Node.DOCUMENT_NODE) return '';
+        const content = [...node.childNodes].map(toText).join('');
+        if (node.nodeName === 'BR') return '\n';
+        return blockTags.has(node.nodeName) ? `${content.trim()}\n` : content;
+      };
+      const pastedText = toText(doc.body).replace(/[\t ]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+      if (!pastedText) return;
+      event.preventDefault();
+      textarea.setRangeText(pastedText, textarea.selectionStart, textarea.selectionEnd, 'end');
+    } catch (error) {
+      console.warn('[BTS] Could not read formatted FAQ paste; using plain text.', error);
+    }
   }
 
   // ── Production Info rich text ─────────────────────────
