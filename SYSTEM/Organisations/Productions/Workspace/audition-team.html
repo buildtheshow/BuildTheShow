@@ -49940,23 +49940,42 @@ See you soon!
     }
 
     const questionKey = value => String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-    const existingQuestions = new Set(_faqItems.map(item => questionKey(item.q)));
-    const uniqueParsed = parsed.filter(item => {
+    const existingQuestions = new Map();
+    _faqItems.forEach(item => {
       const key = questionKey(item.q);
-      if (!key || existingQuestions.has(key)) return false;
-      existingQuestions.add(key);
-      return true;
+      if (key && !existingQuestions.has(key)) existingQuestions.set(key, item);
     });
-    const duplicatesSkipped = parsed.length - uniqueParsed.length;
-    _faqItems.push(...uniqueParsed);
+    let questionsAdded = 0;
+    let answersFilled = 0;
+    let duplicatesSkipped = 0;
+    parsed.forEach(item => {
+      const key = questionKey(item.q);
+      if (!key) return;
+      const existing = existingQuestions.get(key);
+      if (existing) {
+        if (item.a.trim() && !String(existing.a || '').trim()) {
+          existing.a = item.a.trim();
+          answersFilled++;
+        } else {
+          duplicatesSkipped++;
+        }
+        return;
+      }
+      const added = { q: item.q.trim(), a: item.a.trim() };
+      _faqItems.push(added);
+      existingQuestions.set(key, added);
+      questionsAdded++;
+    });
     renderFaqList();
     scheduleProdInfoSave();
 
     inp.value = '';
     if (msg) {
-      msg.textContent = uniqueParsed.length
-        ? `${uniqueParsed.length} question${uniqueParsed.length !== 1 ? 's' : ''} added${duplicatesSkipped ? `; ${duplicatesSkipped} duplicate${duplicatesSkipped !== 1 ? 's' : ''} skipped` : ''}.`
-        : `All ${duplicatesSkipped} question${duplicatesSkipped !== 1 ? 's were' : ' was'} already in your FAQs.`;
+      const results = [];
+      if (questionsAdded) results.push(`${questionsAdded} question${questionsAdded !== 1 ? 's' : ''} added`);
+      if (answersFilled) results.push(`${answersFilled} existing answer${answersFilled !== 1 ? 's' : ''} filled in`);
+      if (duplicatesSkipped) results.push(`${duplicatesSkipped} duplicate${duplicatesSkipped !== 1 ? 's' : ''} skipped`);
+      msg.textContent = results.length ? `${results.join('; ')}.` : 'No FAQ questions found to import.';
       setTimeout(() => { msg.textContent = ''; }, 3000);
     }
     setTimeout(toggleFaqBulk, 1200);
