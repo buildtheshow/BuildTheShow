@@ -2453,22 +2453,40 @@
           }).eq('id', prodId);
           if (error) throw error;
         } else {
-          const num = await getNextProdNumber();
-          const custom_id = (currentOrg.custom_id || 'ORG') + '-' + String(num).padStart(2, '0');
+          const firstNumber = await getNextProdNumber();
+          const idPrefix = currentOrg.custom_id || 'ORG';
+          const isCustomIdCollision = error => error?.code === '23505' &&
+            /productions_custom_id_key/i.test(`${error.message || ''} ${error.details || ''} ${error.constraint || ''}`);
+          let created = null;
+          let insertError = null;
 
-          const { data, error } = await sb.from('productions').insert({
-            organization_id: currentOrg.id,
-            custom_id,
-            title: wizardData.title,
-            description: wizardData.description || null,
-            production_type: wizardData.production_type,
-            is_public: wizardData.is_public,
-            status: 'setup',
-            slug: chosenSlug,
-          }).select('id').single();
+          // Numbering is read from visible rows, while the database constraint
+          // covers every row. Step past any hidden or concurrently claimed ID.
+          for (let attempt = 0; attempt < 25; attempt++) {
+            const custom_id = `${idPrefix}-${String(firstNumber + attempt).padStart(2, '0')}`;
+            const result = await sb.from('productions').insert({
+              organization_id: currentOrg.id,
+              custom_id,
+              title: wizardData.title,
+              description: wizardData.description || null,
+              production_type: wizardData.production_type,
+              is_public: wizardData.is_public,
+              status: 'setup',
+              slug: chosenSlug,
+            }).select('id').single();
 
-          if (error) throw error;
-          prodId = data.id;
+            if (!result.error) { created = result.data; break; }
+            insertError = result.error;
+            if (!isCustomIdCollision(insertError)) throw insertError;
+          }
+
+          if (!created) {
+            if (isCustomIdCollision(insertError)) {
+              throw new Error('Could not reserve a unique production ID. Please try again.');
+            }
+            throw insertError || new Error('Could not create the production. Please try again.');
+          }
+          prodId = created.id;
 
         }
 
