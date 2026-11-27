@@ -261,8 +261,8 @@
       { key:'auditions', name:'Auditions', colour:'#572e88', icon:'/ASSETS/Images/Icons/Auditions.svg', action:"openAuditionsSubTab('setup')", actionLabel:'Open audition setup', phases:[
         { title:'Get the audition basics ready', tasks:['Choose open call or time slots','Set any applicant limits','Choose whether headshots are needed','Choose whether resumes or videos are needed'], ready:s=>s.auditionBasics },
         { title:'Add the roles you are casting', tasks:['Add each role name','Add age guidance where useful','Add voice or movement notes where useful','Choose which roles appear on the audition form'], ready:s=>s.roles>0 },
-        { title:'Plan the audition dates', tasks:['Add audition dates to the calendar','Add callback dates if you need them','Set a start time','Mark unknown times as TBD'], ready:s=>s.auditionEvents>0 },
-        { title:'Get ready to meet performers', tasks:['Review the public audition information','Check the performer form','Decide who will check people in','Open auditions when you are ready'], ready:s=>s.roles>0&&s.auditionEvents>0&&s.auditionBasics },
+        { title:'Create audition sessions and spots', tasks:['Create an audition session in Audition Settings','Choose open call or appointment spots','Add the date, time, and location','For appointments, create the bookable time slots'], ready:s=>s.auditionSessionReady },
+        { title:'Get ready to meet performers', tasks:['Review the public audition information','Check the performer form','Decide who will check people in','Open auditions when you are ready'], ready:s=>s.roles>0&&s.auditionSessionReady&&s.auditionBasics },
       ]},
       { key:'registration', name:'Registration', colour:'#476aaa', icon:'/ASSETS/Images/Icons/Applications.svg', action:"navigateToRegistration('settings')", actionLabel:'Open registration setup', phases:[
         { title:'Choose what to collect', tasks:['Review performer contact details','Choose emergency details to collect','Choose medical details to collect','List permissions and forms you need'], ready:s=>s.registrationSettings },
@@ -335,9 +335,8 @@
       const plan = production.volunteer_staffing_plan && typeof production.volunteer_staffing_plan === 'object' ? production.volunteer_staffing_plan : {};
       const wizardRoles = Array.isArray(wizard.roles) ? wizard.roles.filter(r => (r?.name || '').trim()).length : 0;
       const volunteerRoles = Array.isArray(plan.roles) ? plan.roles.length : (Array.isArray(plan) ? plan.length : Object.values(plan).filter(v => v && typeof v === 'object' && (v.roleName || Number(v.count)>0)).length);
-      const [roles, auditionEvents, budgetCategories, budgetSettings, milestones, tasks, datedTasks, sponsorPackages, sponsorBusinesses] = await Promise.all([
+      const [roles, budgetCategories, budgetSettings, milestones, tasks, datedTasks, sponsorPackages, sponsorBusinesses] = await Promise.all([
         choices.auditions ? ovSetupCount('production_characters') : 0,
-        choices.auditions ? ovSetupCount('bts_visible_production_events', q => q.in('event_type',['audition','auditions','callback'])) : 0,
         choices.budget ? ovSetupCount('budget_categories') : 0,
         choices.budget ? ovSetupCount('budget_settings') : 0,
         choices.producer_timeline ? ovSetupCount('checklist_items') : 0,
@@ -346,9 +345,26 @@
         choices.sponsors ? ovSetupCount('sponsor_packages') : 0,
         choices.sponsors ? ovSetupCount('sponsor_businesses') : 0,
       ]);
+      let auditionSessionReady = false;
+      if (choices.auditions) {
+        try {
+          const { data: sessions } = await sb.from('bts_visible_audition_sessions')
+            .select('id,booking_mode,is_visible,date').eq('production_id',prodId);
+          const visibleDated = (sessions || []).filter(session => session.is_visible !== false && session.date);
+          if (visibleDated.length) {
+            const { data: slots } = await sb.from('bts_visible_audition_time_slots')
+              .select('id,session_id').in('session_id',visibleDated.map(session => session.id));
+            const slotSessionIds = new Set((slots || []).map(slot => String(slot.session_id)));
+            auditionSessionReady = visibleDated.some(session => {
+              const mode = session.booking_mode || 'appointment';
+              return mode === 'open_call' || slotSessionIds.has(String(session.id));
+            });
+          }
+        } catch (_) { auditionSessionReady = false; }
+      }
       const statuses = {
         auditionBasics: wizard.auditions_enabled !== false && !!(wizard.audition_type || wizard.auditions_enabled),
-        roles: Math.max(roles,wizardRoles), auditionEvents,
+        roles: Math.max(roles,wizardRoles), auditionSessionReady,
         registrationSettings: Object.keys(settings).length > 0,
         registrationForms: Object.keys(templates).length > 0,
         registrationPayments: Object.keys(payment).some(k => payment[k] !== '' && payment[k] !== null && payment[k] !== false),
