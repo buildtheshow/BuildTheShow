@@ -27206,7 +27206,7 @@ See you soon!
   let _audSetupController = null;
 
   function _audSetupDefault(id, name = 'General audition') {
-    return { id, name, type: 'audition', audience: 'open', methods: ['in_person'], mode: 'appointment', days: [{ id: 'day-' + crypto.randomUUID(), date: '', start: '', end: '', venue: null, room: '', locationNotes: '' }], slot: '10', gap: '2', capacity: '1', activities: [], prep: '', bring: '', access: '', finish: 'After their appointment', registration: 'Book in advance', deadline: '', customName: false };
+    return { id, name, type: 'audition', audience: 'open', methods: ['in_person'], mode: 'appointment', days: [{ id: 'day-' + crypto.randomUUID(), date: '', start: '', end: '', venue: null, room: '', locationNotes: '', breaks: [] }], slot: '10', gap: '2', capacity: '1', activities: [], prep: '', bring: '', access: '', finish: 'After their appointment', registration: 'Book in advance', deadline: '', customName: false };
   }
 
   function _audSetupFromPublished(id, published, fallback) {
@@ -27221,9 +27221,9 @@ See you soon!
     const days = legacyBlocks.filter(block => block?.date).map((block, index) => ({
       id: String(block.id || 'day-' + index), date: String(block.date || ''), start: String(block.start_time || '' ).slice(0, 5), end: String(block.end_time || '').slice(0, 5),
       venue: block.venue && typeof block.venue === 'object' ? structuredClone(block.venue) : block.location ? { name: String(block.location).split(',')[0], address: String(block.location).split(',').slice(1).join(',').trim() } : null,
-      room: String(block.room || ''), locationNotes: String(block.location_instructions || ''), videoInstructions: String(block.video_instructions || '')
+      room: String(block.room || ''), locationNotes: String(block.location_instructions || ''), videoInstructions: String(block.video_instructions || ''), breaks: Array.isArray(block.breaks) ? structuredClone(block.breaks) : []
     }));
-    if (!days.length) days.push({ id: 'day-' + crypto.randomUUID(), date: String(base.date || ''), start: String(base.start_time || '').slice(0, 5), end: String(base.end_time || '').slice(0, 5), venue: base.location ? { name: String(base.location).split(',')[0], address: String(base.location).split(',').slice(1).join(',').trim() } : null, room: '', locationNotes: '', videoInstructions: '' });
+    if (!days.length) days.push({ id: 'day-' + crypto.randomUUID(), date: String(base.date || ''), start: String(base.start_time || '').slice(0, 5), end: String(base.end_time || '').slice(0, 5), venue: base.location ? { name: String(base.location).split(',')[0], address: String(base.location).split(',').slice(1).join(',').trim() } : null, room: '', locationNotes: '', videoInstructions: '', breaks: [] });
     const currentTypeName = sessionTypeLabel(type);
     const name = String(published?.name || base.name || currentTypeName);
     const record = {
@@ -27241,7 +27241,7 @@ See you soon!
 
   function _createAudSetupController() {
     const state = { loaded: false, loading: false, records: [], revisions: {}, openId: null, step: 0, activeDay: {}, reviewTab: 'audition', timers: {}, saving: {}, error: '' };
-    const sections = ['Details', 'Booking type', 'Dates & location', 'Activities', 'Preparation', 'Review'];
+    const sections = ['Booking type', 'Details', 'Dates & location', 'Schedule', 'Activities', 'Preparation', 'Review'];
     const types = [
       { value: 'audition', label: 'General audition', name: 'General audition', colour: '#476aaa', icon: 'Auditions.svg' },
       { value: 'dance_call', label: 'Dance call', name: 'Dance call', colour: '#dd8233', icon: 'Choreography.svg' },
@@ -27273,7 +27273,7 @@ See you soon!
     const compactTimeRange = (start, end) => [compactTime(start), compactTime(end)].filter(Boolean).join(' - ');
     const mapLink = venue => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([venue?.name, venue?.address].filter(Boolean).join(', '));
     const ensureDays = record => {
-      if (!Array.isArray(record.days) || !record.days.length) record.days = [{ id: 'day-' + crypto.randomUUID(), date: '', start: '', end: '', venue: null, room: '', locationNotes: '' }];
+      if (!Array.isArray(record.days) || !record.days.length) record.days = [{ id: 'day-' + crypto.randomUUID(), date: '', start: '', end: '', venue: null, room: '', locationNotes: '', breaks: [] }];
       return record.days;
     };
 
@@ -27323,10 +27323,10 @@ See you soon!
 
     function missing(record) {
       const out = [];
-      if (!record.name?.trim()) out.push({ step: 0, key: 'name', text: 'Add an audition name.' });
-      if (!record.methods?.length) out.push({ step: 1, key: 'methods', text: 'Choose at least one way people can take part.' });
+      if (!record.name?.trim()) out.push({ step: 1, key: 'name', text: 'Add an audition name.' });
+      if (!record.methods?.length) out.push({ step: 0, key: 'methods', text: 'Choose at least one way people can take part.' });
       const tape = record.methods?.length === 1 && record.methods.includes('self_tape');
-      if (record.methods?.includes('self_tape') && !record.deadline) out.push({ step: 1, key: 'deadline', text: 'Add a submission deadline.' });
+      if (record.methods?.includes('self_tape') && !record.deadline) out.push({ step: 0, key: 'deadline', text: 'Add a submission deadline.' });
       if (!tape) {
         ensureDays(record).forEach((day, index) => {
           if (!day.date) out.push({ step: 2, key: 'date', day: index, text: 'Add a date.' });
@@ -27335,10 +27335,10 @@ See you soon!
           if (record.methods.includes('in_person') && (!day.venue?.name || !day.venue?.address)) out.push({ step: 2, key: 'venue', day: index, text: 'Choose a venue with its full address.' });
           if (day.date && ensureDays(record).some((other, otherIndex) => otherIndex < index && other.date === day.date)) out.push({ step: 2, key: 'date', day: index, text: 'This date is already listed. Change it or remove this day.' });
         });
-        if (['group', 'arrival'].includes(record.mode) && Number(record.capacity) < 1) out.push({ step: 2, key: 'capacity', text: 'Add the number of places.' });
-        if (record.mode !== 'walkin' && Number(record.slot) < 1) out.push({ step: 1, key: 'slot', text: 'Add the minutes per person.' });
+        if (['group', 'arrival'].includes(record.mode) && Number(record.capacity) < 1) out.push({ step: 0, key: 'capacity', text: 'Add the number of places.' });
+        if (record.mode !== 'walkin' && Number(record.slot) < 1) out.push({ step: 0, key: 'slot', text: record.mode === 'group' ? 'Add the minutes per group session.' : 'Add the minutes per person.' });
       }
-      if (!record.activities?.length) out.push({ step: 3, key: 'activities', text: 'Choose at least one audition activity.' });
+      if (!record.activities?.length) out.push({ step: 4, key: 'activities', text: 'Choose at least one audition activity.' });
       return out;
     }
 
@@ -27357,8 +27357,34 @@ See you soon!
       const onlineDetails = record.methods.includes('video_call') ? `<details class="ap-setup-online-day"><summary>Online audition joining instructions (optional)</summary><div class="ap-setup-online-day-content"><p>Add the video link or joining details performers need for this day.</p><label class="ap-setup-field"><span class="ap-setup-field-title">Video link or joining details</span><textarea data-day="${index}" data-day-field="videoInstructions" rows="2" placeholder="Add a video call link or joining details.">${e(day.videoInstructions || '')}</textarea></label></div></details>` : '';
       return `<section class="ap-setup-daypanel"><section class="ap-setup-date-time"><div class="ap-setup-date-row">${dayField('Date','date',day.date,'date')}${dayField('Start time','start',day.start,'time')}${dayField('Finish time','end',day.end,'time')}</div></section>${inPersonDetails}${onlineDetails}</section>`;
     }
+    function scheduleBuilder(record) {
+      if (record.methods.length === 1 && record.methods[0] === 'self_tape') return '<p class="ap-setup-note">Self-tape auditions do not need time slots.</p>';
+      if (record.mode === 'walkin') return '<p class="ap-setup-note">Cattle calls run during the advertised hours, so they do not use bookable time slots.</p>';
+      const blocks = audBlocks[record.id] || (audBlocks[record.id] = []);
+      const cards = ensureDays(record).map((day, index) => {
+        let block = blocks.find(item => String(item.id) === String(day.id));
+        if (!block) {
+          block = { id: String(day.id), breaks: [] };
+          blocks.push(block);
+        }
+        block.date = day.date || '';
+        block.start_time = day.start || '';
+        block.end_time = day.end || '';
+        block.slot_length = Number(record.slot) || 10;
+        block.buffer = Number(record.gap) || 0;
+        block.capacity = Number(record.capacity) || 1;
+        if (Array.isArray(day.breaks)) block.breaks = day.breaks;
+        else day.breaks = block.breaks = Array.isArray(block.breaks) ? block.breaks : [];
+        const slots = (audSlots[record.id] || []).filter(slot => String(slot.block_id || '') === String(block.id) || (!slot.block_id && day.date && String(slot.slot_date || '') === String(day.date)));
+        const openCount = slots.filter(slot => getAudSlotState(slot) === 'open').length;
+        const validWindow = !!(day.date && day.start && day.end && day.end > day.start);
+        const breaks = (block.breaks || []).map((item, breakIndex) => `<li><span>${e(niceTime(item.start))}–${e(niceTime(item.end))}</span><button type="button" data-remove-break="${index}" data-break-index="${breakIndex}" aria-label="Remove break">×</button></li>`).join('');
+        return `<article class="ap-setup-schedule-day"><header><div><strong>${e(niceDate(day.date))}</strong><span>${e(niceTime(day.start))}–${e(niceTime(day.end))}</span></div><span class="ap-setup-schedule-count">${openCount} open · ${slots.length - openCount} blocked · ${slots.length} total</span></header><div class="ap-setup-schedule-actions"><button type="button" data-generate-day="${e(block.id)}" ${validWindow ? '' : 'disabled'}>${slots.length ? 'Refresh time slots' : 'Create time slots'}</button><span>Click a slot to switch it between open and blocked.</span></div>${slots.length ? `<div class="aud-block-calendar">${buildAuditionSchedulerBlockSlotsHtml(record.id, slots)}</div>` : `<p class="ap-setup-schedule-empty">${validWindow ? 'Create slots to see and manage this audition schedule.' : 'Add a date, start time, and finish time under Dates & location first.'}</p>`}<section class="ap-setup-schedule-breaks"><div><strong>Breaks</strong><span>Breaks are excluded when time slots are created.</span></div><ul>${breaks || '<li class="ap-setup-schedule-no-breaks">No breaks added</li>'}</ul><div class="ap-setup-schedule-break-adder" id="break-adder-${record.id}-${block.id}" style="display:none"><label>Start <input type="time" id="break-start-${record.id}-${block.id}"></label><label>End <input type="time" id="break-end-${record.id}-${block.id}"></label><button type="button" data-confirm-break="${index}">Add break</button></div><button type="button" data-add-break="${index}">+ Add break</button></section></article>`;
+      }).join('');
+      return `<section class="ap-setup-schedule-builder"><h3>Time slots for ${e(record.name || 'this audition')}</h3><p>Build and manage this audition’s slots here. Each audition has its own schedule.</p>${cards}</section>`;
+    }
     function editor(record) {
-      const step = state.step;
+      const step = [1, 0, 2, 5, 3, 4, 6][state.step] ?? state.step;
       const accent = colour(record);
       let body = '';
       if (step === 0) body = `<div class="ap-setup-grid">${field('Audition name', 'name', record.name)}<fieldset class="ap-setup-full"><legend>Audition type</legend><div class="ap-setup-types">${types.map(type => `<label class="ap-setup-type ${record.type === type.value ? 'selected' : ''}" style="--type-colour:${type.colour}"><input type="radio" data-field="type" name="type-${e(record.id)}" value="${type.value}" ${record.type === type.value ? 'checked' : ''}><span><img src="/ASSETS/Images/Icons/${type.icon}" alt=""><strong>${type.label}</strong></span></label>`).join('')}</div></fieldset></div>`;
@@ -27368,8 +27394,8 @@ See you soon!
         const tapeDeadline = record.methods.includes('self_tape') ? `<section class="ap-setup-mode-panel ap-setup-deadline"><div class="ap-setup-deadline-copy"><h3>Self-tape deadline</h3><p>Choose a deadline before the audition date so your team has time to review submissions before or during auditions.</p></div><div class="ap-setup-deadline-input">${field('Submission deadline', 'deadline', record.deadline, 'datetime-local')}</div></section>` : '';
         const modeExplainer = tape ? '' : `<aside class="ap-setup-mode-explainer"><strong>${e(modes.find(mode => mode[0] === record.mode)?.[1] || 'Booking option')}</strong><p>${e(modeExamples[record.mode] || '')}</p></aside>`;
         const placesPanel = ['group','arrival'].includes(record.mode) && !tape ? `<section class="ap-setup-capacity"><h3>${record.mode === 'group' ? 'Places in each group session' : 'Performers per arrival time'}</h3><label class="ap-setup-field ap-setup-capacity-field"><input type="number" data-field="capacity" value="${e(record.capacity || '1')}" aria-label="${record.mode === 'group' ? 'Places per group session' : 'Performers per arrival time'}" min="1" max="200" step="1"></label><p>${record.mode === 'group' ? 'How many performers can book a place in each group session?' : 'How many performers can arrive together and take turns auditioning?'}</p></section>` : '';
-        const modeSettings = tape ? '<p class="ap-setup-note">People submit a recording. They do not book a live audition time.</p>' : record.mode !== 'walkin' ? `<section class="ap-setup-mode-settings"><div class="ap-setup-grid"><div class="ap-setup-setting-item">${field('Minutes per person', 'slot', record.slot, 'number', 'min="1" max="180"')}<small>How much time do you need with each performer?</small></div><div class="ap-setup-setting-item">${field('Minutes between appointments', 'gap', record.gap, 'number', 'min="0" max="60"')}<small>Extra time to make notes and reset.</small></div>${placesPanel}</div></section>` : '';
-        const bookingSettings = tape ? modeSettings : `<div class="ap-setup-mode-panel">${modeExplainer}${modeSettings}</div>`;
+        const modeSettings = tape ? '<p class="ap-setup-note">People submit a recording. They do not book a live audition time.</p>' : record.mode !== 'walkin' ? `<section class="ap-setup-mode-settings"><div class="ap-setup-grid"><div class="ap-setup-setting-item">${field(record.mode === 'group' ? 'Minutes per group session' : 'Minutes per person', 'slot', record.slot, 'number', 'min="1" max="180"')}<small>${record.mode === 'group' ? 'How long does each group audition session run?' : 'How much time do you need with each performer?'}</small></div><div class="ap-setup-setting-item">${field(record.mode === 'group' ? 'Minutes between group sessions' : 'Minutes between appointments', 'gap', record.gap, 'number', 'min="0" max="60"')}<small>${record.mode === 'group' ? 'Time to reset before the next group arrives.' : 'Extra time to make notes and reset.'}</small></div>${placesPanel}</div></section>` : '';
+        const bookingSettings = tape ? modeSettings : `<div class="ap-setup-mode-panel${record.mode === 'group' ? ' ap-setup-mode-panel--group' : ''}">${modeExplainer}${modeSettings}</div>`;
         const bookingMethods = tape ? '' : `<fieldset><legend>How should people book?</legend><p>Choose how performers will reserve or receive their audition time.</p><div class="ap-setup-booking-grid">${modes.map(([value,label,desc,icon]) => `<label class="ap-setup-booking ${record.mode === value ? 'selected' : ''}"><input type="radio" data-field="mode" name="mode-${e(record.id)}" value="${value}" ${record.mode === value ? 'checked' : ''}><span class="ap-setup-booking-icon" aria-hidden="true" style="--booking-icon:url('${encodeURI('/ASSETS/Images/Icons/' + icon)}')"></span><span><strong>${label}</strong><small>${desc}</small></span></label>`).join('')}${bookingSettings}</div></fieldset>`;
         body = `${bookingMethods}${additionalOptions}${tapeDeadline}`;
       } else if (step === 2) {
@@ -27381,10 +27407,11 @@ See you soon!
         const dateHelp = record.methods.includes('in_person') ? 'Set when and where your in-person auditions will take place.' : 'Set when your online auditions will take place.';
         const datePanel = tape ? '<p class="ap-setup-note">Self-tape auditions do not need live dates or a venue. Set the submission deadline under Booking type.</p>' : `<section class="ap-setup-date-section"><header><span class="ap-setup-date-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="16" rx="2"></rect><path d="M7.5 3v4M16.5 3v4M3.5 9h17"></path></svg></span><span><h3>${dateTitle}</h3><p>${dateHelp}</p></span></header><div class="ap-setup-days"><nav class="ap-setup-day-tabs" aria-label="Audition dates">${days.map((day,index)=>`<button type="button" data-day-tab="${index}" aria-selected="${dayIndex===index}">Day ${index+1}</button>`).join('')}${days.length>1&&dayIndex>0?`<button type="button" class="ap-setup-remove-day" data-remove-day="${dayIndex}">Remove day</button>`:''}</nav>${dayHTML(record,activeDay,dayIndex)}</div><aside class="ap-setup-more-dates"><div class="ap-setup-more-dates-copy"><strong>Need more time to see everyone?</strong><p>If you're expecting more performers than you can audition in one day, or want to give performers a choice of dates, add another day here. Each performer will only need to attend one of these days.</p></div><button type="button" data-add-day>+ Add another day</button><p class="ap-setup-more-dates-note">If performers need to attend more than one audition (for example, a singing audition and a separate dance call), use <strong>Add audition</strong> instead.</p></aside></section>`;
         body = datePanel;
-      } else if (step === 3) body = `<fieldset><legend>What does this audition include?</legend><div class="ap-setup-grid">${activities.map(([key,label]) => multiChoice(label,'activities',key,record.activities.includes(key))).join('')}</div></fieldset>`;
+      } else if (step === 5) body = scheduleBuilder(record);
+      else if (step === 3) body = `<fieldset><legend>What does this audition include?</legend><div class="ap-setup-grid">${activities.map(([key,label]) => multiChoice(label,'activities',key,record.activities.includes(key))).join('')}</div></fieldset>`;
       else if (step === 4) body = `<div class="ap-setup-grid">${record.type !== 'callback' ? `<section class="aud-materials-setting ap-setup-full"><div class="aud-materials-setting-copy"><strong>Audition materials</strong><span>${isAuditionSessionMaterialsEnabled(record.id) ? 'Performers can see the materials you share for this audition.' : 'No materials will be shared for this audition.'}</span></div><label class="aud-materials-setting-toggle"><span>${isAuditionSessionMaterialsEnabled(record.id) ? 'On' : 'Off'}</span><input type="checkbox" data-materials-session="${e(record.id)}" ${isAuditionSessionMaterialsEnabled(record.id) ? 'checked' : ''} aria-label="Audition materials for ${e(record.name)} ${isAuditionSessionMaterialsEnabled(record.id) ? 'on' : 'off'}"><span class="aud-materials-setting-track" aria-hidden="true"></span></label></section>` : ''}<label class="ap-setup-field ap-setup-full">What should they prepare?<textarea data-field="prep" rows="3">${e(record.prep)}</textarea></label><label class="ap-setup-field ap-setup-full">What should they bring?<textarea data-field="bring" rows="2">${e(record.bring)}</textarea></label><label class="ap-setup-field">When can they leave?<select data-field="finish"><option ${record.finish==='After their appointment'?'selected':''}>After their appointment</option><option ${record.finish==='After the whole session'?'selected':''}>After the whole session</option><option ${record.finish==='When released by the team'?'selected':''}>When released by the team</option></select></label><label class="ap-setup-field ap-setup-full">Arrival instructions (sent after booking)<textarea data-field="access" rows="2" placeholder="For example: check in with our producer at the welcome desk, then wait to be called.">${e(record.access)}</textarea><span class="ap-setup-field-help">These instructions go in the booking confirmation email and do not appear on the public audition page.</span></label><p class="ap-setup-full">Add shared links to audition materials under Materials. Files stay in your own storage; set links so anyone with the link can view.</p></div>`;
       else body = applicantView(record);
-      return `<div class="ap-setup-editor" style="--ap-accent:${accent}"><nav class="ap-setup-tabs" aria-label="Audition details">${sections.map((name,index)=>`<button type="button" data-step="${index}" aria-pressed="${step===index}">${name}${missing(record).some(item=>item.step===index)?'<span class="ap-setup-star" aria-hidden="true">✱</span>':''}</button>`).join('')}</nav><div class="ap-setup-fields">${body}</div><footer><span data-save-status>${state.saving[record.id] ? 'Saving draft…' : 'Draft saves automatically. Nothing is published.'}</span><button type="button" data-close-editor>Done</button></footer></div>`;
+      return `<div class="ap-setup-editor" style="--ap-accent:${accent}"><nav class="ap-setup-tabs" aria-label="Audition details">${sections.map((name,index)=>`<button type="button" data-step="${index}" aria-pressed="${state.step===index}">${name}${missing(record).some(item=>item.step===index)?'<span class="ap-setup-star" aria-hidden="true">✱</span>':''}</button>`).join('')}</nav><div class="ap-setup-fields">${body}</div><footer><span data-save-status>${state.saving[record.id] ? 'Saving draft…' : 'Draft saves automatically. Nothing is published.'}</span><button type="button" data-close-editor>Done</button></footer></div>`;
     }
 
     function applicantView(record) {
@@ -27403,7 +27430,9 @@ See you soon!
       const methodLabels = { in_person: 'In person', video_call: 'Video call', self_tape: 'Self-tape' };
       const isTapeOnly = record.methods.length === 1 && record.methods[0] === 'self_tape';
       const days = isTapeOnly ? [] : ensureDays(record);
-      const duration = `${e(record.slot || '10')} minutes per person${Number(record.gap) ? ` · ${e(record.gap)} minutes between appointments` : ''}`;
+      const duration = record.mode === 'group'
+        ? `${e(record.slot || '10')} minutes per group session${Number(record.gap) ? ` · ${e(record.gap)} minutes between group sessions` : ''}`
+        : `${e(record.slot || '10')} minutes per person${Number(record.gap) ? ` · ${e(record.gap)} minutes between appointments` : ''}`;
       const format = record.mode === 'appointment' ? duration : record.mode === 'group' ? `${e(record.capacity || '1')} places in each group session · ${duration}` : record.mode === 'arrival' ? `${e(record.capacity || '1')} performers per shared arrival time · ${duration}` : record.mode === 'walkin' ? 'Arrive any time during the advertised hours and wait your turn.' : `Your team will assign your audition time · ${duration}`;
       const dayCards = days.map((day, index) => {
         const daySlots = (audSlots[record.id] || [])
@@ -27528,7 +27557,7 @@ See you soon!
         else if(key==='name'){record.name=input.value;record.customName=true;}
         else record[key]=input.value;
         if(key==='type'||key==='mode') {
-          state.step=key==='type'?0:1;
+          state.step=key==='type'?1:0;
           save(record);
           render();
         } else {
@@ -27566,6 +27595,26 @@ See you soon!
       root.querySelectorAll('[data-remove-day]').forEach(button=>button.onclick=()=>{
         const index=Number(button.dataset.removeDay);if(index<1||record.days.length<2)return;
         record.days.splice(index,1);state.activeDay[record.id]=Math.max(0,index-1);save(record);render();
+      });
+      root.querySelectorAll('[data-generate-day]').forEach(button=>button.onclick=event=>{
+        event.preventDefault();
+        _saveBlocks(record.id);
+        generateBlockSlots(record.id, button.dataset.generateDay);
+      });
+      root.querySelectorAll('[data-add-break]').forEach(button=>button.onclick=event=>{
+        event.preventDefault();
+        const day=ensureDays(record)[Number(button.dataset.addBreak)];
+        if(day) promptAddBreak(record.id, day.id);
+      });
+      root.querySelectorAll('[data-confirm-break]').forEach(button=>button.onclick=event=>{
+        event.preventDefault();
+        const day=ensureDays(record)[Number(button.dataset.confirmBreak)];
+        if(day) { confirmAddBreak(record.id, day.id); save(record); }
+      });
+      root.querySelectorAll('[data-remove-break]').forEach(button=>button.onclick=event=>{
+        event.preventDefault();
+        const day=ensureDays(record)[Number(button.dataset.removeBreak)];
+        if(day) { removeBreak(record.id, day.id, Number(button.dataset.breakIndex)); save(record); }
       });
     }
 
