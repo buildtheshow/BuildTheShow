@@ -22813,7 +22813,7 @@
               <div id="faq-bulk-panel" style="display:none;margin-top:0.6rem;background:#faf9fd;border:1.5px solid rgba(87,46,136,0.15);border-radius:10px;padding:1rem;">
                 <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:rgba(87,46,136,0.5);margin-bottom:0.4rem;">Paste your FAQs below</div>
                 <div style="font-size:0.75rem;color:#b0a8c4;margin-bottom:0.6rem;line-height:1.5;">Paste a list of questions or Q&amp;As. Headings, bullets, numbering, and bold text are okay. Answers are optional.</div>
-                <textarea id="faq-bulk-input" class="form-input" rows="8" style="resize:vertical;font-family: var(--bts-font);font-size:0.82rem;" placeholder="Frequently Asked Questions&#10;&#10;What if we need to miss a rehearsal?&#10;Do we need to be available for all performances?&#10;&#10;Q: Is experience required?&#10;A: No previous experience is needed."></textarea>
+                <textarea id="faq-bulk-input" class="form-input" rows="8" style="resize:vertical;font-family: var(--bts-font);font-size:0.82rem;" onpaste="handleFaqPaste(event)" placeholder="Frequently Asked Questions&#10;&#10;What if we need to miss a rehearsal?&#10;Do we need to be available for all performances?&#10;&#10;Q: Is experience required?&#10;A: No previous experience is needed."></textarea>
                 <div style="display:flex;gap:0.5rem;margin-top:0.6rem;align-items:center;">
                   <button type="button" onclick="importFaqBulk()" class="btn-primary" style="font-size:0.8rem;padding:0.45rem 1rem;">Import FAQs</button>
                   <button type="button" onclick="toggleFaqBulk()" style="background:none;border:none;font-size:0.8rem;color:rgba(87,46,136,0.5);cursor:pointer;font-family: var(--bts-font);">Cancel</button>
@@ -49892,27 +49892,32 @@ See you soon!
       .replace(/&#39;|&apos;/gi, "'")
       .replace(/\*\*(.*?)\*\*/g, '$1')
       .replace(/__(.*?)__/g, '$1')
+      .replace(/^\s*#{1,6}\s*/, '')
       .replace(/^\s*(?:[-*•▪‣]+\s*|\d+[.)]\s*)/, '')
       .trim();
-    const isFaqHeading = line => /^(?:frequently\s+asked\s+questions|faqs?|questions\s*(?:&|and)\s*answers)$/i.test(line);
+    const isFaqHeading = line => /^(?:frequently\s+asked\s+questions|faqs?|questions\s*(?:&|and)\s*answers)$/i.test(line.replace(/^#+\s*/, ''));
     const lines = raw.replace(/\r/g, '').split('\n').map(cleanLine);
     const faqHeadingIndex = lines.findIndex(isFaqHeading);
     const sourceLines = faqHeadingIndex >= 0 ? lines.slice(faqHeadingIndex + 1) : lines;
     const parsed = [];
     let current = null;
-    let sawQuestionMarker = false;
     const finishCurrent = () => {
       if (current?.q) parsed.push({ q: current.q.trim(), a: current.a.trim() });
       current = null;
     };
+    const isQuestionLine = line => {
+      if (/[?？]$/.test(line)) return true;
+      const normalized = line.toLowerCase().replace(/[.!,:;]+$/g, '').trim();
+      if (normalized === 'what to expect') return false;
+      return /^(?:what|when|where|who|why|how|which|can|could|will|would|should|do|does|did|is|are|was|were|have|has|had|may|might|must)\b\s+\S+/i.test(normalized);
+    };
 
     sourceLines.forEach(line => {
       if (!line || /^svg$/i.test(line)) return;
-      const qMatch = line.match(/^(?:q|question)\s*[:.)-]\s*(.*)$/i);
-      const aMatch = line.match(/^(?:a|answer)\s*[:.)-]\s*(.*)$/i);
+      const qMatch = line.match(/^(?:q|question)\s*\d*\s*[:.)-]\s*(.*)$/i);
+      const aMatch = line.match(/^(?:a|answer)\s*\d*\s*[:.)-]\s*(.*)$/i);
       if (qMatch) {
         finishCurrent();
-        sawQuestionMarker = true;
         current = { q: qMatch[1].trim(), a: '' };
         return;
       }
@@ -49920,14 +49925,12 @@ See you soon!
         if (current) current.a = [current.a, aMatch[1].trim()].filter(Boolean).join(' ');
         return;
       }
-      if (/[?？]$/.test(line)) {
+      if (isQuestionLine(line)) {
         finishCurrent();
         current = { q: line, a: '' };
         return;
       }
-      if (current && (sawQuestionMarker || current.q)) {
-        current.a = [current.a, line].filter(Boolean).join(' ');
-      }
+      if (current) current.a = [current.a, line].filter(Boolean).join(' ');
     });
     finishCurrent();
 
@@ -49936,16 +49939,51 @@ See you soon!
       return;
     }
 
-    _faqItems.push(...parsed);
+    const questionKey = value => String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const existingQuestions = new Set(_faqItems.map(item => questionKey(item.q)));
+    const uniqueParsed = parsed.filter(item => {
+      const key = questionKey(item.q);
+      if (!key || existingQuestions.has(key)) return false;
+      existingQuestions.add(key);
+      return true;
+    });
+    const duplicatesSkipped = parsed.length - uniqueParsed.length;
+    _faqItems.push(...uniqueParsed);
     renderFaqList();
     scheduleProdInfoSave();
 
     inp.value = '';
     if (msg) {
-      msg.textContent = `${parsed.length} question${parsed.length !== 1 ? 's' : ''} added!`;
+      msg.textContent = uniqueParsed.length
+        ? `${uniqueParsed.length} question${uniqueParsed.length !== 1 ? 's' : ''} added${duplicatesSkipped ? `; ${duplicatesSkipped} duplicate${duplicatesSkipped !== 1 ? 's' : ''} skipped` : ''}.`
+        : `All ${duplicatesSkipped} question${duplicatesSkipped !== 1 ? 's were' : ' was'} already in your FAQs.`;
       setTimeout(() => { msg.textContent = ''; }, 3000);
     }
     setTimeout(toggleFaqBulk, 1200);
+  }
+
+  function handleFaqPaste(event) {
+    const textarea = event.currentTarget;
+    const html = event.clipboardData?.getData('text/html');
+    if (!textarea || !html || !window.DOMParser) return;
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      doc.querySelectorAll('script,style,svg,meta,link').forEach(node => node.remove());
+      const blockTags = new Set(['ADDRESS','ARTICLE','BLOCKQUOTE','DIV','H1','H2','H3','H4','H5','H6','LI','P','PRE','SECTION']);
+      const toText = node => {
+        if (node.nodeType === Node.TEXT_NODE) return node.nodeValue || '';
+        if (node.nodeType !== Node.ELEMENT_NODE && node.nodeType !== Node.DOCUMENT_NODE) return '';
+        const content = [...node.childNodes].map(toText).join('');
+        if (node.nodeName === 'BR') return '\n';
+        return blockTags.has(node.nodeName) ? `${content.trim()}\n` : content;
+      };
+      const pastedText = toText(doc.body).replace(/[\t ]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+      if (!pastedText) return;
+      event.preventDefault();
+      textarea.setRangeText(pastedText, textarea.selectionStart, textarea.selectionEnd, 'end');
+    } catch (error) {
+      console.warn('[BTS] Could not read formatted FAQ paste; using plain text.', error);
+    }
   }
 
   // ── Production Info rich text ─────────────────────────
