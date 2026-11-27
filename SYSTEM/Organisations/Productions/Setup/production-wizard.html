@@ -2840,70 +2840,144 @@
       const preview = document.getElementById('step3-paste-preview');
       const text = input?.value || '';
       if (!preview) return;
-      const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+      const lines = text.split(/\r?\n/).map(line => line.trim().replace(/\\+$/, '').trim()).filter(Boolean);
       if (!lines.length) {
         preview.textContent = 'Paste your schedule text above first.';
         _step3PastedEvents = [];
         return;
       }
 
-      const sharedYear = +(text.match(/\b(20\d{2})\b/) || [])[1] || new Date().getFullYear();
       const typeRules = [
         [/\b(audition|auditions)\b/i, 'audition'],
         [/\b(callback|callbacks)\b/i, 'callback'],
         [/\b(performance|performances|show|shows|matinee)\b/i, 'performance'],
-        [/\b(music rehearsal|music call|vocal rehearsal)\b/i, 'music_rehearsal'],
-        [/\b(dress rehearsal|dress)\b/i, 'dress'],
-        [/\b(choreography|dance rehearsal|dance call)\b/i, 'choreography'],
+        [/\b(music rehearsals?|music calls?|vocal rehearsals?)\b/i, 'music_rehearsal'],
+        [/\b(dress rehearsals?|dress)\b/i, 'dress'],
+        [/\b(choreography|dance rehearsals?|dance calls?)\b/i, 'choreography'],
         [/\b(tech|technical rehearsal|tech week)\b/i, 'tech'],
         [/\b(strike|load[- ]out)\b/i, 'strike'],
         [/\b(cast party|wrap party)\b/i, 'cast_party'],
-        [/\bevent\b/i, 'event'],
-        [/\b(rehearsal|run[- ]through)\b/i, 'rehearsal'],
+        [/\b(event|meet\s*&\s*greet|parade)\b/i, 'event'],
+        [/\b(rehearsals?|run[- ]throughs?)\b/i, 'rehearsal'],
       ];
-      const timeToken = '(?:[01]?\\d|2[0-3])(?::[0-5]\\d)?\\s*(?:a\\.?m\\.?|p\\.?m\\.?)?';
+      const timeToken = '(?:(?:[01]?\\d|2[0-3])(?::[0-5]\\d)?\\s*(?:a\\.?m\\.?|p\\.?m\\.?)|(?:[01]?\\d|2[0-3]):[0-5]\\d)';
       const timeRangePattern = new RegExp(`\\b(${timeToken})\\s*(?:-|–|—|to|until)\\s*(${timeToken})\\b`, 'i');
+      const oneTimePattern = new RegExp(`\\b(${timeToken})\\b`, 'i');
+      const weekdayPattern = /\b(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\b/i;
+      const currentYear = new Date().getFullYear();
+      const explicitYear = +(text.match(/\b(20\d{2})\b/) || [])[1] || 0;
+      const rawDateLines = lines.map(line => ({ line, date: step3ParsePastedDate(line, explicitYear || currentYear) })).filter(item => item.date && !item.date.ambiguous);
+      const weekdayDateLines = rawDateLines.filter(item => weekdayPattern.test(item.line));
+      let fallbackYear = explicitYear || currentYear;
+      let yearNote = '';
+      if (!explicitYear && weekdayDateLines.length) {
+        const candidates = [];
+        for (let year = currentYear; year <= currentYear + 8; year++) {
+          const matches = weekdayDateLines.reduce((count, item) => {
+            const date = step3ParsePastedDate(item.line, year);
+            const weekday = item.line.match(weekdayPattern)?.[1];
+            return count + (date && new Date(`${date.iso}T12:00:00`).toLocaleDateString('en-US', { weekday:'long' }).toLowerCase() === weekday?.toLowerCase() ? 1 : 0);
+          }, 0);
+          candidates.push({ year, matches });
+        }
+        candidates.sort((a, b) => b.matches - a.matches || a.year - b.year);
+        if (candidates[0].matches) {
+          fallbackYear = candidates[0].year;
+          yearNote = `Using ${fallbackYear}, which matches the weekday names.`;
+        } else {
+          fallbackYear = currentYear;
+        }
+      }
+      if (!explicitYear && !yearNote && rawDateLines.length) {
+        const [year, month, day] = rawDateLines[0].date.iso.split('-').map(Number);
+        const today = new Date();
+        if (new Date(year, month - 1, day) < new Date(today.getFullYear(), today.getMonth(), today.getDate())) fallbackYear++;
+        yearNote = `No year was included, so using ${fallbackYear}.`;
+      }
+
+      const monthNames = 'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?';
+      const monthNumber = name => CAL_MONTHS.findIndex(month => month.toLowerCase() === name.slice(0, 3).toLowerCase()) + 1;
+      const eventDatesForLine = (line, date) => {
+        const tail = line.slice(line.indexOf(date.raw) + date.raw.length);
+        let endMonth = Number(date.iso.slice(5, 7));
+        let endDay = 0;
+        let range = tail.match(/^\s*(?:-|–|—|to)\s*(\d{1,2})(?:st|nd|rd|th)?(?=\s*(?:-|–|—|to|$))/i);
+        if (range) endDay = Number(range[1]);
+        if (!endDay) {
+          const monthRange = tail.match(new RegExp(`^\\s*(?:-|–|—|to)\\s*(${monthNames})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?=\\s*(?:-|–|—|to|$))`, 'i'));
+          if (monthRange) { endMonth = monthNumber(monthRange[1]); endDay = Number(monthRange[2]); }
+        }
+        const [year, month, day] = date.iso.split('-').map(Number);
+        const start = new Date(year, month - 1, day);
+        const end = endDay ? new Date(year + (endMonth < month ? 1 : 0), endMonth - 1, endDay) : start;
+        if (end < start || (end - start) / 86400000 > 60) return [date.iso];
+        const dates = [];
+        for (const cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+          dates.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`);
+        }
+        return dates;
+      };
+      const parseTimes = source => {
+        if (/\btime\s+tbd\b/i.test(source)) return { time_mode:'tbd', start_time:'', end_time:'', hasTime:true, warning:'' };
+        const range = source.match(timeRangePattern);
+        if (range) {
+          const endPeriod = (range[2].match(/(am|pm)\.?$/i) || [])[1]?.toLowerCase() || '';
+          let start_time = step3ParsePastedTime(range[1], endPeriod);
+          let end_time = step3ParsePastedTime(range[2]);
+          if (!/am|pm/i.test(range[1]) && /am|pm/i.test(range[2]) && start_time && end_time) {
+            const startHour = Number(start_time.slice(0, 2)), endHour = Number(end_time.slice(0, 2));
+            if (startHour < 12 && endHour >= 12) start_time = `${String(startHour + 12).padStart(2, '0')}:${start_time.slice(3)}`;
+          }
+          return start_time && end_time
+            ? { time_mode:'set', start_time, end_time, hasTime:true, warning:'' }
+            : { time_mode:'tbd', start_time:'', end_time:'', hasTime:true, warning:'Check time' };
+        }
+        const oneTime = source.match(oneTimePattern);
+        if (oneTime) {
+          const start_time = step3ParsePastedTime(oneTime[1]);
+          return start_time
+            ? { time_mode:'set', start_time, end_time:'', hasTime:true, warning:/am|pm/i.test(oneTime[1]) ? '' : 'Check AM/PM' }
+            : { time_mode:'tbd', start_time:'', end_time:'', hasTime:true, warning:'Check time' };
+        }
+        return { time_mode:'tbd', start_time:'', end_time:'', hasTime:false, warning:'' };
+      };
+      const titleFromLine = (line, date) => {
+        let title = line.replace(weekdayPattern, ' ').replace(date.raw, ' ');
+        title = title.replace(/^\s*(?:-|–|—|to)\s*\d{1,2}(?:st|nd|rd|th)?(?=\s*(?:-|–|—|to|$))/i, ' ');
+        title = title.replace(timeRangePattern, ' ').replace(oneTimePattern, ' ').replace(/\btime\s+tbd\b|\bstart\b/ig, ' ');
+        return title.replace(/[|–—-]+/g, ' ').replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^[,\s]+|[,\s]+$/g, '');
+      };
+
       const parsed = [];
       let skipped = 0;
       let needsReview = 0;
-
-      lines.forEach(line => {
-        const date = step3ParsePastedDate(line, sharedYear);
+      let context = { event_type:'', title:'', times:null };
+      for (const line of lines) {
+        const date = step3ParsePastedDate(line, fallbackYear);
         if (!date || date.ambiguous) {
-          if (/\d|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(line)) skipped++;
-          return;
+          const headingType = typeRules.find(([pattern]) => pattern.test(line))?.[1];
+          const headingTimes = parseTimes(line);
+          const headingTitle = line.replace(timeRangePattern, ' ').replace(oneTimePattern, ' ').replace(/\btime\s+tbd\b/ig, ' ').replace(/[|–—-]+/g, ' ').replace(/\s+/g, ' ').trim();
+          if (headingType || headingTitle) context = {
+            event_type:headingType || (headingTitle ? 'event' : context.event_type),
+            title:headingTitle || context.title,
+            times:headingTimes.hasTime ? headingTimes : context.times,
+          };
+          else if (/\d|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(line)) skipped++;
+          continue;
         }
-        const eventType = typeRules.find(([pattern]) => pattern.test(line))?.[1] || 'other';
-        const withoutDate = line.replace(date.raw, ' ');
-        const range = withoutDate.match(timeRangePattern);
-        let start_time = '', end_time = '', time_mode = 'tbd';
-        let warning = '';
-        if (range) {
-          const endPeriod = (range[2].match(/(am|pm)\.?$/i) || [])[1]?.toLowerCase() || '';
-          start_time = step3ParsePastedTime(range[1], endPeriod);
-          end_time = step3ParsePastedTime(range[2]);
-          if (start_time && end_time) {
-            time_mode = 'set';
-            if (!/am|pm/i.test(range[1]) && !/am|pm/i.test(range[2]) && (+range[1].split(':')[0] <= 12 || +range[2].split(':')[0] <= 12)) warning = 'Check AM/PM';
-          } else {
-            start_time = ''; end_time = '';
-            warning = 'Check time';
-          }
-        } else {
-          const oneTime = withoutDate.match(new RegExp(`\\b(${timeToken})\\b`, 'i'));
-          if (oneTime) {
-            start_time = step3ParsePastedTime(oneTime[1]);
-            if (start_time) time_mode = 'set';
-            if (start_time && !/am|pm/i.test(oneTime[1]) && +oneTime[1].split(':')[0] <= 12) warning = 'Check AM/PM';
-          }
+        const lineType = typeRules.find(([pattern]) => pattern.test(line))?.[1];
+        const event_type = lineType || context.event_type || 'other';
+        const lineTimes = parseTimes(line.replace(date.raw, ' '));
+        const times = lineTimes.hasTime ? lineTimes : (context.times || { time_mode:'tbd', start_time:'', end_time:'', warning:'' });
+        const lineTitle = titleFromLine(line, date);
+        const title = lineTitle ? (context.title && /^matinee$/i.test(lineTitle) ? `${context.title} — ${lineTitle}` : lineTitle) : (context.title || EVENT_TYPE_LABELS[event_type] || 'Event');
+        for (const iso of eventDatesForLine(line, date)) {
+          const warning = times.warning || '';
+          if (warning) needsReview++;
+          parsed.push({ _id:_s3id(), db_id:null, title, event_type, date:iso, start_time:times.start_time, end_time:times.end_time, time_mode:times.time_mode, mandatory:false, warning });
         }
-        if (warning) needsReview++;
-        parsed.push({
-          _id: _s3id(), db_id: null, title: EVENT_TYPE_LABELS[eventType] || 'Event',
-          event_type: eventType, date: date.iso, start_time, end_time, time_mode,
-          mandatory: false, warning,
-        });
-      });
+      }
 
       _step3PastedEvents = parsed;
       if (!parsed.length) {
@@ -2912,12 +2986,14 @@
       }
 
       const rows = parsed.map(event => {
-        const dateLabel = new Date(`${event.date}T12:00:00`).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
+        const dateLabel = new Date(`${event.date}T12:00:00`).toLocaleDateString('en-CA', { month:'short', day:'numeric', year:'numeric' });
         const timeLabel = event.time_mode === 'tbd' ? 'Time TBD' : `${step3FormatTime(event.start_time) || 'Start time?'}${event.end_time ? `–${step3FormatTime(event.end_time)}` : ''}`;
-        return `<li><strong>${escHtml(EVENT_TYPE_LABELS[event.event_type] || 'Event')}</strong> · ${escHtml(dateLabel)} · ${escHtml(timeLabel)}${event.warning ? ` <span class="step3-paste-warning">(${escHtml(event.warning)})</span>` : ''}</li>`;
+        const typeLabel = EVENT_TYPE_LABELS[event.event_type] || 'Event';
+        const typeNote = event.title.toLowerCase() === typeLabel.toLowerCase() ? '' : ` <span>(${escHtml(typeLabel)})</span>`;
+        return `<li><strong>${escHtml(event.title)}</strong>${typeNote} · ${escHtml(dateLabel)} · ${escHtml(timeLabel)}${event.warning ? ` <span class="step3-paste-warning">(${escHtml(event.warning)})</span>` : ''}</li>`;
       }).join('');
-      const note = skipped ? `<p class="step3-paste-warning">Skipped ${skipped} line${skipped === 1 ? '' : 's'} because the date was missing or unclear. Add those events manually or rewrite the date with the month name.</p>` : '';
-      const warningNote = needsReview ? `<p class="step3-paste-warning">${needsReview} time${needsReview === 1 ? '' : 's'} may need AM/PM checking. You can edit them after adding.</p>` : '';
+      const note = `${yearNote ? `<p>${escHtml(yearNote)}</p>` : ''}${skipped ? `<p class="step3-paste-warning">Skipped ${skipped} line${skipped === 1 ? '' : 's'} because the date was missing or unclear. Add those events manually or rewrite the date with the month name.</p>` : ''}`;
+      const warningNote = needsReview ? `<p class="step3-paste-warning">${needsReview} time${needsReview === 1 ? '' : 's'} may need checking. You can edit them after adding.</p>` : '';
       preview.innerHTML = `<div>Found ${parsed.length} event${parsed.length === 1 ? '' : 's'}:</div><ul>${rows}</ul>${note}${warningNote}<div class="step3-paste-actions"><button type="button" class="step3-paste-action step3-paste-action--primary" onclick="step3AddPastedEvents()">Add ${parsed.length} event${parsed.length === 1 ? '' : 's'}</button></div>`;
     }
 
@@ -3032,8 +3108,8 @@
           <details class="step3-paste-panel">
             <summary>Paste a schedule</summary>
             <div class="step3-paste-body">
-              <p class="step3-paste-help">Paste schedule text below, ideally one event per line. Include a date and, when you know them, start and end times. Review the results before adding them.</p>
-              <textarea id="step3-paste-input" class="step3-paste-input" placeholder="Performance — November 27, 2026 — 7:00pm to 10:00pm&#10;Rehearsal — November 20, 2026 — 6:00pm to 9:00pm"></textarea>
+              <p class="step3-paste-help">Paste a schedule below. It can list each date separately or group dates under a heading with shared times. Review the interpreted events before adding them.</p>
+              <textarea id="step3-paste-input" class="step3-paste-input" placeholder="Auditions&#10;May 1 — 9:00am–6:00pm&#10;&#10;Rehearsals | 9:00am–2:00pm&#10;July 26–30&#10;August 3–6"></textarea>
               <div class="step3-paste-actions">
                 <button type="button" class="step3-paste-action" onclick="step3PreviewPastedSchedule()">Preview schedule</button>
               </div>
