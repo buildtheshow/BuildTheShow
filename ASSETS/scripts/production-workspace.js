@@ -184,7 +184,7 @@
 
   // ── Load shared sidebar ───────────────────────────────
   (function () {
-    const _key = 'bts-prod-sidebar-v20';
+    const _key = 'bts-prod-sidebar-v21';
     for (let i = 0; i < sessionStorage.length; i++) { const k = sessionStorage.key(i); if (k && k.startsWith('bts-prod-sidebar-') && k !== _key) { sessionStorage.removeItem(k); i--; } }
     const _stored = sessionStorage.getItem(_key);
     const _cached = _stored?.includes('data-account-navigation="20261116-separate-profiles"') ? _stored : null;
@@ -193,7 +193,7 @@
       initProdSidebarEvents();
       try { console.info('[BTS lifecycle]', { timestamp: new Date().toISOString(), functionName: 'production-sidebar-shell', route: window.location.pathname + window.location.search + window.location.hash, reason: 'mounted-from-cache' }); } catch {}
     }
-    fetch('/SHARED/Navigation/production-sidebar.html?v=20261116-separate-profiles')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=20261127-dashboard-only')
       .then(res => res.text())
       .then(html => {
         sessionStorage.setItem(_key, html);

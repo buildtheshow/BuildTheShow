@@ -621,7 +621,7 @@
 
     if (cached) applyAndInit(cached);
 
-    fetch('/SHARED/Navigation/production-sidebar.html?v=20261127-dashboard-label')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=20261127-dashboard-only')
       .then(function (res) { return res.text(); })
       .then(function (html) {
         sessionStorage.setItem(key, html);

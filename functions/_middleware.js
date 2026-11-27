@@ -1039,7 +1039,7 @@ export async function onRequest(context) {
   }
   if(parts[0]==='org' && parts[1] && !['setup','production','profile'].includes(parts[1])) {
     if(parts.length===2 || (parts.length===3 && ['settings','productions','calendar','members'].includes(parts[2]))) return page(context,'/SYSTEM/Organisations/org-dashboard.html');
-    if(parts[2]==='productions' && parts[3]) {if(parts[4]==='tools'){if(parts[5]?.endsWith('.html'))return redirect(context.request,path.slice(0,-5));const asset=WORKSPACE_TOOLS.get(parts[5]);return asset&&parts.length===6?page(context,asset):new Response('Not found',{status:404});}return page(context,parts[3]==='new'?'/SYSTEM/Organisations/Productions/Setup/production-wizard.html':'/SYSTEM/Organisations/Productions/Workspace/production-workspace.html');}
+    if(parts[2]==='productions' && parts[3]) {if(parts[4]==='tools'){if(parts[5]?.endsWith('.html'))return redirect(context.request,path.slice(0,-5));const asset=WORKSPACE_TOOLS.get(parts[5]);return asset&&parts.length===6?page(context,asset):new Response('Not found',{status:404});}if(parts[3]==='new')return page(context,'/SYSTEM/Organisations/Productions/Setup/production-wizard.html');if(!parts[4]||parts[4]==='overview')return page(context,'/SYSTEM/Organisations/Productions/Workspace/production-overview.html');return page(context,'/SYSTEM/Organisations/Productions/Workspace/production-workspace.html');}
     return new Response('Not found',{status:404});
   }
   if(parts.length===1 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(parts[0]) && !RESERVED.has(parts[0].toLowerCase())) {
