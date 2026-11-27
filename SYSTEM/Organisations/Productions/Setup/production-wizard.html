@@ -2082,6 +2082,22 @@
       el.classList.remove('visible');
     }
 
+    function showWizardSaveError(containerId, section, error) {
+      console.error(`Could not save ${section}:`, error);
+      let message = `We couldn’t save ${section}. Your answers are still here. Please try again.`;
+      const errorDetails = `${error?.message || ''} ${error?.details || ''} ${error?.constraint || ''}`;
+      if (error?.code === '23505' && /productions_slug_key/i.test(errorDetails)) {
+        message = 'That public show link is already in use. Go back to Basics, choose a different Show Slug, and try again.';
+      } else if (error?.code === '42501') {
+        message = `Your account doesn’t have permission to save ${section}. Check that you’re signed in to the right organisation, then try again.`;
+      } else if (/network|fetch|timeout|offline/i.test(error?.message || '')) {
+        message = `Your connection interrupted the save for ${section}. Check your connection and try again.`;
+      }
+      const targetId = document.getElementById(containerId) ? containerId : `step${currentStep}Error`;
+      if (document.getElementById(targetId)) showError(targetId, message);
+      else window.alert(message);
+    }
+
     async function getNextProdNumber() {
       const { data, error } = await sb.from('bts_visible_productions')
         .select('id')
@@ -2498,10 +2514,15 @@
           if (!upErr) {
             const { data: urlData } = sb.storage.from('production-posters').getPublicUrl(path);
             wizardData.poster_url = urlData.publicUrl;
-            await sb.from('productions').update({ poster_url: urlData.publicUrl }).eq('id', prodId);
+            const { error: posterSaveError } = await sb.from('productions').update({ poster_url: urlData.publicUrl }).eq('id', prodId);
+            if (posterSaveError) {
+              console.error('Could not attach the uploaded poster to the show:', posterSaveError);
+              showError('step2Error', 'The poster uploaded, but we couldn’t attach it to the show. Click Continue to try saving it again.');
+              return;
+            }
           } else {
             console.error('Poster upload failed:', upErr);
-            showError('step2Error', 'Poster upload failed: ' + (upErr.message || 'Storage error. Make sure the production-files bucket exists in Supabase.'));
+            showError('step2Error', 'We couldn’t upload that poster. Try again or choose another image.');
             return;
           }
         }
@@ -2516,8 +2537,7 @@
           slugField?.focus();
           slugField?.select();
         } else {
-          console.error('Error saving production:', err);
-          showError('step2Error', 'We couldn’t save the show details. Please try again. If this keeps happening, contact support.');
+          showWizardSaveError('step2Error', 'the show details', err);
         }
       } finally {
         hideLoading();
@@ -2830,8 +2850,9 @@
       showLoading(MSGS_SAVING);
       try {
         // Save events to Zeus (production_events table)
-        if (prodId && step3Events.length) {
-          await sb.from('production_events').delete().eq('production_id', prodId);
+        if (prodId) {
+          const { error: deleteError } = await sb.from('production_events').delete().eq('production_id', prodId);
+          if (deleteError) throw deleteError;
           const rows = step3Events
             .filter(e => e.date)
             .map(e => {
@@ -2867,7 +2888,7 @@
         saveToLocalStorage();
         goNextStep();
       } catch(err) {
-        showError('step3Error', 'Error saving events: ' + (err.message || 'Unknown error'));
+        showWizardSaveError('step3Error', 'your dates and events', err);
       } finally {
         hideLoading();
       }
@@ -3087,6 +3108,8 @@
             ${cardsHTML}
           </div>
 
+          <div class="form-error" id="step11Error"></div>
+
           <div class="wizard-nav">
             <button class="btn-back" onclick="goBack()">← Back</button>
             <button class="btn-continue" onclick="submitStep11()">Continue →</button>
@@ -3142,6 +3165,7 @@
     }
 
     async function submitStep11() {
+      hideError('step11Error');
       const f = wizardData.features || {};
       // Sync feature flags to wizardData
       wizardData.auditions_enabled  = !!f.auditions;
@@ -3149,13 +3173,17 @@
       wizardData.volunteers_enabled = !!f.volunteers;
       wizardData.tickets_enabled    = !!f.tickets;
       wizardData.checklists_enabled = f.checklists !== false; // on by default
+      showLoading(MSGS_SAVING);
       try {
-        await sb.from('productions').update({ wizard_data: buildWizardDataObj() }).eq('id', prodId);
+        const { error } = await sb.from('productions').update({ wizard_data: buildWizardDataObj() }).eq('id', prodId);
+        if (error) throw error;
         saveToLocalStorage();
+        goNextStep();
       } catch(err) {
-        console.error('Error saving features:', err);
+        showWizardSaveError('step11Error', 'your selected sections', err);
+      } finally {
+        hideLoading();
       }
-      goNextStep();
     }
 
     // ── Step 4: Auditions Setup ──
@@ -3267,7 +3295,7 @@
         saveToLocalStorage();
         goNextStep();
       } catch(err) {
-        showError('step4Error', 'Error saving audition settings: ' + (err.message || 'Unknown error'));
+        showWizardSaveError('step4Error', 'your audition settings', err);
       } finally {
         hideLoading();
       }
@@ -3370,7 +3398,7 @@
         saveToLocalStorage();
         goNextStep();
       } catch(err) {
-        showError('step5Error', 'Error saving roles: ' + (err.message || 'Unknown error'));
+        showWizardSaveError('step5Error', 'your roles', err);
       } finally {
         hideLoading();
       }
@@ -3534,7 +3562,7 @@
         saveToLocalStorage();
         goNextStep();
       } catch(err) {
-        showError('step6Error', 'Error saving team: ' + (err.message || 'Unknown error'));
+        showWizardSaveError('step6Error', 'your team settings', err);
       } finally {
         hideLoading();
       }
@@ -3615,7 +3643,7 @@
         saveToLocalStorage();
         goNextStep();
       } catch(err) {
-        showError('step7Error', 'Error saving volunteer settings: ' + (err.message || 'Unknown error'));
+        showWizardSaveError('step7Error', 'your volunteer settings', err);
       } finally {
         hideLoading();
       }
@@ -3752,7 +3780,7 @@
         saveToLocalStorage();
         goNextStep();
       } catch(err) {
-        showError('step8Error', 'Error saving ticketing: ' + (err.message || 'Unknown error'));
+        showWizardSaveError('step8Error', 'your ticketing settings', err);
       } finally {
         hideLoading();
       }
@@ -4107,11 +4135,12 @@
       if (prodId) {
         if (btn) { btn.textContent = 'Saving...'; btn.disabled = true; }
         try {
-          await sb.from('productions').update({ status: 'setup', wizard_data: buildWizardDataObj() }).eq('id', prodId);
+          const { error } = await sb.from('productions').update({ status: 'setup', wizard_data: buildWizardDataObj() }).eq('id', prodId);
+          if (error) throw error;
           if (btn) { btn.textContent = 'Saved!'; setTimeout(() => { btn.textContent = 'Save Draft'; btn.disabled = false; }, 2000); }
         } catch(err) {
           if (btn) { btn.textContent = 'Save Draft'; btn.disabled = false; }
-          alert('Could not save: ' + (err.message || 'Unknown error'));
+          showWizardSaveError('step9Error', 'your draft', err);
         }
       } else {
         saveToLocalStorage();
@@ -4130,12 +4159,13 @@
 
         if (error) throw error;
 
-        const { data: savedProd } = await sb.from('bts_visible_productions').select('slug').eq('id', prodId).single();
+        const { data: savedProd, error: readError } = await sb.from('bts_visible_productions').select('slug').eq('id', prodId).single();
+        if (readError) throw readError;
         clearLocalStorage();
         window.location.href = productionAdminUrl(prodId, savedProd?.slug || '');
       } catch(err) {
         hideLoading();
-        showError('step9Error', 'Error saving draft: ' + (err.message || 'Unknown error'));
+        showWizardSaveError('step9Error', 'your draft', err);
       }
     }
 
@@ -4230,7 +4260,7 @@
         window.location.href = productionAdminUrl(prodId, slugToSet);
       } catch(err) {
         hideLoading();
-        showError('step9Error', 'Error launching production: ' + (err.message || 'Unknown error'));
+        showWizardSaveError('step9Error', 'your production', err);
       }
     }
 
