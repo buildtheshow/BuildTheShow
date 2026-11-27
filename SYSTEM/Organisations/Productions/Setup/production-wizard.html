@@ -1371,7 +1371,7 @@
     }
     .step3-event-fields-row--meta {
       display:grid;
-      grid-template-columns:minmax(118px,0.8fr) minmax(160px,1.2fr) minmax(220px,auto);
+      grid-template-columns:minmax(118px,0.8fr) minmax(130px,0.9fr) minmax(160px,1.1fr) minmax(220px,auto);
       align-items:end;
     }
     .step3-event-fields-row--times {
@@ -1385,6 +1385,11 @@
       font-size: 0.78rem; font-weight: 700; font-family: var(--bts-font); color: #000000;
       min-width: 0; width:100%; box-sizing:border-box;
     }
+    .step3-title-input {
+      border:1.5px solid rgba(87,46,136,0.15); border-radius:8px; padding:0.38rem 0.55rem;
+      background:#fff; color:#000; font:400 0.78rem var(--bts-font); min-width:0; width:100%; box-sizing:border-box;
+    }
+    .step3-title-input:focus { outline:none; border-color:rgba(87,46,136,0.45); box-shadow:0 0 0 3px rgba(87,46,136,0.06); }
     .step3-time-mode-btns {
       display: flex; gap: 0.3rem;
     }
@@ -2777,6 +2782,10 @@
                 <span class="step3-time-label">Type</span>
                 <select class="step3-type-select" onchange="step3UpdateField('${ev._id}','event_type',this.value)">${typeOptionsHtml(ev)}</select>
               </div>
+              <div class="step3-time-group">
+                <span class="step3-time-label">Title</span>
+                <input type="text" class="step3-title-input" value="${escHtml(ev.title || EVENT_TYPE_LABELS[ev.event_type] || 'Event')}" placeholder="e.g. Canada Day" maxlength="100" aria-label="Event title" onchange="step3UpdateField('${ev._id}','title',this.value.trim())" />
+              </div>
               <div class="step3-time-group" style="flex:1;min-width:0;">
                 <span class="step3-time-label">Date</span>
                 <div class="step3-time-wrap">
@@ -2903,7 +2912,8 @@
         [/\b(performance|performances|show|shows|matinee)\b/i, 'performance'],
         [/\b(music rehearsals?|music calls?|vocal rehearsals?)\b/i, 'music_rehearsal'],
         [/\b(dress rehearsals?|dress)\b/i, 'dress'],
-        [/\b(choreography|dance rehearsals?|dance calls?)\b/i, 'choreography'],
+        [/\b(dance rehearsals?)\b/i, 'rehearsal'],
+        [/\b(choreography|dance calls?)\b/i, 'choreography'],
         [/\b(tech|technical rehearsal|tech week)\b/i, 'tech'],
         [/\b(strike|load[- ]out)\b/i, 'strike'],
         [/\b(cast party|wrap party)\b/i, 'cast_party'],
@@ -2997,6 +3007,13 @@
         title = title.replace(timeRangePattern, ' ').replace(oneTimePattern, ' ').replace(/\btime\s+tbd\b|\bstart\b/ig, ' ');
         return title.replace(/[|–—-]+/g, ' ').replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^[,\s]+|[,\s]+$/g, '');
       };
+      const titleForEventType = (eventType, title) => {
+        let cleaned = String(title || '').trim();
+        if (eventType === 'rehearsal') cleaned = cleaned.replace(/\s+rehearsals?$/i, '').trim();
+        const label = (EVENT_TYPE_LABELS[eventType] || 'Event').toLowerCase();
+        if (cleaned.toLowerCase() === label || cleaned.toLowerCase() === `${label}s`) return '';
+        return cleaned;
+      };
 
       const parsed = [];
       let skipped = 0;
@@ -3021,7 +3038,8 @@
         const lineTimes = parseTimes(line.replace(date.raw, ' '));
         const times = lineTimes.hasTime ? lineTimes : (context.times || { time_mode:'tbd', start_time:'', end_time:'', warning:'' });
         const lineTitle = titleFromLine(line, date);
-        const title = lineTitle ? (context.title && /^matinee$/i.test(lineTitle) ? `${context.title} — ${lineTitle}` : lineTitle) : (context.title || EVENT_TYPE_LABELS[event_type] || 'Event');
+        const rawTitle = lineTitle ? (context.title && /^matinee$/i.test(lineTitle) ? `${context.title} — ${lineTitle}` : lineTitle) : (context.title || EVENT_TYPE_LABELS[event_type] || 'Event');
+        const title = titleForEventType(event_type, rawTitle) || EVENT_TYPE_LABELS[event_type] || 'Event';
         for (const iso of eventDatesForLine(line, date)) {
           const warning = times.warning || '';
           if (warning) needsReview++;
@@ -3124,7 +3142,7 @@
       const ev = step3Events.find(e => e._id === id);
       if (!ev) return;
       ev[field] = value;
-      if (['date', 'start_time', 'end_time', 'event_type', 'time_mode', 'mandatory'].includes(field)) _refreshStep3List();
+      if (['date', 'start_time', 'end_time', 'event_type', 'time_mode', 'mandatory', 'title'].includes(field)) _refreshStep3List();
     }
 
     function renderStep3HTML() {
