@@ -27458,6 +27458,19 @@ See you soon!
         card.querySelector('.aud-card-vis-badge')?.remove();
         const head = card.querySelector('.aud-session-header');
         head?.setAttribute('role','group');
+        if (head) {
+          head.tabIndex = 0;
+          head.setAttribute('aria-expanded', String(state.openId === record.id));
+          head.setAttribute('aria-label', `Open or close ${record.name || sessionTypeLabel(record.type)} settings`);
+          head.onclick = () => { state.openId = state.openId === record.id ? null : record.id; state.step = 0; render(); };
+          head.onkeydown = event => {
+            if (event.target !== head || (event.key !== 'Enter' && event.key !== ' ')) return;
+            event.preventDefault();
+            state.openId = state.openId === record.id ? null : record.id;
+            state.step = 0;
+            render();
+          };
+        }
         const nameNode=card.querySelector('.aud-card-name');
         nameNode.textContent = record.name || sessionTypeLabel(record.type);
         const titleRow=document.createElement('div');titleRow.className='ap-setup-title-row';
@@ -27471,7 +27484,7 @@ See you soon!
         const deleteButton = card.querySelector('.aud-action-btn.danger');
         deleteButton?.remove();
         const actions = document.createElement('div'); actions.className='ap-setup-actions';
-        const edit = document.createElement('button'); edit.type='button'; edit.className='ap-setup-edit'; edit.textContent=state.openId===record.id?'Done':'Edit'; edit.setAttribute('aria-expanded',String(state.openId===record.id)); edit.onclick=()=>{state.openId=state.openId===record.id?null:record.id;state.step=0;render();}; actions.append(edit);
+        const edit = document.createElement('button'); edit.type='button'; edit.className='ap-setup-edit'; edit.textContent=state.openId===record.id?'Done':'Edit'; edit.setAttribute('aria-expanded',String(state.openId===record.id)); edit.onclick=event=>{event.stopPropagation();state.openId=state.openId===record.id?null:record.id;state.step=0;render();}; actions.append(edit);
         const remove = document.createElement('button'); remove.type='button'; remove.className='ap-setup-delete'; remove.textContent='×'; remove.setAttribute('aria-label',`Delete ${record.name || sessionTypeLabel(record.type)}`); remove.title='Delete audition'; remove.onclick=event=>{event.stopPropagation();deleteAudition(record);}; actions.append(remove);
         head?.append(actions);
         const attendance = document.createElement('div'); attendance.className='ap-setup-attendance'; attendance.style.setProperty('--ap-accent',colour(record)); attendance.innerHTML=record.type==='callback'?`<strong>Who attends?</strong><label><input type="radio" name="audience-${e(record.id)}" value="invited" checked disabled>People we invite</label><small>Your team chooses who gets a callback.</small>`:`<strong>Who attends?</strong><label><input type="radio" name="audience-${e(record.id)}" value="open" ${record.audience!=='invited'?'checked':''}>Anyone who meets the requirements</label><label><input type="radio" name="audience-${e(record.id)}" value="invited" ${record.audience==='invited'?'checked':''}>People we invite</label>${record.audience==='invited'?'<small>Attending another audition does not add anyone here.</small>':''}`;
