@@ -32840,7 +32840,7 @@ See you soon!
                  oninput="_faqItems[${i}].q = this.value; scheduleProdInfoSave();" />
           <button type="button" class="faq-editor-remove" onclick="removeFaqItem(${i})" aria-label="Remove question ${i + 1}" title="Remove question">&times;</button>
         </div>
-        <label class="faq-editor-answer-label" for="pi-faq-answer-${i}">Answer (optional)</label>
+        <label class="faq-editor-answer-label" for="pi-faq-answer-${i}">Answer</label>
         <textarea id="pi-faq-answer-${i}" class="form-input faq-editor-answer" rows="2" placeholder="Add an answer for performers"
                   oninput="_faqItems[${i}].a = this.value; scheduleProdInfoSave();">${esc(item.a)}</textarea>
       </div>`).join('');
