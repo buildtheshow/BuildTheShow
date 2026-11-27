@@ -31901,7 +31901,7 @@ See you soon!
   function materialRows(type) {
     const meta = materialTypeMeta(type);
     const renderer = window.BTSAuditionTemplates?.renderTemplateById;
-    const tileColor = '#572e88';
+    const tileColor = '#476aaa';
     return `<div class="mat-list">${characters.map(c => {
       const slotsHTML = meta.slots.map(slot => {
         const fileId  = `${meta.fileIdPrefix}-${slot.key}-${c.id}`;
@@ -32241,6 +32241,27 @@ See you soon!
 
   function renderMaterialsContent(type, settings) {
     const organization = getMaterialOrganization(type);
+    const presentations = {
+      folder: {
+        title: 'Shared audition materials folder',
+        description: 'Paste one viewable link to your shared folder. Set access so anyone with the link can view it.',
+        icon: 'Materials-shared-folder.svg?v=20261127-outline',
+        color: '#572e88'
+      },
+      by_role: {
+        title: 'Role-specific sides or music',
+        description: 'Use this when performers need different material for different roles.',
+        icon: 'Materials-Role-specific.svg?v=20261127-outline',
+        color: '#476aaa'
+      },
+      at_audition: {
+        title: 'Provided at the audition',
+        description: 'No advance link is needed. Have sides, music, or dance instructions ready to hand out at the audition.',
+        icon: 'Materials-provided-at-audition.svg?v=20261127-outline',
+        color: '#dd8233'
+      }
+    };
+    const setup = presentations[organization] || presentations.folder;
     let detailHtml = '';
     if (!settings[type]) {
       detailHtml = `<div class="materials-empty">${esc(materialDisabledMessage(type))} Turn them on in each audition’s Preparation section when you are ready.</div>`;
@@ -32248,19 +32269,17 @@ See you soon!
       const formatLabel = 'Shared audition materials folder';
       const files = sharedMaterialFiles(type);
       const ids = `mat-shared-${type}`;
-      detailHtml = `<div class="mat-shared-link-panel"><h4>${formatLabel}</h4><p>Paste one viewable link to your shared folder. Set access so anyone with the link can view it.</p><div class="mat-shared-link-form"><label class="sr-only" for="${ids}-url">${formatLabel}</label><input id="${ids}-url" type="url" inputmode="url" placeholder="Paste a Google Drive, Dropbox, or other folder link"/><label class="sr-only" for="${ids}-name">Link name</label><input id="${ids}-name" type="text" placeholder="Folder name (optional)"/><button type="button" class="mat-upload-btn" onclick="addSharedMaterialLink('${esc(type)}','${organization}','${ids}-url','${ids}-name')">Add folder link</button></div>${files.length ? `<ul class="mat-shared-link-list">${files.map(file => `<li><a href="${esc(file.file_url)}" target="_blank" rel="noopener">${esc(file.name || 'View materials')}</a><button type="button" onclick="removeSharedMaterialLink('${esc(file.id)}')">Remove</button></li>`).join('')}</ul>` : '<div class="mat-file-missing">No folder link added yet.</div>'}</div>`;
+      detailHtml = `<div class="mat-shared-link-panel"><div class="mat-shared-link-form"><label class="sr-only" for="${ids}-url">${formatLabel}</label><input id="${ids}-url" type="url" inputmode="url" placeholder="Paste a Google Drive, Dropbox, or other folder link"/><label class="sr-only" for="${ids}-name">Link name</label><input id="${ids}-name" type="text" placeholder="Folder name (optional)"/><button type="button" class="mat-upload-btn" onclick="addSharedMaterialLink('${esc(type)}','${organization}','${ids}-url','${ids}-name')">Add folder link</button></div>${files.length ? `<ul class="mat-shared-link-list">${files.map(file => `<li><a href="${esc(file.file_url)}" target="_blank" rel="noopener">${esc(file.name || 'View materials')}</a><button type="button" onclick="removeSharedMaterialLink('${esc(file.id)}')">Remove</button></li>`).join('')}</ul>` : '<div class="mat-file-missing">No folder link added yet.</div>'}</div>`;
     } else if (organization === 'by_role') {
       detailHtml = characters.length ? materialRows(type) : '<div class="materials-empty">Add roles in Characters &amp; Roles before adding role-specific sides or music.</div>';
     } else {
-      detailHtml = '<div class="mat-shared-link-panel mat-provided-panel"><h4>Materials provided in the room</h4><p>No link is needed. Have sides, music, or dance instructions ready to hand out at the audition.</p></div>';
+      detailHtml = '<div class="materials-empty">No link is needed. Have sides, music, or dance instructions ready to hand out at the audition.</div>';
     }
-    const setup = organization === 'folder'
-      ? { title: 'Shared audition materials folder' }
-      : organization === 'by_role'
-        ? { title: 'Role-specific sides or music' }
-        : { title: 'Provided at the audition' };
     return `<section class="mat-setup-page" aria-label="${esc(setup.title)}">
-      <div class="mat-setup-content">${detailHtml}</div>
+      <div class="mat-setup-content"><section class="mat-detail-card" style="--mat-detail-accent:${setup.color};">
+        <header class="mat-detail-header"><img class="mat-detail-icon" src="/ASSETS/Images/Icons/${setup.icon}" alt="" aria-hidden="true"><div><h3 class="mat-detail-title">${esc(setup.title)}</h3><p class="mat-detail-description">${esc(setup.description)}</p></div></header>
+        <div class="mat-detail-body">${detailHtml}</div>
+      </section></div>
     </section>`;
   }
 
