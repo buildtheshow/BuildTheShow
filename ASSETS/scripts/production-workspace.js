@@ -32276,9 +32276,9 @@ See you soon!
       ['at_audition', 'Provided at the audition', 'No advance link; sides or other materials are provided in the room.'],
     ];
     const icons = {
-      folder: 'Materials-shared-folder.svg',
-      by_role: 'Materials-Role-specific.svg',
-      at_audition: 'Materials-provided-at-audition.svg',
+      folder: 'Materials-shared-folder.svg?v=20261127-outline',
+      by_role: 'Materials-Role-specific.svg?v=20261127-outline',
+      at_audition: 'Materials-provided-at-audition.svg?v=20261127-outline',
     };
     const options = choices.map(([value, title, copy]) => `<button type="button" class="mat-org-choice" data-material-choice="${value}" aria-label="Choose ${esc(title)}"><span class="mat-org-choice-icon" aria-hidden="true"><img src="/ASSETS/Images/Icons/${icons[value]}" alt=""></span><span class="mat-org-choice-copy"><strong>${esc(title)}</strong><small>${esc(copy)}</small></span></button>`).join('');
     return `<section class="mat-entry-prompt" aria-label="Choose how to share audition materials"><div class="mat-organization-options">${options}</div></section>`;
