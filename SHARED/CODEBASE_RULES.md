@@ -1261,6 +1261,11 @@ const value =
 4. Do not rename stable database tables, API fields, or other technical identifiers solely for spelling.
 5. If a legacy or technical field uses `organization`, the UI may still show `organisation`.
 
+### Time Formatting
+
+1. Display user-facing 12-hour times with lowercase `am`/`pm` attached directly to the time, such as `7:00pm` (no space, no uppercase meridiem).
+2. Keep stored times in the existing 24-hour format; apply this rule to display and editable time fields.
+
 ## Editing and Persistence
 
 1. Autosave is preferred for living records when the user is already in an edit surface.
