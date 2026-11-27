@@ -8915,8 +8915,164 @@ See you soon!
 
   // ── Overview glance cards ─────────────────────────────
   async function loadOverviewCards() {
+    await renderProductionSetupCards();
     await loadUpNextCard();
     renderOverviewChecklist();
+  }
+
+  const PRODUCTION_SETUP_DEFINITIONS = [
+    {
+      key: 'auditions', colour: '#572e88', icon: '/ASSETS/Images/Icons/Auditions.svg', name: 'Auditions',
+      action: "openAuditionsSubTab('setup')", actionLabel: 'Open audition setup',
+      phases: [
+        { title: 'Get the audition basics ready', tasks: ['Choose open call or time slots', 'Set any applicant limits', 'Choose whether headshots are needed', 'Choose whether resumes or videos are needed'], ready: s => s.auditionBasics },
+        { title: 'Add the roles you are casting', tasks: ['Add each role name', 'Add age guidance where useful', 'Add voice or movement notes where useful', 'Choose which roles appear on the audition form'], ready: s => s.roles > 0 },
+        { title: 'Plan the audition dates', tasks: ['Add audition dates to the calendar', 'Add callback dates if you need them', 'Set a start time', 'Mark unknown times as TBD'], ready: s => s.auditionEvents > 0 },
+        { title: 'Get ready to meet performers', tasks: ['Review the public audition information', 'Check the performer form', 'Decide who will check people in', 'Open auditions when you are ready'], ready: s => s.roles > 0 && s.auditionEvents > 0 && s.auditionBasics },
+      ],
+    },
+    {
+      key: 'registration', colour: '#476aaa', icon: '/ASSETS/Images/Icons/Applications.svg', name: 'Registration',
+      action: "openRegistrationSubTab('settings')", actionLabel: 'Open registration setup',
+      phases: [
+        { title: 'Choose what to collect', tasks: ['Review performer contact details', 'Choose emergency details to collect', 'Choose medical details to collect', 'List permissions and forms you need'], ready: s => s.registrationSettings },
+        { title: 'Set up your forms', tasks: ['Open the default registration form', 'Keep the questions you need', 'Remove questions you do not need', 'Check each question is easy to understand'], ready: s => s.registrationForms },
+        { title: 'Decide how payments work', tasks: ['Set the production fee if there is one', 'Choose whether instalments are allowed', 'Add due dates if you use a payment plan', 'Review payment reminders and instructions'], ready: s => s.registrationPayments },
+        { title: 'Prepare registration for your cast', tasks: ['Preview the form as a performer', 'Check which fields are required', 'Check your payment instructions', 'Make the form available when your cast is ready'], ready: s => s.registrationSettings && s.registrationForms && s.registrationPayments },
+      ],
+    },
+    {
+      key: 'budget', colour: '#dd8233', icon: '/ASSETS/Images/Icons/Financial - Reports.svg', name: 'Budget',
+      action: "navigateToBudget('dashboard')", actionLabel: 'Open budget',
+      phases: [
+        { title: 'Set the budget starting point', tasks: ['Add expected ticket income', 'Add grants or starting funds', 'Add other income you already know about', 'Choose the budget period'], ready: s => s.budgetSettings },
+        { title: 'Break costs into categories', tasks: ['Add the main spending categories', 'Add an expected amount for each category', 'Include small costs such as postage or snacks', 'Check that nothing important is missing'], ready: s => s.budgetCategories > 0 },
+        { title: 'Plan how you will track spending', tasks: ['Decide who can record a purchase', 'Choose where receipts will be added', 'Write down how reimbursements should work', 'Choose who approves spending'], ready: s => s.budgetCategories > 0 && s.budgetSettings },
+        { title: 'Get ready to review the numbers', tasks: ['Check your planned totals', 'Confirm the right people can access the budget', 'Choose a regular review day', 'Update actual costs as bills arrive'], ready: s => s.budgetCategories > 0 && s.budgetSettings },
+      ],
+    },
+    {
+      key: 'producer_timeline', colour: '#74a2b4', icon: '/ASSETS/Images/Icons/Producers To-do list.svg', name: 'Producer To-Do List',
+      action: "switchProdTab('checklist')", actionLabel: 'Open producer to-do list',
+      phases: [
+        { title: 'Make a simple production roadmap', tasks: ['Add the major production milestones', 'Put them in the order they happen', 'Add dates you already know', 'Remove anything that does not apply to your show'], ready: s => s.milestones > 0 },
+        { title: 'Turn milestones into small tasks', tasks: ['Add the first action for each milestone', 'Split big jobs into smaller actions', 'Keep each task focused on one thing', 'Add a due date when it helps'], ready: s => s.tasks > 0 },
+        { title: 'Make tasks easy to act on', tasks: ['Group tasks by area or department', 'Assign an owner where you know who is doing it', 'Add notes or links people will need', 'Move unclear tasks into a short “figure this out” task'], ready: s => s.tasks > 0 && s.milestones > 0 },
+        { title: 'Choose your next few actions', tasks: ['Review what is due soon', 'Pick one next action for each active area', 'Mark finished tasks as complete', 'Add a new small task when something changes'], ready: s => s.tasks > 0 && s.milestones > 0 },
+      ],
+    },
+    {
+      key: 'volunteers', colour: '#769e7b', icon: '/ASSETS/Images/Icons/Volunteers.svg', name: 'Volunteers',
+      action: "switchProdTab('volunteers', { sub: 'roles' })", actionLabel: 'Open volunteer setup',
+      phases: [
+        { title: 'List the help you need', tasks: ['Name each volunteer job', 'Write one short description per job', 'Estimate how many people each job needs', 'Remove jobs you do not need this time'], ready: s => s.volunteerRoles > 0 },
+        { title: 'Set expectations for each role', tasks: ['Add useful skills or age requirements', 'Say what training is needed', 'Say who will supervise the role', 'Note access, timing, or physical requirements'], ready: s => s.volunteerRoles > 0 },
+        { title: 'Plan shifts and coverage', tasks: ['Add the dates that need covering', 'Break long days into manageable shifts', 'Check busy arrival and break times', 'Make sure every shift has enough people'], ready: s => s.volunteerRoles > 0 && s.volunteerShifts > 0 },
+        { title: 'Get ready to invite volunteers', tasks: ['Review the sign-up information', 'Choose who will review applications', 'Check how volunteers will hear back', 'Share the sign-up page when you are ready'], ready: s => s.volunteerRoles > 0 && s.volunteerShifts > 0 },
+      ],
+    },
+    {
+      key: 'sponsors', colour: '#d1523d', icon: '/ASSETS/Images/Icons/Budgeting-Sponsorship.svg', name: 'Sponsors',
+      action: "navigateToMarketing('sponsors')", actionLabel: 'Open sponsor setup',
+      phases: [
+        { title: 'Decide what you can offer', tasks: ['List the ways a business can support the show', 'Create simple sponsorship levels if useful', 'Write down what each level costs', 'List what the sponsor receives'], ready: s => s.sponsorPackages > 0 },
+        { title: 'Build a first list of prospects', tasks: ['Add businesses you may approach', 'Add a contact name when you have one', 'Add an email or phone number when known', 'Choose who will make the first contact'], ready: s => s.sponsorBusinesses > 0 },
+        { title: 'Keep promises easy to track', tasks: ['Record the package or support agreed', 'Record whether payment arrived', 'Add artwork or logo follow-ups', 'Track each benefit you need to deliver'], ready: s => s.sponsorBusinesses > 0 && s.sponsorPackages > 0 },
+        { title: 'Prepare your sponsor follow-up', tasks: ['Set the next contact date', 'Collect logos or advert artwork', 'Check every promised benefit is covered', 'Plan a thank-you after the production'], ready: s => s.sponsorBusinesses > 0 && s.sponsorPackages > 0 },
+      ],
+    },
+  ];
+
+  function productionSetupChoices() {
+    const features = prod?.wizard_data?.features || {};
+    const modules = prod?.enabled_modules || {};
+    const hasFeatureMap = Object.keys(features).length > 0;
+    const selected = {
+      auditions: hasFeatureMap ? !!features.auditions : !!modules.cast,
+      registration: hasFeatureMap ? !!features.registration : false,
+      budget: hasFeatureMap ? !!features.budget : !!modules.financials,
+      producer_timeline: Object.prototype.hasOwnProperty.call(modules, 'producer_timeline')
+        ? !!modules.producer_timeline
+        : (Object.prototype.hasOwnProperty.call(features, 'producer_timeline') ? !!features.producer_timeline : !!features.checklists),
+      volunteers: hasFeatureMap ? !!features.volunteers : !!modules.volunteers,
+      sponsors: hasFeatureMap ? !!features.sponsors : !!modules.promote,
+    };
+    return selected;
+  }
+
+  async function setupCount(table, column = 'id', extra = null) {
+    try {
+      let query = sb.from(table).select(column, { count: 'exact', head: true }).eq('production_id', prodId);
+      if (extra) query = extra(query);
+      const { count, error } = await query;
+      return error ? 0 : (count || 0);
+    } catch (_) { return 0; }
+  }
+
+  async function renderProductionSetupCards() {
+    const section = document.getElementById('ov-setup-progress-section');
+    const grid = document.getElementById('ov-setup-progress-grid');
+    if (!section || !grid) return;
+    const chosen = productionSetupChoices();
+    const definitions = PRODUCTION_SETUP_DEFINITIONS.filter(item => chosen[item.key]);
+    section.hidden = definitions.length === 0;
+    if (!definitions.length) { grid.innerHTML = ''; return; }
+    grid.innerHTML = '<div class="setup-progress-empty">Loading your setup steps…</div>';
+
+    const settings = prod?.registration_settings && typeof prod.registration_settings === 'object' ? prod.registration_settings : {};
+    const payment = settings.payment_settings && typeof settings.payment_settings === 'object' ? settings.payment_settings : {};
+    const templates = settings.form_templates && typeof settings.form_templates === 'object' ? settings.form_templates : {};
+    const wizard = prod?.wizard_data || {};
+    const plan = prod?.volunteer_staffing_plan && typeof prod.volunteer_staffing_plan === 'object' ? prod.volunteer_staffing_plan : {};
+    const roleCount = Array.isArray(wizard.roles) ? wizard.roles.filter(r => (r?.name || '').trim()).length : 0;
+    const planRoleCount = Array.isArray(plan.roles)
+      ? plan.roles.length
+      : (Array.isArray(plan) ? plan.length : Object.values(plan).filter(value => value && typeof value === 'object' && (value.roleName || Number(value.count) > 0)).length);
+
+    const [roles, events, categories, budgetSettings, milestones, tasks, sponsorPackages, sponsorBusinesses] = await Promise.all([
+      chosen.auditions ? setupCount('production_characters') : 0,
+      chosen.auditions ? setupCount('bts_visible_production_events', 'id', q => q.in('event_type', ['audition','auditions','callback'])) : 0,
+      chosen.budget ? setupCount('budget_categories') : 0,
+      chosen.budget ? setupCount('budget_settings') : 0,
+      chosen.producer_timeline ? setupCount('checklist_items') : 0,
+      chosen.producer_timeline ? setupCount('producer_tasks') : 0,
+      chosen.sponsors ? setupCount('sponsor_packages') : 0,
+      chosen.sponsors ? setupCount('sponsor_businesses') : 0,
+    ]);
+    const milestoneCount = milestones || checklistItems?.length || 0;
+    const taskCount = tasks || producerTasks?.length || 0;
+    const registrationSettings = Object.keys(settings).length > 0;
+    const registrationForms = Object.keys(templates).length > 0;
+    const registrationPayments = Object.keys(payment).some(k => payment[k] !== '' && payment[k] !== null && payment[k] !== false);
+    const statuses = {
+      auditionBasics: wizard.auditions_enabled !== false && !!(wizard.audition_type || wizard.auditions_enabled),
+      roles: Math.max(roles, roleCount),
+      auditionEvents: events,
+      registrationSettings,
+      registrationForms,
+      registrationPayments,
+      budgetSettings: budgetSettings > 0,
+      budgetCategories: categories,
+      milestones: milestoneCount,
+      tasks: taskCount,
+      volunteerRoles: planRoleCount || (wizard.volunteer_roles ? String(wizard.volunteer_roles).split(/[\n,;]/).filter(Boolean).length : 0),
+      volunteerShifts: Object.values(plan).filter(value => value && typeof value === 'object' && (
+        value.shiftStartMins || value.shiftEndMins || value.shiftStartAnchor || value.shiftEndAnchor
+      )).length,
+      sponsorPackages,
+      sponsorBusinesses,
+    };
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    grid.innerHTML = definitions.map(def => {
+      const completed = def.phases.filter(phase => { try { return !!phase.ready(statuses); } catch (_) { return false; } }).length;
+      const percent = Math.round(completed / 4 * 100);
+      const nextIndex = def.phases.findIndex(phase => { try { return !phase.ready(statuses); } catch (_) { return true; } });
+      const phaseHtml = def.phases.map((phase, index) => {
+        const done = !!phase.ready(statuses);
+        return `<details class="setup-progress-phase" ${index === Math.min(nextIndex < 0 ? 3 : nextIndex, 3) ? 'open' : ''}><summary><span class="setup-phase-state" aria-hidden="true">${index + 1}</span><span>${esc(phase.title)}</span><span style="margin-left:auto;font-weight:600;opacity:.78;">${done ? 'Ready' : 'To do'}</span></summary><ul class="setup-progress-tasks">${phase.tasks.map(task => `<li>${esc(task)}</li>`).join('')}</ul></details>`;
+      }).join('');
+      return `<article class="setup-progress-card" style="--setup-colour:${def.colour}"><div class="setup-progress-card-head"><img class="setup-progress-icon" src="${def.icon}" alt=""><h3 class="setup-progress-name">${esc(def.name)}</h3></div><div class="setup-progress-summary"><span>${completed} of 4 steps ready</span><span>${percent}%</span></div><div class="setup-progress-track" role="progressbar" aria-label="${esc(def.name)} setup progress" aria-valuemin="0" aria-valuemax="4" aria-valuenow="${completed}"><span class="setup-progress-fill" style="width:${percent}%"></span></div><div class="setup-progress-phases">${phaseHtml}</div><button class="setup-progress-action" type="button" onclick="${def.action}">${esc(def.actionLabel)} <span aria-hidden="true">→</span></button></article>`;
+    }).join('');
   }
 
   async function loadUpNextCard() {
