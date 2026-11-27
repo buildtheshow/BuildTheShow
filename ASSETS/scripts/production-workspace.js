@@ -193,7 +193,7 @@
       initProdSidebarEvents();
       try { console.info('[BTS lifecycle]', { timestamp: new Date().toISOString(), functionName: 'production-sidebar-shell', route: window.location.pathname + window.location.search + window.location.hash, reason: 'mounted-from-cache' }); } catch {}
     }
-    fetch('/SHARED/Navigation/production-sidebar.html?v=20261127-auditions-routes')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=20261127-production-navigation')
       .then(res => res.text())
       .then(html => {
         sessionStorage.setItem(_key, html);

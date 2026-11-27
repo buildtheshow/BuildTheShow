@@ -28,8 +28,8 @@
   function productionBase(){const parts=location.pathname.split('/').filter(Boolean);return parts[0]==='org'&&parts[2]==='productions'&&parts[3]?'/'+parts.slice(0,4).join('/'):canonicalProductionBase||'/org/production';}
   function workspaceUrl(tab, sub) {
     const id = prodId();
-    let url = productionBase()+'?id=' + encodeURIComponent(id) + '&tab=' + tab;
-    if (sub) url += '&sub=' + sub;
+    let url = productionBase()+'/workspace?id=' + encodeURIComponent(id) + '&tab=' + encodeURIComponent(tab);
+    if (sub) url += '&sub=' + encodeURIComponent(sub);
     return url;
   }
 
@@ -632,7 +632,7 @@
 
     if (cached) applyAndInit(cached);
 
-    fetch('/SHARED/Navigation/production-sidebar.html?v=20261127-auditions-routes')
+    fetch('/SHARED/Navigation/production-sidebar.html?v=20261127-production-navigation')
       .then(function (res) { return res.text(); })
       .then(function (html) {
         sessionStorage.setItem(key, html);
