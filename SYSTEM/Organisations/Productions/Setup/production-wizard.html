@@ -1451,6 +1451,34 @@
       cursor: pointer; transition: background 0.15s, border-color 0.15s;
     }
     .btn-add-event:hover { background: rgba(87,46,136,0.05); border-color: rgba(87,46,136,0.38); }
+    .step3-paste-panel { margin-top:0.65rem; }
+    .step3-paste-panel > summary {
+      color:#572e88; font-size:0.82rem; font-weight:700; cursor:pointer;
+      list-style:none; width:max-content; max-width:100%;
+    }
+    .step3-paste-panel > summary::-webkit-details-marker { display:none; }
+    .step3-paste-panel > summary::before { content:'＋'; margin-right:0.35rem; }
+    .step3-paste-panel[open] > summary::before { content:'−'; }
+    .step3-paste-body {
+      margin-top:0.65rem; padding:1rem; border:1px solid rgba(87,46,136,0.15);
+      border-radius:10px; background:rgba(87,46,136,0.035);
+    }
+    .step3-paste-help { margin:0 0 0.65rem; color:#6f6387; font-size:0.76rem; line-height:1.45; }
+    .step3-paste-input {
+      display:block; width:100%; min-height:125px; box-sizing:border-box; resize:vertical;
+      padding:0.7rem 0.8rem; border:1px solid rgba(87,46,136,0.2); border-radius:8px;
+      background:#fff; color:#241b35; font:inherit; font-size:0.8rem; line-height:1.45;
+    }
+    .step3-paste-actions { display:flex; justify-content:flex-end; gap:0.5rem; margin-top:0.65rem; flex-wrap:wrap; }
+    .step3-paste-action {
+      border:1px solid rgba(87,46,136,0.2); border-radius:7px; padding:0.48rem 0.75rem;
+      background:#fff; color:#572e88; font:inherit; font-size:0.76rem; font-weight:700; cursor:pointer;
+    }
+    .step3-paste-action--primary { background:#572e88; color:#fff; border-color:#572e88; }
+    .step3-paste-preview { margin-top:0.7rem; color:#514666; font-size:0.76rem; line-height:1.5; }
+    .step3-paste-preview ul { margin:0.4rem 0 0; padding-left:1.2rem; }
+    .step3-paste-preview li { margin:0.15rem 0; }
+    .step3-paste-warning { color:#9a5b00; }
     @media (max-width: 600px) {
       .step3-event-bottom { gap: 0.5rem; }
       .step3-field-group { min-width: 0; width: calc(50% - 0.25rem); }
@@ -2757,6 +2785,151 @@
       _refreshStep3List();
     }
 
+    let _step3PastedEvents = [];
+
+    function step3ParsePastedDate(line, fallbackYear) {
+      const validDate = (year, month, day, raw) => {
+        const date = new Date(year, month - 1, day);
+        if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+        return { iso: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`, raw };
+      };
+      let match = line.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
+      if (match) return validDate(+match[1], +match[2], +match[3], match[0]);
+
+      const monthNames = 'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?';
+      const monthNumber = name => {
+        const short = name.slice(0, 3).toLowerCase();
+        return CAL_MONTHS.findIndex(m => m.toLowerCase() === short) + 1;
+      };
+      match = line.match(new RegExp(`\\b(${monthNames})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+(20\\d{2}))?\\b`, 'i'));
+      if (match) return validDate(+(match[3] || fallbackYear), monthNumber(match[1]), +match[2], match[0]);
+      match = line.match(new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(${monthNames})\\.?[,]?\\s*(20\\d{2})?\\b`, 'i'));
+      if (match) return validDate(+(match[3] || fallbackYear), monthNumber(match[2]), +match[1], match[0]);
+
+      match = line.match(/\b(\d{1,2})[/-](\d{1,2})[/-](20\d{2})\b/);
+      if (match) {
+        const first = +match[1], second = +match[2], year = +match[3];
+        if (first > 12 && second <= 12) return validDate(year, second, first, match[0]);
+        if (second > 12 && first <= 12) return validDate(year, first, second, match[0]);
+        if (first <= 12 && second <= 12) return { ambiguous: true, raw: match[0] };
+      }
+      return null;
+    }
+
+    function step3ParsePastedTime(token, inheritedPeriod = '') {
+      const cleaned = token.toLowerCase().replace(/\./g, '').trim();
+      const periodMatch = cleaned.match(/(am|pm)$/);
+      const period = periodMatch?.[1] || inheritedPeriod;
+      const clock = cleaned.replace(/(am|pm)$/, '').trim();
+      const parts = clock.split(':').map(Number);
+      let hour = parts[0], minute = parts[1] || 0;
+      if (!Number.isFinite(hour) || minute > 59 || minute < 0 || hour > 24 || hour < 0) return '';
+      if (period) {
+        if (hour < 1 || hour > 12) return '';
+        if (period === 'am') hour = hour === 12 ? 0 : hour;
+        else hour = hour === 12 ? 12 : hour + 12;
+      } else if (hour === 24 && minute === 0) {
+        hour = 0;
+      }
+      return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    }
+
+    function step3PreviewPastedSchedule() {
+      const input = document.getElementById('step3-paste-input');
+      const preview = document.getElementById('step3-paste-preview');
+      const text = input?.value || '';
+      if (!preview) return;
+      const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+      if (!lines.length) {
+        preview.textContent = 'Paste your schedule text above first.';
+        _step3PastedEvents = [];
+        return;
+      }
+
+      const sharedYear = +(text.match(/\b(20\d{2})\b/) || [])[1] || new Date().getFullYear();
+      const typeRules = [
+        [/\b(performance|performances|show|shows|matinee)\b/i, 'performance'],
+        [/\b(music rehearsal|music call|vocal rehearsal)\b/i, 'music_rehearsal'],
+        [/\b(dress rehearsal|dress)\b/i, 'dress'],
+        [/\b(choreography|dance rehearsal|dance call)\b/i, 'choreography'],
+        [/\b(tech|technical rehearsal|tech week)\b/i, 'tech'],
+        [/\b(strike|load[- ]out)\b/i, 'strike'],
+        [/\b(cast party|wrap party)\b/i, 'cast_party'],
+        [/\b(rehearsal|run[- ]through)\b/i, 'rehearsal'],
+      ];
+      const timeToken = '(?:[01]?\\d|2[0-3])(?::[0-5]\\d)?\\s*(?:a\\.?m\\.?|p\\.?m\\.?)?';
+      const timeRangePattern = new RegExp(`\\b(${timeToken})\\s*(?:-|–|—|to|until)\\s*(${timeToken})\\b`, 'i');
+      const parsed = [];
+      let skipped = 0;
+      let needsReview = 0;
+
+      lines.forEach(line => {
+        const date = step3ParsePastedDate(line, sharedYear);
+        if (!date || date.ambiguous) {
+          if (/\d|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(line)) skipped++;
+          return;
+        }
+        const eventType = typeRules.find(([pattern]) => pattern.test(line))?.[1] || 'other';
+        const withoutDate = line.replace(date.raw, ' ');
+        const range = withoutDate.match(timeRangePattern);
+        let start_time = '', end_time = '', time_mode = 'tbd';
+        let warning = '';
+        if (range) {
+          const endPeriod = (range[2].match(/(am|pm)\.?$/i) || [])[1]?.toLowerCase() || '';
+          start_time = step3ParsePastedTime(range[1], endPeriod);
+          end_time = step3ParsePastedTime(range[2]);
+          if (start_time && end_time) {
+            time_mode = 'set';
+            if (!/am|pm/i.test(range[1]) && !/am|pm/i.test(range[2]) && (+range[1].split(':')[0] <= 12 || +range[2].split(':')[0] <= 12)) warning = 'Check AM/PM';
+          } else {
+            start_time = ''; end_time = '';
+            warning = 'Check time';
+          }
+        } else {
+          const oneTime = withoutDate.match(new RegExp(`\\b(${timeToken})\\b`, 'i'));
+          if (oneTime) {
+            start_time = step3ParsePastedTime(oneTime[1]);
+            if (start_time) time_mode = 'set';
+            if (start_time && !/am|pm/i.test(oneTime[1]) && +oneTime[1].split(':')[0] <= 12) warning = 'Check AM/PM';
+          }
+        }
+        if (warning) needsReview++;
+        parsed.push({
+          _id: _s3id(), db_id: null, title: EVENT_TYPE_LABELS[eventType] || 'Event',
+          event_type: eventType, date: date.iso, start_time, end_time, time_mode,
+          mandatory: false, warning,
+        });
+      });
+
+      _step3PastedEvents = parsed;
+      if (!parsed.length) {
+        preview.innerHTML = `<span class="step3-paste-warning">I couldn’t find any clear dates. Use a date like “November 27, 2026” or “2026-11-27”. Dates like 03/04/2026 are ambiguous, so spell out the month.</span>`;
+        return;
+      }
+
+      const rows = parsed.map(event => {
+        const dateLabel = new Date(`${event.date}T12:00:00`).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
+        const timeLabel = event.time_mode === 'tbd' ? 'Time TBD' : `${event.start_time || 'Start time?'}${event.end_time ? `–${event.end_time}` : ''}`;
+        return `<li><strong>${escHtml(EVENT_TYPE_LABELS[event.event_type] || 'Event')}</strong> · ${escHtml(dateLabel)} · ${escHtml(timeLabel)}${event.warning ? ` <span class="step3-paste-warning">(${escHtml(event.warning)})</span>` : ''}</li>`;
+      }).join('');
+      const note = skipped ? `<p class="step3-paste-warning">Skipped ${skipped} line${skipped === 1 ? '' : 's'} because the date was missing or unclear. Add those events manually or rewrite the date with the month name.</p>` : '';
+      const warningNote = needsReview ? `<p class="step3-paste-warning">${needsReview} time${needsReview === 1 ? '' : 's'} may need AM/PM checking. You can edit them after adding.</p>` : '';
+      preview.innerHTML = `<div>Found ${parsed.length} event${parsed.length === 1 ? '' : 's'}:</div><ul>${rows}</ul>${note}${warningNote}<div class="step3-paste-actions"><button type="button" class="step3-paste-action step3-paste-action--primary" onclick="step3AddPastedEvents()">Add ${parsed.length} event${parsed.length === 1 ? '' : 's'}</button></div>`;
+    }
+
+    function step3AddPastedEvents() {
+      if (!_step3PastedEvents.length) return;
+      step3Events.push(..._step3PastedEvents);
+      _step3PastedEvents = [];
+      _refreshStep3List();
+      const details = document.querySelector('.step3-paste-panel');
+      if (details) details.open = false;
+      const input = document.getElementById('step3-paste-input');
+      const preview = document.getElementById('step3-paste-preview');
+      if (input) input.value = '';
+      if (preview) preview.textContent = 'Schedule events added. Review them in the list above.';
+    }
+
     function step3RemoveEvent(id) {
       step3Events = step3Events.filter(e => e._id !== id);
       _refreshStep3List();
@@ -2824,6 +2997,18 @@
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg>
             Add Event
           </button>
+
+          <details class="step3-paste-panel">
+            <summary>Paste a schedule</summary>
+            <div class="step3-paste-body">
+              <p class="step3-paste-help">Paste schedule text below, ideally one event per line. Include a date and, when you know them, start and end times. Review the results before adding them.</p>
+              <textarea id="step3-paste-input" class="step3-paste-input" placeholder="Performance — November 27, 2026 — 7:00 PM to 10:00 PM&#10;Rehearsal — November 20, 2026 — 6:00 PM to 9:00 PM"></textarea>
+              <div class="step3-paste-actions">
+                <button type="button" class="step3-paste-action" onclick="step3PreviewPastedSchedule()">Preview schedule</button>
+              </div>
+              <div class="step3-paste-preview" id="step3-paste-preview" aria-live="polite"></div>
+            </div>
+          </details>
 
           <div class="form-error" id="step3Error"></div>
 
