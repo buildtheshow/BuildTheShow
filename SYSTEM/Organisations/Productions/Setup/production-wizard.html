@@ -1318,8 +1318,15 @@
     /* ── Step 3 events header ── */
     .step3-events-header {
       display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 0.65rem;
+      gap:0.65rem; flex-wrap:wrap; margin-bottom: 0.65rem;
     }
+    .step3-events-header-left { display:flex; align-items:center; gap:0.55rem; flex-wrap:wrap; }
+    .step3-mark-all-btn {
+      border:1px solid rgba(87,46,136,0.2); border-radius:7px; padding:0.35rem 0.55rem;
+      background:#fff; color:#572e88; font:700 0.68rem var(--bts-font); cursor:pointer;
+    }
+    .step3-mark-all-btn:hover { background:rgba(87,46,136,0.06); border-color:rgba(87,46,136,0.4); }
+    .step3-events-header-label { margin-left:auto; }
     .step3-events-header-count {
       font-size: 0.95rem; font-weight: 700; color: #000000;
     }
@@ -1364,7 +1371,7 @@
     .step3-event-fields-row--times {
       display:grid;
       grid-template-columns:minmax(100px,150px) minmax(100px,150px) auto;
-      align-items:end;
+      align-items:end; justify-content:start;
     }
     .step3-type-select {
       border: 1.5px solid rgba(87,46,136,0.15); border-radius: 8px;
@@ -2263,6 +2270,8 @@
                   date: e.start_time ? e.start_time.slice(0,10) : '',
                   start_time: e.start_time ? e.start_time.slice(11,16) : '',
                   end_time:   e.end_time   ? e.end_time.slice(11,16)   : '',
+                  time_mode: e.time_tbd ? 'tbd' : e.all_day ? 'full_day' : 'set',
+                  mandatory: !!e.mandatory,
                 }));
                 localStorage.setItem('bts_wizard_events', JSON.stringify(step3Events));
               }
@@ -2631,11 +2640,22 @@
     function _s3id() { return 's3_' + (_step3NextId++); }
 
     const CAL_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    function calBadgeHtml(dateStr) {
+    function step3SortChronologically(events) {
+      return [...events].sort((a, b) => {
+        const dateOrder = (a.date || '9999-99-99').localeCompare(b.date || '9999-99-99');
+        if (dateOrder) return dateOrder;
+        const startA = a.start_time || (a.time_mode === 'full_day' ? '00:00' : '99:99');
+        const startB = b.start_time || (b.time_mode === 'full_day' ? '00:00' : '99:99');
+        return startA.localeCompare(startB) || (a.end_time || '').localeCompare(b.end_time || '');
+      });
+    }
+
+    function calBadgeHtml(dateStr, eventType = 'performance') {
       const parts = dateStr.split('-');
       const month = CAL_MONTHS[parseInt(parts[1], 10) - 1] || '';
       const day   = parseInt(parts[2], 10);
-      return `<div class="cal-badge"><div class="cal-badge-month">${month}</div><div class="cal-badge-day">${day}</div></div>`;
+      const colour = EVENT_COLOURS[eventType] || '#efab45';
+      return `<div class="cal-badge"><div class="cal-badge-month" style="background:${colour};">${month}</div><div class="cal-badge-day">${day}</div></div>`;
     }
 
     async function initStep3() {
@@ -2657,6 +2677,8 @@
             date: e.start_time ? e.start_time.slice(0, 10) : '',
             start_time: e.start_time ? e.start_time.slice(11, 16) : '',
             end_time:   e.end_time   ? e.end_time.slice(11, 16)   : '',
+            time_mode: e.time_tbd ? 'tbd' : e.all_day ? 'full_day' : 'set',
+            mandatory: !!e.mandatory,
           }));
           _refreshStep3List();
           return;
@@ -2667,6 +2689,7 @@
     function _refreshStep3List() {
       const el = document.getElementById('step3-events-list');
       if (!el) return;
+      step3Events = step3SortChronologically(step3Events);
       el.innerHTML = _buildStep3ListHTML();
     }
 
@@ -2677,12 +2700,16 @@
           No events added yet. Add your first one below, or skip and fill these in from the calendar after setup.
         </div>`;
       }
-      const sorted = [...step3Events].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+      const sorted = step3SortChronologically(step3Events);
+      const allMandatory = step3Events.length > 0 && step3Events.every(event => !!event.mandatory);
 
       const clockIcon = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" style="flex-shrink:0;opacity:0.45;"><circle cx="8" cy="8" r="6.5"/><polyline points="8,4.5 8,8 10.5,9.5"/></svg>`;
 
       const header = `<div class="step3-events-header">
-        <span class="step3-events-header-count">Schedule</span>
+        <div class="step3-events-header-left">
+          <span class="step3-events-header-count">Schedule</span>
+          <button type="button" class="step3-mark-all-btn" onclick="step3ToggleAllMandatory()">${allMandatory ? 'Unmark all' : 'Mark all as mandatory'}</button>
+        </div>
         <span class="step3-events-header-label">
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="3" width="12" height="11" rx="2"/><line x1="5" y1="1.5" x2="5" y2="4.5"/><line x1="11" y1="1.5" x2="11" y2="4.5"/><line x1="2" y1="6.5" x2="14" y2="6.5"/></svg>
           Opens in your production calendar
@@ -2695,7 +2722,7 @@
       ).join('');
 
       const rows = sorted.map(ev => {
-        const badgeHtml = ev.date ? calBadgeHtml(ev.date) : `<div style="width:42px;height:52px;border-radius:5px;background:#efefef;flex-shrink:0;"></div>`;
+        const badgeHtml = ev.date ? calBadgeHtml(ev.date, ev.event_type) : `<div style="width:42px;height:52px;border-radius:5px;background:#efefef;flex-shrink:0;"></div>`;
         const timeMode = ev.time_mode || 'set';
         const timeModeBtns = `<div class="step3-time-mode-btns">
           <button type="button" class="step3-time-mode-btn${timeMode === 'set' ? ' step3-time-mode-btn--active' : ''}" onclick="step3UpdateField('${ev._id}','time_mode','set')">Set Time</button>
@@ -2766,7 +2793,7 @@
         }
       });
 
-      const sorted = [...step3Events].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+      const sorted = step3SortChronologically(step3Events);
       const last = sorted.length ? sorted[sorted.length - 1] : null;
 
       let nextDate = new Date().toISOString().slice(0, 10);
@@ -3020,6 +3047,12 @@
       _refreshStep3List();
     }
 
+    function step3ToggleAllMandatory() {
+      const markAll = !step3Events.every(event => !!event.mandatory);
+      step3Events.forEach(event => { event.mandatory = markAll; });
+      _refreshStep3List();
+    }
+
     function step3FormatTime(value) {
       if (!value) return '';
       const match = String(value).match(/^(\d{1,2}):(\d{2})$/);
@@ -3060,21 +3093,7 @@
       const ev = step3Events.find(e => e._id === id);
       if (!ev) return;
       ev[field] = value;
-      if (field === 'date') {
-        const row = document.querySelector(`[data-eid="${id}"]`);
-        const badge = row?.querySelector('.cal-badge');
-        if (badge && value) {
-          badge.outerHTML = calBadgeHtml(value);
-        } else if (!value) {
-          const badgePlaceholder = row?.querySelector('[style*="background:#efefef"]');
-          if (!badgePlaceholder) _refreshStep3List();
-        }
-      } else if (field === 'time_mode' || field === 'mandatory') {
-        // These change which controls show (time inputs) or how the toggle
-        // renders (active state), so the row needs a full rebuild — a plain
-        // value swap on the DOM element isn't enough here.
-        _refreshStep3List();
-      }
+      if (['date', 'start_time', 'end_time', 'event_type', 'time_mode', 'mandatory'].includes(field)) _refreshStep3List();
     }
 
     function renderStep3HTML() {
@@ -3145,7 +3164,7 @@
         if (prodId) {
           const { error: deleteError } = await sb.from('production_events').delete().eq('production_id', prodId);
           if (deleteError) throw deleteError;
-          const rows = step3Events
+          const rows = step3SortChronologically(step3Events)
             .filter(e => e.date)
             .map(e => {
               const mode = e.time_mode || 'set';
@@ -3272,7 +3291,7 @@
         : '';
 
       // Timeline section - group events by type, sorted by date
-      const sorted = [...step3Events].sort((a,b) => (a.date||'').localeCompare(b.date||''));
+      const sorted = step3SortChronologically(step3Events);
 
       const eventsHTML = sorted.length
         ? sorted.map(e => {
@@ -4129,7 +4148,7 @@
       const orgSlug   = currentOrg?.slug || 'yourorg';
       const showSlug  = wizardData.slug || '';
       const publicUrl = showSlug ? `buildtheshow.com/${orgSlug}/${showSlug}` : null;
-      const sortedRaw = [...step3Events].sort((a,b) => (a.date||'').localeCompare(b.date||''));
+      const sortedRaw = step3SortChronologically(step3Events);
       // Deduplicate events with the same date and start time.
       const _seenEvKeys = new Set();
       const sorted = sortedRaw.filter(ev => {
@@ -4323,6 +4342,9 @@
         if (!e.date) return;
         if (!byDate[e.date]) byDate[e.date] = [];
         byDate[e.date].push(e);
+      });
+      Object.values(byDate).forEach(events => {
+        events.sort((a, b) => (a.start_time || (a.time_mode === 'full_day' ? '00:00' : '99:99')).localeCompare(b.start_time || (b.time_mode === 'full_day' ? '00:00' : '99:99')));
       });
 
       const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
