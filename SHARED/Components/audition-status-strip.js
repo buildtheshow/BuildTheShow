@@ -100,7 +100,6 @@
         animation: audition-status-pulse 1.9s ease-out infinite;
       }
       :host([state="hidden"]) .status-sub,
-      :host([state="hidden"]) .action-view,
       :host([state="hidden"]) .action-copy,
       :host([state="hidden"]) .copy-confirm,
       :host([state="hidden"]) .status-dot {
@@ -315,6 +314,7 @@
         toggleButton.style.display = this._state.showToggle ? '' : 'none';
         toggleButton.textContent = this._state.toggleLabel || '';
       }
+      if (viewButton) viewButton.textContent = state === 'hidden' ? 'Preview' : 'View';
     }
   }
 

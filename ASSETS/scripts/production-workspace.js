@@ -13634,8 +13634,8 @@ See you soon!
         state: 'hidden',
         title: 'Auditions hidden',
         subtitle: '',
-        showView: canShare,
-        showCopy: canShare,
+        showView: true,
+        showCopy: false,
         showToggle: true,
         toggleLabel: 'Make Auditions Live',
       };
@@ -25430,7 +25430,7 @@ See you soon!
 
   function currentPublicOpenLink() {
     const link = getPageLink();
-    return currentPublicPageStatus() === 'draft' ? withQueryParam(link, 'preview', '1') : link;
+    return currentPublicPageStatus() === 'live' ? link : withQueryParam(link, 'preview', '1');
   }
 
   function openCurrentPublicUrl(event) {

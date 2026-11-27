@@ -2110,6 +2110,7 @@
     }
 
     function canAcceptPublicBookings(prod, audConfig) {
+      if (preview) return false;
       const status = normalizePageStatus(prod?.page_status);
       if (status === 'draft') return false;
       if (!canAccessPublicPage(prod)) return false;
@@ -2319,21 +2320,29 @@
       if (!canAccessPublicPage(prod)) { showNotFound(); return; }
 
       const resolvedId = prod.id;
+      const { data: { session: userSession } } = await sb.auth.getSession();
+      if (preview) {
+        if (!userSession) { showNotFound(); return; }
+        const { data: canPreview, error: previewAccessError } = await sb.rpc('bts_production_page_permission', {
+          p_production_id: resolvedId,
+          p_page: 'auditions.general',
+          p_rank: 1,
+        });
+        if (previewAccessError || canPreview !== true) { showNotFound(); return; }
+      }
       setupPublicAuditionsRealtime(resolvedId);
 
-      // Parallel: org, audConfig, events, characters, user session
+      // Parallel: org, audConfig, events, and characters
       const [
         { data: org },
         { data: audConfig },
         { data: events },
         { data: characters },
-        { data: { session: userSession } },
       ] = await Promise.all([
         sb.from('bts_visible_organizations').select('id,name,logo_url,email,website,location').eq('id', prod.organization_id).maybeSingle(),
         sb.from('bts_visible_audition_configs').select('*').eq('production_id', resolvedId).maybeSingle(),
         sb.from('bts_visible_production_events').select('id,event_type,title,start_time,end_time,all_day,venue,notes,is_public').eq('production_id', resolvedId).order('start_time'),
         sb.from('bts_visible_characters').select('*').eq('production_id', resolvedId).eq('show_on_public_page', true).order('created_at'),
-        sb.auth.getSession(),
       ]);
 
       // Audition sessions (enabled and shown to applicants)
@@ -2724,7 +2733,7 @@
       const closeDate = audConfig?.close_date;
       const daysLeft = daysBetween(closeDate);
       let statusTag = '';
-      if (preview && pageStatus === 'draft') {
+      if (preview) {
         statusTag = `<div class="ai-status-tag"><span class="ai-status-dot"></span>Preview Mode</div>`;
       } else if (pageStatus === 'hidden') {
         statusTag = `<div class="ai-status-tag"><span class="ai-status-dot"></span>Link Only</div>`;
