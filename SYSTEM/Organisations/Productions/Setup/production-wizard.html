@@ -909,6 +909,7 @@
       padding: 0.7rem 1rem;
       font-size: 0.85rem;
       margin-top: 1rem;
+      white-space: pre-line;
     }
 
     .form-error.visible { display: block; }
@@ -2139,6 +2140,12 @@
         message = `Your account doesn’t have permission to save ${section}. Check that you’re signed in to the right organisation, then try again.`;
       } else if (/network|fetch|timeout|offline/i.test(error?.message || '')) {
         message = `Your connection interrupted the save for ${section}. Check your connection and try again.`;
+      } else if (error?.code === '23502' && /start_time/i.test(errorDetails)) {
+        message = `An event is missing its required start time. Mark it “Time TBD” or enter a start time, then try again.`;
+      }
+      if (error?.code) {
+        const detail = String(error.message || error.details || '').trim().slice(0, 180);
+        message += `\nTechnical details: ${error.code}${detail ? ` — ${detail}` : ''}`;
       }
       const targetId = document.getElementById(containerId) ? containerId : `step${currentStep}Error`;
       if (document.getElementById(targetId)) showError(targetId, message);
@@ -3200,8 +3207,11 @@
                 // guessing 00:00/23:59. Full Day: spans the whole date, same
                 // as the old blank-defaults, but flagged so the calendar can
                 // show "All Day" instead of "12:00am - 11:59pm".
-                start_time: mode === 'tbd' ? null : localDTStr(e.date, e.start_time || '00:00'),
-                end_time:   mode === 'tbd' ? null : localDTStr(e.date, e.end_time   || '23:59'),
+                // production_events.start_time is required by the database.
+                // Store midnight as a neutral anchor for TBD, and let time_tbd
+                // control how the event is presented in calendars.
+                start_time: localDTStr(e.date, mode === 'tbd' ? '00:00' : (e.start_time || '00:00')),
+                end_time:   mode === 'tbd' ? null : localDTStr(e.date, e.end_time || '23:59'),
                 all_day:    mode === 'full_day',
                 time_tbd:   mode === 'tbd',
                 mandatory:  !!e.mandatory,
