@@ -27768,20 +27768,23 @@ See you soon!
         const edit = document.createElement('button'); edit.type='button'; edit.className='ap-setup-edit'; edit.innerHTML=editing ? 'Done' : `${cardIcon('edit-pencil.svg')}Edit`; edit.setAttribute('aria-expanded',String(editing)); edit.onclick=event=>{event.stopPropagation();toggleEditor(record);}; actions.append(edit);
         const remove = document.createElement('button'); remove.type='button'; remove.className='ap-setup-delete'; remove.innerHTML=cardIcon('Bin.svg'); remove.setAttribute('aria-label',`Delete ${record.name || sessionTypeLabel(record.type)}`); remove.title='Delete audition'; remove.onclick=event=>{event.stopPropagation();deleteAudition(record);}; actions.append(remove);
         head?.append(actions);
-        const audienceHeading = `<strong>${cardIconLabel('Who attends?', 'performer2.svg')}</strong>`;
-        const attendance = document.createElement('div'); attendance.className='ap-setup-attendance'; attendance.style.setProperty('--ap-accent',colour(record)); attendance.innerHTML=audienceHeading+(record.type==='callback'?`<label><input type="radio" name="audience-${e(record.id)}" value="invited" checked disabled>People we invite</label><small>Your team chooses who gets a callback.</small>`:`<label><input type="radio" name="audience-${e(record.id)}" value="open" ${record.audience!=='invited'?'checked':''}>Anyone who meets the requirements</label><label><input type="radio" name="audience-${e(record.id)}" value="invited" ${record.audience==='invited'?'checked':''}>People we invite</label>${record.audience==='invited'?'<small>Attending another audition does not add anyone here.</small>':''}`);
-        card.append(attendance);
-        attendance.querySelectorAll('input').forEach(input=>input.onchange=()=>{record.audience=input.value;save(record);render();});
-        const caption = document.createElement('div');
-        caption.className = 'ap-setup-caption';
-        caption.innerHTML = record.activities.map(key => {
-          const activity = activities.find(([id]) => id === key);
-          return activity ? cardIconLabel(activity[1], activity[2]) : cardIconLabel(key);
-        }).join('');
-        card.append(caption);
-        if(state.openId===record.id) card.insertAdjacentHTML('beforeend',editor(record));
+        if (editing) {
+          card.insertAdjacentHTML('beforeend', editor(record));
+        } else {
+          const audienceHeading = `<strong>${cardIconLabel('Who attends?', 'performer2.svg')}</strong>`;
+          const attendance = document.createElement('div'); attendance.className='ap-setup-attendance'; attendance.style.setProperty('--ap-accent',colour(record)); attendance.innerHTML=audienceHeading+(record.type==='callback'?`<label><input type="radio" name="audience-${e(record.id)}" value="invited" checked disabled>People we invite</label><small>Your team chooses who gets a callback.</small>`:`<label><input type="radio" name="audience-${e(record.id)}" value="open" ${record.audience!=='invited'?'checked':''}>Anyone who meets the requirements</label><label><input type="radio" name="audience-${e(record.id)}" value="invited" ${record.audience==='invited'?'checked':''}>People we invite</label>${record.audience==='invited'?'<small>Attending another audition does not add anyone here.</small>':''}`);
+          card.append(attendance);
+          attendance.querySelectorAll('input').forEach(input=>input.onchange=()=>{record.audience=input.value;save(record);render();});
+          const caption = document.createElement('div');
+          caption.className = 'ap-setup-caption';
+          caption.innerHTML = record.activities.map(key => {
+            const activity = activities.find(([id]) => id === key);
+            return activity ? cardIconLabel(activity[1], activity[2]) : cardIconLabel(key);
+          }).join('');
+          card.append(caption);
+        }
         host.append(card);
-        if(state.openId===record.id) bind(card.querySelector('.ap-setup-editor'),record);
+        if (editing) bind(card.querySelector('.ap-setup-editor'), record);
         updateMissing(card,record);
       });
       const add=document.createElement('button');add.type='button';add.className='ap-setup-add';add.textContent='+ Add audition';add.onclick=addAudition;host.append(add);
