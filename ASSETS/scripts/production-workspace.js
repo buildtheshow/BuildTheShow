@@ -27482,6 +27482,8 @@ See you soon!
         const emptyMessage = hasWindow
           ? 'No slots fit. Check the booking length, time between appointments and breaks.'
           : 'Add a date, start time and finish time under Dates & location first.';
+        const breakEditorId = `ap-setup-break-editor-${escapeId(record.id)}-${index}`;
+        const addBreakButton = `<button type="button" data-add-break="${index}" aria-controls="${breakEditorId}" aria-expanded="false">+ Add break</button>`;
         const breaks = (day.breaks || []).map((item, breakIndex) => `<li><span>${e(BTSFormatTimeRange(item.start, item.end))}</span><button type="button" data-remove-break="${index}" data-break-index="${breakIndex}" aria-label="Remove break">×</button></li>`).join('');
         return `
           <article class="ap-setup-schedule-day" style="${buildAuditionScheduleCalendarThemeStyle(colour(record))}">
@@ -27495,40 +27497,25 @@ See you soon!
                   <span class="ap-setup-schedule-time">${e(niceTimeRange(day.start, day.end))}</span>
                 </div>
               </div>
-              <span class="ap-setup-schedule-count">${openCount} open · ${slots.length - openCount} blocked · ${slots.length} total${breakWindows.length ? ` · ${breakWindows.length} ${breakWindows.length === 1 ? 'break' : 'breaks'}` : ''}</span>
+              <div class="ap-setup-schedule-day-actions">
+                ${addBreakButton}
+                <span class="ap-setup-schedule-count">${openCount} open · ${slots.length - openCount} blocked · ${slots.length} total${breakWindows.length ? ` · ${breakWindows.length} ${breakWindows.length === 1 ? 'break' : 'breaks'}` : ''}</span>
+              </div>
             </header>
-            ${slots.length ? `
-              <div class="ap-setup-schedule-action">
-                <h4>Block a time slot</h4>
-                <p>Select a slot to hide it from public booking. Great for catch-up time or keeping extra audition spaces in reserve. You can reopen it at any time.</p>
-              </div>` : `<p class="ap-setup-schedule-empty">${emptyMessage}</p>`}
+            ${slots.length ? '' : `<p class="ap-setup-schedule-empty">${emptyMessage}</p>`}
             ${slots.length || breakWindows.length ? `<div class="aud-block-calendar">${buildAuditionSchedulerBlockSlotsHtml(record.id, slots, index, breakWindows)}</div>` : ''}
             <section class="ap-setup-schedule-breaks">
-              <div class="ap-setup-schedule-action">
-                <h4>Add a scheduled break</h4>
-                <p>Need 45 minutes for lunch? Set a start and end time, and we'll adjust your audition slots around it.</p>
+              <div class="ap-setup-scheduled-breaks-row">
+                <h4>Scheduled breaks</h4>
+                <ul>${breaks || '<li class="ap-setup-schedule-no-breaks">No breaks added</li>'}</ul>
               </div>
-              <ul>${breaks || '<li class="ap-setup-schedule-no-breaks">No breaks added</li>'}</ul>
-              <div class="ap-setup-schedule-break-adder" data-break-editor="${index}" style="display:none">
+              <div class="ap-setup-schedule-break-adder" id="${breakEditorId}" data-break-editor="${index}" hidden>
                 <label>Start <input type="text" data-break-start placeholder="12:00pm" autocomplete="off"></label>
                 <label>End <input type="text" data-break-end placeholder="12:30pm" autocomplete="off"></label>
                 <button type="button" data-confirm-break="${index}">Add break</button>
                 <span data-break-error role="status"></span>
               </div>
-              <button type="button" data-add-break="${index}">+ Add break</button>
-              <details class="ap-setup-break-tips">
-                <summary>Break planning tips</summary>
-                <div class="ap-setup-break-guidance">
-                  <p>Audition days can be long! Give yourself and your audition team time to recharge throughout the day.</p>
-                  <p>A few things to keep in mind:</p>
-                  <ul>
-                    <li><strong>Catch-up time:</strong> Auditions don't always run on schedule. Leave some breathing room in case you fall behind.</li>
-                    <li><strong>Coffee and bathroom breaks:</strong> Give your team a chance to step away, stretch and grab a drink.</li>
-                    <li><strong>Lunch:</strong> Don't forget to eat! Make sure everyone has enough time to enjoy a proper meal.</li>
-                    <li><strong>Team discussions:</strong> Leave time to compare notes, discuss performers and check in with your audition team.</li>
-                  </ul>
-                </div>
-              </details>
+              ${addBreakButton}
             </section>
           </article>`;
       }).join('');
@@ -27539,9 +27526,28 @@ See you soon!
         <section class="ap-setup-schedule-builder">
           <header class="ap-setup-schedule-intro">
             <h3>Time slots for ${e(headingName)}</h3>
-            <p>Here's what your audition day looks like! We've worked out your time slots based on your audition hours, the length of each audition and any breaks you've added.</p>
-            <p>Take a moment to look through your day. You can block individual time slots or add breaks before making your auditions available for booking.</p>
+            <p>Here's what your audition day looks like! We've worked out your time slots based on your audition hours and audition length.</p>
           </header>
+          <div class="ap-setup-schedule-guide">
+            <div class="ap-setup-schedule-guide-card">
+              <div class="ap-setup-schedule-icon ap-setup-schedule-icon--slots" aria-hidden="true"><span></span><span>×</span><span></span></div>
+              <div class="ap-setup-schedule-guide-copy">
+                <h4>Block a time slot</h4>
+                <p>Select a slot to hide it from public booking. Reopen it whenever you need to. Great for catch-up time or keeping slots in reserve.</p>
+              </div>
+            </div>
+            <div class="ap-setup-schedule-guide-card">
+              <div class="ap-setup-schedule-icon ap-setup-schedule-icon--slots ap-setup-schedule-icon--break" aria-hidden="true"><span></span><span>◷</span><span></span></div>
+              <div class="ap-setup-schedule-guide-copy">
+                <h4>Add a scheduled break</h4>
+                <p>Choose a start and end time and we'll adjust your audition slots around it. Ideal for lunch and longer breaks.</p>
+              </div>
+            </div>
+          </div>
+          <aside class="ap-setup-schedule-reminder">
+            <span class="ap-setup-schedule-icon" aria-hidden="true">☕︎</span>
+            <p><strong>Don't forget about yourself!</strong> Audition days can be long. Make time for coffee, lunch, bathroom breaks, catching up and chatting with your team.</p>
+          </aside>
           ${cards}
         </section>`;
     }
@@ -27573,7 +27579,7 @@ See you soon!
       else if (step === 3) body = `<fieldset><legend>What does this audition include?</legend><div class="ap-setup-grid">${activities.map(([key,label]) => multiChoice(label,'activities',key,record.activities.includes(key))).join('')}</div></fieldset>`;
       else if (step === 4) body = `<div class="ap-setup-grid">${record.type !== 'callback' ? `<section class="aud-materials-setting ap-setup-full"><div class="aud-materials-setting-copy"><strong>Audition materials</strong><span>${isAuditionSessionMaterialsEnabled(record.id) ? 'Performers can see the materials you share for this audition.' : 'No materials will be shared for this audition.'}</span></div><label class="aud-materials-setting-toggle"><span>${isAuditionSessionMaterialsEnabled(record.id) ? 'On' : 'Off'}</span><input type="checkbox" data-materials-session="${e(record.id)}" ${isAuditionSessionMaterialsEnabled(record.id) ? 'checked' : ''} aria-label="Audition materials for ${e(record.name)} ${isAuditionSessionMaterialsEnabled(record.id) ? 'on' : 'off'}"><span class="aud-materials-setting-track" aria-hidden="true"></span></label></section>` : ''}<label class="ap-setup-field ap-setup-full">What should they prepare?<textarea data-field="prep" rows="3">${e(record.prep)}</textarea></label>${record.methods.includes('self_tape') ? `<section class="ap-setup-self-tape ap-setup-full"><header><h3>Self-tape</h3><p>Give performers the filming instructions and submission deadline for this audition.</p></header><label class="ap-setup-field ap-setup-full"><span class="ap-setup-field-title">What should they film?</span><textarea data-field="selfTapeInstructions" rows="3" placeholder="For example: record a short song and a scene, then submit both using the link in your confirmation email.">${e(record.selfTapeInstructions || '')}</textarea></label><label class="ap-setup-field ap-setup-self-tape-deadline"><span class="ap-setup-field-title">Submission deadline</span><input type="datetime-local" data-field="deadline" value="${e(record.deadline || '')}"><span class="ap-setup-field-help">Set a deadline that gives your team time to review submissions.</span></label></section>` : ''}<label class="ap-setup-field ap-setup-full">What should they bring?<textarea data-field="bring" rows="2">${e(record.bring)}</textarea></label><label class="ap-setup-field">When can they leave?<select data-field="finish"><option ${record.finish==='After their appointment'?'selected':''}>After their appointment</option><option ${record.finish==='After the whole session'?'selected':''}>After the whole session</option><option ${record.finish==='When released by the team'?'selected':''}>When released by the team</option></select></label><label class="ap-setup-field ap-setup-full">Arrival instructions (sent after booking)<textarea data-field="access" rows="2" placeholder="For example: check in with our producer at the welcome desk, then wait to be called.">${e(record.access)}</textarea><span class="ap-setup-field-help">These instructions go in the booking confirmation email and do not appear on the public audition page.</span></label><p class="ap-setup-full">Add shared links to audition materials under Materials. Files stay in your own storage; set links so anyone with the link can view.</p></div>`;
       else body = applicantView(record);
-      return `<div class="ap-setup-editor" style="--ap-accent:${accent}"><nav class="ap-setup-tabs" aria-label="Audition details">${sections.map((name,index)=>`<button type="button" data-step="${index}" aria-pressed="${state.step===index}">${name}${missing(record).some(item=>item.step===index)?'<span class="ap-setup-star" aria-hidden="true">✱</span>':''}</button>`).join('')}</nav><div class="ap-setup-fields">${body}</div><footer><span data-save-status role="status">${e(draftSaveStatus(record.id))}</span><button type="button" data-close-editor>Done</button></footer></div>`;
+      return `<div class="ap-setup-editor" style="--ap-accent:${accent}"><nav class="ap-setup-tabs" aria-label="Audition details">${sections.map((name,index)=>`<button type="button" data-step="${index}" aria-pressed="${state.step===index}">${name}${missing(record).some(item=>item.step===index)?'<span class="ap-setup-star" aria-hidden="true">✱</span>':''}</button>`).join('')}</nav><div class="ap-setup-fields">${body}</div><footer><div class="ap-setup-draft-status">${step === 5 ? '<span class="ap-setup-schedule-icon" aria-hidden="true">☁︎</span>' : ''}<span data-save-status role="status">${e(draftSaveStatus(record.id))}</span></div><button type="button" data-close-editor>Done</button></footer></div>`;
     }
 
     function applicantView(record) {
@@ -27819,9 +27825,17 @@ See you soon!
         document.querySelector(`[data-draft-slot-day="${button.dataset.draftSlotDay}"][data-draft-slot-time="${button.dataset.draftSlotTime}"]`)?.focus();
       });
       root.querySelectorAll('[data-add-break]').forEach(button => button.onclick = () => {
-        const editor = root.querySelector(`[data-break-editor="${button.dataset.addBreak}"]`);
-        editor.style.display = 'flex';
-        editor.querySelector('[data-break-start]').focus();
+        const card = button.closest('.ap-setup-schedule-day');
+        const editor = card.querySelector('[data-break-editor]');
+        const fromHeader = button.closest('header');
+        const anchor = fromHeader || card.querySelector('.ap-setup-scheduled-breaks-row');
+        const opening = editor.hidden || editor.previousElementSibling !== anchor;
+        if (opening) anchor.after(editor);
+        editor.hidden = !opening;
+        card.querySelectorAll('[data-add-break]').forEach(trigger => {
+          trigger.setAttribute('aria-expanded', String(opening && trigger === button));
+        });
+        if (opening) editor.querySelector('[data-break-start]').focus();
       });
       root.querySelectorAll('[data-confirm-break]').forEach(button => button.onclick = () => {
         const day = ensureDays(record)[Number(button.dataset.confirmBreak)];
