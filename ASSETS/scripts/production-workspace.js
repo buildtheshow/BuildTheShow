@@ -27117,20 +27117,27 @@ See you soon!
     if (!Number.isInteger(length) || length < 1 || !Number.isInteger(gap) || gap < 0) return [];
     const start = timeToMins(block.start_time);
     const end = timeToMins(block.end_time);
-    const breaks = (block.breaks || []).map(({ start, end }) => [timeToMins(start), timeToMins(end)]);
+    const breaks = (block.breaks || [])
+      .map(breakTime => [Math.max(start, timeToMins(breakTime.start)), Math.min(end, timeToMins(breakTime.end))])
+      .filter(([from, to]) => from < to)
+      .sort(([first], [second]) => first - second);
     const slots = [];
-    for (let minute = start; minute + length <= end; minute += length + gap) {
-      if (breaks.some(([from, to]) => minute < to && minute + length > from)) continue;
-      const hour = String(Math.floor(minute / 60)).padStart(2, '0');
-      const minutes = String(minute % 60).padStart(2, '0');
-      slots.push({
-        session_id: sessionId,
-        slot_date: block.date,
-        slot_time: `${hour}:${minutes}:00`,
-        block_id: block.id,
-        capacity: Number(block.capacity) || 1,
-        is_available: true,
-      });
+    const capacity = Number(block.capacity) || 1;
+    let resumeAt = start;
+    for (const [pauseAt, breakEnd] of [...breaks, [end, end]]) {
+      for (let minute = resumeAt; minute + length <= pauseAt; minute += length + gap) {
+        const hour = String(Math.floor(minute / 60)).padStart(2, '0');
+        const minutes = String(minute % 60).padStart(2, '0');
+        slots.push({
+          session_id: sessionId,
+          slot_date: block.date,
+          slot_time: `${hour}:${minutes}:00`,
+          block_id: block.id,
+          capacity,
+          is_available: true,
+        });
+      }
+      resumeAt = Math.max(resumeAt, breakEnd);
     }
     return slots;
   }
@@ -27431,7 +27438,7 @@ See you soon!
               ? `<div class="ap-setup-schedule-actions"><span>Click a slot to switch it between open and blocked.</span></div><div class="aud-block-calendar">${buildAuditionSchedulerBlockSlotsHtml(record.id, slots, index)}</div>`
               : `<p class="ap-setup-schedule-empty">${emptyMessage}</p>`}
             <section class="ap-setup-schedule-breaks">
-              <div><strong>Breaks</strong><span>Breaks are excluded when time slots are created.</span></div>
+              <div><strong>Breaks</strong><span>Time slots restart at the end of each break.</span></div>
               <ul>${breaks || '<li class="ap-setup-schedule-no-breaks">No breaks added</li>'}</ul>
               <div class="ap-setup-schedule-break-adder" data-break-editor="${index}" style="display:none">
                 <label>Start <input type="text" data-break-start placeholder="12:00pm" autocomplete="off"></label>
