@@ -27488,6 +27488,20 @@ See you soon!
       });
     }
 
+    function headerDaySummary(day, undatedLabel) {
+      const weekday = _getAudDow(day.date);
+      const timeRange = compactTimeRange(day.start, day.end);
+      return `<span class="ap-setup-header-day">
+        ${weekday ? `<span aria-hidden="true">${_makeAudDateBadge(day.date, 'sm', 'span')}</span>` : ''}
+        <span class="ap-setup-header-day-details">
+          <strong>${weekday
+            ? `<time datetime="${e(day.date)}"><span aria-hidden="true">${e(weekday)}</span><span class="sr-only">${e(niceDate(day.date))}</span></time>`
+            : e(undatedLabel)}</strong>
+          ${timeRange ? `<span>${e(timeRange)}</span>` : ''}
+        </span>
+      </span>`;
+    }
+
     function scheduleBuilder(record) {
       if (!usesTimeSlots(record)) {
         return record.mode === 'walkin'
@@ -27639,7 +27653,7 @@ See you soon!
           </header>
           <div class="ap-setup-days">
             <nav class="ap-setup-day-tabs" aria-label="Audition dates">
-              ${tapeOnly ? '' : days.map((_, index) => `<button type="button" data-day-tab="${index}" aria-current="${!showSelfTape && dayIndex === index}"><span class="ap-setup-date-tab-icon" aria-hidden="true"></span>Day ${index + 1}</button>`).join('')}
+              ${tapeOnly ? '' : days.map((day, index) => `<button type="button" data-day-tab="${index}" aria-current="${!showSelfTape && dayIndex === index}">${headerDaySummary(day, `Day ${index + 1}`)}</button>`).join('')}
               ${hasSelfTape ? `<button type="button" data-day-tab="self-tape" aria-current="${Boolean(showSelfTape)}"><span class="ap-setup-date-tab-icon ap-setup-date-tab-icon--self-tape" aria-hidden="true"></span>Self-tape</button>` : ''}
               ${!showSelfTape && days.length > 1 && dayIndex > 0 ? `<button type="button" class="ap-setup-remove-day" data-remove-day="${dayIndex}">Remove day</button>` : ''}
             </nav>
@@ -27739,19 +27753,8 @@ See you soon!
       if (!chips) return;
       const days = ensureDays(record);
       const scheduledDays = days.filter(day => day.date || day.start || day.end);
-      chips.innerHTML = (scheduledDays.length ? scheduledDays : days.slice(0, 1)).map(day => {
-        const timeRange = compactTimeRange(day.start, day.end);
-        const weekday = _getAudDow(day.date);
-        return `<div class="ap-setup-header-day">
-          ${weekday ? `<div aria-hidden="true">${_makeAudDateBadge(day.date, 'sm')}</div>` : ''}
-          <div class="ap-setup-header-day-details">
-            <strong>${weekday
-              ? `<time datetime="${e(day.date)}"><span aria-hidden="true">${e(weekday)}</span><span class="sr-only">${e(niceDate(day.date))}</span></time>`
-              : 'Dates to come'}</strong>
-            ${timeRange ? `<span>${e(timeRange)}</span>` : ''}
-          </div>
-        </div>`;
-      }).join('');
+      chips.innerHTML = (scheduledDays.length ? scheduledDays : days.slice(0, 1))
+        .map(day => headerDaySummary(day, 'Dates to come')).join('');
     }
 
     function render() {
@@ -27768,6 +27771,7 @@ See you soon!
         render();
       };
       state.records.forEach(record => {
+        const editing = state.openId === record.id;
         const template = document.createElement('template');
         template.innerHTML = buildAudSessionCardHTML({ id: record.id, name: record.name, type: record.type, date: record.days?.[0]?.date || '', start_time: record.days?.[0]?.start || '', end_time: record.days?.[0]?.end || '', format: record.methods.includes('in_person') ? 'in_person' : 'virtual', booking_mode: 'appointment', show_to_applicants: false });
         const card = template.content.firstElementChild;
@@ -27781,7 +27785,7 @@ See you soon!
         head?.setAttribute('role','group');
         if (head) {
           head.tabIndex = 0;
-          head.setAttribute('aria-expanded', String(state.openId === record.id));
+          head.setAttribute('aria-expanded', String(editing));
           head.setAttribute('aria-label', `Open or close ${record.name || sessionTypeLabel(record.type)} settings`);
           head.onclick = () => toggleEditor(record);
           head.onkeydown = event => {
@@ -27792,22 +27796,28 @@ See you soon!
         }
         const nameNode=card.querySelector('.aud-card-name');
         nameNode.textContent = record.name || sessionTypeLabel(record.type);
-        const titleRow=document.createElement('div');titleRow.className='ap-setup-title-row';
-        nameNode.replaceWith(titleRow);titleRow.append(nameNode);
-        const headerStatus=document.createElement('div');headerStatus.className='ap-setup-header-status';headerStatus.innerHTML=completion(record);titleRow.append(headerStatus);bindNeedsAction(headerStatus,record);
-        renderHeaderDates(card, record);
+        if (editing) {
+          card.querySelector('.aud-card-chips')?.remove();
+        } else {
+          const titleRow = document.createElement('div');
+          titleRow.className = 'ap-setup-title-row';
+          nameNode.replaceWith(titleRow);
+          const headerStatus = document.createElement('div');
+          headerStatus.className = 'ap-setup-header-status';
+          titleRow.append(nameNode, headerStatus);
+          renderHeaderDates(card, record);
+        }
         const img = card.querySelector('.aud-card-type-pill img');
         if (img) { img.src = '/ASSETS/Images/Icons/' + (types.find(type=>type.value===record.type)?.icon || 'Auditions.svg'); img.style.filter = 'brightness(0) invert(1)'; }
         const deleteButton = card.querySelector('.aud-action-btn.danger');
         deleteButton?.remove();
         const actions = document.createElement('div'); actions.className='ap-setup-actions';
-        const editing = state.openId === record.id;
         const edit = document.createElement('button'); edit.type='button'; edit.className='ap-setup-edit'; edit.innerHTML=editing ? 'Done' : `${cardIcon('edit-pencil.svg')}Edit`; edit.setAttribute('aria-expanded',String(editing)); edit.onclick=event=>{event.stopPropagation();toggleEditor(record);}; actions.append(edit);
-        const remove = document.createElement('button'); remove.type='button'; remove.className='ap-setup-delete'; remove.innerHTML=cardIcon('Bin.svg'); remove.setAttribute('aria-label',`Delete ${record.name || sessionTypeLabel(record.type)}`); remove.title='Delete audition'; remove.onclick=event=>{event.stopPropagation();deleteAudition(record);}; actions.append(remove);
         head?.append(actions);
         if (editing) {
           card.insertAdjacentHTML('beforeend', editor(record));
         } else {
+          const remove = document.createElement('button'); remove.type='button'; remove.className='ap-setup-delete'; remove.innerHTML=cardIcon('Bin.svg'); remove.setAttribute('aria-label',`Delete ${record.name || sessionTypeLabel(record.type)}`); remove.title='Delete audition'; remove.onclick=event=>{event.stopPropagation();deleteAudition(record);}; actions.append(remove);
           const audienceHeading = `<strong>${cardIconLabel('Who attends?', 'performer2.svg')}</strong>`;
           const attendance = document.createElement('div'); attendance.className='ap-setup-attendance'; attendance.style.setProperty('--ap-accent',colour(record)); attendance.innerHTML=audienceHeading+(record.type==='callback'?`<label><input type="radio" name="audience-${e(record.id)}" value="invited" checked disabled>People we invite</label><small>Your team chooses who gets a callback.</small>`:`<label><input type="radio" name="audience-${e(record.id)}" value="open" ${record.audience!=='invited'?'checked':''}>Anyone who meets the requirements</label><label><input type="radio" name="audience-${e(record.id)}" value="invited" ${record.audience==='invited'?'checked':''}>People we invite</label>${record.audience==='invited'?'<small>Attending another audition does not add anyone here.</small>':''}`);
           card.append(attendance);
@@ -27882,10 +27892,12 @@ See you soon!
             error.textContent = '';
           }
           day[key] = value;
+          if (key === 'date' || isTime) {
+            const tab = root.querySelector(`[data-day-tab="${index}"]`);
+            if (tab) tab.innerHTML = headerDaySummary(day, `Day ${index + 1}`);
+          }
           save(record);
-          const card = root.closest('.aud-session-card');
-          if (isTime || key === 'date') renderHeaderDates(card, record);
-          updateMissing(card, record);
+          updateMissing(root.closest('.aud-session-card'), record);
         });
         if (isTime) input.addEventListener('keydown', event => {
           if (event.key === 'Enter' && !event.isComposing) {
