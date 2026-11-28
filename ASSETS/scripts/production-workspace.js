@@ -27559,10 +27559,31 @@ See you soon!
       if (step === 0) body = `<div class="ap-setup-grid">${field('Audition name', 'name', record.name)}<fieldset class="ap-setup-full"><legend>Audition type</legend><div class="ap-setup-types">${types.map(type => `<label class="ap-setup-type ${record.type === type.value ? 'selected' : ''}" style="--type-colour:${type.colour}"><input type="radio" data-field="type" name="type-${e(record.id)}" value="${type.value}" ${record.type === type.value ? 'checked' : ''}><span><img src="/ASSETS/Images/Icons/${type.icon}" alt=""><strong>${type.label}</strong></span></label>`).join('')}</div></fieldset></div>`;
       else if (step === 1) {
         const tape = record.methods.length === 1 && record.methods.includes('self_tape');
+        const groupBooking = record.mode === 'group';
+        const timingHelpId = `ap-setup-timing-${escapeId(record.id)}`;
         const additionalOptions = `<fieldset class="ap-setup-additional-options"><legend>How can people take part?</legend><p>Select all that apply. Performers can choose more than one.</p><div class="ap-setup-method-list">${methods.map(([key,label,icon,description])=>`<label class="ap-setup-method-card ${record.methods.includes(key)?'selected':''}"><input type="checkbox" data-multi="methods" value="${key}" ${record.methods.includes(key)?'checked':''}><span class="ap-setup-method-icon" aria-hidden="true" style="--method-icon:url('${encodeURI('/ASSETS/Images/Icons/' + icon)}')"></span><span class="ap-setup-method-copy"><strong>${label}</strong><small>${description}</small></span></label>`).join('')}</div></fieldset>`;
         const modeExplainer = tape ? '' : `<aside class="ap-setup-mode-explainer"><strong>${e(modes.find(mode => mode[0] === record.mode)?.[1] || 'Booking option')}</strong><p>${e(modeExamples[record.mode] || '')}</p></aside>`;
         const placesPanel = ['group','arrival'].includes(record.mode) && !tape ? `<section class="ap-setup-capacity"><h3>${record.mode === 'group' ? 'Places in each group session' : 'Performers per arrival time'}</h3><label class="ap-setup-field ap-setup-capacity-field"><input type="number" data-field="capacity" value="${e(record.capacity || '1')}" aria-label="${record.mode === 'group' ? 'Places per group session' : 'Performers per arrival time'}" min="1" max="200" step="1"></label><p>${record.mode === 'group' ? 'How many performers can book a place in each group session?' : 'How many performers can arrive together and take turns auditioning?'}</p></section>` : '';
-        const modeSettings = tape ? '<p class="ap-setup-note">People submit a recording. They do not book a live audition time.</p>' : record.mode !== 'walkin' ? `<section class="ap-setup-mode-settings"><div class="ap-setup-grid"><div class="ap-setup-setting-item">${field(record.mode === 'group' ? 'Minutes per group session' : 'Minutes per person', 'slot', record.slot, 'number', 'min="1" max="180"')}<small>${record.mode === 'group' ? 'How long does each group audition session run?' : 'How much time do you need with each performer?'}</small></div><div class="ap-setup-setting-item">${field(record.mode === 'group' ? 'Minutes between group sessions' : 'Minutes between appointments', 'gap', record.gap, 'number', 'min="0" max="60"')}<small>${record.mode === 'group' ? 'Time to reset before the next group arrives.' : 'Extra time to make notes and reset.'}</small></div>${placesPanel}</div></section>` : '';
+        const modeSettings = tape ? '<p class="ap-setup-note">People submit a recording. They do not book a live audition time.</p>' : record.mode !== 'walkin' ? `
+          <section class="ap-setup-mode-settings">
+            <div class="ap-setup-grid">
+              <div class="ap-setup-setting-item">
+                ${field(groupBooking ? 'Minutes per group session' : 'Minutes per person', 'slot', record.slot, 'number', `min="1" max="180" aria-describedby="${timingHelpId}-slot"`)}
+                <small id="${timingHelpId}-slot">${groupBooking ? 'How long does each group audition session run?' : 'How much time do you need with each performer?'}</small>
+              </div>
+              <div class="ap-setup-setting-item">
+                ${field(groupBooking ? 'Minutes between group sessions' : 'Minutes between appointments', 'gap', record.gap, 'number', `min="0" max="60" aria-describedby="${timingHelpId}-gap"`)}
+                <small id="${timingHelpId}-gap">${groupBooking
+                  ? 'Time to reset before the next group arrives.'
+                  : 'How much extra time do you need between every audition to make notes, reset and welcome the next performer? This time will be added after each appointment.'}</small>
+              </div>
+              ${placesPanel}
+            </div>
+            ${groupBooking ? '' : `<div class="ap-setup-booking-break-note">
+              <strong>We'll plan your breaks in the next few steps!</strong>
+              <p>For now, just focus on how much time you need with each performer and between individual auditions. You'll be able to add lunch breaks, coffee breaks and catch-up time separately when building your audition schedule.</p>
+            </div>`}
+          </section>` : '';
         const bookingSettings = tape ? modeSettings : `<div class="ap-setup-mode-panel${record.mode === 'group' ? ' ap-setup-mode-panel--group' : ''}">${modeExplainer}${modeSettings}</div>`;
         const bookingMethods = tape ? '' : `<fieldset><legend>How should people book?</legend><p>Choose how performers will reserve or receive their audition time.</p><div class="ap-setup-booking-grid">${modes.map(([value,label,desc,icon]) => `<label class="ap-setup-booking ${record.mode === value ? 'selected' : ''}"><input type="radio" data-field="mode" name="mode-${e(record.id)}" value="${value}" ${record.mode === value ? 'checked' : ''}><span class="ap-setup-booking-icon" aria-hidden="true" style="--booking-icon:url('${encodeURI('/ASSETS/Images/Icons/' + icon)}')"></span><span><strong>${label}</strong><small>${desc}</small></span></label>`).join('')}${bookingSettings}</div></fieldset>`;
         body = `${bookingMethods}${additionalOptions}`;
