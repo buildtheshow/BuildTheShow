@@ -26006,8 +26006,8 @@ See you soon!
     });
 
     const entries = breaks.length
-      ? [...blockSlots, ...breaks.map(([start, end]) => ({ slot_time: auditionSlotClock(start), breakEnd: auditionSlotClock(end) }))]
-          .sort((first, second) => first.slot_time.localeCompare(second.slot_time))
+      ? [...blockSlots, ...breaks.map((item, breakIndex) => ({ slot_time: item.start, breakEnd: item.end, breakIndex }))]
+          .sort((first, second) => timeToMins(first.slot_time) - timeToMins(second.slot_time))
       : blockSlots;
     const draftTimeHTML = label => esc(label).replace(
       /(\d{1,2}:\d{2})(am|pm)/g,
@@ -26015,10 +26015,12 @@ See you soon!
     );
 
     return `<div class="aud-block-calendar-grid">${entries.map(slot => {
-      if (slot.breakEnd) {
+      if (slot.breakIndex !== undefined) {
+        const timeRange = BTSFormatTimeRange(slot.slot_time, slot.breakEnd);
         return `<div class="aud-block-slot-cell state-break ap-setup-break-cell">
-          <div class="aud-block-slot-time"><span>${draftTimeHTML(BTSFormatTimeRange(slot.slot_time, slot.breakEnd))}</span></div>
+          <div class="aud-block-slot-time"><span>${draftTimeHTML(timeRange)}</span></div>
           <div class="aud-block-slot-bottom"><span class="aud-block-slot-state state-break">Break</span></div>
+          <button class="ap-setup-remove-break" type="button" data-remove-break="${draftDayIndex}" data-break-index="${slot.breakIndex}" aria-label="${esc(timeRange ? `Remove break ${timeRange}` : 'Remove break')}">×</button>
         </div>`;
       }
       const state    = getAudSlotState(slot);
@@ -27546,7 +27548,7 @@ See you soon!
       const start = timeToMins(day.start);
       const end = timeToMins(day.end);
       const hasWindow = day.date && day.start && day.end && end > start;
-      const breakWindows = hasWindow ? auditionBreakWindows(day.breaks, start, end) : [];
+      const breaks = day.breaks || [];
       const emptyMessage = hasWindow
         ? 'No slots fit. Check the booking length, time between appointments and breaks.'
         : 'Add a date, start time and finish time under Dates & location first.';
@@ -27554,7 +27556,6 @@ See you soon!
       const addBreakButton = `<button type="button" data-add-break="${index}" aria-controls="${breakEditorId}" aria-expanded="false">+ Add break</button>`;
       const copiedBreaks = copyableBreaks(day, days[index - 1]);
       const copyBreaksButton = copiedBreaks.length ? `<button type="button" data-copy-breaks="${index}">Copy breaks from previous day</button>` : '';
-      const breaks = (day.breaks || []).map((item, breakIndex) => `<li><span>${e(BTSFormatTimeRange(item.start, item.end))}</span><button type="button" data-remove-break="${index}" data-break-index="${breakIndex}" aria-label="Remove break">×</button></li>`).join('');
       const card = `
           <article class="ap-setup-schedule-day" id="${scheduleId}"${dayTabs ? ` role="tabpanel" aria-labelledby="${scheduleId}-tab-${index}"` : ''} style="${buildAuditionScheduleCalendarThemeStyle(colour(record))}">
             <header>
@@ -27562,13 +27563,12 @@ See you soon!
               <div class="ap-setup-schedule-day-actions">
                 ${addBreakButton}
                 ${copyBreaksButton}
-                <span class="ap-setup-schedule-count">${openCount} open · ${slots.length - openCount} blocked · ${slots.length} total${breakWindows.length ? ` · ${breakWindows.length} ${breakWindows.length === 1 ? 'break' : 'breaks'}` : ''}</span>
+                <span class="ap-setup-schedule-count">${openCount} open · ${slots.length - openCount} blocked · ${slots.length} total${breaks.length ? ` · ${breaks.length} ${breaks.length === 1 ? 'break' : 'breaks'}` : ''}</span>
               </div>
             </header>
             ${slots.length ? '' : `<p class="ap-setup-schedule-empty">${emptyMessage}</p>`}
-            ${slots.length || breakWindows.length ? `<div class="aud-block-calendar">${buildAuditionSchedulerBlockSlotsHtml(record.id, slots, index, breakWindows)}</div>` : ''}
+            ${slots.length || breaks.length ? `<div class="aud-block-calendar">${buildAuditionSchedulerBlockSlotsHtml(record.id, slots, index, breaks)}</div>` : ''}
             <section class="ap-setup-schedule-breaks">
-              ${breaks ? `<ul class="ap-setup-break-list" aria-label="Scheduled breaks">${breaks}</ul>` : ''}
               <div class="ap-setup-schedule-break-adder" id="${breakEditorId}" data-break-editor="${index}" hidden>
                 <label>Start <input type="text" data-break-start placeholder="12:00pm" autocomplete="off"></label>
                 <label>End <input type="text" data-break-end placeholder="12:30pm" autocomplete="off"></label>
@@ -28040,9 +28040,15 @@ See you soon!
       });
       root.querySelectorAll('[data-remove-break]').forEach(button => button.onclick = () => {
         const day = ensureDays(record)[Number(button.dataset.removeBreak)];
-        day.breaks.splice(Number(button.dataset.breakIndex), 1);
+        const breakIndex = Number(button.dataset.breakIndex);
+        const scheduleId = button.closest('.ap-setup-schedule-day').id;
+        day.breaks.splice(breakIndex, 1);
         save(record);
         render();
+        const schedule = document.getElementById(scheduleId);
+        const nextButton = schedule?.querySelector(`[data-remove-break][data-break-index="${breakIndex}"]`)
+          || schedule?.querySelector('header [data-add-break]');
+        nextButton?.focus();
       });
     }
 
