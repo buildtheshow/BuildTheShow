@@ -26009,11 +26009,15 @@ See you soon!
       ? [...blockSlots, ...breaks.map(([start, end]) => ({ slot_time: auditionSlotClock(start), breakEnd: auditionSlotClock(end) }))]
           .sort((first, second) => first.slot_time.localeCompare(second.slot_time))
       : blockSlots;
+    const draftTimeHTML = label => esc(label).replace(
+      /(\d{1,2}:\d{2})(am|pm)/g,
+      '<span class="aud-block-slot-clock">$1<span class="aud-block-slot-meridiem">$2</span></span>'
+    );
 
     return `<div class="aud-block-calendar-grid">${entries.map(slot => {
       if (slot.breakEnd) {
         return `<div class="aud-block-slot-cell state-break ap-setup-break-cell">
-          <div class="aud-block-slot-time"><span>${esc(BTSFormatTimeRange(slot.slot_time, slot.breakEnd))}</span></div>
+          <div class="aud-block-slot-time"><span>${draftTimeHTML(BTSFormatTimeRange(slot.slot_time, slot.breakEnd))}</span></div>
           <div class="aud-block-slot-bottom"><span class="aud-block-slot-state state-break">Break</span></div>
         </div>`;
       }
@@ -26030,7 +26034,7 @@ See you soon!
 
       return `
       <div class="aud-block-slot-cell state-${esc(state)}"${draft ? '' : ` onclick="cycleAudSlotLabel('${slot.id}','${sessionId}')" title="Click to ${state === 'open' ? 'block' : 'open'} this slot"`}>
-        <div class="aud-block-slot-time">${draft ? esc(timeLabel) : buildAuditionSchedulePlaceholderTimeLabelHtml(timeLabel)}</div>
+        <div class="aud-block-slot-time">${draft ? draftTimeHTML(timeLabel) : buildAuditionSchedulePlaceholderTimeLabelHtml(timeLabel)}</div>
         <div class="aud-block-slot-bottom">
           <button class="aud-block-slot-state state-${esc(state)}" type="button" ${toggle}>${esc(getAudSlotLabel(slot))}</button>
           <div class="aud-block-slot-cap">${esc(capLabel)}</div>
