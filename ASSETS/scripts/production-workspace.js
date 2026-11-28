@@ -27324,11 +27324,34 @@ See you soon!
     function multiChoice(label, key, value, checked) {
       return `<label class="ap-setup-choice ${checked ? 'ap-setup-choice-selected' : ''}"><input type="checkbox" role="checkbox" aria-checked="${checked}" data-multi="${key}" value="${value}" ${checked ? 'checked' : ''}><span class="ap-setup-radio-mark" aria-hidden="true"></span><span>${label}</span></label>`;
     }
+    function parseDayTime(value) {
+      const match = value.trim().match(/^(\d{1,2})(?::([0-5]\d))?\s*(am|pm)?$/i);
+      if (!match) return null;
+      const [, hours, minutes, period] = match;
+      let hour = Number(hours);
+      if (period) {
+        if (hour < 1 || hour > 12) return null;
+        hour = hour % 12 + (period.toLowerCase() === 'pm' ? 12 : 0);
+      } else if (hour > 23 || minutes === undefined) {
+        return null;
+      }
+      return `${String(hour).padStart(2, '0')}:${minutes || '00'}`;
+    }
+
     function dayHTML(record, day, index) {
       const uid = escapeId(record.id + '-' + index);
-      const calendarIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="16" rx="2"/><path d="M7.5 3v4M16.5 3v4M3.5 9h17"/></svg>`;
       const venueIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.3"/></svg>`;
-      const dayField = (label, key, value, type) => `<label class="ap-setup-field"><span class="ap-setup-field-title${key === 'date' ? ' ap-setup-field-title--icon' : ''}">${key === 'date' ? calendarIcon : ''}${label}</span><input type="${type}" data-day="${index}" data-day-field="${key}" value="${e(value || '')}"></label>`;
+      const dayField = (label, key, value, type, icon) => {
+        const isTime = key === 'start' || key === 'end';
+        const errorId = `ap-setup-time-error-${uid}-${key}`;
+        return `<label class="ap-setup-field">
+          <span class="ap-setup-field-title${icon ? ' ap-setup-field-title--icon' : ''}">
+            ${icon ? `<span class="ap-setup-day-field-icon" style="--ap-day-field-icon: url('/ASSETS/Images/Icons/${icon}.svg')" aria-hidden="true"></span>` : ''}${label}
+          </span>
+          <input type="${type}" data-day="${index}" data-day-field="${key}" value="${e(isTime ? BTSFormatTime(value) : value || '')}"${isTime ? ` data-day-time placeholder="${key === 'start' ? '9:00am' : '6:00pm'}" autocomplete="off" spellcheck="false" aria-describedby="${errorId}"` : ''}>
+          ${isTime ? `<small class="ap-setup-time-error" id="${errorId}" role="status"></small>` : ''}
+        </label>`;
+      };
       const venuePickerId = `ap-setup-venue-${uid}`;
       const inPersonDetails = record.methods.includes('in_person') ? `
         <section class="ap-setup-location">
@@ -27358,7 +27381,7 @@ See you soon!
             </label>
           </div>
         </details>` : '';
-      return `<section class="ap-setup-daypanel"><section class="ap-setup-date-time"><div class="ap-setup-date-row">${dayField('Date','date',day.date,'date')}${dayField('Start time','start',day.start,'time')}${dayField('Finish time','end',day.end,'time')}</div></section>${inPersonDetails}${videoCallDetails}</section>`;
+      return `<section class="ap-setup-daypanel"><section class="ap-setup-date-time"><div class="ap-setup-date-row">${dayField('Date', 'date', day.date, 'date', 'calendar-date')}${dayField('Start time', 'start', day.start, 'text', 'time-start')}${dayField('Finish time', 'end', day.end, 'text', 'time-end')}</div></section>${inPersonDetails}${videoCallDetails}</section>`;
     }
     function scheduleBuilder(record) {
       if (record.methods.length === 1 && record.methods[0] === 'self_tape') return '<p class="ap-setup-note">Self-tape auditions do not need time slots.</p>';
@@ -27601,11 +27624,37 @@ See you soon!
       }));
       root.querySelectorAll('[data-multi]').forEach(input=>input.addEventListener('change',()=>{const key=input.dataset.multi;record[key]=[...root.querySelectorAll(`[data-multi="${key}"]:checked`)].map(item=>item.value);save(record);render();}));
       root.querySelectorAll('[data-day-tab]').forEach(button=>button.onclick=()=>{state.activeDay[record.id]=Number(button.dataset.dayTab);render();});
-      root.querySelectorAll('[data-day-field]').forEach(input=>input.addEventListener('input',()=>{
-        const index=Number(input.dataset.day),key=input.dataset.dayField,day=ensureDays(record)[index];
-        day[key]=input.value;
-        save(record);updateMissing(root.closest('.aud-session-card'),record);
-      }));
+      root.querySelectorAll('[data-day-field]').forEach(input => {
+        const index = Number(input.dataset.day);
+        const key = input.dataset.dayField;
+        const day = ensureDays(record)[index];
+        const isTime = input.hasAttribute('data-day-time');
+        input.addEventListener(isTime ? 'change' : 'input', () => {
+          let value = input.value;
+          if (isTime) {
+            value = value.trim() ? parseDayTime(value) : '';
+            const error = input.nextElementSibling;
+            if (value === null) {
+              input.value = BTSFormatTime(day[key]);
+              input.setAttribute('aria-invalid', 'true');
+              error.textContent = 'Enter a time like 9:00am.';
+              return;
+            }
+            input.value = BTSFormatTime(value);
+            input.removeAttribute('aria-invalid');
+            error.textContent = '';
+          }
+          day[key] = value;
+          save(record);
+          updateMissing(root.closest('.aud-session-card'), record);
+        });
+        if (isTime) input.addEventListener('keydown', event => {
+          if (event.key === 'Enter' && !event.isComposing) {
+            event.preventDefault();
+            input.blur();
+          }
+        });
+      });
       root.querySelectorAll('[data-audition-venue]').forEach(container=>{
         const index=Number(container.dataset.auditionVenue),day=ensureDays(record)[index];
         if(typeof VenuePicker==='undefined')return;
