@@ -11,8 +11,9 @@
 ## Icon consistency
 
 - Reuse existing Build The Show artwork when a matching icon is available.
+- Place standalone icons directly on the surrounding surface. Never add a box, border, or separate background behind an icon.
 - Keep icons used together consistent in apparent size, alignment, and visual weight. Start with a shared stroke weight for outline icons at the same display size.
-- Check icons next to one another at the sizes they actually render. Small outline icons may need thicker strokes for legibility. Solid or visually dense icons may need a slightly smaller drawing within the same icon box.
+- Check icons next to one another at the sizes they actually render. Small outline icons may need thicker strokes for legibility. Solid or visually dense artwork may need to render slightly smaller to look balanced alongside outline artwork.
 - Preserve each icon's proportions and recognizable shape. Keep larger icons visually proportional to their role and verify the balance at both desktop and mobile sizes when the layout changes.
 
 ## Slash spacing
