@@ -27391,7 +27391,7 @@ See you soon!
       return `${String(hour).padStart(2, '0')}:${minutes || '00'}`;
     }
 
-    function breakTimeOptions(value) {
+    function timeEntryOptions(value) {
       const clock = value.trim();
       if (/^(?:[1-9]|1[0-2])(?::[0-5]\d)?$/.test(clock)) {
         return ['am', 'pm'].map(period => parseDayTime(clock + period));
@@ -27401,8 +27401,8 @@ See you soon!
     }
 
     function resolveBreakTimes(startValue, endValue, day) {
-      const starts = breakTimeOptions(startValue);
-      const ends = breakTimeOptions(endValue);
+      const starts = timeEntryOptions(startValue);
+      const ends = timeEntryOptions(endValue);
       if (starts.length === 1 && ends.length === 1) {
         return starts[0] < ends[0] ? { start: starts[0], end: ends[0] } : null;
       }
@@ -27547,11 +27547,13 @@ See you soon!
       const openCount = slots.filter(slot => getAudSlotState(slot) === 'open').length;
       const start = timeToMins(day.start);
       const end = timeToMins(day.end);
-      const hasWindow = day.date && day.start && day.end && end > start;
+      const hasHours = day.start && day.end;
       const breaks = day.breaks || [];
-      const emptyMessage = hasWindow
-        ? 'No slots fit. Check the booking length, time between appointments and breaks.'
-        : 'Add a date, start time and finish time under Dates & location first.';
+      const emptyMessage = !day.date || !hasHours
+        ? 'Add a date, start time and finish time under Dates & location first.'
+        : end <= start
+          ? 'Set a finish time after the start time under Dates & location to generate slots.'
+          : 'No slots fit. Check the booking length, time between appointments and breaks.';
       const breakEditorId = `ap-setup-break-editor-${escapeId(record.id)}-${index}`;
       const addBreakButton = `<button type="button" data-add-break="${index}" aria-controls="${breakEditorId}" aria-expanded="false">+ Add break</button>`;
       const copiedBreaks = copyableBreaks(day, days[index - 1]);
@@ -27902,7 +27904,15 @@ See you soon!
         input.addEventListener(isTime ? 'change' : 'input', () => {
           let value = input.value;
           if (isTime) {
-            value = value.trim() ? parseDayTime(value) : '';
+            const clock = value.trim();
+            if (clock) {
+              const normalized = parseDayTime(/^\d{1,2}$/.test(clock) ? clock + ':00' : clock);
+              value = key === 'end' && day.start
+                ? timeEntryOptions(clock).find(option => option > day.start) ?? normalized
+                : normalized;
+            } else {
+              value = '';
+            }
             const error = input.nextElementSibling;
             if (value === null) {
               input.value = BTSFormatTime(day[key]);
