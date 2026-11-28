@@ -25989,8 +25989,8 @@ See you soon!
       </div>`).join('');
   }
 
-  function buildAuditionSchedulerBlockSlotsHtml(sessionId, blockSlots, draftDayIndex) {
-    if (!blockSlots.length) {
+  function buildAuditionSchedulerBlockSlotsHtml(sessionId, blockSlots, draftDayIndex, breaks = []) {
+    if (!blockSlots.length && !breaks.length) {
       return '<div class="aud-block-calendar-empty">Generate slots to build this time view.</div>';
     }
 
@@ -26005,7 +26005,18 @@ See you soon!
       appsPerSlot[slotId].push(app);
     });
 
-    return `<div class="aud-block-calendar-grid">${blockSlots.map(slot => {
+    const entries = breaks.length
+      ? [...blockSlots, ...breaks.map(([start, end]) => ({ slot_time: auditionSlotClock(start), breakEnd: auditionSlotClock(end) }))]
+          .sort((first, second) => first.slot_time.localeCompare(second.slot_time))
+      : blockSlots;
+
+    return `<div class="aud-block-calendar-grid">${entries.map(slot => {
+      if (slot.breakEnd) {
+        return `<div class="aud-block-slot-cell state-break ap-setup-break-cell">
+          <div class="aud-block-slot-time">${esc(BTSFormatTimeRange(slot.slot_time, slot.breakEnd))}</div>
+          <div class="aud-block-slot-state state-break">Break</div>
+        </div>`;
+      }
       const state    = getAudSlotState(slot);
       const cap      = Number(slot.capacity) || 1;
       const slotApps = appsPerSlot[slot.id] || [];
@@ -27111,27 +27122,35 @@ See you soon!
     return h * 60 + m;
   }
 
+  function auditionBreakWindows(breaks, start, end) {
+    return (breaks || [])
+      .map(breakTime => [Math.max(start, timeToMins(breakTime.start)), Math.min(end, timeToMins(breakTime.end))])
+      .filter(([from, to]) => from < to)
+      .sort(([first], [second]) => first - second);
+  }
+
+  function auditionSlotClock(minute) {
+    const hour = String(Math.floor(minute / 60)).padStart(2, '0');
+    const minutes = String(minute % 60).padStart(2, '0');
+    return `${hour}:${minutes}:00`;
+  }
+
   function buildProposedAuditionSlots(sessionId, block) {
     const length = Number(block.slot_length ?? 10);
     const gap = Number(block.buffer ?? 0);
     if (!Number.isInteger(length) || length < 1 || !Number.isInteger(gap) || gap < 0) return [];
     const start = timeToMins(block.start_time);
     const end = timeToMins(block.end_time);
-    const breaks = (block.breaks || [])
-      .map(breakTime => [Math.max(start, timeToMins(breakTime.start)), Math.min(end, timeToMins(breakTime.end))])
-      .filter(([from, to]) => from < to)
-      .sort(([first], [second]) => first - second);
+    const breaks = auditionBreakWindows(block.breaks, start, end);
     const slots = [];
     const capacity = Number(block.capacity) || 1;
     let resumeAt = start;
     for (const [pauseAt, breakEnd] of [...breaks, [end, end]]) {
       for (let minute = resumeAt; minute + length <= pauseAt; minute += length + gap) {
-        const hour = String(Math.floor(minute / 60)).padStart(2, '0');
-        const minutes = String(minute % 60).padStart(2, '0');
         slots.push({
           session_id: sessionId,
           slot_date: block.date,
-          slot_time: `${hour}:${minutes}:00`,
+          slot_time: auditionSlotClock(minute),
           block_id: block.id,
           capacity,
           is_available: true,
@@ -27423,7 +27442,10 @@ See you soon!
       const cards = ensureDays(record).map((day, index) => {
         const slots = draftDaySlots(record, day);
         const openCount = slots.filter(slot => getAudSlotState(slot) === 'open').length;
-        const hasWindow = day.date && day.start && day.end && timeToMins(day.end) > timeToMins(day.start);
+        const start = timeToMins(day.start);
+        const end = timeToMins(day.end);
+        const hasWindow = day.date && day.start && day.end && end > start;
+        const breakWindows = hasWindow ? auditionBreakWindows(day.breaks, start, end) : [];
         const emptyMessage = hasWindow
           ? 'No slots fit. Check the booking length, time between appointments and breaks.'
           : 'Add a date, start time and finish time under Dates & location first.';
@@ -27432,11 +27454,12 @@ See you soon!
           <article class="ap-setup-schedule-day" style="${buildAuditionScheduleCalendarThemeStyle(colour(record))}">
             <header>
               <div><strong>${e(niceDate(day.date))}</strong><span>${e(niceTimeRange(day.start, day.end))}</span></div>
-              <span class="ap-setup-schedule-count">${openCount} open · ${slots.length - openCount} blocked · ${slots.length} total</span>
+              <span class="ap-setup-schedule-count">${openCount} open · ${slots.length - openCount} blocked · ${slots.length} total${breakWindows.length ? ` · ${breakWindows.length} ${breakWindows.length === 1 ? 'break' : 'breaks'}` : ''}</span>
             </header>
             ${slots.length
-              ? `<div class="ap-setup-schedule-actions"><span>Click a slot to switch it between open and blocked.</span></div><div class="aud-block-calendar">${buildAuditionSchedulerBlockSlotsHtml(record.id, slots, index)}</div>`
+              ? '<div class="ap-setup-schedule-actions"><span>Click a slot to switch it between open and blocked.</span></div>'
               : `<p class="ap-setup-schedule-empty">${emptyMessage}</p>`}
+            ${slots.length || breakWindows.length ? `<div class="aud-block-calendar">${buildAuditionSchedulerBlockSlotsHtml(record.id, slots, index, breakWindows)}</div>` : ''}
             <section class="ap-setup-schedule-breaks">
               <div><strong>Breaks</strong><span>Time slots restart at the end of each break.</span></div>
               <ul>${breaks || '<li class="ap-setup-schedule-no-breaks">No breaks added</li>'}</ul>
