@@ -26419,12 +26419,12 @@ See you soon!
     return days[d.getDay()] || '';
   }
 
-  function _makeAudDateBadge(dateStr, size) {
+  function _makeAudDateBadge(dateStr, size, tag = 'div') {
     if (!dateStr) return '';
     const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const p = String(dateStr).slice(0,10).split('-');
     const cls = size === 'sm' ? 'cal-badge cal-badge--sm' : 'cal-badge';
-    return `<div class="${cls}"><div class="cal-badge-month">${M[parseInt(p[1],10)-1]||''}</div><div class="cal-badge-day">${parseInt(p[2],10)}</div></div>`;
+    return `<${tag} class="${cls}"><${tag} class="cal-badge-month">${M[parseInt(p[1],10)-1]||''}</${tag}><${tag} class="cal-badge-day">${parseInt(p[2],10)}</${tag}></${tag}>`;
   }
 
   function _buildSdateExtraDayRowHtml(sid, block, dayNum) {
@@ -27473,40 +27473,67 @@ See you soon!
       });
     }
 
+    function copyableBreaks(day, previousDay) {
+      if (!day.start || !day.end) return [];
+      const dayStart = timeToMins(day.start);
+      const dayEnd = timeToMins(day.end);
+      const existing = new Set((day.breaks || []).map(({ start, end }) => `${timeToMins(start)}-${timeToMins(end)}`));
+      return (previousDay?.breaks || []).filter(({ start, end }) => {
+        const from = timeToMins(start);
+        const to = timeToMins(end);
+        const key = `${from}-${to}`;
+        if (from < dayStart || to > dayEnd || !(from < to) || existing.has(key)) return false;
+        existing.add(key);
+        return true;
+      });
+    }
+
     function scheduleBuilder(record) {
       if (!usesTimeSlots(record)) {
         return record.mode === 'walkin'
           ? '<p class="ap-setup-note">Cattle calls run during the advertised hours, so they do not use bookable time slots.</p>'
           : '<p class="ap-setup-note">Self-tape auditions do not need time slots.</p>';
       }
-      const cards = ensureDays(record).map((day, index) => {
-        const slots = draftDaySlots(record, day);
-        const openCount = slots.filter(slot => getAudSlotState(slot) === 'open').length;
-        const weekday = _getAudDow(day.date);
-        const start = timeToMins(day.start);
-        const end = timeToMins(day.end);
-        const hasWindow = day.date && day.start && day.end && end > start;
-        const breakWindows = hasWindow ? auditionBreakWindows(day.breaks, start, end) : [];
-        const emptyMessage = hasWindow
-          ? 'No slots fit. Check the booking length, time between appointments and breaks.'
-          : 'Add a date, start time and finish time under Dates & location first.';
-        const breakEditorId = `ap-setup-break-editor-${escapeId(record.id)}-${index}`;
-        const addBreakButton = `<button type="button" data-add-break="${index}" aria-controls="${breakEditorId}" aria-expanded="false">+ Add break</button>`;
-        const breaks = (day.breaks || []).map((item, breakIndex) => `<li><span>${e(BTSFormatTimeRange(item.start, item.end))}</span><button type="button" data-remove-break="${index}" data-break-index="${breakIndex}" aria-label="Remove break">×</button></li>`).join('');
-        return `
-          <article class="ap-setup-schedule-day" style="${buildAuditionScheduleCalendarThemeStyle(colour(record))}">
+      const days = ensureDays(record);
+      const index = Math.min(state.activeDay[record.id] || 0, days.length - 1);
+      const day = days[index];
+      const scheduleId = `ap-setup-schedule-${escapeId(record.id)}`;
+      const dateLabel = (date, dayIndex) => {
+        const weekday = _getAudDow(date.date);
+        return `<span class="ap-setup-schedule-date">
+          ${weekday ? `<span aria-hidden="true">${_makeAudDateBadge(date.date, undefined, 'span')}</span>` : ''}
+          <span class="ap-setup-schedule-date-details">
+            <strong>${weekday
+              ? `<time datetime="${e(date.date)}"><span aria-hidden="true">${e(weekday)}</span><span class="sr-only">${e(niceDate(date.date))}</span></time>`
+              : `Day ${dayIndex + 1} · Date to be added`}</strong>
+            <span class="ap-setup-schedule-time">${e(niceTimeRange(date.start, date.end))}</span>
+          </span>
+        </span>`;
+      };
+      const dayTabs = days.length > 1 ? `<div class="ap-setup-schedule-tabs" role="tablist" aria-label="Audition days">
+        ${days.map((item, dayIndex) => `<button type="button" role="tab" data-schedule-day="${dayIndex}" id="${scheduleId}-tab-${dayIndex}" aria-controls="${scheduleId}" aria-selected="${dayIndex === index}" tabindex="${dayIndex === index ? 0 : -1}">${dateLabel(item, dayIndex)}</button>`).join('')}
+      </div>` : '';
+      const slots = draftDaySlots(record, day);
+      const openCount = slots.filter(slot => getAudSlotState(slot) === 'open').length;
+      const start = timeToMins(day.start);
+      const end = timeToMins(day.end);
+      const hasWindow = day.date && day.start && day.end && end > start;
+      const breakWindows = hasWindow ? auditionBreakWindows(day.breaks, start, end) : [];
+      const emptyMessage = hasWindow
+        ? 'No slots fit. Check the booking length, time between appointments and breaks.'
+        : 'Add a date, start time and finish time under Dates & location first.';
+      const breakEditorId = `ap-setup-break-editor-${escapeId(record.id)}-${index}`;
+      const addBreakButton = `<button type="button" data-add-break="${index}" aria-controls="${breakEditorId}" aria-expanded="false">+ Add break</button>`;
+      const copiedBreaks = copyableBreaks(day, days[index - 1]);
+      const copyBreaksButton = copiedBreaks.length ? `<button type="button" data-copy-breaks="${index}">Copy breaks from previous day</button>` : '';
+      const breaks = (day.breaks || []).map((item, breakIndex) => `<li><span>${e(BTSFormatTimeRange(item.start, item.end))}</span><button type="button" data-remove-break="${index}" data-break-index="${breakIndex}" aria-label="Remove break">×</button></li>`).join('');
+      const card = `
+          <article class="ap-setup-schedule-day" id="${scheduleId}"${dayTabs ? ` role="tabpanel" aria-labelledby="${scheduleId}-tab-${index}"` : ''} style="${buildAuditionScheduleCalendarThemeStyle(colour(record))}">
             <header>
-              <div class="ap-setup-schedule-date">
-                ${weekday ? `<div aria-hidden="true">${_makeAudDateBadge(day.date)}</div>` : ''}
-                <div class="ap-setup-schedule-date-details">
-                  <strong>${weekday
-                    ? `<time datetime="${e(day.date)}"><span aria-hidden="true">${e(weekday)}</span><span class="sr-only">${e(niceDate(day.date))}</span></time>`
-                    : e(niceDate(day.date))}</strong>
-                  <span class="ap-setup-schedule-time">${e(niceTimeRange(day.start, day.end))}</span>
-                </div>
-              </div>
+              ${dayTabs ? '' : dateLabel(day, index)}
               <div class="ap-setup-schedule-day-actions">
                 ${addBreakButton}
+                ${copyBreaksButton}
                 <span class="ap-setup-schedule-count">${openCount} open · ${slots.length - openCount} blocked · ${slots.length} total${breakWindows.length ? ` · ${breakWindows.length} ${breakWindows.length === 1 ? 'break' : 'breaks'}` : ''}</span>
               </div>
             </header>
@@ -27523,7 +27550,6 @@ See you soon!
               ${addBreakButton}
             </section>
           </article>`;
-      }).join('');
       const auditionName = record.name || 'this audition';
       const defaultName = types.find(type => type.value === record.type)?.name.toLowerCase();
       const headingName = auditionName.toLowerCase() === defaultName ? defaultName : auditionName;
@@ -27553,7 +27579,8 @@ See you soon!
             <div class="ap-setup-schedule-art" aria-hidden="true"><span style="--ap-schedule-art:url('/ASSETS/Images/Icons/coffee.svg')"></span></div>
             <p><strong>Don't forget about yourself!</strong> Audition days can be long. Make time for coffee, lunch, bathroom breaks, catching up and chatting with your team.</p>
           </aside>
-          ${cards}
+          ${dayTabs}
+          ${card}
         </section>`;
     }
 
@@ -27858,13 +27885,45 @@ See you soon!
         const days=ensureDays(record),first=days[0],previous=days[days.length-1],index=days.length;
         let nextDate='';
         if(previous.date){const date=new Date(previous.date+'T12:00:00');date.setDate(date.getDate()+1);nextDate=[date.getFullYear(),String(date.getMonth()+1).padStart(2,'0'),String(date.getDate()).padStart(2,'0')].join('-');}
-        const newDay={...structuredClone(first),id:'day-'+crypto.randomUUID(),date:nextDate};
+        const newDay={...structuredClone(first),id:'day-'+crypto.randomUUID(),date:nextDate,breaks:[],slotOverrides:{}};
         record.days.push(newDay);
         state.activeDay[record.id]=index;state.step=2;save(record);render();
       });
       root.querySelectorAll('[data-remove-day]').forEach(button=>button.onclick=()=>{
         const index=Number(button.dataset.removeDay);if(index<1||record.days.length<2)return;
         record.days.splice(index,1);state.activeDay[record.id]=Math.max(0,index-1);save(record);render();
+      });
+      const scheduleTabs = [...root.querySelectorAll('[data-schedule-day]')];
+      scheduleTabs.forEach((button, index) => {
+        const selectDay = dayIndex => {
+          state.activeDay[record.id] = dayIndex;
+          render();
+          document.getElementById(scheduleTabs[dayIndex].id)?.focus();
+        };
+        button.onclick = () => {
+          if (button.getAttribute('aria-selected') !== 'true') selectDay(index);
+        };
+        button.onkeydown = event => {
+          const last = scheduleTabs.length - 1;
+          const destinations = { ArrowLeft: index === 0 ? last : index - 1, ArrowRight: index === last ? 0 : index + 1, Home: 0, End: last };
+          const destination = destinations[event.key];
+          if (typeof destination !== 'number') return;
+          event.preventDefault();
+          selectDay(destination);
+        };
+      });
+      root.querySelector('[data-copy-breaks]')?.addEventListener('click', event => {
+        const button = event.currentTarget;
+        const index = Number(button.dataset.copyBreaks);
+        const days = ensureDays(record);
+        const day = days[index];
+        const breaks = copyableBreaks(day, days[index - 1]);
+        if (!breaks.length) return;
+        const scheduleId = button.closest('.ap-setup-schedule-day').id;
+        day.breaks = [...(day.breaks || []), ...structuredClone(breaks)];
+        save(record);
+        render();
+        document.getElementById(scheduleId)?.querySelector('header [data-add-break]')?.focus();
       });
       root.querySelectorAll('[data-draft-slot-day]').forEach(button => button.onclick = () => {
         const day = ensureDays(record)[Number(button.dataset.draftSlotDay)];
