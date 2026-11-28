@@ -27288,6 +27288,20 @@ See you soon!
       return record.days;
     };
 
+    function defaultSelfTapeDeadline(record) {
+      if (!record.methods.some(method => method === 'in_person' || method === 'video_call')) return '';
+      const dates = ensureDays(record)
+        .map(day => day.date)
+        .filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date))
+        .sort();
+      if (!dates.length) return '';
+      // Use UTC for calendar arithmetic only. The deadline itself is a local wall time.
+      const date = new Date(dates[0] + 'T00:00:00Z');
+      if (Number.isNaN(date.getTime())) return '';
+      date.setUTCDate(date.getUTCDate() - 2);
+      return date.toISOString().slice(0, 10) + 'T23:59';
+    }
+
     async function load() {
       if (state.loading) return;
       state.loading = true;
@@ -27661,7 +27675,9 @@ See you soon!
               <label class="ap-setup-field ap-setup-self-tape-deadline">
                 <span class="ap-setup-field-title ap-setup-field-title--icon"><span class="ap-setup-date-tab-icon" aria-hidden="true"></span>Submission deadline</span>
                 <input type="datetime-local" data-field="deadline" value="${e(record.deadline || '')}">
-                <span class="ap-setup-field-help">Set a deadline that gives your team time to review submissions.</span>
+                <span class="ap-setup-field-help">${tapeOnly
+                  ? 'Set a deadline that gives your team time to review submissions.'
+                  : 'The default is 11:59pm two days before the first audition. You can change it here.'}</span>
               </label>
             </section>` : dayHTML(record, days[dayIndex], dayIndex)}
           </div>
@@ -27688,7 +27704,7 @@ See you soon!
 
     function applicantAuditionPreview(record) {
       const attendance = record.type === 'callback' || record.audience === 'invited' ? 'Your team will send you an invitation with booking details.' : (modes.find(mode => mode[0] === record.mode)?.[2] || modes.find(mode => mode[0] === 'assigned')[2]);
-      return `<article class="ap-setup-applicant" style="--ap-accent:${colour(record)}"><header><b>${e(prod?.name || 'Production')}</b><h2>${e(record.name)}</h2><span>${e(record.audience === 'invited' || record.type === 'callback' ? 'People we invite' : 'Anyone who meets the requirements')}</span></header><div><h3>Taking part</h3><p>${e(record.methods.map(key=>({in_person:'In person',video_call:'Live video call',self_tape:'Self-tape'})[key]).join(' · '))}</p><p>${e(record.activities.map(key=>activities.find(item=>item[0]===key)?.[1]||key).join(' · '))}</p>${record.methods.length===1&&record.methods[0]==='self_tape'?`<section><h3>Submission deadline</h3><p>${e(record.deadline || 'To be confirmed')}</p></section>`:`<section><h3>Dates & locations</h3>${ensureDays(record).map(day=>`<div class="ap-setup-app-day"><strong>${e(niceDate(day.date))} · ${e(niceTimeRange(day.start, day.end))}</strong>${record.methods.includes('in_person')?`<p>${e(day.venue?.name||'Venue to be confirmed')}${day.room?' · '+e(day.room):''}</p><p>${e(day.venue?.address||'Full address to be added')}</p>${day.venue?.address?`<a href="${mapLink(day.venue)}" target="_blank" rel="noopener noreferrer">Open in maps ↗</a>`:''}${day.locationNotes?`<p>${e(day.locationNotes)}</p>`:''}`:''}${record.methods.includes('video_call')?`<p>${e(day.videoInstructions||'Joining details will be sent with your booking confirmation.')}</p>`:''}</div>`).join('')}</section><section><h3>Booking & arrival</h3><p>${e(attendance)}</p>${record.mode==='appointment'?`<p>Appointments last ${e(record.slot)} minutes.`:''}<p>${e(record.finish)}.</p></section>`}<section><h3>What to prepare</h3><p>${e(record.prep||'No preparation needed.')}</p></section>${record.methods.includes('self_tape') ? `<section><h3>Self-tape</h3>${record.selfTapeInstructions ? `<p>${e(record.selfTapeInstructions)}</p>` : '<p>Filming instructions to be confirmed.</p>'}${record.methods.length > 1 ? `<p>Submit by ${e(record.deadline ? BTSFormatDateTime(new Date(record.deadline), { dateStyle: 'long' }) : 'the deadline to be confirmed')}.</p>` : ''}</section>` : ''}${record.bring?`<section><h3>What to bring</h3><p>${e(record.bring)}</p></section>`:''}</div></article>`;
+      return `<article class="ap-setup-applicant" style="--ap-accent:${colour(record)}"><header><b>${e(prod?.name || 'Production')}</b><h2>${e(record.name)}</h2><span>${e(record.audience === 'invited' || record.type === 'callback' ? 'People we invite' : 'Anyone who meets the requirements')}</span></header><div><h3>Taking part</h3><p>${e(record.methods.map(key=>({in_person:'In person',video_call:'Live video call',self_tape:'Self-tape'})[key]).join(' · '))}</p><p>${e(record.activities.map(key=>activities.find(item=>item[0]===key)?.[1]||key).join(' · '))}</p>${record.methods.length===1&&record.methods[0]==='self_tape'?`<section><h3>Submission deadline</h3><p>${e(record.deadline ? BTSFormatDateTime(new Date(record.deadline), { dateStyle: 'long' }) : 'To be confirmed')}</p></section>`:`<section><h3>Dates & locations</h3>${ensureDays(record).map(day=>`<div class="ap-setup-app-day"><strong>${e(niceDate(day.date))} · ${e(niceTimeRange(day.start, day.end))}</strong>${record.methods.includes('in_person')?`<p>${e(day.venue?.name||'Venue to be confirmed')}${day.room?' · '+e(day.room):''}</p><p>${e(day.venue?.address||'Full address to be added')}</p>${day.venue?.address?`<a href="${mapLink(day.venue)}" target="_blank" rel="noopener noreferrer">Open in maps ↗</a>`:''}${day.locationNotes?`<p>${e(day.locationNotes)}</p>`:''}`:''}${record.methods.includes('video_call')?`<p>${e(day.videoInstructions||'Joining details will be sent with your booking confirmation.')}</p>`:''}</div>`).join('')}</section><section><h3>Booking & arrival</h3><p>${e(attendance)}</p>${record.mode==='appointment'?`<p>Appointments last ${e(record.slot)} minutes.`:''}<p>${e(record.finish)}.</p></section>`}<section><h3>What to prepare</h3><p>${e(record.prep||'No preparation needed.')}</p></section>${record.methods.includes('self_tape') ? `<section><h3>Self-tape</h3>${record.selfTapeInstructions ? `<p>${e(record.selfTapeInstructions)}</p>` : '<p>Filming instructions to be confirmed.</p>'}${record.methods.length > 1 ? `<p>Submit by ${e(record.deadline ? BTSFormatDateTime(new Date(record.deadline), { dateStyle: 'long' }) : 'the deadline to be confirmed')}.</p>` : ''}</section>` : ''}${record.bring?`<section><h3>What to bring</h3><p>${e(record.bring)}</p></section>`:''}</div></article>`;
     }
 
     function applicantSchedulePreview(record) {
@@ -27832,6 +27848,14 @@ See you soon!
     }
 
     function bind(root, record) {
+      const deadline = root.querySelector('[data-field="deadline"]');
+      if (deadline && !record.deadline) {
+        const defaultDeadline = defaultSelfTapeDeadline(record);
+        if (defaultDeadline) {
+          deadline.value = record.deadline = defaultDeadline;
+          save(record);
+        }
+      }
       root.querySelectorAll('[data-materials-session]').forEach(input=>input.addEventListener('change',()=>{
         const enabled=input.checked;
         const label=input.closest('.aud-materials-setting-toggle')?.querySelector('span:first-child');
