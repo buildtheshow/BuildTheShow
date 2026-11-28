@@ -27379,7 +27379,7 @@ See you soon!
             </label>
           </div>
         </details>` : '';
-      return `<section class="ap-setup-daypanel"><section class="ap-setup-date-time"><div class="ap-setup-date-row">${dayField('Date', 'date', day.date, 'date', 'calendar-date')}${dayField('Start time', 'start', day.start, 'text', 'time-start')}${dayField('Finish time', 'end', day.end, 'text', 'time-end')}</div></section>${inPersonDetails}${videoCallDetails}</section>`;
+      return `<section class="ap-setup-daypanel"><section class="ap-setup-date-time"><div class="ap-setup-date-row">${dayField('Date', 'date', day.date, 'date', 'navproductioncalendar')}${dayField('Start time', 'start', day.start, 'text', 'time-start')}${dayField('Finish time', 'end', day.end, 'text', 'time-end')}</div></section>${inPersonDetails}${videoCallDetails}</section>`;
     }
     function usesTimeSlots(record) {
       return record.mode !== 'walkin' && !(record.methods.length === 1 && record.methods[0] === 'self_tape');
