@@ -651,7 +651,7 @@
     const perfEvents = _tixEvents.filter(e => e.event_type === 'performance' || (e.event_type === 'dress' && setup.dress_ticketed));
     const ticketTypes = setup.ticket_types || [];
     const fmtDate = iso => { if (!iso) return ''; const d = new Date(iso); return d.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }); };
-    const fmtTime = iso => { if (!iso) return ''; const d = new Date(iso); return d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' }); };
+    const fmtTime = iso => { if (!iso) return ''; const d = new Date(iso); return BTSFormatTime(d); };
 
     let inventoryStats = { total: 0, available: 0, sold: 0, held: 0, blocked: 0 };
     let perfInventory = [];
@@ -885,7 +885,7 @@
     const dressEvents = _tixEvents.filter(e => e.event_type === 'dress');
     const dressTicketed = !!_tixSetup.dress_ticketed;
     const fmtDate = iso => { if (!iso) return ''; const d = new Date(iso); return d.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }); };
-    const fmtTime = iso => { if (!iso) return ''; const d = new Date(iso); return d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' }); };
+    const fmtTime = iso => { if (!iso) return ''; const d = new Date(iso); return BTSFormatTime(d); };
 
     if (!perfEvents.length && !dressEvents.length) {
       return `<div style="text-align:center;padding:2.5rem 1.5rem;">

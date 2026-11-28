@@ -5,8 +5,8 @@ export function validCalendarDate(value){return /^\d{4}-\d{2}-\d{2}$/.test(value
 export function eventColour(type){return EVENT_COLOURS[type]||EVENT_COLOURS.event;}
 export function formatCalendarRange(event){
  if(event.time_tbd)return 'Time to be arranged';if(event.all_day)return 'All day';
- const format=value=>new Date(value).toLocaleTimeString('en-CA',{hour:'numeric',minute:'2-digit',hour12:true}).replace(/\s*([ap])\.?m\.?/i,(_,p)=>' '+p.toLowerCase()+'m');
- const start=format(event.start_time);return start+(event.end_time?'–'+format(event.end_time):' · End time to be arranged');
+ const format=value=>BTSFormatTime(new Date(value));
+ const start=format(event.start_time);return start+(event.end_time?' - '+format(event.end_time):' · End time to be arranged');
 }
 export function normaliseCalendarRows(rows,members,productions){
  const people=new Map(members.map(p=>[p.id,p])),allowed=new Set(productions.map(p=>p.id)),events=new Map();

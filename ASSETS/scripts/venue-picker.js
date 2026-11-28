@@ -8,9 +8,9 @@
  *   // onChange(venueText, venueId|null) called when a venue is chosen
  *
  * TBD behaviour:
- *   - Small checkbox + label sits below the dropdown.
+ *   - Small checkbox + label sits below the search field.
  *   - Auto-checked when currentText is blank or "TBD".
- *   - When checked: dropdown is disabled and greyed out, value is "TBD".
+ *   - When checked: search is disabled and greyed out, value is "TBD".
  *   - Picking a real venue unchecks TBD automatically.
  *   - Checking TBD while a venue is set clears the selection.
  */
@@ -35,9 +35,10 @@
       .order('name', { ascending: true });
     _venues = data || [];
     document.querySelectorAll('[data-venue-picker]').forEach(el => {
-      const id      = el.dataset.venuePicker;
-      const current = el.dataset.venueCurrentText || '';
-      _rebuildSelect(id, current);
+      const id = el.dataset.venuePicker;
+      const input = document.getElementById(`vp-search-${id}`);
+      if (input && document.activeElement !== input) input.value = el.dataset.venueCurrentText || '';
+      if (input && document.activeElement === input) _showResults(id, input.value);
     });
   }
 
@@ -67,31 +68,32 @@
         }
         .vp-tbd-row input[type="checkbox"]:checked + label { color: var(--ap-accent, #572e88); }
         .vp-picker-disabled { opacity: 0.45; pointer-events: none; }
+        .vp-search-wrap { position: relative; }
+        .vp-search-dropdown { display:none; position:absolute; top:100%; left:0; right:0; z-index:9999; background:#fff; border:1px solid #cfc8dc; border-radius:0 0 10px 10px; box-shadow:0 8px 22px rgba(35,20,50,.16); max-height:280px; overflow-y:auto; }
+        .vp-result-heading { padding:.55rem .8rem .3rem; color:#76668a; font-size:.7rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }
+        .vp-result { padding:.55rem .8rem; cursor:pointer; border-top:1px solid #eeeaf3; }
+        .vp-result:hover,.vp-result:focus { background:#f4f0f8; outline:none; }
+        .vp-result-name { font-weight:700; }
+        .vp-result-address { margin-top:.12rem; font-size:.78em; opacity:.75; }
+        .vp-search-status { padding:.65rem .8rem; font-size:.82em; color:#76668a; }
       `;
       document.head.appendChild(style);
     }
 
     container.innerHTML = `
       <div data-venue-picker="${containerId}"
-           data-venue-current-text="${(currentText || '').replace(/"/g, '&quot;')}"
+           data-venue-current-text="${_esc(currentText || '')}"
            data-show-saved-venue-address="${showAddressInSavedOptions}"
            data-venue-onchange="__vp_cb_${containerId}">
 
         <div id="vp-picker-${containerId}"${isTbd ? ' class="vp-picker-disabled"' : ''}>
-          <div class="venue-picker-row">
-            <select class="form-select venue-picker-select" id="vp-select-${containerId}">
-              <option value="">Select a venue...</option>
-              ${_venues.map(v => { const lbl = v.nickname || v.name; return `<option value="${v.id}" data-name="${lbl.replace(/"/g, '&quot;')}" ${!isTbd && (currentText === lbl || currentText === v.name) ? 'selected' : ''}>${lbl}${showAddressInSavedOptions && v.address ? ' — ' + v.address : ''}</option>`; }).join('')}
-              <option value="__new__">+ Add new venue...</option>
-            </select>
+          <div class="vp-search-wrap">
+              <input class="form-input" id="vp-search-${containerId}" type="text"
+                     value="${_esc(isTbd ? '' : currentText || '')}"
+                     placeholder="Search saved venues or type a venue or address..." autocomplete="off" />
+              <div class="vp-search-dropdown" id="vp-dropdown-${containerId}"></div>
           </div>
           <div class="venue-picker-new-wrap" id="vp-new-${containerId}" style="display:none;">
-            <div style="font-size:0.72rem;font-weight:700;color:#000;margin:0.6rem 0 0.3rem;">Search for venue or address</div>
-            <div style="position:relative;">
-              <input class="form-input" id="vp-search-${containerId}" type="text"
-                     placeholder="Start typing a name or address..." autocomplete="off" />
-              <div id="vp-dropdown-${containerId}" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;background:#fff;border:1.5px solid rgba(0,0,0,0.2);border-top:none;border-radius:0 0 8px 8px;box-shadow:0 6px 18px rgba(0,0,0,0.1);max-height:220px;overflow-y:auto;"></div>
-            </div>
             <div id="vp-preview-${containerId}" style="display:none;margin-top:0.5rem;">
               <div class="venue-picker-preview">
                 <div>
@@ -123,27 +125,11 @@
       onChange('TBD', null);
     }
 
-    const select = document.getElementById(`vp-select-${containerId}`);
-    if (options.searchImmediately) {
-      document.getElementById(`vp-new-${containerId}`).style.display = 'block';
-      _initSearch(containerId);
-    }
-    select.addEventListener('change', () => {
-      const val = select.value;
-      if (val === '__new__') {
-        document.getElementById(`vp-new-${containerId}`).style.display = 'block';
-        _initSearch(containerId);
-        select.value = '';
-      } else if (val) {
-        const opt  = select.options[select.selectedIndex];
-        const name = opt.dataset.name || opt.textContent.split(' — ')[0];
-        document.getElementById(`vp-new-${containerId}`).style.display = 'none';
-        _setTbd(containerId, false);
-        if (typeof onChange === 'function') onChange(name, val);
-      } else {
-        if (typeof onChange === 'function') onChange('', null);
-      }
-    });
+    _initSearch(containerId);
+    const input = document.getElementById(`vp-search-${containerId}`);
+    input.dataset.currentText = isTbd ? '' : (currentText || '');
+    input.addEventListener('focus', () => _showResults(containerId, input.value));
+    if (options.searchImmediately) input.focus();
   }
 
   function _toggleTbd(containerId) {
@@ -151,9 +137,10 @@
     if (!cb) return;
     if (cb.checked) {
       _setTbd(containerId, true);
-      const select = document.getElementById(`vp-select-${containerId}`);
-      if (select) select.value = '';
+      const input = document.getElementById(`vp-search-${containerId}`);
+      if (input) input.value = '';
       _cancelNew(containerId);
+      if (input) { input.value = ''; input.dataset.currentText = ''; }
       const onChange = window[`__vp_cb_${containerId}`];
       if (typeof onChange === 'function') onChange('TBD', null);
     } else {
@@ -170,21 +157,6 @@
     if (picker) picker.classList.toggle('vp-picker-disabled', active);
   }
 
-  function _rebuildSelect(id, currentText) {
-    const select = document.getElementById(`vp-select-${id}`);
-    if (!select) return;
-    const existing = select.value;
-    const showAddress = select.closest('[data-venue-picker]')?.dataset.showSavedVenueAddress !== 'false';
-    select.innerHTML = `
-      <option value="">Select a venue...</option>
-      ${_venues.map(v => { const lbl = v.nickname || v.name; return `<option value="${v.id}" data-name="${lbl.replace(/"/g, '&quot;')}" ${currentText === lbl || currentText === v.name ? 'selected' : ''}>${lbl}${showAddress && v.address ? ' — ' + v.address : ''}</option>`; }).join('')}
-      <option value="__new__">+ Add new venue...</option>`;
-    if (existing && existing !== '__new__') {
-      const match = _venues.find(v => v.id === existing);
-      if (match) select.value = existing;
-    }
-  }
-
   function _initSearch(pickerId) {
     const input    = document.getElementById(`vp-search-${pickerId}`);
     const dropdown = document.getElementById(`vp-dropdown-${pickerId}`);
@@ -194,8 +166,12 @@
     input.addEventListener('input', () => {
       clearTimeout(_debounceTimers[pickerId]);
       const q = input.value.trim();
-      if (q.length < 2) { dropdown.style.display = 'none'; return; }
-      _debounceTimers[pickerId] = setTimeout(() => _fetchSuggestions(pickerId, q), 350);
+      const selected = _venues.find(v => v.id === input._selectedVenueId);
+      if (selected && q !== (selected.nickname || selected.name)) input._selectedVenueId = null;
+      input._externalResults = [];
+      input._placeSearchDone = false;
+      _showResults(pickerId, q);
+      if (q.length >= 2) _debounceTimers[pickerId] = setTimeout(() => _fetchSuggestions(pickerId, q), 350);
     });
 
     document.addEventListener('click', e => {
@@ -205,36 +181,68 @@
     }, { once: false });
   }
 
+  function _showResults(pickerId, query = '') {
+    const dropdown = document.getElementById(`vp-dropdown-${pickerId}`);
+    const input = document.getElementById(`vp-search-${pickerId}`);
+    if (!dropdown || !input) return;
+    const q = String(query || '').trim().toLowerCase();
+    const saved = _venues.filter(v => [v.nickname, v.name, v.address].some(value => String(value || '').toLowerCase().includes(q)));
+    let html = '';
+    if (saved.length) html += `<div class="vp-result-heading">Saved venues</div>` + saved.map(v => `<div class="vp-result" tabindex="0" data-saved-id="${_esc(v.id)}"><div class="vp-result-name">${_esc(v.nickname || v.name)}</div>${v.address ? `<div class="vp-result-address">${_esc(v.address)}</div>` : ''}</div>`).join('');
+    const external = input._externalResults || [];
+    if (external.length) html += `<div class="vp-result-heading">Search places</div>` + external.map((place, i) => `<div class="vp-result" tabindex="0" data-place-index="${i}"><div class="vp-result-name">${_esc(place.name)}</div><div class="vp-result-address">${_esc(place.address)}</div></div>`).join('');
+    if (!html) html = `<div class="vp-search-status">${q.length < 2 ? 'Start typing to search saved venues and places.' : input._placeSearchDone ? 'No places found. Try another search.' : 'Searching for places…'}</div>`;
+    dropdown.innerHTML = html;
+    dropdown.style.display = 'block';
+    dropdown.querySelectorAll('[data-saved-id]').forEach(el => el.addEventListener('click', () => {
+      const venue = _venues.find(v => v.id === el.dataset.savedId);
+      if (!venue) return;
+      input.value = venue.nickname || venue.name;
+      input._selectedVenueId = venue.id;
+      input.dataset.currentText = input.value;
+      const pickerRoot = document.querySelector(`[data-venue-picker="${pickerId}"]`);
+      if (pickerRoot) pickerRoot.dataset.venueCurrentText = input.value;
+      dropdown.style.display = 'none';
+      const wrap = document.getElementById(`vp-new-${pickerId}`);
+      if (wrap) wrap.style.display = 'none';
+      _setTbd(pickerId, false);
+      const cb = window[`__vp_cb_${pickerId}`];
+      if (typeof cb === 'function') cb(input.value, venue.id);
+    }));
+    dropdown.querySelectorAll('[data-place-index]').forEach(el => el.addEventListener('click', () => {
+      const place = external[Number(el.dataset.placeIndex)];
+      if (place) _selectSuggestion(pickerId, place);
+    }));
+  }
+
   async function _fetchSuggestions(pickerId, query) {
     const dropdown = document.getElementById(`vp-dropdown-${pickerId}`);
     if (!dropdown) return;
-    dropdown.innerHTML = '<div style="padding:0.5rem 0.75rem;font-size:0.8rem;color:#000;">Searching...</div>';
-    dropdown.style.display = 'block';
+    _showResults(pickerId, query);
+    const status = document.createElement('div');
+    status.className = 'vp-search-status'; status.textContent = 'Searching places…'; dropdown.appendChild(status);
 
     try {
       const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=6`;
       const res  = await fetch(url, { headers: { 'Accept-Language': 'en', 'User-Agent': 'BuildTheShow/1.0' } });
       const data = await res.json();
 
-      if (!data || !data.length) {
-        dropdown.innerHTML = '<div style="padding:0.5rem 0.75rem;font-size:0.8rem;color:#000;">No results found.</div>';
-        return;
-      }
-
-      dropdown.innerHTML = data.map((r, i) => {
+      const input = document.getElementById(`vp-search-${pickerId}`);
+      if (!input || input.value.trim() !== query) return;
+      input._externalResults = (data || []).map(r => {
         const name    = r.name || r.address?.amenity || r.address?.building || r.display_name.split(',')[0];
         const address = r.display_name;
-        return `<div class="vp-suggestion" data-idx="${i}"
-                     style="padding:0.55rem 0.85rem;cursor:pointer;border-bottom:1px solid rgba(0,0,0,0.1);font-size:0.84rem;transition:background 0.12s;"
-                     onmouseover="this.style.background='#efefef'"
-                     onmouseout="this.style.background='#fff'"
-                     onclick="VenuePicker._selectSuggestion('${pickerId}', ${JSON.stringify({ name, address, lat: r.lat, lng: r.lon, place_id: String(r.place_id) }).replace(/"/g, '&quot;')})">
-                  <div style="font-weight:700;color:#000000;">${_esc(name)}</div>
-                  <div style="font-size:0.72rem;color:#000;margin-top:0.1rem;">${_esc(address)}</div>
-                </div>`;
-      }).join('');
+        return { name, address, lat: r.lat, lng: r.lon, place_id: String(r.place_id) };
+      });
+      input._placeSearchDone = true;
+      _showResults(pickerId, query);
     } catch {
-      dropdown.innerHTML = '<div style="padding:0.5rem 0.75rem;font-size:0.8rem;color:#d1523d;">Search failed. Check your connection.</div>';
+      const input = document.getElementById(`vp-search-${pickerId}`);
+      if (!input || input.value.trim() !== query) return;
+      _showResults(pickerId, query);
+      const error = document.createElement('div');
+      error.className = 'vp-search-status'; error.textContent = 'Place search failed. You can still choose a saved venue.';
+      dropdown.appendChild(error);
     }
   }
 
@@ -245,11 +253,13 @@
     if (!input) return;
     input._placeData = d;
     input.value      = d.name;
+    input._selectedVenueId = null;
     if (dropdown) dropdown.style.display = 'none';
     const nameEl = document.getElementById(`vp-pname-${pickerId}`);
     const addrEl = document.getElementById(`vp-paddress-${pickerId}`);
     if (nameEl) nameEl.textContent = d.name;
     if (addrEl) addrEl.textContent = d.address;
+    document.getElementById(`vp-new-${pickerId}`).style.display = 'block';
     document.getElementById(`vp-preview-${pickerId}`).style.display = 'block';
   }
 
@@ -267,9 +277,16 @@
     }).select().single();
     if (error) { console.error('Venue save error', error); return; }
     await reload();
-    const select = document.getElementById(`vp-select-${pickerId}`);
-    if (select) select.value = data.id;
-    _cancelNew(pickerId);
+    const savedInput = document.getElementById(`vp-search-${pickerId}`);
+    if (savedInput) { savedInput.value = d.name; savedInput._selectedVenueId = data.id; savedInput.dataset.currentText = d.name; }
+    const pickerRoot = document.querySelector(`[data-venue-picker="${pickerId}"]`);
+    if (pickerRoot) pickerRoot.dataset.venueCurrentText = d.name;
+    const wrap = document.getElementById(`vp-new-${pickerId}`);
+    if (wrap) wrap.style.display = 'none';
+    const dropdown = document.getElementById(`vp-dropdown-${pickerId}`);
+    if (dropdown) dropdown.style.display = 'none';
+    const preview = document.getElementById(`vp-preview-${pickerId}`);
+    if (preview) preview.style.display = 'none';
     _setTbd(pickerId, false);
     const cb = window[`__vp_cb_${pickerId}`];
     if (typeof cb === 'function') cb(d.name, data.id);
@@ -283,7 +300,7 @@
     if (wrap)  wrap.style.display  = 'none';
     if (prev)  prev.style.display  = 'none';
     if (drop)  drop.style.display  = 'none';
-    if (input) { input.value = ''; input._placeData = null; }
+    if (input) { input.value = input.dataset.currentText || ''; input._placeData = null; }
   }
 
   function _esc(s) {

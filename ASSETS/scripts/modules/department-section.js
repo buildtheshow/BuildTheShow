@@ -120,7 +120,7 @@
     const hour = parseInt(parts[0], 10);
     const minute = parts[1] || '00';
     if (!Number.isFinite(hour)) return '';
-    return (hour % 12 || 12) + ':' + minute + ' ' + (hour < 12 ? 'AM' : 'PM');
+    return BTSFormatTime(`${hour}:${minute}`);
   }
 
   function fmtTimeRange(start, end) {

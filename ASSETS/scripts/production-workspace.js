@@ -1338,7 +1338,7 @@
         { sessionType: 'dance_call', bucketName: 'Maybe',    bucketColour: '#43b8b0' },
       ],
       roleNotes: null,
-      auditionTimeRows: [['General Audition', '10:30 AM'], ['Dance Call', '2:00 PM']],
+      auditionTimeRows: [['General Audition', '10:30am'], ['Dance Call', '2:00pm']],
     });
     const creativeTeamMember = {
       id: 'template-test-creative',
@@ -1529,22 +1529,22 @@
     const backPreviewHtml = namespaceBackTemplate(backHtml, 'template-test-back');
     const cleanFlipBackHtml = namespaceBackTemplate(backHtml, 'template-test-og-flip');
     const checkedInPreviewPeople = [
-      { time: '9:40 AM', state: 'Through', className: 'is-done' },
-      { time: '9:50 AM', state: 'Through', className: 'is-done' },
-      { time: '10:00 AM', state: 'Through', className: 'is-done' },
-      { time: '10:20 AM', state: 'Through', className: 'is-done' },
-      { time: '10:30 AM', state: 'Next', className: 'is-next' },
-      { time: '10:40 AM', state: 'Ready', className: '' },
-      { time: '10:50 AM', state: 'Ready', className: '' },
-      { time: '11:00 AM', state: 'Ready', className: '' },
-      { time: '11:10 AM', state: 'Ready', className: '' },
-      { time: '11:30 AM', state: 'Ready', className: '' },
-      { time: '11:40 AM', state: 'Ready', className: '' },
-      { time: '11:50 AM', state: 'Ready', className: '' },
-      { time: '12:40 PM', state: 'Ready', className: '' },
-      { time: '12:50 PM', state: 'Ready', className: '' },
-      { time: '1:00 PM', state: 'Ready', className: '' },
-      { time: '1:10 PM', state: 'Ready', className: '' },
+      { time: '9:40am', state: 'Through', className: 'is-done' },
+      { time: '9:50am', state: 'Through', className: 'is-done' },
+      { time: '10:00am', state: 'Through', className: 'is-done' },
+      { time: '10:20am', state: 'Through', className: 'is-done' },
+      { time: '10:30am', state: 'Next', className: 'is-next' },
+      { time: '10:40am', state: 'Ready', className: '' },
+      { time: '10:50am', state: 'Ready', className: '' },
+      { time: '11:00am', state: 'Ready', className: '' },
+      { time: '11:10am', state: 'Ready', className: '' },
+      { time: '11:30am', state: 'Ready', className: '' },
+      { time: '11:40am', state: 'Ready', className: '' },
+      { time: '11:50am', state: 'Ready', className: '' },
+      { time: '12:40pm', state: 'Ready', className: '' },
+      { time: '12:50pm', state: 'Ready', className: '' },
+      { time: '1:00pm', state: 'Ready', className: '' },
+      { time: '1:10pm', state: 'Ready', className: '' },
     ].map((person, index) => {
       const sample = samplePeople[index % samplePeople.length];
       return {
@@ -1850,7 +1850,7 @@
       esc,
       kicker: 'Auditions',
       title: 'Auditions at a glance.',
-      copy: 'Next audition: General Auditions, May 23 at 9:00 AM.',
+      copy: 'Next audition: General Auditions, May 23 at 9:00am.',
       statValue: '36',
       statLabel: 'Performers'
     });
@@ -5151,14 +5151,14 @@
     castOfferCode: 'KATHERINE42725',
     selfTapeCode: 'KATHERINE42725',
     generalAuditionDate: 'May 23, 2026',
-    generalAuditionTime: '9:00 AM',
+    generalAuditionTime: '9:00am',
     generalAuditionVenue: 'Emerald City Theatre',
-    danceCallTime: '11:00 AM',
+    danceCallTime: '11:00am',
     videoCallLink: 'https://meet.google.com/build-the-show',
     callbackDate: 'May 24, 2026',
-    callbackTime: '10:00 AM',
+    callbackTime: '10:00am',
     callbackVenue: 'Emerald City Theatre',
-    selfTapeDeadline: 'May 22, 2026 at 6:00 PM',
+    selfTapeDeadline: 'May 22, 2026 at 6:00pm',
   };
 
   function etSampleShowSlug() {
@@ -5293,18 +5293,7 @@
     return etFirstRealValue(prod?.venue);
   }
 
-  function formatTime12h(value) {
-    if (typeof formatSlotTime === 'function') return formatSlotTime(value);
-    const raw = String(value || '').trim();
-    const match = raw.match(/^(\d{1,2}):(\d{2})/);
-    if (!match) return raw;
-    let hour = Number(match[1]);
-    const minute = match[2];
-    if (!Number.isFinite(hour)) return raw;
-    const suffix = hour >= 12 ? 'PM' : 'AM';
-    hour = hour % 12 || 12;
-    return `${hour}:${minute} ${suffix}`;
-  }
+  function formatTime12h(value) { return BTSFormatTime(value); }
 
   function etSessionValue(session, field, label, fallbackType = '') {
     if (!session && field === 'location') return etProductionLocationFor(fallbackType) || etPlaceholder(label);
@@ -5418,9 +5407,9 @@
         { token: '{{callback_date}}',  label: 'Date',         sample: () => etSessionSampleValue('callback', 'date', 'callback date', ET_SAMPLE_CONTEXT.callbackDate, 'callback') },
         { token: '{{callback_time}}',  label: 'Start Time',   sample: () => etSessionSampleValue('callback', 'time', 'callback time', ET_SAMPLE_CONTEXT.callbackTime, 'callback') },
         { token: '{{callback_start_time}}', label: 'Start Time', sample: () => etSessionSampleValue('callback', 'time', 'callback start time', ET_SAMPLE_CONTEXT.callbackTime, 'callback') },
-        { token: '{{callback_end_time}}', label: 'End Time', sample: () => '1:30 PM' },
-        { token: '{{callback_time_range}}', label: 'Time Range', sample: () => `${ET_SAMPLE_CONTEXT.callbackTime} - 1:30 PM` },
-        { token: '{{callback_schedule}}', label: 'Callback Schedule', sample: () => '<strong>Individual Reads</strong><br>Date: May 24, 2026<br>Time: 1:20 PM - 1:30 PM' },
+        { token: '{{callback_end_time}}', label: 'End Time', sample: () => '1:30pm' },
+        { token: '{{callback_time_range}}', label: 'Time Range', sample: () => `${ET_SAMPLE_CONTEXT.callbackTime} - 1:30pm` },
+        { token: '{{callback_schedule}}', label: 'Callback Schedule', sample: () => '<strong>Individual Reads</strong><br>Date: May 24, 2026<br>Time: 1:20pm - 1:30pm' },
         { token: '{{callback_venue}}', label: 'Location',     sample: () => etSessionSampleValue('callback', 'location', 'callback location', ET_SAMPLE_CONTEXT.callbackVenue, 'callback') },
         { token: '{{callback_name}}',  label: 'Session Name', sample: () => etSessionSampleValue('callback', 'name', 'callback name', 'Callback', 'callback') },
         { token: '{{callback_prepare}}', label: 'What to Prepare', sample: () => etSessionSampleValue('callback', 'prepare', 'what to prepare for callbacks', 'Please review the Glinda side and be ready to sing the selected reprise.', 'callback') },
@@ -5453,7 +5442,7 @@
         { token: '{{cast_decline_button}}', label: 'Decline Offer Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/cast-offer/${ET_SAMPLE_CONTEXT.castOfferCode}/NO`), 'NO, I decline this offer', 'secondary') },
         { token: '{{cast_response_link}}', label: 'Review Offer Link', sample: () => etSampleProductionUrl(`/cast-offer/${ET_SAMPLE_CONTEXT.castOfferCode}`) },
         { token: '{{cast_response_button}}', label: 'Review Offer Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/cast-offer/${ET_SAMPLE_CONTEXT.castOfferCode}`), 'Review Offer and Respond') },
-        { token: '{{cast_offer_deadline}}', label: 'Offer Reply Deadline', sample: 'Friday, May 15, 2026 at 5:00 PM' },
+        { token: '{{cast_offer_deadline}}', label: 'Offer Reply Deadline', sample: 'Friday, May 15, 2026 at 5:00pm' },
         { token: '{{registration_link}}', label: 'Registration Link', sample: () => etSampleProductionUrl(`/registration/${ET_SAMPLE_CONTEXT.registrationCode}`) },
         { token: '{{registration_button}}', label: 'Registration Button', sample: () => emailActionButtonHtml(etSampleProductionUrl(`/registration/${ET_SAMPLE_CONTEXT.registrationCode}`), 'Complete Registration') },
         { token: '{{registration_pdf_url}}', label: 'Registration PDF Link', sample: () => etSampleProductionUrl(`/files/registrations/${ET_SAMPLE_CONTEXT.registrationCode}.pdf`) },
@@ -5467,7 +5456,7 @@
         { token: '{{volunteer_email}}', label: 'Volunteer Email', sample: () => 'volunteer@example.com' },
         { token: '{{volunteer_passcode}}', label: 'Legacy code (retired)', sample: () => '' },
         { token: '{{volunteer_role}}', label: 'Volunteer Role', sample: () => 'Rehearsal Assistant' },
-        { token: '{{volunteer_shift_dates}}', label: 'Volunteer Shift Dates', sample: () => 'Wednesday, August 5, 2026, 9:00 AM – 2:00 PM' },
+        { token: '{{volunteer_shift_dates}}', label: 'Volunteer Shift Dates', sample: () => 'Wednesday, August 5, 2026, 9:00am - 2:00pm' },
         { token: '{{volunteer_shifts_block}}', label: 'Volunteer Shift Block (full details)', sample: () => '<em>[Structured shift card with role, when, where, check-in]</em>' },
         { token: '{{volunteer_point_person}}', label: 'Volunteer Point Person', sample: () => 'Lead Set Builder' },
       ],
@@ -8372,12 +8361,7 @@ See you soon!
   function formatShortDateTime(value) {
     if (!value) return 'just now';
     try {
-      return new Date(value).toLocaleString('en-CA', {
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit'
-      });
+      return BTSFormatDateTime(new Date(value), { month: 'short', day: 'numeric' });
     } catch {
       return String(value);
     }
@@ -24132,14 +24116,7 @@ See you soon!
 
   function castOfferDeadlineLabel(date) {
     if (!date || Number.isNaN(date.getTime())) return '';
-    return date.toLocaleString('en-CA', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
+    return `${date.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} at ${BTSFormatTime(date)}`;
   }
 
   function castOfferDeadlineFromSettings() {
@@ -24767,7 +24744,7 @@ See you soon!
     if (buttonEl) { buttonEl.disabled = true; buttonEl.textContent = 'Sending...'; }
     try {
       await _sendFinalCastingEmailDirect(item.app, 'cast_announcement', item.roles, item.roleEntries || []);
-      finalCastingEmailSendState.set(`offer:${item.app.id}`, { sentAt: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) });
+      finalCastingEmailSendState.set(`offer:${item.app.id}`, { sentAt: BTSFormatTime(new Date()) });
       closeFinalCastingEmailPreview();
       const toEmail = applicantEmailAddress(item.app) || item.app.email || '';
       const ccEmail = String(applicantSecondaryContact(item.app).email || '').trim();
@@ -24806,7 +24783,7 @@ See you soon!
     if (buttonEl) { buttonEl.disabled = true; buttonEl.textContent = 'Sending...'; }
     try {
       await _sendFinalCastingEmailDirect(item.app, 'not_cast', [], []);
-      finalCastingEmailSendState.set(`rejection:${item.app.id}`, { sentAt: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) });
+      finalCastingEmailSendState.set(`rejection:${item.app.id}`, { sentAt: BTSFormatTime(new Date()) });
       showToast(`Not cast email sent to ${item.app.name || item.app.email}.`);
       renderFinalCastingOffers();
     } catch (error) {
@@ -26000,19 +25977,9 @@ See you soon!
     { value: 'open_call', label: 'Open Call' },
   ];
 
-  function formatSlotTime(t) {
-    if (!t) return '';
-    const parts = t.split(':');
-    const h = parseInt(parts[0]);
-    const m = parts[1] || '00';
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const h12 = h % 12 || 12;
-    return `${h12}:${m} ${ampm}`;
-  }
+  function formatSlotTime(t) { return BTSFormatTime(t); }
 
-  function formatAuditionCardTime(t) {
-    return formatSlotTime(t).replace(/\s+(AM|PM)$/i, (_, period) => period.toLowerCase());
-  }
+  function formatAuditionCardTime(t) { return formatSlotTime(t); }
 
   function buildSlotPillsHTML(slots, sessionId) {
     if (!slots.length) return '<span class="aud-slots-empty-msg">No slots yet.</span>';
@@ -26074,6 +26041,7 @@ See you soon!
     const next = current === 'open' ? 'Block' : 'Open';
     updateSlotField(slotId, sessionId, 'label', next);
     _reRenderBlocksList(sessionId);
+    if (document.querySelector('.ap-setup-schedule-builder')) _audSetupController?.render();
   }
 
   const CALLBACK_BLOCK_TYPES = [
@@ -26985,7 +26953,7 @@ See you soon!
     _reRenderBlocksList(sessionId);
   }
 
-  async function generateBlockSlots(sessionId, blockId) {
+  async function generateBlockSlots(sessionId, blockId, { silent = false } = {}) {
     const block   = (audBlocks[sessionId] || []).find(b => b.id === blockId);
     const session = audSessions.find(s => s.id === sessionId);
     if (!block) return;
@@ -26995,8 +26963,8 @@ See you soon!
     const endTime    = block.end_time   || session?.end_time;
 
     if (!date || !startTime || !endTime) {
-      showToast('Set the date and time on the audition card first.', true);
-      return;
+      if (!silent) showToast('Set the date and time on the audition card first.', true);
+      return false;
     }
 
     // Keep a copy on the block so slots stay linked if session values change later
@@ -27023,7 +26991,7 @@ See you soon!
       const hh = String(Math.floor(cur / 60)).padStart(2, '0');
       const mm = String(cur % 60).padStart(2, '0');
       const slotTime = `${hh}:${mm}:00`;
-      const inBreak  = breaks.some(br => cur >= br.startMins && cur < br.endMins);
+      const inBreak  = breaks.some(br => cur < br.endMins && cur + slotLen > br.startMins);
       if (!inBreak) {
         proposedSlots.push({
           session_id:   sessionId,
@@ -27083,13 +27051,17 @@ See you soon!
     const slotsToRemove = existingBlockSlots.filter(slot => !proposedKeys.has(`${slot.slot_date || date}|${slot.slot_time}`));
     const bookedSlotsToRemove = slotsToRemove.filter(slot => (bookingsPerSlot[slot.id] || 0) > 0);
     if (bookedSlotsToRemove.length) {
-      showToast('This change would remove booked times. Please keep those times, or move those bookings first.', true);
-      return;
+      if (!silent) showToast('This change would remove booked times. Please keep those times, or move those bookings first.', true);
+      return false;
     }
     const duplicateBookedIds = duplicateIdsToRemove.filter(id => (bookingsPerSlot[id] || 0) > 0);
     if (duplicateBookedIds.length) {
-      showToast('This session already has duplicate booked times. Please move those bookings before regenerating.', true);
-      return;
+      if (!silent) showToast('This session already has duplicate booked times. Please move those bookings before regenerating.', true);
+      return false;
+    }
+    if (!proposedSlots.length) {
+      if (!silent) showToast('No time slots fit in this date and time window. Check the booking length and breaks.', true);
+      return false;
     }
 
     const slotsToInsert = [];
@@ -27157,7 +27129,8 @@ See you soon!
     audSlots[sessionId] = audSlots[sessionId]
       .sort((a, b) => (a.slot_date || '').localeCompare(b.slot_date || '') || a.slot_time.localeCompare(b.slot_time));
     _reRenderBlocksList(sessionId);
-    showToast('Schedule refreshed.');
+    if (!silent) showToast('Schedule refreshed.');
+    return true;
   }
 
   function timeToMins(t) {
@@ -27206,7 +27179,7 @@ See you soon!
   let _audSetupController = null;
 
   function _audSetupDefault(id, name = 'General audition') {
-    return { id, name, type: 'audition', audience: 'open', methods: ['in_person'], mode: 'appointment', days: [{ id: 'day-' + crypto.randomUUID(), date: '', start: '', end: '', venue: null, room: '', locationNotes: '', breaks: [] }], slot: '10', gap: '2', capacity: '1', activities: [], prep: '', bring: '', access: '', finish: 'After their appointment', registration: 'Book in advance', deadline: '', customName: false };
+    return { id, name, type: 'audition', audience: 'open', methods: ['in_person'], mode: 'appointment', days: [{ id: 'day-' + crypto.randomUUID(), date: '', start: '', end: '', venue: null, room: '', locationNotes: '', breaks: [] }], slot: '10', gap: '2', capacity: '1', activities: [], prep: '', bring: '', access: '', selfTapeInstructions: '', finish: 'After their appointment', registration: 'Book in advance', deadline: '', customName: false };
   }
 
   function _audSetupFromPublished(id, published, fallback) {
@@ -27235,12 +27208,14 @@ See you soon!
       slot: String(base.slot_length || 10), gap: String(base.buffer_time || 0), capacity: String(base.capacity_per_slot || 1),
       activities: [], prep: String(base.prepare_text || getSessionPrepareText(base) || ''),
       bring: '', access: String(base.instructions || ''),
+      deadline: String(prod?.wizard_data?.self_tape_deadline || ''),
+      selfTapeInstructions: String(prod?.wizard_data?.self_tape_instructions || '').replace(/<br\s*\/?\s*>/gi, '\n').replace(/<\/p>/gi, '\n').replace(/<[^>]*>/g, ''),
     };
     return record;
   }
 
   function _createAudSetupController() {
-    const state = { loaded: false, loading: false, records: [], revisions: {}, openId: null, step: 0, activeDay: {}, reviewTab: 'audition', timers: {}, saving: {}, error: '' };
+    const state = { loaded: false, loading: false, records: [], revisions: {}, openId: null, step: 0, activeDay: {}, reviewTab: 'audition', timers: {}, saving: {}, scheduleSync: {}, scheduleSyncFailed: {}, scheduleSyncBusy: {}, error: '' };
     const sections = ['Booking type', 'Details', 'Dates & location', 'Schedule', 'Activities', 'Preparation', 'Review'];
     const types = [
       { value: 'audition', label: 'General audition', name: 'General audition', colour: '#476aaa', icon: 'Auditions.svg' },
@@ -27257,10 +27232,10 @@ See you soon!
       ['assigned', 'Assigned Appointment', 'Assigned audition time. Performers register for an audition, and your team assigns them a time.', 'audition-booking-type-assigned time.svg'],
     ];
     const modeExamples = {
-      appointment: "Let's say you want 10 minutes with each performer. They can book 9:00 AM, 9:10 AM, 9:20 AM and so on. This is a great option if you want to spend less time organising your audition schedule and let performers book their own times.",
-      arrival: "Let's say five performers book to arrive at 9:00 AM. They all arrive together, but you audition them one at a time. This is a great option if some auditions might take longer than others and you don't want to be watching the clock between performers.",
+      appointment: "Let's say you want 10 minutes with each performer. They can book 9:00am, 9:10am, 9:20am and so on. This is a great option if you want to spend less time organising your audition schedule and let performers book their own times.",
+      arrival: "Let's say five performers book to arrive at 9:00am. They all arrive together, but you audition them one at a time. This is a great option if some auditions might take longer than others and you don't want to be watching the clock between performers.",
       group: "Let's say you want to run a one-hour audition for 20 performers. Each performer books a place in that group and stays for the session. You can work with them all together, split them into smaller groups or ask them to perform individually.",
-      walkin: "Let's say you're holding auditions from 9:00 AM to 3:00 PM. Performers can turn up anytime during those hours, check in and wait their turn on a first come, first served basis. This is a great option if you don't know how many performers to expect.",
+      walkin: "Let's say you're holding auditions from 9:00am - 3:00pm. Performers can turn up anytime during those hours, check in and wait their turn on a first come, first served basis. This is a great option if you don't know how many performers to expect.",
       assigned: "Performers sign up for an audition, but instead of choosing their own time, you decide when each person will audition. This is a great option if you want more control over who you see, when you see them and in what order.",
     };
     const activities = [['singing', 'Singing'], ['acting', 'Acting / scene reading'], ['movement', 'Dance / movement'], ['workshop', 'Workshop activities'], ['specialist', 'Other skills']];
@@ -27268,8 +27243,8 @@ See you soon!
     const escapeId = value => String(value).replace(/[^a-zA-Z0-9_-]/g, '-');
     const colour = record => types.find(item => item.value === record.type)?.colour || '#476aaa';
     const niceDate = value => { if (!value) return 'Date to be added'; const date = new Date(value + 'T12:00:00'); return Number.isNaN(date.getTime()) ? 'Date to be added' : date.toLocaleDateString('en-CA', { weekday: 'long', day: 'numeric', month: 'long' }); };
-    const niceTime = value => value ? new Date('2000-01-01T' + value).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' }) : 'Time to be confirmed';
-    const compactTime = value => { const match = String(value || '').match(/(?:T)?(\d{1,2}):(\d{2})/); if (!match) return ''; const hour = Number(match[1]); const minute = match[2]; return `${hour % 12 || 12}:${minute}${hour >= 12 ? 'pm' : 'am'}`; };
+    const niceTime = value => value ? BTSFormatTime(value) : 'Time to be confirmed';
+    const compactTime = value => { const match = String(value || '').match(/(?:T)?(\d{1,2}):(\d{2})/); return match ? BTSFormatTime(`${match[1]}:${match[2]}`) : ''; };
     const compactTimeRange = (start, end) => [compactTime(start), compactTime(end)].filter(Boolean).join(' - ');
     const mapLink = venue => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([venue?.name, venue?.address].filter(Boolean).join(', '));
     const ensureDays = record => {
@@ -27300,6 +27275,8 @@ See you soon!
           if (!record.name) record.name = sessionTypeLabel(record.type || 'audition');
           if (!Array.isArray(record.methods)) record.methods = ['in_person'];
           if (!Array.isArray(record.activities)) record.activities = [];
+          if (record.deadline == null) record.deadline = String(prod?.wizard_data?.self_tape_deadline || '');
+          if (record.selfTapeInstructions == null) record.selfTapeInstructions = String(prod?.wizard_data?.self_tape_instructions || '').replace(/<br\s*\/?\s*>/gi, '\n').replace(/<\/p>/gi, '\n').replace(/<[^>]*>/g, '');
           ensureDays(record);
           return record;
         });
@@ -27326,7 +27303,7 @@ See you soon!
       if (!record.name?.trim()) out.push({ step: 1, key: 'name', text: 'Add an audition name.' });
       if (!record.methods?.length) out.push({ step: 0, key: 'methods', text: 'Choose at least one way people can take part.' });
       const tape = record.methods?.length === 1 && record.methods.includes('self_tape');
-      if (record.methods?.includes('self_tape') && !record.deadline) out.push({ step: 0, key: 'deadline', text: 'Add a submission deadline.' });
+      if (record.methods?.includes('self_tape') && !record.deadline) out.push({ step: 5, key: 'deadline', text: 'Add a self-tape submission deadline.' });
       if (!tape) {
         ensureDays(record).forEach((day, index) => {
           if (!day.date) out.push({ step: 2, key: 'date', day: index, text: 'Add a date.' });
@@ -27378,10 +27355,40 @@ See you soon!
         const slots = (audSlots[record.id] || []).filter(slot => String(slot.block_id || '') === String(block.id) || (!slot.block_id && day.date && String(slot.slot_date || '') === String(day.date)));
         const openCount = slots.filter(slot => getAudSlotState(slot) === 'open').length;
         const validWindow = !!(day.date && day.start && day.end && day.end > day.start);
+        const syncKey = `${record.id}:${block.id}`;
+        const signature = JSON.stringify({ date: day.date, start: day.start, end: day.end, mode: record.mode, slot: record.slot, gap: record.gap, capacity: record.capacity, breaks: day.breaks || [] });
+        const generationFailed = validWindow && state.scheduleSyncFailed[syncKey] === signature;
         const breaks = (block.breaks || []).map((item, breakIndex) => `<li><span>${e(niceTime(item.start))}–${e(niceTime(item.end))}</span><button type="button" data-remove-break="${index}" data-break-index="${breakIndex}" aria-label="Remove break">×</button></li>`).join('');
-        return `<article class="ap-setup-schedule-day" style="${buildAuditionScheduleCalendarThemeStyle(colour(record))}"><header><div><strong>${e(niceDate(day.date))}</strong><span>${e(niceTime(day.start))}–${e(niceTime(day.end))}</span></div><span class="ap-setup-schedule-count">${openCount} open · ${slots.length - openCount} blocked · ${slots.length} total</span></header><div class="ap-setup-schedule-actions"><button type="button" data-generate-day="${e(block.id)}" ${validWindow ? '' : 'disabled'}>${slots.length ? 'Refresh time slots' : 'Create time slots'}</button><span>Click a slot to switch it between open and blocked.</span></div>${slots.length ? `<div class="aud-block-calendar">${buildAuditionSchedulerBlockSlotsHtml(record.id, slots)}</div>` : `<p class="ap-setup-schedule-empty">${validWindow ? 'Create slots to see and manage this audition schedule.' : 'Add a date, start time, and finish time under Dates & location first.'}</p>`}<section class="ap-setup-schedule-breaks"><div><strong>Breaks</strong><span>Breaks are excluded when time slots are created.</span></div><ul>${breaks || '<li class="ap-setup-schedule-no-breaks">No breaks added</li>'}</ul><div class="ap-setup-schedule-break-adder" id="break-adder-${record.id}-${block.id}" style="display:none"><label>Start <input type="time" id="break-start-${record.id}-${block.id}"></label><label>End <input type="time" id="break-end-${record.id}-${block.id}"></label><button type="button" data-confirm-break="${index}">Add break</button></div><button type="button" data-add-break="${index}">+ Add break</button></section></article>`;
+        return `<article class="ap-setup-schedule-day" style="${buildAuditionScheduleCalendarThemeStyle(colour(record))}"><header><div><strong>${e(niceDate(day.date))}</strong><span>${e(niceTime(day.start))}–${e(niceTime(day.end))}</span></div><span class="ap-setup-schedule-count">${openCount} open · ${slots.length - openCount} blocked · ${slots.length} total</span></header><div class="ap-setup-schedule-actions">${slots.length || generationFailed ? `<button type="button" data-generate-day="${e(block.id)}" ${validWindow ? '' : 'disabled'}>${slots.length ? 'Refresh slots' : 'Try again'}</button>` : ''}<span>${generationFailed && slots.length ? 'Some slots could not be updated; the existing schedule is retained.' : slots.length ? 'Click a slot to switch it between open and blocked.' : generationFailed ? 'Slots could not be updated automatically.' : validWindow ? 'Creating slots from your booking settings…' : 'Add a date, start time, and finish time under Dates & location first.'}</span></div>${slots.length ? `<div class="aud-block-calendar">${buildAuditionSchedulerBlockSlotsHtml(record.id, slots)}</div>` : `<p class="ap-setup-schedule-empty">${validWindow ? generationFailed ? 'Could not create time slots. Check the date, booking length and breaks, then try again.' : 'Your time slots will appear here automatically.' : 'Add a date, start time, and finish time under Dates & location first.'}</p>`}<section class="ap-setup-schedule-breaks"><div><strong>Breaks</strong><span>Breaks are excluded when time slots are created.</span></div><ul>${breaks || '<li class="ap-setup-schedule-no-breaks">No breaks added</li>'}</ul><div class="ap-setup-schedule-break-adder" id="break-adder-${record.id}-${block.id}" style="display:none"><label>Start <input type="time" id="break-start-${record.id}-${block.id}"></label><label>End <input type="time" id="break-end-${record.id}-${block.id}"></label><button type="button" data-confirm-break="${index}">Add break</button></div><button type="button" data-add-break="${index}">+ Add break</button></section></article>`;
       }).join('');
-      return `<section class="ap-setup-schedule-builder"><h3>Time slots for ${e(record.name || 'this audition')}</h3><p>Build and manage this audition’s slots here. Each audition has its own schedule.</p>${cards}</section>`;
+      return `<section class="ap-setup-schedule-builder"><h3>Time slots for ${e(record.name || 'this audition')}</h3><p>Slots are generated from your dates, times, booking length and breaks. Update those details and this schedule will stay in sync.</p>${cards}</section>`;
+    }
+
+    async function autoGenerateSchedule(record) {
+      if (record.methods.length === 1 && record.methods[0] === 'self_tape' || record.mode === 'walkin') return;
+      let changed = false;
+      for (const day of ensureDays(record)) {
+        if (!day.date || !day.start || !day.end || day.end <= day.start) continue;
+        const block = (audBlocks[record.id] || []).find(item => String(item.id) === String(day.id));
+        if (!block) continue;
+        const key = `${record.id}:${block.id}`;
+        const signature = JSON.stringify({ date: day.date, start: day.start, end: day.end, mode: record.mode, slot: record.slot, gap: record.gap, capacity: record.capacity, breaks: day.breaks || [] });
+        if (state.scheduleSync[key] === signature || state.scheduleSyncFailed[key] === signature || state.scheduleSyncBusy[key]) continue;
+        state.scheduleSyncBusy[key] = signature;
+        _saveBlocks(record.id);
+        let generated = false;
+        try { generated = await generateBlockSlots(record.id, block.id, { silent: true }); }
+        catch (error) { console.error('[BTS] automatic audition slot generation failed', error); }
+        if (generated) {
+          state.scheduleSync[key] = signature;
+          delete state.scheduleSyncFailed[key];
+        } else {
+          state.scheduleSyncFailed[key] = signature;
+        }
+        changed = true;
+        delete state.scheduleSyncBusy[key];
+      }
+      if (changed && state.openId === record.id && state.step === 3) render();
     }
     function editor(record) {
       const step = [1, 0, 2, 5, 3, 4, 6][state.step] ?? state.step;
@@ -27391,13 +27398,12 @@ See you soon!
       else if (step === 1) {
         const tape = record.methods.length === 1 && record.methods.includes('self_tape');
         const additionalOptions = `<fieldset class="ap-setup-additional-options"><legend>How can people take part?</legend><p>Select all that apply. Performers can choose more than one.</p><div class="ap-setup-method-list">${methods.map(([key,label,icon,description])=>`<label class="ap-setup-method-card ${record.methods.includes(key)?'selected':''}"><input type="checkbox" data-multi="methods" value="${key}" ${record.methods.includes(key)?'checked':''}><span class="ap-setup-method-icon" aria-hidden="true" style="--method-icon:url('${encodeURI('/ASSETS/Images/Icons/' + icon)}')"></span><span class="ap-setup-method-copy"><strong>${label}</strong><small>${description}</small></span></label>`).join('')}</div></fieldset>`;
-        const tapeDeadline = record.methods.includes('self_tape') ? `<section class="ap-setup-mode-panel ap-setup-deadline"><div class="ap-setup-deadline-copy"><h3>Self-tape deadline</h3><p>Choose a deadline before the audition date so your team has time to review submissions before or during auditions.</p></div><div class="ap-setup-deadline-input">${field('Submission deadline', 'deadline', record.deadline, 'datetime-local')}</div></section>` : '';
         const modeExplainer = tape ? '' : `<aside class="ap-setup-mode-explainer"><strong>${e(modes.find(mode => mode[0] === record.mode)?.[1] || 'Booking option')}</strong><p>${e(modeExamples[record.mode] || '')}</p></aside>`;
         const placesPanel = ['group','arrival'].includes(record.mode) && !tape ? `<section class="ap-setup-capacity"><h3>${record.mode === 'group' ? 'Places in each group session' : 'Performers per arrival time'}</h3><label class="ap-setup-field ap-setup-capacity-field"><input type="number" data-field="capacity" value="${e(record.capacity || '1')}" aria-label="${record.mode === 'group' ? 'Places per group session' : 'Performers per arrival time'}" min="1" max="200" step="1"></label><p>${record.mode === 'group' ? 'How many performers can book a place in each group session?' : 'How many performers can arrive together and take turns auditioning?'}</p></section>` : '';
         const modeSettings = tape ? '<p class="ap-setup-note">People submit a recording. They do not book a live audition time.</p>' : record.mode !== 'walkin' ? `<section class="ap-setup-mode-settings"><div class="ap-setup-grid"><div class="ap-setup-setting-item">${field(record.mode === 'group' ? 'Minutes per group session' : 'Minutes per person', 'slot', record.slot, 'number', 'min="1" max="180"')}<small>${record.mode === 'group' ? 'How long does each group audition session run?' : 'How much time do you need with each performer?'}</small></div><div class="ap-setup-setting-item">${field(record.mode === 'group' ? 'Minutes between group sessions' : 'Minutes between appointments', 'gap', record.gap, 'number', 'min="0" max="60"')}<small>${record.mode === 'group' ? 'Time to reset before the next group arrives.' : 'Extra time to make notes and reset.'}</small></div>${placesPanel}</div></section>` : '';
         const bookingSettings = tape ? modeSettings : `<div class="ap-setup-mode-panel${record.mode === 'group' ? ' ap-setup-mode-panel--group' : ''}">${modeExplainer}${modeSettings}</div>`;
         const bookingMethods = tape ? '' : `<fieldset><legend>How should people book?</legend><p>Choose how performers will reserve or receive their audition time.</p><div class="ap-setup-booking-grid">${modes.map(([value,label,desc,icon]) => `<label class="ap-setup-booking ${record.mode === value ? 'selected' : ''}"><input type="radio" data-field="mode" name="mode-${e(record.id)}" value="${value}" ${record.mode === value ? 'checked' : ''}><span class="ap-setup-booking-icon" aria-hidden="true" style="--booking-icon:url('${encodeURI('/ASSETS/Images/Icons/' + icon)}')"></span><span><strong>${label}</strong><small>${desc}</small></span></label>`).join('')}${bookingSettings}</div></fieldset>`;
-        body = `${bookingMethods}${additionalOptions}${tapeDeadline}`;
+        body = `${bookingMethods}${additionalOptions}`;
       } else if (step === 2) {
         const tape = record.methods.length === 1 && record.methods.includes('self_tape');
         const days = ensureDays(record);
@@ -27405,11 +27411,11 @@ See you soon!
         const activeDay = days[dayIndex];
         const dateTitle = record.methods.includes('in_person') ? 'Dates & Locations' : 'Dates & Times';
         const dateHelp = record.methods.includes('in_person') ? 'Set when and where your in-person auditions will take place.' : 'Set when your online auditions will take place.';
-        const datePanel = tape ? '<p class="ap-setup-note">Self-tape auditions do not need live dates or a venue. Set the submission deadline under Booking type.</p>' : `<section class="ap-setup-date-section"><header><span class="ap-setup-date-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="16" rx="2"></rect><path d="M7.5 3v4M16.5 3v4M3.5 9h17"></path></svg></span><span><h3>${dateTitle}</h3><p>${dateHelp}</p></span></header><div class="ap-setup-days"><nav class="ap-setup-day-tabs" aria-label="Audition dates">${days.map((day,index)=>`<button type="button" data-day-tab="${index}" aria-selected="${dayIndex===index}">Day ${index+1}</button>`).join('')}${days.length>1&&dayIndex>0?`<button type="button" class="ap-setup-remove-day" data-remove-day="${dayIndex}">Remove day</button>`:''}</nav>${dayHTML(record,activeDay,dayIndex)}</div><aside class="ap-setup-more-dates"><div class="ap-setup-more-dates-copy"><strong>Need more time to see everyone?</strong><p>If you're expecting more performers than you can audition in one day, or want to give performers a choice of dates, add another day here. Each performer will only need to attend one of these days.</p></div><button type="button" data-add-day>+ Add another day</button><p class="ap-setup-more-dates-note">If performers need to attend more than one audition (for example, a singing audition and a separate dance call), use <strong>Add audition</strong> instead.</p></aside></section>`;
+        const datePanel = tape ? '<p class="ap-setup-note">Self-tape auditions do not need live dates or a venue. Add the submission deadline under Preparation.</p>' : `<section class="ap-setup-date-section"><header><span class="ap-setup-date-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="16" rx="2"></rect><path d="M7.5 3v4M16.5 3v4M3.5 9h17"></path></svg></span><span><h3>${dateTitle}</h3><p>${dateHelp}</p></span></header><div class="ap-setup-days"><nav class="ap-setup-day-tabs" aria-label="Audition dates">${days.map((day,index)=>`<button type="button" data-day-tab="${index}" aria-selected="${dayIndex===index}">Day ${index+1}</button>`).join('')}${days.length>1&&dayIndex>0?`<button type="button" class="ap-setup-remove-day" data-remove-day="${dayIndex}">Remove day</button>`:''}</nav>${dayHTML(record,activeDay,dayIndex)}</div><aside class="ap-setup-more-dates"><div class="ap-setup-more-dates-copy"><strong>Need more time to see everyone?</strong><p>If you're expecting more performers than you can audition in one day, or want to give performers a choice of dates, add another day here. Each performer will only need to attend one of these days.</p></div><button type="button" data-add-day>+ Add another day</button><p class="ap-setup-more-dates-note">If performers need to attend more than one audition (for example, a singing audition and a separate dance call), use <strong>Add audition</strong> instead.</p></aside></section>`;
         body = datePanel;
       } else if (step === 5) body = scheduleBuilder(record);
       else if (step === 3) body = `<fieldset><legend>What does this audition include?</legend><div class="ap-setup-grid">${activities.map(([key,label]) => multiChoice(label,'activities',key,record.activities.includes(key))).join('')}</div></fieldset>`;
-      else if (step === 4) body = `<div class="ap-setup-grid">${record.type !== 'callback' ? `<section class="aud-materials-setting ap-setup-full"><div class="aud-materials-setting-copy"><strong>Audition materials</strong><span>${isAuditionSessionMaterialsEnabled(record.id) ? 'Performers can see the materials you share for this audition.' : 'No materials will be shared for this audition.'}</span></div><label class="aud-materials-setting-toggle"><span>${isAuditionSessionMaterialsEnabled(record.id) ? 'On' : 'Off'}</span><input type="checkbox" data-materials-session="${e(record.id)}" ${isAuditionSessionMaterialsEnabled(record.id) ? 'checked' : ''} aria-label="Audition materials for ${e(record.name)} ${isAuditionSessionMaterialsEnabled(record.id) ? 'on' : 'off'}"><span class="aud-materials-setting-track" aria-hidden="true"></span></label></section>` : ''}<label class="ap-setup-field ap-setup-full">What should they prepare?<textarea data-field="prep" rows="3">${e(record.prep)}</textarea></label><label class="ap-setup-field ap-setup-full">What should they bring?<textarea data-field="bring" rows="2">${e(record.bring)}</textarea></label><label class="ap-setup-field">When can they leave?<select data-field="finish"><option ${record.finish==='After their appointment'?'selected':''}>After their appointment</option><option ${record.finish==='After the whole session'?'selected':''}>After the whole session</option><option ${record.finish==='When released by the team'?'selected':''}>When released by the team</option></select></label><label class="ap-setup-field ap-setup-full">Arrival instructions (sent after booking)<textarea data-field="access" rows="2" placeholder="For example: check in with our producer at the welcome desk, then wait to be called.">${e(record.access)}</textarea><span class="ap-setup-field-help">These instructions go in the booking confirmation email and do not appear on the public audition page.</span></label><p class="ap-setup-full">Add shared links to audition materials under Materials. Files stay in your own storage; set links so anyone with the link can view.</p></div>`;
+      else if (step === 4) body = `<div class="ap-setup-grid">${record.type !== 'callback' ? `<section class="aud-materials-setting ap-setup-full"><div class="aud-materials-setting-copy"><strong>Audition materials</strong><span>${isAuditionSessionMaterialsEnabled(record.id) ? 'Performers can see the materials you share for this audition.' : 'No materials will be shared for this audition.'}</span></div><label class="aud-materials-setting-toggle"><span>${isAuditionSessionMaterialsEnabled(record.id) ? 'On' : 'Off'}</span><input type="checkbox" data-materials-session="${e(record.id)}" ${isAuditionSessionMaterialsEnabled(record.id) ? 'checked' : ''} aria-label="Audition materials for ${e(record.name)} ${isAuditionSessionMaterialsEnabled(record.id) ? 'on' : 'off'}"><span class="aud-materials-setting-track" aria-hidden="true"></span></label></section>` : ''}<label class="ap-setup-field ap-setup-full">What should they prepare?<textarea data-field="prep" rows="3">${e(record.prep)}</textarea></label>${record.methods.includes('self_tape') ? `<section class="ap-setup-self-tape ap-setup-full"><header><h3>Self-tape</h3><p>Give performers the filming instructions and submission deadline for this audition.</p></header><label class="ap-setup-field ap-setup-full"><span class="ap-setup-field-title">What should they film?</span><textarea data-field="selfTapeInstructions" rows="3" placeholder="For example: record a short song and a scene, then submit both using the link in your confirmation email.">${e(record.selfTapeInstructions || '')}</textarea></label><label class="ap-setup-field ap-setup-self-tape-deadline"><span class="ap-setup-field-title">Submission deadline</span><input type="datetime-local" data-field="deadline" value="${e(record.deadline || '')}"><span class="ap-setup-field-help">Set a deadline that gives your team time to review submissions.</span></label></section>` : ''}<label class="ap-setup-field ap-setup-full">What should they bring?<textarea data-field="bring" rows="2">${e(record.bring)}</textarea></label><label class="ap-setup-field">When can they leave?<select data-field="finish"><option ${record.finish==='After their appointment'?'selected':''}>After their appointment</option><option ${record.finish==='After the whole session'?'selected':''}>After the whole session</option><option ${record.finish==='When released by the team'?'selected':''}>When released by the team</option></select></label><label class="ap-setup-field ap-setup-full">Arrival instructions (sent after booking)<textarea data-field="access" rows="2" placeholder="For example: check in with our producer at the welcome desk, then wait to be called.">${e(record.access)}</textarea><span class="ap-setup-field-help">These instructions go in the booking confirmation email and do not appear on the public audition page.</span></label><p class="ap-setup-full">Add shared links to audition materials under Materials. Files stay in your own storage; set links so anyone with the link can view.</p></div>`;
       else body = applicantView(record);
       return `<div class="ap-setup-editor" style="--ap-accent:${accent}"><nav class="ap-setup-tabs" aria-label="Audition details">${sections.map((name,index)=>`<button type="button" data-step="${index}" aria-pressed="${state.step===index}">${name}${missing(record).some(item=>item.step===index)?'<span class="ap-setup-star" aria-hidden="true">✱</span>':''}</button>`).join('')}</nav><div class="ap-setup-fields">${body}</div><footer><span data-save-status>${state.saving[record.id] ? 'Saving draft…' : 'Draft saves automatically. Nothing is published.'}</span><button type="button" data-close-editor>Done</button></footer></div>`;
     }
@@ -27421,7 +27427,7 @@ See you soon!
 
     function applicantAuditionPreview(record) {
       const attendance = record.type === 'callback' || record.audience === 'invited' ? 'Your team will send you an invitation with booking details.' : (modes.find(mode => mode[0] === record.mode)?.[2] || modes.find(mode => mode[0] === 'assigned')[2]);
-      return `<article class="ap-setup-applicant" style="--ap-accent:${colour(record)}"><header><b>${e(prod?.name || 'Production')}</b><h2>${e(record.name)}</h2><span>${e(record.audience === 'invited' || record.type === 'callback' ? 'People we invite' : 'Anyone who meets the requirements')}</span></header><div><h3>Taking part</h3><p>${e(record.methods.map(key=>({in_person:'In person',video_call:'Live video call',self_tape:'Self-tape'})[key]).join(' · '))}</p><p>${e(record.activities.map(key=>activities.find(item=>item[0]===key)?.[1]||key).join(' · '))}</p>${record.methods.length===1&&record.methods[0]==='self_tape'?`<section><h3>Submission deadline</h3><p>${e(record.deadline || 'To be confirmed')}</p></section>`:`<section><h3>Dates & locations</h3>${ensureDays(record).map(day=>`<div class="ap-setup-app-day"><strong>${e(niceDate(day.date))} · ${e(niceTime(day.start))}–${e(niceTime(day.end))}</strong>${record.methods.includes('in_person')?`<p>${e(day.venue?.name||'Venue to be confirmed')}${day.room?' · '+e(day.room):''}</p><p>${e(day.venue?.address||'Full address to be added')}</p>${day.venue?.address?`<a href="${mapLink(day.venue)}" target="_blank" rel="noopener noreferrer">Open in maps ↗</a>`:''}${day.locationNotes?`<p>${e(day.locationNotes)}</p>`:''}`:''}${record.methods.includes('video_call')?`<p>${e(day.videoInstructions||'Joining details will be sent with your booking confirmation.')}</p>`:''}</div>`).join('')}</section><section><h3>Booking & arrival</h3><p>${e(attendance)}</p>${record.mode==='appointment'?`<p>Appointments last ${e(record.slot)} minutes.`:''}<p>${e(record.finish)}.</p></section>`}<section><h3>What to prepare</h3><p>${e(record.prep||'No preparation needed.')}</p></section>${record.bring?`<section><h3>What to bring</h3><p>${e(record.bring)}</p></section>`:''}</div></article>`;
+      return `<article class="ap-setup-applicant" style="--ap-accent:${colour(record)}"><header><b>${e(prod?.name || 'Production')}</b><h2>${e(record.name)}</h2><span>${e(record.audience === 'invited' || record.type === 'callback' ? 'People we invite' : 'Anyone who meets the requirements')}</span></header><div><h3>Taking part</h3><p>${e(record.methods.map(key=>({in_person:'In person',video_call:'Live video call',self_tape:'Self-tape'})[key]).join(' · '))}</p><p>${e(record.activities.map(key=>activities.find(item=>item[0]===key)?.[1]||key).join(' · '))}</p>${record.methods.length===1&&record.methods[0]==='self_tape'?`<section><h3>Submission deadline</h3><p>${e(record.deadline || 'To be confirmed')}</p></section>`:`<section><h3>Dates & locations</h3>${ensureDays(record).map(day=>`<div class="ap-setup-app-day"><strong>${e(niceDate(day.date))} · ${e(niceTime(day.start))}–${e(niceTime(day.end))}</strong>${record.methods.includes('in_person')?`<p>${e(day.venue?.name||'Venue to be confirmed')}${day.room?' · '+e(day.room):''}</p><p>${e(day.venue?.address||'Full address to be added')}</p>${day.venue?.address?`<a href="${mapLink(day.venue)}" target="_blank" rel="noopener noreferrer">Open in maps ↗</a>`:''}${day.locationNotes?`<p>${e(day.locationNotes)}</p>`:''}`:''}${record.methods.includes('video_call')?`<p>${e(day.videoInstructions||'Joining details will be sent with your booking confirmation.')}</p>`:''}</div>`).join('')}</section><section><h3>Booking & arrival</h3><p>${e(attendance)}</p>${record.mode==='appointment'?`<p>Appointments last ${e(record.slot)} minutes.`:''}<p>${e(record.finish)}.</p></section>`}<section><h3>What to prepare</h3><p>${e(record.prep||'No preparation needed.')}</p></section>${record.methods.includes('self_tape') ? `<section><h3>Self-tape</h3>${record.selfTapeInstructions ? `<p>${e(record.selfTapeInstructions)}</p>` : '<p>Filming instructions to be confirmed.</p>'}${record.methods.length > 1 ? `<p>Submit by ${e(record.deadline ? BTSFormatDateTime(new Date(record.deadline), { dateStyle: 'long' }) : 'the deadline to be confirmed')}.</p>` : ''}</section>` : ''}${record.bring?`<section><h3>What to bring</h3><p>${e(record.bring)}</p></section>`:''}</div></article>`;
     }
 
     function applicantSchedulePreview(record) {
@@ -27451,7 +27457,7 @@ See you soon!
         const slotsHtml = daySlots.length
           ? `<div class="ap-setup-public-slot-list">${daySlots.map(slot => {
               const [hour, minute] = String(slot.slot_time || '').split(':').map(Number);
-              const time = Number.isFinite(hour) ? `${hour % 12 || 12}:${String(minute || 0).padStart(2, '0')} ${hour >= 12 ? 'PM' : 'AM'}` : String(slot.slot_time || 'Time to be confirmed');
+              const time = Number.isFinite(hour) ? BTSFormatTime(`${hour}:${String(minute || 0).padStart(2, '0')}`) : String(slot.slot_time || 'Time to be confirmed');
               const capacity = Number(slot.capacity || record.capacity || 1);
               const booked = bookedBySlot[slot.id] || 0;
               const full = capacity > 0 && booked >= capacity;
@@ -27460,7 +27466,7 @@ See you soon!
           : `<p class="ap-setup-public-slots-empty">Slots not yet published</p>`;
         return `<article class="ap-setup-performer-day"><h3>${e(days.length > 1 ? `Day ${index + 1}` : typeLabel)}</h3><strong>${e(niceDate(day.date))}</strong><p>${e(niceTime(day.start))}–${e(niceTime(day.end))}</p>${record.methods.includes('in_person')?`<p><b>Location:</b> ${e(day.venue?.name||'Venue to be confirmed')}${day.room?' · '+e(day.room):''}</p>${day.venue?.address?`<p>${e(day.venue.address)}</p>`:''}${day.locationNotes?`<p>${e(day.locationNotes)}</p>`:''}`:''}${record.methods.includes('video_call')?`<p><b>Video call:</b> ${e(day.videoInstructions||'Joining details will be sent with your booking confirmation.')}</p>`:''}<div class="ap-setup-performer-slots"><b>${e(modeLabel)}</b><span>${format}</span></div>${slotsHtml}</article>`;
       }).join('');
-      return `<section class="ap-setup-performer-schedule"><header><span>${e(typeLabel)}</span><h2>${e(record.name)}</h2><p>${e(modeLabel)} · ${e(record.methods.map(method => methodLabels[method]).join(' · '))}</p></header>${isTapeOnly ? `<article class="ap-setup-performer-day"><h3>Submission deadline</h3><strong>${e(record.deadline ? new Date(record.deadline).toLocaleString(undefined, { dateStyle: 'long', timeStyle: 'short' }) : 'To be confirmed')}</strong><p>Your team will review submissions by this deadline.</p></article>` : dayCards}<button class="ap-setup-public-book" type="button" disabled>Book Audition</button></section>`;
+      return `<section class="ap-setup-performer-schedule"><header><span>${e(typeLabel)}</span><h2>${e(record.name)}</h2><p>${e(modeLabel)} · ${e(record.methods.map(method => methodLabels[method]).join(' · '))}</p></header>${isTapeOnly ? `<article class="ap-setup-performer-day"><h3>Submission deadline</h3><strong>${e(record.deadline ? BTSFormatDateTime(new Date(record.deadline), { dateStyle: 'long' }) : 'To be confirmed')}</strong><p>Your team will review submissions by this deadline.</p></article>` : dayCards}<button class="ap-setup-public-book" type="button" disabled>Book Audition</button></section>`;
     }
 
     function completion(record) {
@@ -27598,8 +27604,19 @@ See you soon!
       });
       root.querySelectorAll('[data-generate-day]').forEach(button=>button.onclick=event=>{
         event.preventDefault();
+        const blockId = button.dataset.generateDay;
+        const day = ensureDays(record).find(item => String(item.id) === String(blockId));
+        const syncKey = `${record.id}:${blockId}`;
+        const signature = JSON.stringify({ date: day?.date, start: day?.start, end: day?.end, mode: record.mode, slot: record.slot, gap: record.gap, capacity: record.capacity, breaks: day?.breaks || [] });
+        state.scheduleSyncBusy[syncKey] = signature;
+        delete state.scheduleSyncFailed[syncKey];
         _saveBlocks(record.id);
-        generateBlockSlots(record.id, button.dataset.generateDay);
+        generateBlockSlots(record.id, blockId).then(generated=>{
+          delete state.scheduleSyncBusy[syncKey];
+          if(generated)state.scheduleSync[syncKey]=signature;
+          else state.scheduleSyncFailed[syncKey]=signature;
+          render();
+        }).catch(error=>{delete state.scheduleSyncBusy[syncKey];state.scheduleSyncFailed[syncKey]=signature;console.error('[BTS] audition slot refresh failed',error);render();});
       });
       root.querySelectorAll('[data-add-break]').forEach(button=>button.onclick=event=>{
         event.preventDefault();
@@ -27609,13 +27626,14 @@ See you soon!
       root.querySelectorAll('[data-confirm-break]').forEach(button=>button.onclick=event=>{
         event.preventDefault();
         const day=ensureDays(record)[Number(button.dataset.confirmBreak)];
-        if(day) { confirmAddBreak(record.id, day.id); save(record); }
+        if(day) { confirmAddBreak(record.id, day.id); save(record); render(); }
       });
       root.querySelectorAll('[data-remove-break]').forEach(button=>button.onclick=event=>{
         event.preventDefault();
         const day=ensureDays(record)[Number(button.dataset.removeBreak)];
-        if(day) { removeBreak(record.id, day.id, Number(button.dataset.breakIndex)); save(record); }
+        if(day) { removeBreak(record.id, day.id, Number(button.dataset.breakIndex)); save(record); render(); }
       });
+      if (state.step === 3) autoGenerateSchedule(record);
     }
 
     function updateMissing(card, record) {
@@ -27962,14 +27980,7 @@ See you soon!
     const parts = t.split(':').map(Number);
     return (parts[0] || 0) * 60 + (parts[1] || 0);
   }
-  function _wizFmtTime(t) {
-    if (!t) return '';
-    const parts = t.split(':').map(Number);
-    const h = parts[0] || 0, m = parts[1] || 0;
-    const ampm = h < 12 ? 'AM' : 'PM';
-    const h12 = h % 12 || 12;
-    return h12 + (m ? ':' + String(m).padStart(2, '0') : '') + ' ' + ampm;
-  }
+  function _wizFmtTime(t) { return BTSFormatTime(t); }
   function _wizFmtDate(d) {
     if (!d) return '';
     const dt = new Date(d + 'T12:00:00');
@@ -28311,10 +28322,10 @@ See you soon!
           </div>
           <div class="add-wiz-mode-card-example">
             <div class="add-wiz-mode-ex-label">Example</div>
-            <div class="add-wiz-mode-ex-row">9:00 AM</div>
-            <div class="add-wiz-mode-ex-row">9:10 AM</div>
-            <div class="add-wiz-mode-ex-row">9:20 AM</div>
-            <div class="add-wiz-mode-ex-row">9:30 AM</div>
+            <div class="add-wiz-mode-ex-row">9:00am</div>
+            <div class="add-wiz-mode-ex-row">9:10am</div>
+            <div class="add-wiz-mode-ex-row">9:20am</div>
+            <div class="add-wiz-mode-ex-row">9:30am</div>
             <div class="add-wiz-mode-ex-muted">...</div>
           </div>
         </button>
@@ -28338,7 +28349,7 @@ See you soon!
           <div class="add-wiz-mode-card-example">
             <div class="add-wiz-mode-ex-label">Example</div>
             <div class="add-wiz-mode-ex-row">Dance Call</div>
-            <div class="add-wiz-mode-ex-muted">2:00 PM - 4:00 PM</div>
+            <div class="add-wiz-mode-ex-muted">2:00pm - 4:00pm</div>
             <div class="add-wiz-mode-ex-muted">12 registered &middot; Max 20</div>
           </div>
         </button>
@@ -28362,7 +28373,7 @@ See you soon!
           <div class="add-wiz-mode-card-example">
             <div class="add-wiz-mode-ex-label">Example</div>
             <div class="add-wiz-mode-ex-row">Audition open</div>
-            <div class="add-wiz-mode-ex-row">9:00 AM - 10:00 AM</div>
+            <div class="add-wiz-mode-ex-row">9:00am - 10:00am</div>
             <div class="add-wiz-mode-ex-muted">Anyone can arrive.</div>
           </div>
         </button>
@@ -28414,7 +28425,7 @@ See you soon!
       <div class="add-wiz-review-card">
         <div class="add-wiz-review-row"><div class="add-wiz-review-label">Type</div><div class="add-wiz-review-value">${typeObj.label}</div></div>
         <div class="add-wiz-review-row"><div class="add-wiz-review-label">Date</div><div class="add-wiz-review-value">${_audWiz.date ? _wizFmtDate(_audWiz.date) : 'Not set'}</div></div>
-        <div class="add-wiz-review-row"><div class="add-wiz-review-label">Time</div><div class="add-wiz-review-value">${_audWiz.startTime && _audWiz.endTime ? _wizFmtTime(_audWiz.startTime) + ' to ' + _wizFmtTime(_audWiz.endTime) : 'Not set'}</div></div>
+        <div class="add-wiz-review-row"><div class="add-wiz-review-label">Time</div><div class="add-wiz-review-value">${_audWiz.startTime && _audWiz.endTime ? _wizFmtTime(_audWiz.startTime) + ' - ' + _wizFmtTime(_audWiz.endTime) : 'Not set'}</div></div>
         <div class="add-wiz-review-row"><div class="add-wiz-review-label">Slots</div><div class="add-wiz-review-value">${slotSummary}</div></div>
       <div class="add-wiz-review-row"><div class="add-wiz-review-label">Self Tape</div><div class="add-wiz-review-value">${_audWiz.selfTape ? 'Yes — performers can submit a recording' : 'No'}</div></div>
         <div class="add-wiz-review-row"><div class="add-wiz-review-label">Location</div><div class="add-wiz-review-value">${_audWiz.location || 'Not specified'}</div></div>
@@ -34007,7 +34018,7 @@ See you soon!
   function emailSentDateDisplay(value) {
     const date = new Date(value || '');
     if (Number.isNaN(date.getTime())) return '';
-    return date.toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    return BTSFormatDateTime(date, { month: 'short', day: 'numeric' });
   }
 
   function normalizeEmailSentLog(value) {
@@ -34117,7 +34128,7 @@ See you soon!
         ? new Date(slotDate + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
         : '';
       const timeLabel = slotStart
-        ? `${formatSlotTime(slotStart)}${slotEnd ? ` – ${formatSlotTime(slotEnd)}` : ''}`
+        ? `${formatSlotTime(slotStart)}${slotEnd ? ` - ${formatSlotTime(slotEnd)}` : ''}`
         : '';
       const dateTime = [dateLabel, timeLabel].filter(Boolean).join(' · ');
       const attendance = getApplicantAttendanceForSession(app, sessionId);
@@ -35093,7 +35104,7 @@ See you soon!
         ? new Date(slotDate + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })
         : '';
       const timeLabel = slotStart
-        ? `${formatSlotTime(slotStart)}${slotEnd ? ` – ${formatSlotTime(slotEnd)}` : ''}`
+        ? `${formatSlotTime(slotStart)}${slotEnd ? ` - ${formatSlotTime(slotEnd)}` : ''}`
         : '';
       pushItem(
         [dateLabel, timeLabel].filter(Boolean).join(' · '),
@@ -41273,22 +41284,22 @@ See you soon!
       <button class="audition-flow-template-score-btn" type="button">${esc(row[3])}</button>
     </div>`).join('');
     const checkinPeople = [
-      { time: '9:40 AM', first: 'Norma', last: 'Talmadge', status: 'Through', className: 'is-done' },
-      { time: '9:50 AM', first: 'John', last: 'Drew Barrymore', status: 'Through', className: 'is-done', img: '/ASSETS/Images/templates/sample-template-headshots/john-drew-barrymore-He:Him-.png' },
-      { time: '10:00 AM', first: 'Fred', last: 'Astaire', status: 'Through', className: 'is-done', img: '/ASSETS/Images/templates/sample-template-headshots/fred-astaire-He:Him-.png' },
-      { time: '10:20 AM', first: 'Clara', last: 'Bow', status: 'Through', className: 'is-done' },
-      { time: '10:30 AM', first: 'Sarah', last: 'Bernhardt', status: 'Next', className: 'is-next' },
-      { time: '10:40 AM', first: 'Ginger', last: 'Rogers', status: 'Ready', img: '/ASSETS/Images/templates/sample-template-headshots/ginger-rogers-She:Her-.png' },
-      { time: '10:50 AM', first: 'Joan', last: 'Crawford', status: 'Ready', img: '/ASSETS/Images/templates/sample-template-headshots/joan-crawford-She:Her-.png' },
-      { time: '11:00 AM', first: 'Katherine', last: 'Hepburn', status: 'Ready', img: '/ASSETS/Images/templates/sample-template-headshots/katherine-hepburn-She:Her-.png' },
-      { time: '11:10 AM', first: 'Gloria', last: 'Swanson', status: 'Ready', img: '/ASSETS/Images/templates/sample-template-headshots/gloria-swanson-She:Her-.png' },
-      { time: '11:30 AM', first: 'Eleonora', last: 'Duse', status: 'Ready', img: '/ASSETS/Images/templates/sample-template-headshots/eleonora-duse-She:Her-.png' },
-      { time: '11:40 AM', first: 'Jane', last: 'Austen', status: 'Ready', img: '/ASSETS/Images/templates/Volunteer Headshots/4.png' },
-      { time: '11:50 AM', first: 'Clara', last: 'Schumann', status: 'Ready', img: '/ASSETS/Images/templates/sample-template-headshots/clara-bow-She:Her-.png' },
-      { time: '12:40 PM', first: 'Marie', last: 'Curie', status: 'Ready', img: '/ASSETS/Images/templates/Volunteer Headshots/8.png' },
-      { time: '12:50 PM', first: 'Ada', last: 'Lovelace', status: 'Ready' },
-      { time: '1:00 PM', first: 'Oscar', last: 'Wilde', status: 'Ready', img: '/ASSETS/Images/templates/Volunteer Headshots/10.png' },
-      { time: '1:10 PM', first: 'Wolfgan', last: 'Amadeus Mozart', status: 'Ready' },
+      { time: '9:40am', first: 'Norma', last: 'Talmadge', status: 'Through', className: 'is-done' },
+      { time: '9:50am', first: 'John', last: 'Drew Barrymore', status: 'Through', className: 'is-done', img: '/ASSETS/Images/templates/sample-template-headshots/john-drew-barrymore-He:Him-.png' },
+      { time: '10:00am', first: 'Fred', last: 'Astaire', status: 'Through', className: 'is-done', img: '/ASSETS/Images/templates/sample-template-headshots/fred-astaire-He:Him-.png' },
+      { time: '10:20am', first: 'Clara', last: 'Bow', status: 'Through', className: 'is-done' },
+      { time: '10:30am', first: 'Sarah', last: 'Bernhardt', status: 'Next', className: 'is-next' },
+      { time: '10:40am', first: 'Ginger', last: 'Rogers', status: 'Ready', img: '/ASSETS/Images/templates/sample-template-headshots/ginger-rogers-She:Her-.png' },
+      { time: '10:50am', first: 'Joan', last: 'Crawford', status: 'Ready', img: '/ASSETS/Images/templates/sample-template-headshots/joan-crawford-She:Her-.png' },
+      { time: '11:00am', first: 'Katherine', last: 'Hepburn', status: 'Ready', img: '/ASSETS/Images/templates/sample-template-headshots/katherine-hepburn-She:Her-.png' },
+      { time: '11:10am', first: 'Gloria', last: 'Swanson', status: 'Ready', img: '/ASSETS/Images/templates/sample-template-headshots/gloria-swanson-She:Her-.png' },
+      { time: '11:30am', first: 'Eleonora', last: 'Duse', status: 'Ready', img: '/ASSETS/Images/templates/sample-template-headshots/eleonora-duse-She:Her-.png' },
+      { time: '11:40am', first: 'Jane', last: 'Austen', status: 'Ready', img: '/ASSETS/Images/templates/Volunteer Headshots/4.png' },
+      { time: '11:50am', first: 'Clara', last: 'Schumann', status: 'Ready', img: '/ASSETS/Images/templates/sample-template-headshots/clara-bow-She:Her-.png' },
+      { time: '12:40pm', first: 'Marie', last: 'Curie', status: 'Ready', img: '/ASSETS/Images/templates/Volunteer Headshots/8.png' },
+      { time: '12:50pm', first: 'Ada', last: 'Lovelace', status: 'Ready' },
+      { time: '1:00pm', first: 'Oscar', last: 'Wilde', status: 'Ready', img: '/ASSETS/Images/templates/Volunteer Headshots/10.png' },
+      { time: '1:10pm', first: 'Wolfgan', last: 'Amadeus Mozart', status: 'Ready' },
     ];
     const checkinTiles = checkinPeople.map(person => {
       const cardHtml = renderCastingCard({
@@ -41336,7 +41347,7 @@ See you soon!
           <h1 class="audition-flow-template-title">${esc(sessionTitle)}</h1>
           <div class="audition-flow-template-meta">
             <span class="audition-flow-template-tag"><strong>Date</strong> May 23, 2026</span>
-            <span class="audition-flow-template-tag"><strong>Time</strong> 9:00 AM - 7:00 PM</span>
+            <span class="audition-flow-template-tag"><strong>Time</strong> 9:00am - 7:00pm</span>
             <span class="audition-flow-template-tag"><strong>Location</strong> Mark R. Isfeld Secondary School</span>
           </div>
         </header>
@@ -44426,13 +44437,7 @@ See you soon!
     }
   }, true);
 
-  function formatAuditionSchedulePlaceholderTime(totalMinutes) {
-    const hours24 = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    const meridiem = hours24 >= 12 ? 'PM' : 'AM';
-    const hours12 = ((hours24 + 11) % 12) + 1;
-    return `${hours12}:${String(minutes).padStart(2, '0')} ${meridiem}`;
-  }
+  function formatAuditionSchedulePlaceholderTime(totalMinutes) { return BTSFormatTime(`${Math.floor(totalMinutes / 60)}:${String(totalMinutes % 60).padStart(2, '0')}`); }
 
   let activeAuditionScheduleSessionId = '';
 
@@ -47100,7 +47105,7 @@ See you soon!
         const year = new Date().getFullYear();
         const d = new Date(parts[0].replace(/^[A-Za-z]+,\s*/, '') + ' ' + year);
         if (!isNaN(d)) {
-          const timeStr = parts.slice(1).join(' – ');
+          const timeStr = parts.slice(1).join(' - ');
           return { date: d, timeStr };
         }
       }
@@ -47959,7 +47964,7 @@ See you soon!
 	    const dateLabel = date ? new Date(date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }) : (ev?.title || '');
 	    const start = volFmtShiftTime(timing.shift_start_time);
 	    const end = volFmtShiftTime(timing.shift_end_time);
-	    const range = [start, end].filter(Boolean).join(' – ');
+	    const range = [start, end].filter(Boolean).join(' - ');
 	    return [dateLabel, range].filter(Boolean).join(' · ');
 	  }
 
@@ -49523,13 +49528,13 @@ See you soon!
 
 	    function renderShiftCard(shift) {
 	      if (shift.kind === 'empty') {
-	        const timeStr = [volFmtShiftTime(shift.shift_start_time), volFmtShiftTime(shift.shift_end_time)].filter(Boolean).join(' – ') || 'Time not set';
+	        const timeStr = [volFmtShiftTime(shift.shift_start_time), volFmtShiftTime(shift.shift_end_time)].filter(Boolean).join(' - ') || 'Time not set';
 	        return `<div class="vd-event-card vd-event-card--empty" style="border-left:3px solid ${shift.color};">
 	          <div class="vd-event-time">${esc(timeStr)}</div>
 	          <div class="vd-no-role">No volunteer shifts set yet</div>
 	        </div>`;
 	      }
-	      const timeStr = [volFmtShiftTime(shift.shift_start_time), volFmtShiftTime(shift.shift_end_time)].filter(Boolean).join(' – ') || 'Time not set';
+	      const timeStr = [volFmtShiftTime(shift.shift_start_time), volFmtShiftTime(shift.shift_end_time)].filter(Boolean).join(' - ') || 'Time not set';
 	      const dot = shift.filled >= shift.needed ? '#22c55e' : shift.filled > 0 ? '#f59e0b' : '#ef4444';
 	      const cls = shift.filled >= shift.needed ? 'filled' : shift.filled > 0 ? 'partial' : 'empty';
 	      const namesHtml = shift.names.length

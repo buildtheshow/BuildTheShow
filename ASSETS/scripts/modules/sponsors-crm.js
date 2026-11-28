@@ -232,7 +232,7 @@
     if (!iso) return '';
     var d = new Date(iso);
     if (isNaN(d.getTime())) return '';
-    return d.toLocaleDateString('en-CA') + ' · ' + d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' });
+    return d.toLocaleDateString('en-CA') + ' · ' + BTSFormatTime(d);
   }
   function bizName(id) { var b = SpnsState.businesses.find(function (x) { return x.id === id; }); return b ? b.name : ''; }
   function esc(s) { return s ? String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : ''; }
