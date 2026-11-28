@@ -27497,21 +27497,16 @@ See you soon!
               </div>
               <span class="ap-setup-schedule-count">${openCount} open · ${slots.length - openCount} blocked · ${slots.length} total${breakWindows.length ? ` · ${breakWindows.length} ${breakWindows.length === 1 ? 'break' : 'breaks'}` : ''}</span>
             </header>
-            ${slots.length ? '' : `<p class="ap-setup-schedule-empty">${emptyMessage}</p>`}
+            ${slots.length ? `
+              <div class="ap-setup-schedule-action">
+                <h4>Block a time slot</h4>
+                <p>Select a slot to hide it from public booking. Great for catch-up time or keeping extra audition spaces in reserve. You can reopen it at any time.</p>
+              </div>` : `<p class="ap-setup-schedule-empty">${emptyMessage}</p>`}
             ${slots.length || breakWindows.length ? `<div class="aud-block-calendar">${buildAuditionSchedulerBlockSlotsHtml(record.id, slots, index, breakWindows)}</div>` : ''}
             <section class="ap-setup-schedule-breaks">
-              <div class="ap-setup-break-guidance">
-                <header class="ap-setup-break-heading">
-                  <h4>Breaks &amp; catch-up time</h4>
-                  <p>Audition days can be long! Give yourself and your audition team time to recharge throughout the day.</p>
-                </header>
-                <p>A few things to keep in mind:</p>
-                <ul>
-                  <li><strong>Catch-up time:</strong> Auditions don't always run on schedule. Leave some breathing room in case you fall behind.</li>
-                  <li><strong>Coffee and bathroom breaks:</strong> Give your team a chance to step away, stretch and grab a drink.</li>
-                  <li><strong>Lunch:</strong> Don't forget to eat! Make sure everyone has enough time to enjoy a proper meal.</li>
-                  <li><strong>Team discussions:</strong> Leave time to compare notes, discuss performers and check in with your audition team.</li>
-                </ul>
+              <div class="ap-setup-schedule-action">
+                <h4>Add a scheduled break</h4>
+                <p>Need 45 minutes for lunch? Set a start and end time, and we'll adjust your audition slots around it.</p>
               </div>
               <ul>${breaks || '<li class="ap-setup-schedule-no-breaks">No breaks added</li>'}</ul>
               <div class="ap-setup-schedule-break-adder" data-break-editor="${index}" style="display:none">
@@ -27521,6 +27516,19 @@ See you soon!
                 <span data-break-error role="status"></span>
               </div>
               <button type="button" data-add-break="${index}">+ Add break</button>
+              <details class="ap-setup-break-tips">
+                <summary>Break planning tips</summary>
+                <div class="ap-setup-break-guidance">
+                  <p>Audition days can be long! Give yourself and your audition team time to recharge throughout the day.</p>
+                  <p>A few things to keep in mind:</p>
+                  <ul>
+                    <li><strong>Catch-up time:</strong> Auditions don't always run on schedule. Leave some breathing room in case you fall behind.</li>
+                    <li><strong>Coffee and bathroom breaks:</strong> Give your team a chance to step away, stretch and grab a drink.</li>
+                    <li><strong>Lunch:</strong> Don't forget to eat! Make sure everyone has enough time to enjoy a proper meal.</li>
+                    <li><strong>Team discussions:</strong> Leave time to compare notes, discuss performers and check in with your audition team.</li>
+                  </ul>
+                </div>
+              </details>
             </section>
           </article>`;
       }).join('');
@@ -27534,16 +27542,6 @@ See you soon!
             <p>Here's what your audition day looks like! We've worked out your time slots based on your audition hours, the length of each audition and any breaks you've added.</p>
             <p>Take a moment to look through your day. You can block individual time slots or add breaks before making your auditions available for booking.</p>
           </header>
-          <div class="ap-setup-schedule-options">
-            <div>
-              <h4>Block a time slot</h4>
-              <p>Select a slot to hide it from public booking. Great for catch-up time or keeping extra audition spaces in reserve. You can reopen it at any time.</p>
-            </div>
-            <div>
-              <h4>Add a scheduled break</h4>
-              <p>Need 45 minutes for lunch? Set a start and end time, and we'll adjust your audition slots around it.</p>
-            </div>
-          </div>
           ${cards}
         </section>`;
     }
