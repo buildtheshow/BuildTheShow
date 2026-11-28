@@ -25989,7 +25989,7 @@ See you soon!
       </div>`).join('');
   }
 
-  function buildAuditionSchedulerBlockSlotsHtml(sessionId, blockSlots) {
+  function buildAuditionSchedulerBlockSlotsHtml(sessionId, blockSlots, draftDayIndex) {
     if (!blockSlots.length) {
       return '<div class="aud-block-calendar-empty">Generate slots to build this time view.</div>';
     }
@@ -26011,12 +26011,16 @@ See you soon!
       const slotApps = appsPerSlot[slot.id] || [];
       const booked   = slotApps.length;
       const capLabel = `${booked}/${cap}`;
+      const draft = draftDayIndex !== undefined;
+      const toggle = draft
+        ? `data-draft-slot-day="${draftDayIndex}" data-draft-slot-time="${esc(slot.slot_time)}" aria-pressed="${state === 'block'}" aria-label="${esc(formatSlotTime(slot.slot_time))} blocked"`
+        : 'tabindex="-1"';
 
       return `
-      <div class="aud-block-slot-cell state-${esc(state)}" onclick="cycleAudSlotLabel('${slot.id}','${sessionId}')" title="Click to ${state === 'open' ? 'block' : 'open'} this slot">
+      <div class="aud-block-slot-cell state-${esc(state)}"${draft ? '' : ` onclick="cycleAudSlotLabel('${slot.id}','${sessionId}')" title="Click to ${state === 'open' ? 'block' : 'open'} this slot"`}>
         <div class="aud-block-slot-time">${buildAuditionSchedulePlaceholderTimeLabelHtml(formatSlotTime(slot.slot_time || slot.start_time || ''))}</div>
         <div class="aud-block-slot-bottom">
-          <button class="aud-block-slot-state state-${esc(state)}" type="button" tabindex="-1">${esc(getAudSlotLabel(slot))}</button>
+          <button class="aud-block-slot-state state-${esc(state)}" type="button" ${toggle}>${esc(getAudSlotLabel(slot))}</button>
           <div class="aud-block-slot-cap">${esc(capLabel)}</div>
         </div>
       </div>`;
@@ -26970,38 +26974,8 @@ See you soon!
     block.start_time = startTime;
     block.end_time   = endTime;
 
-    const slotLen = block.slot_length || 10;
-    const buffer  = block.buffer || 0;
-    const dur     = slotLen + buffer;
-    const cap     = block.capacity || 1;
-    const breaks  = (block.breaks || []).map(br => ({
-      startMins: timeToMins(br.start),
-      endMins:   timeToMins(br.end),
-    }));
-
-    const [sh, sm] = startTime.split(':').map(Number);
-    const [eh, em] = endTime.split(':').map(Number);
-    let cur = sh * 60 + sm;
-    const endMins = eh * 60 + em;
-
-    const proposedSlots = [];
-    while (cur + slotLen <= endMins) {
-      const hh = String(Math.floor(cur / 60)).padStart(2, '0');
-      const mm = String(cur % 60).padStart(2, '0');
-      const slotTime = `${hh}:${mm}:00`;
-      const inBreak  = breaks.some(br => cur < br.endMins && cur + slotLen > br.startMins);
-      if (!inBreak) {
-        proposedSlots.push({
-          session_id:   sessionId,
-          slot_time:    slotTime,
-          slot_date:    date,
-          block_id:     block.id,
-          capacity:     cap,
-          is_available: true,
-        });
-      }
-      cur += dur;
-    }
+    const proposedSlots = buildProposedAuditionSlots(sessionId, block);
+    const cap = Number(block.capacity) || 1;
 
     const bookingsPerSlot = {};
     (allApplicants || []).forEach(app => {
@@ -27137,6 +27111,30 @@ See you soon!
     return h * 60 + m;
   }
 
+  function buildProposedAuditionSlots(sessionId, block) {
+    const length = Number(block.slot_length ?? 10);
+    const gap = Number(block.buffer ?? 0);
+    if (!Number.isInteger(length) || length < 1 || !Number.isInteger(gap) || gap < 0) return [];
+    const start = timeToMins(block.start_time);
+    const end = timeToMins(block.end_time);
+    const breaks = (block.breaks || []).map(({ start, end }) => [timeToMins(start), timeToMins(end)]);
+    const slots = [];
+    for (let minute = start; minute + length <= end; minute += length + gap) {
+      if (breaks.some(([from, to]) => minute < to && minute + length > from)) continue;
+      const hour = String(Math.floor(minute / 60)).padStart(2, '0');
+      const minutes = String(minute % 60).padStart(2, '0');
+      slots.push({
+        session_id: sessionId,
+        slot_date: block.date,
+        slot_time: `${hour}:${minutes}:00`,
+        block_id: block.id,
+        capacity: Number(block.capacity) || 1,
+        is_available: true,
+      });
+    }
+    return slots;
+  }
+
   function promptAddBreak(sessionId, blockId) {
     const adder = document.getElementById(`break-adder-${sessionId}-${blockId}`);
     if (adder) adder.style.display = 'flex';
@@ -27213,7 +27211,7 @@ See you soon!
   }
 
   function _createAudSetupController() {
-    const state = { loaded: false, loading: false, records: [], revisions: {}, openId: null, step: 0, activeDay: {}, reviewTab: 'audition', timers: {}, saving: {}, scheduleSync: {}, scheduleSyncFailed: {}, scheduleSyncBusy: {}, error: '' };
+    const state = { loaded: false, loading: false, records: [], revisions: {}, openId: null, step: 0, activeDay: {}, reviewTab: 'audition', timers: {}, saving: {}, saveErrors: {}, saveAttempts: {}, queues: {}, error: '' };
     const sections = ['Booking type', 'Details', 'Dates & location', 'Schedule', 'Activities', 'Preparation', 'Review'];
     const types = [
       { value: 'audition', label: 'General audition', name: 'General audition', colour: '#476aaa', icon: 'Auditions.svg' },
@@ -27383,62 +27381,71 @@ See you soon!
         </details>` : '';
       return `<section class="ap-setup-daypanel"><section class="ap-setup-date-time"><div class="ap-setup-date-row">${dayField('Date', 'date', day.date, 'date', 'calendar-date')}${dayField('Start time', 'start', day.start, 'text', 'time-start')}${dayField('Finish time', 'end', day.end, 'text', 'time-end')}</div></section>${inPersonDetails}${videoCallDetails}</section>`;
     }
+    function usesTimeSlots(record) {
+      return record.mode !== 'walkin' && !(record.methods.length === 1 && record.methods[0] === 'self_tape');
+    }
+
+    function draftDaySlots(record, day) {
+      if (!usesTimeSlots(record) || !day.date || !day.start || !day.end) return [];
+      const publishedDate = audSessions.find(session => session.id === record.id)?.date;
+      const publishedSlots = new Map((audSlots[record.id] || [])
+        .filter(slot => (slot.slot_date || publishedDate) === day.date)
+        .map(slot => [slot.slot_time, slot]));
+      return buildProposedAuditionSlots(record.id, {
+        id: day.id,
+        date: day.date,
+        start_time: day.start,
+        end_time: day.end,
+        slot_length: record.slot,
+        buffer: record.gap,
+        capacity: ['group', 'arrival'].includes(record.mode) ? record.capacity : 1,
+        breaks: day.breaks,
+      }).map(slot => {
+        const published = publishedSlots.get(slot.slot_time);
+        const key = day.date + '|' + slot.slot_time;
+        return { ...slot, id: published?.id, label: day.slotOverrides?.[key] ?? published?.label };
+      });
+    }
+
     function scheduleBuilder(record) {
-      if (record.methods.length === 1 && record.methods[0] === 'self_tape') return '<p class="ap-setup-note">Self-tape auditions do not need time slots.</p>';
-      if (record.mode === 'walkin') return '<p class="ap-setup-note">Cattle calls run during the advertised hours, so they do not use bookable time slots.</p>';
-      const blocks = audBlocks[record.id] || (audBlocks[record.id] = []);
+      if (!usesTimeSlots(record)) {
+        return record.mode === 'walkin'
+          ? '<p class="ap-setup-note">Cattle calls run during the advertised hours, so they do not use bookable time slots.</p>'
+          : '<p class="ap-setup-note">Self-tape auditions do not need time slots.</p>';
+      }
       const cards = ensureDays(record).map((day, index) => {
-        let block = blocks.find(item => String(item.id) === String(day.id));
-        if (!block) {
-          block = { id: String(day.id), breaks: [] };
-          blocks.push(block);
-        }
-        block.date = day.date || '';
-        block.start_time = day.start || '';
-        block.end_time = day.end || '';
-        block.slot_length = Number(record.slot) || 10;
-        block.buffer = Number(record.gap) || 0;
-        block.capacity = Number(record.capacity) || 1;
-        if (Array.isArray(day.breaks)) block.breaks = day.breaks;
-        else day.breaks = block.breaks = Array.isArray(block.breaks) ? block.breaks : [];
-        const slots = (audSlots[record.id] || []).filter(slot => String(slot.block_id || '') === String(block.id) || (!slot.block_id && day.date && String(slot.slot_date || '') === String(day.date)));
+        const slots = draftDaySlots(record, day);
         const openCount = slots.filter(slot => getAudSlotState(slot) === 'open').length;
-        const validWindow = !!(day.date && day.start && day.end && day.end > day.start);
-        const syncKey = `${record.id}:${block.id}`;
-        const signature = JSON.stringify({ date: day.date, start: day.start, end: day.end, mode: record.mode, slot: record.slot, gap: record.gap, capacity: record.capacity, breaks: day.breaks || [] });
-        const generationFailed = validWindow && state.scheduleSyncFailed[syncKey] === signature;
-        const breaks = (block.breaks || []).map((item, breakIndex) => `<li><span>${e(BTSFormatTimeRange(item.start, item.end))}</span><button type="button" data-remove-break="${index}" data-break-index="${breakIndex}" aria-label="Remove break">×</button></li>`).join('');
-        return `<article class="ap-setup-schedule-day" style="${buildAuditionScheduleCalendarThemeStyle(colour(record))}"><header><div><strong>${e(niceDate(day.date))}</strong><span>${e(niceTimeRange(day.start, day.end))}</span></div><span class="ap-setup-schedule-count">${openCount} open · ${slots.length - openCount} blocked · ${slots.length} total</span></header><div class="ap-setup-schedule-actions">${slots.length || generationFailed ? `<button type="button" data-generate-day="${e(block.id)}" ${validWindow ? '' : 'disabled'}>${slots.length ? 'Refresh slots' : 'Try again'}</button>` : ''}<span>${generationFailed && slots.length ? 'Some slots could not be updated; the existing schedule is retained.' : slots.length ? 'Click a slot to switch it between open and blocked.' : generationFailed ? 'Slots could not be updated automatically.' : validWindow ? 'Creating slots from your booking settings…' : 'Add a date, start time, and finish time under Dates & location first.'}</span></div>${slots.length ? `<div class="aud-block-calendar">${buildAuditionSchedulerBlockSlotsHtml(record.id, slots)}</div>` : `<p class="ap-setup-schedule-empty">${validWindow ? generationFailed ? 'Could not create time slots. Check the date, booking length and breaks, then try again.' : 'Your time slots will appear here automatically.' : 'Add a date, start time, and finish time under Dates & location first.'}</p>`}<section class="ap-setup-schedule-breaks"><div><strong>Breaks</strong><span>Breaks are excluded when time slots are created.</span></div><ul>${breaks || '<li class="ap-setup-schedule-no-breaks">No breaks added</li>'}</ul><div class="ap-setup-schedule-break-adder" id="break-adder-${record.id}-${block.id}" style="display:none"><label>Start <input type="time" id="break-start-${record.id}-${block.id}"></label><label>End <input type="time" id="break-end-${record.id}-${block.id}"></label><button type="button" data-confirm-break="${index}">Add break</button></div><button type="button" data-add-break="${index}">+ Add break</button></section></article>`;
+        const hasWindow = day.date && day.start && day.end && timeToMins(day.end) > timeToMins(day.start);
+        const emptyMessage = hasWindow
+          ? 'No slots fit. Check the booking length, time between appointments and breaks.'
+          : 'Add a date, start time and finish time under Dates & location first.';
+        const breaks = (day.breaks || []).map((item, breakIndex) => `<li><span>${e(BTSFormatTimeRange(item.start, item.end))}</span><button type="button" data-remove-break="${index}" data-break-index="${breakIndex}" aria-label="Remove break">×</button></li>`).join('');
+        return `
+          <article class="ap-setup-schedule-day" style="${buildAuditionScheduleCalendarThemeStyle(colour(record))}">
+            <header>
+              <div><strong>${e(niceDate(day.date))}</strong><span>${e(niceTimeRange(day.start, day.end))}</span></div>
+              <span class="ap-setup-schedule-count">${openCount} open · ${slots.length - openCount} blocked · ${slots.length} total</span>
+            </header>
+            ${slots.length
+              ? `<div class="ap-setup-schedule-actions"><span>Click a slot to switch it between open and blocked.</span></div><div class="aud-block-calendar">${buildAuditionSchedulerBlockSlotsHtml(record.id, slots, index)}</div>`
+              : `<p class="ap-setup-schedule-empty">${emptyMessage}</p>`}
+            <section class="ap-setup-schedule-breaks">
+              <div><strong>Breaks</strong><span>Breaks are excluded when time slots are created.</span></div>
+              <ul>${breaks || '<li class="ap-setup-schedule-no-breaks">No breaks added</li>'}</ul>
+              <div class="ap-setup-schedule-break-adder" data-break-editor="${index}" style="display:none">
+                <label>Start <input type="text" data-break-start placeholder="12:00pm" autocomplete="off"></label>
+                <label>End <input type="text" data-break-end placeholder="12:30pm" autocomplete="off"></label>
+                <button type="button" data-confirm-break="${index}">Add break</button>
+                <span data-break-error role="status"></span>
+              </div>
+              <button type="button" data-add-break="${index}">+ Add break</button>
+            </section>
+          </article>`;
       }).join('');
       return `<section class="ap-setup-schedule-builder"><h3>Time slots for ${e(record.name || 'this audition')}</h3><p>Slots are generated from your dates, times, booking length and breaks. Update those details and this schedule will stay in sync.</p>${cards}</section>`;
     }
 
-    async function autoGenerateSchedule(record) {
-      if (record.methods.length === 1 && record.methods[0] === 'self_tape' || record.mode === 'walkin') return;
-      let changed = false;
-      for (const day of ensureDays(record)) {
-        if (!day.date || !day.start || !day.end || day.end <= day.start) continue;
-        const block = (audBlocks[record.id] || []).find(item => String(item.id) === String(day.id));
-        if (!block) continue;
-        const key = `${record.id}:${block.id}`;
-        const signature = JSON.stringify({ date: day.date, start: day.start, end: day.end, mode: record.mode, slot: record.slot, gap: record.gap, capacity: record.capacity, breaks: day.breaks || [] });
-        if (state.scheduleSync[key] === signature || state.scheduleSyncFailed[key] === signature || state.scheduleSyncBusy[key]) continue;
-        state.scheduleSyncBusy[key] = signature;
-        _saveBlocks(record.id);
-        let generated = false;
-        try { generated = await generateBlockSlots(record.id, block.id, { silent: true }); }
-        catch (error) { console.error('[BTS] automatic audition slot generation failed', error); }
-        if (generated) {
-          state.scheduleSync[key] = signature;
-          delete state.scheduleSyncFailed[key];
-        } else {
-          state.scheduleSyncFailed[key] = signature;
-        }
-        changed = true;
-        delete state.scheduleSyncBusy[key];
-      }
-      if (changed && state.openId === record.id && state.step === 3) render();
-    }
     function editor(record) {
       const step = [1, 0, 2, 5, 3, 4, 6][state.step] ?? state.step;
       const accent = colour(record);
@@ -27466,7 +27473,7 @@ See you soon!
       else if (step === 3) body = `<fieldset><legend>What does this audition include?</legend><div class="ap-setup-grid">${activities.map(([key,label]) => multiChoice(label,'activities',key,record.activities.includes(key))).join('')}</div></fieldset>`;
       else if (step === 4) body = `<div class="ap-setup-grid">${record.type !== 'callback' ? `<section class="aud-materials-setting ap-setup-full"><div class="aud-materials-setting-copy"><strong>Audition materials</strong><span>${isAuditionSessionMaterialsEnabled(record.id) ? 'Performers can see the materials you share for this audition.' : 'No materials will be shared for this audition.'}</span></div><label class="aud-materials-setting-toggle"><span>${isAuditionSessionMaterialsEnabled(record.id) ? 'On' : 'Off'}</span><input type="checkbox" data-materials-session="${e(record.id)}" ${isAuditionSessionMaterialsEnabled(record.id) ? 'checked' : ''} aria-label="Audition materials for ${e(record.name)} ${isAuditionSessionMaterialsEnabled(record.id) ? 'on' : 'off'}"><span class="aud-materials-setting-track" aria-hidden="true"></span></label></section>` : ''}<label class="ap-setup-field ap-setup-full">What should they prepare?<textarea data-field="prep" rows="3">${e(record.prep)}</textarea></label>${record.methods.includes('self_tape') ? `<section class="ap-setup-self-tape ap-setup-full"><header><h3>Self-tape</h3><p>Give performers the filming instructions and submission deadline for this audition.</p></header><label class="ap-setup-field ap-setup-full"><span class="ap-setup-field-title">What should they film?</span><textarea data-field="selfTapeInstructions" rows="3" placeholder="For example: record a short song and a scene, then submit both using the link in your confirmation email.">${e(record.selfTapeInstructions || '')}</textarea></label><label class="ap-setup-field ap-setup-self-tape-deadline"><span class="ap-setup-field-title">Submission deadline</span><input type="datetime-local" data-field="deadline" value="${e(record.deadline || '')}"><span class="ap-setup-field-help">Set a deadline that gives your team time to review submissions.</span></label></section>` : ''}<label class="ap-setup-field ap-setup-full">What should they bring?<textarea data-field="bring" rows="2">${e(record.bring)}</textarea></label><label class="ap-setup-field">When can they leave?<select data-field="finish"><option ${record.finish==='After their appointment'?'selected':''}>After their appointment</option><option ${record.finish==='After the whole session'?'selected':''}>After the whole session</option><option ${record.finish==='When released by the team'?'selected':''}>When released by the team</option></select></label><label class="ap-setup-field ap-setup-full">Arrival instructions (sent after booking)<textarea data-field="access" rows="2" placeholder="For example: check in with our producer at the welcome desk, then wait to be called.">${e(record.access)}</textarea><span class="ap-setup-field-help">These instructions go in the booking confirmation email and do not appear on the public audition page.</span></label><p class="ap-setup-full">Add shared links to audition materials under Materials. Files stay in your own storage; set links so anyone with the link can view.</p></div>`;
       else body = applicantView(record);
-      return `<div class="ap-setup-editor" style="--ap-accent:${accent}"><nav class="ap-setup-tabs" aria-label="Audition details">${sections.map((name,index)=>`<button type="button" data-step="${index}" aria-pressed="${state.step===index}">${name}${missing(record).some(item=>item.step===index)?'<span class="ap-setup-star" aria-hidden="true">✱</span>':''}</button>`).join('')}</nav><div class="ap-setup-fields">${body}</div><footer><span data-save-status>${state.saving[record.id] ? 'Saving draft…' : 'Draft saves automatically. Nothing is published.'}</span><button type="button" data-close-editor>Done</button></footer></div>`;
+      return `<div class="ap-setup-editor" style="--ap-accent:${accent}"><nav class="ap-setup-tabs" aria-label="Audition details">${sections.map((name,index)=>`<button type="button" data-step="${index}" aria-pressed="${state.step===index}">${name}${missing(record).some(item=>item.step===index)?'<span class="ap-setup-star" aria-hidden="true">✱</span>':''}</button>`).join('')}</nav><div class="ap-setup-fields">${body}</div><footer><span data-save-status role="status">${e(draftSaveStatus(record.id))}</span><button type="button" data-close-editor>Done</button></footer></div>`;
     }
 
     function applicantView(record) {
@@ -27490,10 +27497,7 @@ See you soon!
         : `${e(record.slot || '10')} minutes per person${Number(record.gap) ? ` · ${e(record.gap)} minutes between appointments` : ''}`;
       const format = record.mode === 'appointment' ? duration : record.mode === 'group' ? `${e(record.capacity || '1')} places in each group session · ${duration}` : record.mode === 'arrival' ? `${e(record.capacity || '1')} performers per shared arrival time · ${duration}` : record.mode === 'walkin' ? 'Arrive any time during the advertised hours and wait your turn.' : `Your team will assign your audition time · ${duration}`;
       const dayCards = days.map((day, index) => {
-        const daySlots = (audSlots[record.id] || [])
-          .filter(slot => slot.block_id === day.id || (day.date && (slot.slot_date || record.days?.[0]?.date) === day.date))
-          .slice()
-          .sort((a, b) => String(a.slot_time || '').localeCompare(String(b.slot_time || '')));
+        const daySlots = draftDaySlots(record, day).filter(slot => getAudSlotState(slot) === 'open');
         const bookedBySlot = {};
         (allApplicants || []).forEach(app => {
           const assignments = Array.isArray(app?.slot_assignments) && app.slot_assignments.length
@@ -27512,7 +27516,7 @@ See you soon!
               const full = capacity > 0 && booked >= capacity;
               return `<span class="ap-setup-public-slot${full ? ' is-full' : ''}">${e(time)}${capacity > 1 && !full ? `<small>${booked}/${capacity}</small>` : ''}</span>`;
             }).join('')}</div>`
-          : `<p class="ap-setup-public-slots-empty">Slots not yet published</p>`;
+          : `<p class="ap-setup-public-slots-empty">No bookable time slots</p>`;
         return `<article class="ap-setup-performer-day"><h3>${e(days.length > 1 ? `Day ${index + 1}` : typeLabel)}</h3><strong>${e(niceDate(day.date))}</strong><p>${e(niceTimeRange(day.start, day.end))}</p>${record.methods.includes('in_person')?`<p><b>Location:</b> ${e(day.venue?.name||'Venue to be confirmed')}${day.room?' · '+e(day.room):''}</p>${day.venue?.address?`<p>${e(day.venue.address)}</p>`:''}${day.locationNotes?`<p>${e(day.locationNotes)}</p>`:''}`:''}${record.methods.includes('video_call')?`<p><b>Video call:</b> ${e(day.videoInstructions||'Joining details will be sent with your booking confirmation.')}</p>`:''}<div class="ap-setup-performer-slots"><b>${e(modeLabel)}</b><span>${format}</span></div>${slotsHtml}</article>`;
       }).join('');
       return `<section class="ap-setup-performer-schedule"><header><span>${e(typeLabel)}</span><h2>${e(record.name)}</h2><p>${e(modeLabel)} · ${e(record.methods.map(method => methodLabels[method]).join(' · '))}</p></header>${isTapeOnly ? `<article class="ap-setup-performer-day"><h3>Submission deadline</h3><strong>${e(record.deadline ? BTSFormatDateTime(new Date(record.deadline), { dateStyle: 'long' }) : 'To be confirmed')}</strong><p>Your team will review submissions by this deadline.</p></article>` : dayCards}<button class="ap-setup-public-book" type="button" disabled>Book Audition</button></section>`;
@@ -27540,6 +27544,13 @@ See you soon!
       const countBadge = document.getElementById('aud-session-count-badge');
       if (countBadge) countBadge.textContent = String(state.records.length);
       host.replaceChildren();
+      const toggleEditor = record => {
+        const previous = state.records.find(item => item.id === state.openId);
+        if (previous) flushDraft(previous);
+        state.openId = state.openId === record.id ? null : record.id;
+        state.step = 0;
+        render();
+      };
       state.records.forEach(record => {
         const template = document.createElement('template');
         template.innerHTML = buildAudSessionCardHTML({ id: record.id, name: record.name, type: record.type, date: record.days?.[0]?.date || '', start_time: record.days?.[0]?.start || '', end_time: record.days?.[0]?.end || '', format: record.methods.includes('in_person') ? 'in_person' : 'virtual', booking_mode: 'appointment', show_to_applicants: false });
@@ -27556,13 +27567,11 @@ See you soon!
           head.tabIndex = 0;
           head.setAttribute('aria-expanded', String(state.openId === record.id));
           head.setAttribute('aria-label', `Open or close ${record.name || sessionTypeLabel(record.type)} settings`);
-          head.onclick = () => { state.openId = state.openId === record.id ? null : record.id; state.step = 0; render(); };
+          head.onclick = () => toggleEditor(record);
           head.onkeydown = event => {
             if (event.target !== head || (event.key !== 'Enter' && event.key !== ' ')) return;
             event.preventDefault();
-            state.openId = state.openId === record.id ? null : record.id;
-            state.step = 0;
-            render();
+            toggleEditor(record);
           };
         }
         const nameNode=card.querySelector('.aud-card-name');
@@ -27578,7 +27587,7 @@ See you soon!
         const deleteButton = card.querySelector('.aud-action-btn.danger');
         deleteButton?.remove();
         const actions = document.createElement('div'); actions.className='ap-setup-actions';
-        const edit = document.createElement('button'); edit.type='button'; edit.className='ap-setup-edit'; edit.textContent=state.openId===record.id?'Done':'Edit'; edit.setAttribute('aria-expanded',String(state.openId===record.id)); edit.onclick=event=>{event.stopPropagation();state.openId=state.openId===record.id?null:record.id;state.step=0;render();}; actions.append(edit);
+        const edit = document.createElement('button'); edit.type='button'; edit.className='ap-setup-edit'; edit.textContent=state.openId===record.id?'Done':'Edit'; edit.setAttribute('aria-expanded',String(state.openId===record.id)); edit.onclick=event=>{event.stopPropagation();toggleEditor(record);}; actions.append(edit);
         const remove = document.createElement('button'); remove.type='button'; remove.className='ap-setup-delete'; remove.textContent='×'; remove.setAttribute('aria-label',`Delete ${record.name || sessionTypeLabel(record.type)}`); remove.title='Delete audition'; remove.onclick=event=>{event.stopPropagation();deleteAudition(record);}; actions.append(remove);
         head?.append(actions);
         const attendance = document.createElement('div'); attendance.className='ap-setup-attendance'; attendance.style.setProperty('--ap-accent',colour(record)); attendance.innerHTML=record.type==='callback'?`<strong>Who attends?</strong><label><input type="radio" name="audience-${e(record.id)}" value="invited" checked disabled>People we invite</label><small>Your team chooses who gets a callback.</small>`:`<strong>Who attends?</strong><label><input type="radio" name="audience-${e(record.id)}" value="open" ${record.audience!=='invited'?'checked':''}>Anyone who meets the requirements</label><label><input type="radio" name="audience-${e(record.id)}" value="invited" ${record.audience==='invited'?'checked':''}>People we invite</label>${record.audience==='invited'?'<small>Attending another audition does not add anyone here.</small>':''}`;
@@ -27603,9 +27612,13 @@ See you soon!
         if(copy) copy.textContent=enabled?'Performers can see the materials you share for this audition.':'No materials will be shared for this audition.';
         toggleAuditionSessionMaterials(record.id,enabled);
       }));
-      root.querySelectorAll('[data-step]').forEach(button=>button.onclick=()=>{state.step=Number(button.dataset.step);render();});
+      root.querySelectorAll('[data-step]').forEach(button => button.onclick = () => {
+        flushDraft(record);
+        state.step = Number(button.dataset.step);
+        render();
+      });
       root.querySelectorAll('[data-review-tab]').forEach(button=>button.onclick=()=>{state.reviewTab=button.dataset.reviewTab;render();});
-      root.querySelector('[data-close-editor]')?.addEventListener('click',()=>{save(record);state.openId=null;render();});
+      root.querySelector('[data-close-editor]')?.addEventListener('click',()=>{flushDraft(record);state.openId=null;render();});
       root.querySelectorAll('[data-field]').forEach(input=>input.addEventListener(input.type==='radio'||input.tagName==='SELECT'?'change':'input',()=>{
         const key=input.dataset.field;
         if(key==='type') { const old=types.find(type=>type.value===record.type)?.name; if(!record.customName || record.name===old) record.name=types.find(type=>type.value===input.value)?.name||'General audition'; record.type=input.value; if(record.type==='callback')record.audience='invited'; }
@@ -27623,7 +27636,11 @@ See you soon!
         }
       }));
       root.querySelectorAll('[data-multi]').forEach(input=>input.addEventListener('change',()=>{const key=input.dataset.multi;record[key]=[...root.querySelectorAll(`[data-multi="${key}"]:checked`)].map(item=>item.value);save(record);render();}));
-      root.querySelectorAll('[data-day-tab]').forEach(button=>button.onclick=()=>{state.activeDay[record.id]=Number(button.dataset.dayTab);render();});
+      root.querySelectorAll('[data-day-tab]').forEach(button => button.onclick = () => {
+        flushDraft(record);
+        state.activeDay[record.id] = Number(button.dataset.dayTab);
+        render();
+      });
       root.querySelectorAll('[data-day-field]').forEach(input => {
         const index = Number(input.dataset.day);
         const key = input.dataset.dayField;
@@ -27692,38 +27709,40 @@ See you soon!
         const index=Number(button.dataset.removeDay);if(index<1||record.days.length<2)return;
         record.days.splice(index,1);state.activeDay[record.id]=Math.max(0,index-1);save(record);render();
       });
-      root.querySelectorAll('[data-generate-day]').forEach(button=>button.onclick=event=>{
-        event.preventDefault();
-        const blockId = button.dataset.generateDay;
-        const day = ensureDays(record).find(item => String(item.id) === String(blockId));
-        const syncKey = `${record.id}:${blockId}`;
-        const signature = JSON.stringify({ date: day?.date, start: day?.start, end: day?.end, mode: record.mode, slot: record.slot, gap: record.gap, capacity: record.capacity, breaks: day?.breaks || [] });
-        state.scheduleSyncBusy[syncKey] = signature;
-        delete state.scheduleSyncFailed[syncKey];
-        _saveBlocks(record.id);
-        generateBlockSlots(record.id, blockId).then(generated=>{
-          delete state.scheduleSyncBusy[syncKey];
-          if(generated)state.scheduleSync[syncKey]=signature;
-          else state.scheduleSyncFailed[syncKey]=signature;
-          render();
-        }).catch(error=>{delete state.scheduleSyncBusy[syncKey];state.scheduleSyncFailed[syncKey]=signature;console.error('[BTS] audition slot refresh failed',error);render();});
+      root.querySelectorAll('[data-draft-slot-day]').forEach(button => button.onclick = () => {
+        const day = ensureDays(record)[Number(button.dataset.draftSlotDay)];
+        const key = day.date + '|' + button.dataset.draftSlotTime;
+        day.slotOverrides ||= {};
+        day.slotOverrides[key] = button.getAttribute('aria-pressed') === 'true' ? 'Open' : 'Block';
+        save(record);
+        render();
+        document.querySelector(`[data-draft-slot-day="${button.dataset.draftSlotDay}"][data-draft-slot-time="${button.dataset.draftSlotTime}"]`)?.focus();
       });
-      root.querySelectorAll('[data-add-break]').forEach(button=>button.onclick=event=>{
-        event.preventDefault();
-        const day=ensureDays(record)[Number(button.dataset.addBreak)];
-        if(day) promptAddBreak(record.id, day.id);
+      root.querySelectorAll('[data-add-break]').forEach(button => button.onclick = () => {
+        const editor = root.querySelector(`[data-break-editor="${button.dataset.addBreak}"]`);
+        editor.style.display = 'flex';
+        editor.querySelector('[data-break-start]').focus();
       });
-      root.querySelectorAll('[data-confirm-break]').forEach(button=>button.onclick=event=>{
-        event.preventDefault();
-        const day=ensureDays(record)[Number(button.dataset.confirmBreak)];
-        if(day) { confirmAddBreak(record.id, day.id); save(record); render(); }
+      root.querySelectorAll('[data-confirm-break]').forEach(button => button.onclick = () => {
+        const day = ensureDays(record)[Number(button.dataset.confirmBreak)];
+        const editor = button.closest('[data-break-editor]');
+        const start = parseDayTime(editor.querySelector('[data-break-start]').value);
+        const end = parseDayTime(editor.querySelector('[data-break-end]').value);
+        if (!start || !end || end <= start) {
+          editor.querySelector('[data-break-error]').textContent = 'Enter a start and a later end, for example 12:00pm - 12:30pm.';
+          return;
+        }
+        day.breaks ||= [];
+        day.breaks.push({ start, end });
+        save(record);
+        render();
       });
-      root.querySelectorAll('[data-remove-break]').forEach(button=>button.onclick=event=>{
-        event.preventDefault();
-        const day=ensureDays(record)[Number(button.dataset.removeBreak)];
-        if(day) { removeBreak(record.id, day.id, Number(button.dataset.breakIndex)); save(record); render(); }
+      root.querySelectorAll('[data-remove-break]').forEach(button => button.onclick = () => {
+        const day = ensureDays(record)[Number(button.dataset.removeBreak)];
+        day.breaks.splice(Number(button.dataset.breakIndex), 1);
+        save(record);
+        render();
       });
-      if (state.step === 3) autoGenerateSchedule(record);
     }
 
     function updateMissing(card, record) {
@@ -27743,26 +27762,62 @@ See you soon!
       });
     }
 
-    function save(record, immediate=false) {
-      clearTimeout(state.timers[record.id]);
-      const card=document.querySelector(`.aud-session-card[data-session-id="${CSS.escape(record.id)}"]`);
-      const status=card?.querySelector('[data-save-status]');if(status)status.textContent='Saving draft…';
-      state.saving[record.id]=true;
-      const delay=immediate?0:450;
-      state.timers[record.id]=setTimeout(()=>{
-        state.queues ||= {};
-        state.queues[record.id]=(state.queues[record.id]||Promise.resolve()).then(async()=>{
+    function draftSaveStatus(id) {
+      if (state.saving[id]) return 'Saving draft…';
+      return state.saveErrors[id] || 'Draft saves automatically. Nothing is published.';
+    }
+
+    function flushDraft(record) {
+      const active = document.activeElement;
+      if (active?.matches('[data-day-time]')) active.blur();
+      if (state.timers[record.id]) save(record, true);
+    }
+
+    function save(record, immediate = false) {
+      const id = record.id;
+      const attempt = (state.saveAttempts[id] || 0) + 1;
+      state.saveAttempts[id] = attempt;
+      clearTimeout(state.timers[id]);
+      state.saving[id] = true;
+      delete state.saveErrors[id];
+
+      const updateStatus = () => {
+        const status = document.querySelector(`.aud-session-card[data-session-id="${CSS.escape(id)}"] [data-save-status]`);
+        if (status) status.textContent = draftSaveStatus(id);
+      };
+
+      const enqueue = () => {
+        delete state.timers[id];
+        const draft = structuredClone(record);
+        state.queues[id] = (state.queues[id] || Promise.resolve()).then(async () => {
           try {
-            const {data,error}=await sb.rpc('bts_audition_setup_save',{p_session_id:record.id,p_expected_revision:state.revisions[record.id]||0,p_draft:record});
-            if(error)throw error;
-            state.revisions[record.id]=Number(data?.revision ?? state.revisions[record.id]+1);state.saving[record.id]=false;
-            const statusEl=document.querySelector(`.aud-session-card[data-session-id="${CSS.escape(record.id)}"] [data-save-status]`);if(statusEl)statusEl.textContent='Draft saved automatically. Nothing is published.';
-          } catch(error) {
-            console.error('[BTS] audition draft save failed',error);state.saving[record.id]=false;
-            const statusEl=document.querySelector(`.aud-session-card[data-session-id="${CSS.escape(record.id)}"] [data-save-status]`);if(statusEl)statusEl.textContent='Could not save this draft. Your changes are still on screen. Try again.';
+            const revision = state.revisions[id] || 0;
+            const { data, error } = await sb.rpc('bts_audition_setup_save', {
+              p_session_id: id,
+              p_expected_revision: revision,
+              p_draft: draft,
+            });
+            if (error) throw error;
+            state.revisions[id] = Number(data?.revision ?? revision + 1);
+          } catch (error) {
+            console.error('[BTS] audition draft save failed', error);
+            if (state.saveAttempts[id] === attempt) {
+              state.saveErrors[id] = error?.code === '40001'
+                ? 'This audition changed in another window. Reload before saving more changes.'
+                : 'Could not save this draft. Your changes are still on screen. Make an edit to try again.';
+            }
+          } finally {
+            if (state.saveAttempts[id] === attempt) {
+              state.saving[id] = false;
+              updateStatus();
+            }
           }
         });
-      },delay);
+      };
+
+      updateStatus();
+      if (immediate) enqueue();
+      else state.timers[id] = setTimeout(enqueue, 450);
     }
 
     function addAudition() {
@@ -27796,7 +27851,7 @@ See you soon!
         }
         state.records = state.records.filter(item => item.id !== record.id);
         delete state.revisions[record.id]; delete state.timers[record.id]; delete state.queues?.[record.id];
-        delete state.saving[record.id]; delete state.activeDay[record.id];
+        delete state.saving[record.id]; delete state.saveAttempts[record.id]; delete state.saveErrors[record.id]; delete state.activeDay[record.id];
         if (state.openId === record.id) state.openId = null;
         audSessions = audSessions.filter(item => String(item.id) !== String(record.id));
         delete audSlots[record.id]; delete audBlocks[record.id];
