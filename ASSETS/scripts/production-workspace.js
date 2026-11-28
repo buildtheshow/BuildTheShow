@@ -27533,7 +27533,7 @@ See you soon!
               <div class="ap-setup-schedule-art"><img src="/ASSETS/Images/Icons/break-block.svg" alt=""></div>
               <div class="ap-setup-schedule-guide-copy">
                 <h4>Block a time slot</h4>
-                <p>Select a slot to hide it from public booking. Reopen it whenever you need to. Great for catch-up time or keeping slots in reserve.</p>
+                <p>Click or tap a time slot to block it from public booking. Click or tap it again to reopen it. Great for catch-up time or keeping slots in reserve.</p>
               </div>
             </div>
             <div class="ap-setup-schedule-guide-card">
