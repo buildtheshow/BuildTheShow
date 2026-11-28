@@ -27329,24 +27329,12 @@ See you soon!
       const calendarIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="16" rx="2"/><path d="M7.5 3v4M16.5 3v4M3.5 9h17"/></svg>`;
       const venueIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.3"/></svg>`;
       const dayField = (label, key, value, type) => `<label class="ap-setup-field"><span class="ap-setup-field-title${key === 'date' ? ' ap-setup-field-title--icon' : ''}">${key === 'date' ? calendarIcon : ''}${label}</span><input type="${type}" data-day="${index}" data-day-field="${key}" value="${e(value || '')}"></label>`;
-      const venueName = String(day.venue?.name || '').trim();
-      const venueAddress = String(day.venue?.address || '').trim();
-      const addressStartsWithName = venueAddress.toLowerCase().startsWith(venueName.toLowerCase() + ',');
-      const streetAddress = addressStartsWithName ? venueAddress.slice(venueName.length + 1).trim() : venueAddress;
       const venuePickerId = `ap-setup-venue-${uid}`;
-      const venueSummary = venueName ? `
-        <div class="ap-setup-venue-summary">
-          <span><span>${e(venueName)}</span>${streetAddress && streetAddress.toLowerCase() !== venueName.toLowerCase() ? `<small>${e(streetAddress)}</small>` : ''}</span>
-          ${venueAddress ? `<a href="${mapLink(day.venue)}" target="_blank" rel="noopener noreferrer">Open in maps</a>` : ''}
-          <button type="button" data-change-venue aria-controls="${venuePickerId}" aria-expanded="false">Change venue</button>
-        </div>` : '';
       const inPersonDetails = record.methods.includes('in_person') ? `
         <section class="ap-setup-location">
           <div class="ap-setup-field">
-            <span class="ap-setup-field-title ap-setup-field-title--icon" id="${venuePickerId}-label">${venueIcon}Venue</span>
-            ${venueName ? '' : '<span class="ap-setup-field-help">Choose a saved venue or search by name or address.</span>'}
-            ${venueSummary}
-            <div class="ap-setup-venue-picker" id="${venuePickerId}" data-audition-venue="${index}"${venueName ? ' hidden' : ''}></div>
+            <label class="ap-setup-field-title ap-setup-field-title--icon" for="vp-search-${venuePickerId}">${venueIcon}Venue</label>
+            <div class="ap-setup-venue-picker" id="${venuePickerId}" data-audition-venue="${index}"></div>
           </div>
         </section>
         <details class="ap-setup-day-instructions">
@@ -27621,26 +27609,27 @@ See you soon!
       root.querySelectorAll('[data-audition-venue]').forEach(container=>{
         const index=Number(container.dataset.auditionVenue),day=ensureDays(record)[index];
         if(typeof VenuePicker==='undefined')return;
-        const changeButton = container.parentElement.querySelector('[data-change-venue]');
-        VenuePicker.render(container.id, '', (name, venueId) => {
+        const venueName = String(day.venue?.name || '').trim();
+        const fullAddress = String(day.venue?.address || '').trim();
+        const streetAddress = fullAddress.toLowerCase().startsWith(venueName.toLowerCase() + ',')
+          ? fullAddress.slice(venueName.length + 1).trim()
+          : fullAddress;
+        VenuePicker.render(container.id, venueName, (name, venueId) => {
           if (name === 'TBD') return;
           const venue = VenuePicker.getVenues?.().find(item => String(item.id) === String(venueId));
-          day.venue = venue ? { id: venue.id, name: venue.nickname || venue.name, address: venue.address || '', lat: venue.lat, lng: venue.lng } : null;
+          if (!venue) return;
+          const restoreFocus = container.contains(document.activeElement);
+          day.venue = { id: venue.id, name: venue.nickname || venue.name, address: venue.address || '', lat: venue.lat, lng: venue.lng };
           save(record);
           render();
-          document.getElementById(container.id)?.parentElement.querySelector('[data-change-venue]')?.focus();
-        }, { searchImmediately: !changeButton, hideTbd: true, showAddressInSavedOptions: false });
-        const search = container.querySelector('input');
-        search.setAttribute('aria-labelledby', `${container.id}-label`);
-        if (changeButton) {
-          changeButton.onclick = () => {
-            const opening = container.hidden;
-            container.hidden = !opening;
-            changeButton.setAttribute('aria-expanded', String(opening));
-            changeButton.textContent = opening ? 'Hide search' : 'Change venue';
-            if (opening) requestAnimationFrame(() => search.focus());
-          };
-        }
+          if (restoreFocus) document.getElementById(`vp-search-${container.id}`)?.focus();
+        }, {
+          hideTbd: true,
+          inlineSelection: {
+            address: streetAddress.toLowerCase() === venueName.toLowerCase() ? '' : streetAddress,
+            mapUrl: fullAddress ? mapLink(day.venue) : ''
+          }
+        });
       });
       root.querySelectorAll('[data-add-day]').forEach(button=>button.onclick=()=>{
         const days=ensureDays(record),first=days[0],previous=days[days.length-1],index=days.length;

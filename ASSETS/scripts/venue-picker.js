@@ -37,8 +37,12 @@
     document.querySelectorAll('[data-venue-picker]').forEach(el => {
       const id = el.dataset.venuePicker;
       const input = document.getElementById(`vp-search-${id}`);
-      if (input && document.activeElement !== input) input.value = el.dataset.venueCurrentText || '';
-      if (input && document.activeElement === input) _showResults(id, input.value);
+      if (!input) return;
+      if (input.hasAttribute('data-vp-inline')) {
+        const dropdown = document.getElementById(`vp-dropdown-${id}`);
+        if (!input.readOnly && dropdown.style.display === 'block') _showResults(id, input.value);
+      } else if (document.activeElement !== input) input.value = el.dataset.venueCurrentText || '';
+      else _showResults(id, input.value);
     });
   }
 
@@ -48,6 +52,11 @@
 
     const isTbd = !options.hideTbd && (!currentText || currentText.trim().toLowerCase() === 'tbd');
     const showAddressInSavedOptions = options.showAddressInSavedOptions !== false;
+    const inline = options.inlineSelection;
+    const searchInput = `<input class="form-input" id="vp-search-${containerId}" type="text"
+        value="${_esc(isTbd ? '' : currentText || '')}"
+        placeholder="Search saved venues or type a venue or address..." autocomplete="off"
+        ${inline ? `data-vp-inline aria-controls="vp-dropdown-${containerId}"` : ''} />`;
 
     // Inject styles once
     if (!document.getElementById('vp-tbd-style')) {
@@ -73,8 +82,8 @@
         .vp-result-heading { padding:.55rem .8rem .3rem; color:#76668a; font-size:.7rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }
         .vp-result { padding:.55rem .8rem; cursor:pointer; border-top:1px solid #eeeaf3; }
         .vp-result:hover,.vp-result:focus { background:#f4f0f8; outline:none; }
-        .vp-result-name { font-weight:700; }
-        .vp-result-address { margin-top:.12rem; font-size:.78em; opacity:.75; }
+        .vp-result-name { display:block; font-weight:700; }
+        .vp-result-address { display:block; margin-top:.12rem; font-size:.78em; opacity:.75; }
         .vp-search-status { padding:.65rem .8rem; font-size:.82em; color:#76668a; }
       `;
       document.head.appendChild(style);
@@ -88,12 +97,16 @@
 
         <div id="vp-picker-${containerId}"${isTbd ? ' class="vp-picker-disabled"' : ''}>
           <div class="vp-search-wrap">
-              <input class="form-input" id="vp-search-${containerId}" type="text"
-                     value="${_esc(isTbd ? '' : currentText || '')}"
-                     placeholder="Search saved venues or type a venue or address..." autocomplete="off" />
+              ${inline ? `<div class="vp-inline-field">
+                ${searchInput}
+                ${inline.address || inline.mapUrl ? `<div class="vp-selection-details">
+                  ${inline.address ? `<small>${_esc(inline.address)}</small>` : ''}
+                  ${inline.mapUrl ? `<a href="${_esc(inline.mapUrl)}" target="_blank" rel="noopener noreferrer">Open in maps</a>` : ''}
+                </div>` : ''}
+              </div>` : searchInput}
               <div class="vp-search-dropdown" id="vp-dropdown-${containerId}"></div>
           </div>
-          <div class="venue-picker-new-wrap" id="vp-new-${containerId}" style="display:none;">
+          ${inline ? '' : `<div class="venue-picker-new-wrap" id="vp-new-${containerId}" style="display:none;">
             <div id="vp-preview-${containerId}" style="display:none;margin-top:0.5rem;">
               <div class="venue-picker-preview">
                 <div>
@@ -108,7 +121,7 @@
                 </div>
               </div>
             </div>
-          </div>
+          </div>`}
         </div>
 
         ${options.hideTbd ? '' : `<div class="vp-tbd-row">
@@ -128,7 +141,8 @@
     _initSearch(containerId);
     const input = document.getElementById(`vp-search-${containerId}`);
     input.dataset.currentText = isTbd ? '' : (currentText || '');
-    input.addEventListener('focus', () => _showResults(containerId, input.value));
+    if (inline) input.addEventListener('focus', () => input.select());
+    else input.addEventListener('focus', () => _showResults(containerId, input.value));
     if (options.searchImmediately) input.focus();
   }
 
@@ -162,10 +176,22 @@
     const dropdown = document.getElementById(`vp-dropdown-${pickerId}`);
     if (!input || input._vpWired) return;
     input._vpWired = true;
+    const inline = input.hasAttribute('data-vp-inline');
+    const wrap = dropdown.parentElement;
+    const details = inline && wrap.querySelector('.vp-selection-details');
+    const closeSearch = () => {
+      clearTimeout(_debounceTimers[pickerId]);
+      input._searchVersion = (input._searchVersion || 0) + 1;
+      input.value = input.dataset.currentText || '';
+      if (details) details.hidden = false;
+      dropdown.style.display = 'none';
+    };
 
     input.addEventListener('input', () => {
       clearTimeout(_debounceTimers[pickerId]);
       const q = input.value.trim();
+      input._searchVersion = (input._searchVersion || 0) + 1;
+      if (details) details.hidden = true;
       const selected = _venues.find(v => v.id === input._selectedVenueId);
       if (selected && q !== (selected.nickname || selected.name)) input._selectedVenueId = null;
       input._externalResults = [];
@@ -174,11 +200,28 @@
       if (q.length >= 2) _debounceTimers[pickerId] = setTimeout(() => _fetchSuggestions(pickerId, q), 350);
     });
 
-    document.addEventListener('click', e => {
-      if (!input.contains(e.target) && !dropdown.contains(e.target)) {
-        dropdown.style.display = 'none';
-      }
-    }, { once: false });
+    if (inline) {
+      input.parentElement.addEventListener('click', event => {
+        if (!event.target.closest('a')) input.focus();
+      });
+      dropdown.addEventListener('mousedown', event => {
+        if (event.target.closest('.vp-result')) event.preventDefault();
+      });
+      wrap.addEventListener('focusout', event => {
+        if (!wrap.contains(event.relatedTarget)) closeSearch();
+      });
+      wrap.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && dropdown.style.display === 'block') {
+          event.preventDefault();
+          input.focus();
+          closeSearch();
+        }
+      });
+    } else {
+      document.addEventListener('click', event => {
+        if (!input.contains(event.target) && !dropdown.contains(event.target)) dropdown.style.display = 'none';
+      });
+    }
   }
 
   function _showResults(pickerId, query = '') {
@@ -187,21 +230,33 @@
     if (!dropdown || !input) return;
     const q = String(query || '').trim().toLowerCase();
     const saved = _venues.filter(v => [v.nickname, v.name, v.address].some(value => String(value || '').toLowerCase().includes(q)));
+    const inline = input.hasAttribute('data-vp-inline');
+    const resultTag = inline ? 'button' : 'div';
+    const resultAttributes = inline ? 'type="button"' : 'tabindex="0"';
+    const focusedResult = dropdown.contains(document.activeElement) ? document.activeElement.dataset : null;
     let html = '';
-    if (saved.length) html += `<div class="vp-result-heading">Saved venues</div>` + saved.map(v => `<div class="vp-result" tabindex="0" data-saved-id="${_esc(v.id)}"><div class="vp-result-name">${_esc(v.nickname || v.name)}</div>${v.address ? `<div class="vp-result-address">${_esc(v.address)}</div>` : ''}</div>`).join('');
+    if (saved.length) html += `<div class="vp-result-heading">Saved venues</div>` + saved.map(v => `<${resultTag} class="vp-result" ${resultAttributes} data-saved-id="${_esc(v.id)}"><span class="vp-result-name">${_esc(v.nickname || v.name)}</span>${v.address ? `<span class="vp-result-address">${_esc(v.address)}</span>` : ''}</${resultTag}>`).join('');
     const external = input._externalResults || [];
-    if (external.length) html += `<div class="vp-result-heading">Search places</div>` + external.map((place, i) => `<div class="vp-result" tabindex="0" data-place-index="${i}"><div class="vp-result-name">${_esc(place.name)}</div><div class="vp-result-address">${_esc(place.address)}</div></div>`).join('');
+    if (external.length) html += `<div class="vp-result-heading">Search places</div>` + external.map((place, i) => `<${resultTag} class="vp-result" ${resultAttributes} data-place-index="${i}"><span class="vp-result-name">${_esc(place.name)}</span><span class="vp-result-address">${_esc(place.address)}</span></${resultTag}>`).join('');
     if (!html) html = `<div class="vp-search-status">${q.length < 2 ? 'Start typing to search saved venues and places.' : input._placeSearchDone ? 'No places found. Try another search.' : 'Searching for places…'}</div>`;
+    if (inline && focusedResult) input.focus();
     dropdown.innerHTML = html;
     dropdown.style.display = 'block';
+    if (inline && focusedResult) {
+      const matchingOption = [...dropdown.querySelectorAll('.vp-result')].find(option =>
+        focusedResult.savedId ? option.dataset.savedId === focusedResult.savedId : option.dataset.placeIndex === focusedResult.placeIndex
+      );
+      matchingOption?.focus();
+    }
     dropdown.querySelectorAll('[data-saved-id]').forEach(el => el.addEventListener('click', () => {
       const venue = _venues.find(v => v.id === el.dataset.savedId);
-      if (!venue) return;
+      if (!venue || input.readOnly) return;
       input.value = venue.nickname || venue.name;
       input._selectedVenueId = venue.id;
       input.dataset.currentText = input.value;
       const pickerRoot = document.querySelector(`[data-venue-picker="${pickerId}"]`);
       if (pickerRoot) pickerRoot.dataset.venueCurrentText = input.value;
+      if (inline) input.focus();
       dropdown.style.display = 'none';
       const wrap = document.getElementById(`vp-new-${pickerId}`);
       if (wrap) wrap.style.display = 'none';
@@ -211,13 +266,17 @@
     }));
     dropdown.querySelectorAll('[data-place-index]').forEach(el => el.addEventListener('click', () => {
       const place = external[Number(el.dataset.placeIndex)];
-      if (place) _selectSuggestion(pickerId, place);
+      if (place && inline) _saveNew(pickerId, place);
+      else if (place) _selectSuggestion(pickerId, place);
     }));
   }
 
   async function _fetchSuggestions(pickerId, query) {
     const dropdown = document.getElementById(`vp-dropdown-${pickerId}`);
-    if (!dropdown) return;
+    const search = document.getElementById(`vp-search-${pickerId}`);
+    if (!dropdown || !search || search.value.trim() !== query) return;
+    const version = search._searchVersion;
+    const currentSearch = () => search.isConnected && search.value.trim() === query && search._searchVersion === version;
     _showResults(pickerId, query);
     const status = document.createElement('div');
     status.className = 'vp-search-status'; status.textContent = 'Searching places…'; dropdown.appendChild(status);
@@ -228,7 +287,7 @@
       const data = await res.json();
 
       const input = document.getElementById(`vp-search-${pickerId}`);
-      if (!input || input.value.trim() !== query) return;
+      if (!currentSearch() || input !== search || input.readOnly) return;
       input._externalResults = (data || []).map(r => {
         const name    = r.name || r.address?.amenity || r.address?.building || r.display_name.split(',')[0];
         const address = r.display_name;
@@ -238,7 +297,7 @@
       _showResults(pickerId, query);
     } catch {
       const input = document.getElementById(`vp-search-${pickerId}`);
-      if (!input || input.value.trim() !== query) return;
+      if (!currentSearch() || input !== search || input.readOnly) return;
       _showResults(pickerId, query);
       const error = document.createElement('div');
       error.className = 'vp-search-status'; error.textContent = 'Place search failed. You can still choose a saved venue.';
@@ -263,10 +322,20 @@
     document.getElementById(`vp-preview-${pickerId}`).style.display = 'block';
   }
 
-  async function _saveNew(pickerId) {
+  async function _saveNew(pickerId, inlinePlace) {
     const input = document.getElementById(`vp-search-${pickerId}`);
-    if (!input || !input._placeData || !_sb || !_orgId) return;
-    const d = input._placeData;
+    const d = inlinePlace || input?._placeData;
+    if (!input || !d || input.readOnly || !_sb || !_orgId) return;
+    const callback = window[`__vp_cb_${pickerId}`];
+    const results = document.getElementById(`vp-dropdown-${pickerId}`);
+    const saveStatus = inlinePlace && document.createElement('div');
+    if (saveStatus) {
+      input.readOnly = true;
+      saveStatus.className = 'vp-search-status';
+      saveStatus.setAttribute('role', 'status');
+      saveStatus.textContent = 'Saving venue…';
+      results.appendChild(saveStatus);
+    }
     const { data, error } = await _sb.from('venues').insert({
       org_id:   _orgId,
       name:     d.name,
@@ -275,7 +344,17 @@
       lat:      d.lat      ? parseFloat(d.lat)  : null,
       lng:      d.lng      ? parseFloat(d.lng)  : null,
     }).select().single();
-    if (error) { console.error('Venue save error', error); return; }
+    if (saveStatus) input.readOnly = false;
+    if (error) {
+      console.error('Venue save error', error);
+      if (saveStatus) saveStatus.textContent = 'Couldn’t save this venue. Select it again to retry.';
+      return;
+    }
+    if (inlinePlace) {
+      _venues = [..._venues, data].sort((a, b) => a.name.localeCompare(b.name));
+      if (typeof callback === 'function') callback(data.name, data.id);
+      return;
+    }
     await reload();
     const savedInput = document.getElementById(`vp-search-${pickerId}`);
     if (savedInput) { savedInput.value = d.name; savedInput._selectedVenueId = data.id; savedInput.dataset.currentText = d.name; }
