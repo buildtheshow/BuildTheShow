@@ -27266,11 +27266,11 @@ See you soon!
       assigned: "Performers sign up for an audition, but instead of choosing their own time, you decide when each person will audition. This is a great option if you want more control over who you see, when you see them and in what order.",
     };
     const activities = [
-      ['singing', 'Singing', 'type-musical.svg'],
-      ['acting', 'Acting/scene reading', 'type-play.svg'],
-      ['movement', 'Dance/movement', 'Choreography.svg'],
-      ['workshop', 'Workshop activities', 'type-workshops.svg'],
-      ['specialist', 'Other skills', 'Star.svg'],
+      ['singing', 'Singing'],
+      ['acting', 'Acting/scene reading'],
+      ['movement', 'Dance/movement'],
+      ['workshop', 'Workshop activities'],
+      ['specialist', 'Other skills'],
     ];
     const e = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const cardIcon = file => `<img class="ap-setup-card-icon" src="/ASSETS/Images/Icons/${e(file)}" alt="">`;
@@ -27781,13 +27781,6 @@ See you soon!
           const attendance = document.createElement('div'); attendance.className='ap-setup-attendance'; attendance.style.setProperty('--ap-accent',colour(record)); attendance.innerHTML=audienceHeading+(record.type==='callback'?`<label><input type="radio" name="audience-${e(record.id)}" value="invited" checked disabled>People we invite</label><small>Your team chooses who gets a callback.</small>`:`<label><input type="radio" name="audience-${e(record.id)}" value="open" ${record.audience!=='invited'?'checked':''}>Anyone who meets the requirements</label><label><input type="radio" name="audience-${e(record.id)}" value="invited" ${record.audience==='invited'?'checked':''}>People we invite</label>${record.audience==='invited'?'<small>Attending another audition does not add anyone here.</small>':''}`);
           card.append(attendance);
           attendance.querySelectorAll('input').forEach(input=>input.onchange=()=>{record.audience=input.value;save(record);render();});
-          const caption = document.createElement('div');
-          caption.className = 'ap-setup-caption';
-          caption.innerHTML = record.activities.map(key => {
-            const activity = activities.find(([id]) => id === key);
-            return activity ? cardIconLabel(activity[1], activity[2]) : cardIconLabel(key);
-          }).join('');
-          card.append(caption);
         }
         host.append(card);
         if (editing) bind(card.querySelector('.ap-setup-editor'), record);
