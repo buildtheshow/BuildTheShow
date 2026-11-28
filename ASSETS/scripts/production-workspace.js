@@ -27242,7 +27242,7 @@ See you soon!
   }
 
   function _createAudSetupController() {
-    const state = { loaded: false, loading: false, records: [], revisions: {}, openId: null, step: 0, activeDay: {}, reviewTab: 'audition', timers: {}, saving: {}, saveErrors: {}, saveAttempts: {}, queues: {}, error: '' };
+    const state = { loaded: false, loading: false, records: [], revisions: {}, openId: null, step: 0, activeDay: {}, datesSelfTape: {}, reviewTab: 'audition', timers: {}, saving: {}, saveErrors: {}, saveAttempts: {}, queues: {}, error: '' };
     const sections = ['Audition type', 'Booking type', 'Dates & location', 'Schedule', 'Activities', 'Preparation', 'Review'];
     const types = [
       { value: 'audition', label: 'General audition', name: 'General audition', colour: '#476aaa', icon: 'Auditions.svg' },
@@ -27339,7 +27339,7 @@ See you soon!
       if (!record.name?.trim()) out.push({ step: 0, key: 'name', text: 'Add an audition name.' });
       if (!record.methods?.length) out.push({ step: 1, key: 'methods', text: 'Choose at least one way people can take part.' });
       const tape = record.methods?.length === 1 && record.methods.includes('self_tape');
-      if (record.methods?.includes('self_tape') && !record.deadline) out.push({ step: 5, key: 'deadline', text: 'Add a self-tape submission deadline.' });
+      if (record.methods?.includes('self_tape') && !record.deadline) out.push({ step: 2, key: 'deadline', text: 'Add a self-tape submission deadline.' });
       if (!tape) {
         ensureDays(record).forEach((day, index) => {
           if (!day.date) out.push({ step: 2, key: 'date', day: index, text: 'Add a date.' });
@@ -27620,24 +27620,49 @@ See you soon!
         const bookingMethods = tape ? '' : `<fieldset><legend>How should people book?</legend><p>Choose how performers will reserve or receive their audition time.</p><div class="ap-setup-booking-grid">${modes.map(([value,label,desc,icon]) => `<label class="ap-setup-booking ${record.mode === value ? 'selected' : ''}"><input type="radio" data-field="mode" name="mode-${e(record.id)}" value="${value}" ${record.mode === value ? 'checked' : ''}><span class="ap-setup-booking-icon" aria-hidden="true" style="--booking-icon:url('${encodeURI('/ASSETS/Images/Icons/' + icon)}')"></span><span><strong>${label}</strong><small>${desc}</small></span></label>`).join('')}${bookingSettings}</div></fieldset>`;
         body = `${bookingMethods}${additionalOptions}`;
       } else if (step === 2) {
-        const tape = record.methods.length === 1 && record.methods.includes('self_tape');
+        const hasSelfTape = record.methods.includes('self_tape');
+        const tapeOnly = hasSelfTape && record.methods.length === 1;
+        const showSelfTape = tapeOnly || (hasSelfTape && state.datesSelfTape[record.id]);
         const days = ensureDays(record);
         const dayIndex = Math.min(state.activeDay[record.id] || 0, days.length - 1);
-        const activeDay = days[dayIndex];
-        const dateTitle = record.methods.includes('in_person') ? 'Dates & Locations' : 'Dates & Times';
-        const dateHelp = record.methods.includes('in_person') ? 'Set when and where your in-person auditions will take place.' : 'Set when your online auditions will take place.';
-        const datePanel = tape ? '<p class="ap-setup-note">Self-tape auditions do not need live dates or a venue. Add the submission deadline under Preparation.</p>' : `<section class="ap-setup-date-section"><header><span class="ap-setup-date-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="16" rx="2"></rect><path d="M7.5 3v4M16.5 3v4M3.5 9h17"></path></svg></span><span><h3>${dateTitle}</h3><p>${dateHelp}</p></span></header><div class="ap-setup-days"><nav class="ap-setup-day-tabs" aria-label="Audition dates">${days.map((day,index)=>`<button type="button" data-day-tab="${index}" aria-selected="${dayIndex===index}">Day ${index+1}</button>`).join('')}${days.length>1&&dayIndex>0?`<button type="button" class="ap-setup-remove-day" data-remove-day="${dayIndex}">Remove day</button>`:''}</nav>${dayHTML(record,activeDay,dayIndex)}</div><aside class="ap-setup-more-dates">
-          <button type="button" data-add-day>+ Add another day</button>
-          <div class="ap-setup-more-dates-copy">
-            <strong>Need more time to see everyone?</strong>
-            <p>If you're expecting more performers than you can audition in one day, or want to give performers a choice of dates, add another day here. Each performer will only need to attend one of these days.</p>
-            <p>If performers need to attend more than one audition (for example, a singing audition and a separate dance call), use <strong>Add audition</strong> instead.</p>
+        const hasVenue = record.methods.includes('in_person');
+        const dateTitle = hasVenue ? 'Dates & Locations' : 'Dates & Times';
+        const dateHelp = tapeOnly
+          ? 'Set when performers need to submit their self-tapes.'
+          : hasVenue
+            ? 'Set when and where your in-person auditions will take place.'
+            : 'Set when your online auditions will take place.';
+        body = `<section class="ap-setup-date-section">
+          <header>
+            <span class="ap-setup-date-icon" aria-hidden="true"><span class="ap-setup-date-tab-icon"></span></span>
+            <span><h3>${dateTitle}</h3><p>${dateHelp}</p></span>
+          </header>
+          <div class="ap-setup-days">
+            <nav class="ap-setup-day-tabs" aria-label="Audition dates">
+              ${tapeOnly ? '' : days.map((_, index) => `<button type="button" data-day-tab="${index}" aria-current="${!showSelfTape && dayIndex === index}"><span class="ap-setup-date-tab-icon" aria-hidden="true"></span>Day ${index + 1}</button>`).join('')}
+              ${hasSelfTape ? `<button type="button" data-day-tab="self-tape" aria-current="${Boolean(showSelfTape)}"><span class="ap-setup-date-tab-icon ap-setup-date-tab-icon--self-tape" aria-hidden="true"></span>Self-tape</button>` : ''}
+              ${!showSelfTape && days.length > 1 && dayIndex > 0 ? `<button type="button" class="ap-setup-remove-day" data-remove-day="${dayIndex}">Remove day</button>` : ''}
+            </nav>
+            ${showSelfTape ? `<section class="ap-setup-daypanel">
+              <label class="ap-setup-field ap-setup-self-tape-deadline">
+                <span class="ap-setup-field-title ap-setup-field-title--icon"><span class="ap-setup-date-tab-icon" aria-hidden="true"></span>Submission deadline</span>
+                <input type="datetime-local" data-field="deadline" value="${e(record.deadline || '')}">
+                <span class="ap-setup-field-help">Set a deadline that gives your team time to review submissions.</span>
+              </label>
+            </section>` : dayHTML(record, days[dayIndex], dayIndex)}
           </div>
-        </aside></section>`;
-        body = datePanel;
+          ${tapeOnly ? '' : `<aside class="ap-setup-more-dates">
+              <button type="button" data-add-day>+ Add another day</button>
+              <div class="ap-setup-more-dates-copy">
+                <strong>Need more time to see everyone?</strong>
+                <p>If you're expecting more performers than you can audition in one day, or want to give performers a choice of dates, add another day here. Each performer will only need to attend one of these days.</p>
+                <p>If performers need to attend more than one audition (for example, a singing audition and a separate dance call), use <strong>Add audition</strong> instead.</p>
+              </div>
+              </aside>`}
+        </section>`;
       } else if (step === 5) body = scheduleBuilder(record);
       else if (step === 3) body = `<fieldset><legend>What does this audition include?</legend><div class="ap-setup-grid">${activities.map(([key,label]) => multiChoice(label,'activities',key,record.activities.includes(key))).join('')}</div></fieldset>`;
-      else if (step === 4) body = `<div class="ap-setup-grid">${record.type !== 'callback' ? `<section class="aud-materials-setting ap-setup-full"><div class="aud-materials-setting-copy"><strong>Audition materials</strong><span>${isAuditionSessionMaterialsEnabled(record.id) ? 'Performers can see the materials you share for this audition.' : 'No materials will be shared for this audition.'}</span></div><label class="aud-materials-setting-toggle"><span>${isAuditionSessionMaterialsEnabled(record.id) ? 'On' : 'Off'}</span><input type="checkbox" data-materials-session="${e(record.id)}" ${isAuditionSessionMaterialsEnabled(record.id) ? 'checked' : ''} aria-label="Audition materials for ${e(record.name)} ${isAuditionSessionMaterialsEnabled(record.id) ? 'on' : 'off'}"><span class="aud-materials-setting-track" aria-hidden="true"></span></label></section>` : ''}<label class="ap-setup-field ap-setup-full">What should they prepare?<textarea data-field="prep" rows="3">${e(record.prep)}</textarea></label>${record.methods.includes('self_tape') ? `<section class="ap-setup-self-tape ap-setup-full"><header><h3>Self-tape</h3><p>Give performers the filming instructions and submission deadline for this audition.</p></header><label class="ap-setup-field ap-setup-full"><span class="ap-setup-field-title">What should they film?</span><textarea data-field="selfTapeInstructions" rows="3" placeholder="For example: record a short song and a scene, then submit both using the link in your confirmation email.">${e(record.selfTapeInstructions || '')}</textarea></label><label class="ap-setup-field ap-setup-self-tape-deadline"><span class="ap-setup-field-title">Submission deadline</span><input type="datetime-local" data-field="deadline" value="${e(record.deadline || '')}"><span class="ap-setup-field-help">Set a deadline that gives your team time to review submissions.</span></label></section>` : ''}<label class="ap-setup-field ap-setup-full">What should they bring?<textarea data-field="bring" rows="2">${e(record.bring)}</textarea></label><label class="ap-setup-field">When can they leave?<select data-field="finish"><option ${record.finish==='After their appointment'?'selected':''}>After their appointment</option><option ${record.finish==='After the whole session'?'selected':''}>After the whole session</option><option ${record.finish==='When released by the team'?'selected':''}>When released by the team</option></select></label><label class="ap-setup-field ap-setup-full">Arrival instructions (sent after booking)<textarea data-field="access" rows="2" placeholder="For example: check in with our producer at the welcome desk, then wait to be called.">${e(record.access)}</textarea><span class="ap-setup-field-help">These instructions go in the booking confirmation email and do not appear on the public audition page.</span></label><p class="ap-setup-full">Add shared links to audition materials under Materials. Files stay in your own storage; set links so anyone with the link can view.</p></div>`;
+      else if (step === 4) body = `<div class="ap-setup-grid">${record.type !== 'callback' ? `<section class="aud-materials-setting ap-setup-full"><div class="aud-materials-setting-copy"><strong>Audition materials</strong><span>${isAuditionSessionMaterialsEnabled(record.id) ? 'Performers can see the materials you share for this audition.' : 'No materials will be shared for this audition.'}</span></div><label class="aud-materials-setting-toggle"><span>${isAuditionSessionMaterialsEnabled(record.id) ? 'On' : 'Off'}</span><input type="checkbox" data-materials-session="${e(record.id)}" ${isAuditionSessionMaterialsEnabled(record.id) ? 'checked' : ''} aria-label="Audition materials for ${e(record.name)} ${isAuditionSessionMaterialsEnabled(record.id) ? 'on' : 'off'}"><span class="aud-materials-setting-track" aria-hidden="true"></span></label></section>` : ''}<label class="ap-setup-field ap-setup-full">What should they prepare?<textarea data-field="prep" rows="3">${e(record.prep)}</textarea></label>${record.methods.includes('self_tape') ? `<section class="ap-setup-self-tape ap-setup-full"><header><h3>Self-tape</h3><p>Give performers the filming instructions for this audition.</p></header><label class="ap-setup-field ap-setup-full"><span class="ap-setup-field-title">What should they film?</span><textarea data-field="selfTapeInstructions" rows="3" placeholder="For example: record a short song and a scene, then submit both using the link in your confirmation email.">${e(record.selfTapeInstructions || '')}</textarea></label></section>` : ''}<label class="ap-setup-field ap-setup-full">What should they bring?<textarea data-field="bring" rows="2">${e(record.bring)}</textarea></label><label class="ap-setup-field">When can they leave?<select data-field="finish"><option ${record.finish==='After their appointment'?'selected':''}>After their appointment</option><option ${record.finish==='After the whole session'?'selected':''}>After the whole session</option><option ${record.finish==='When released by the team'?'selected':''}>When released by the team</option></select></label><label class="ap-setup-field ap-setup-full">Arrival instructions (sent after booking)<textarea data-field="access" rows="2" placeholder="For example: check in with our producer at the welcome desk, then wait to be called.">${e(record.access)}</textarea><span class="ap-setup-field-help">These instructions go in the booking confirmation email and do not appear on the public audition page.</span></label><p class="ap-setup-full">Add shared links to audition materials under Materials. Files stay in your own storage; set links so anyone with the link can view.</p></div>`;
       else body = applicantView(record);
       return `<div class="ap-setup-editor" style="--ap-accent:${accent}"><nav class="ap-setup-tabs" aria-label="Audition details">${sections.map((name,index)=>`<button type="button" data-step="${index}" aria-pressed="${state.step===index}">${name}${missing(record).some(item=>item.step===index)?'<span class="ap-setup-star" aria-hidden="true">✱</span>':''}</button>`).join('')}</nav><div class="ap-setup-fields">${body}</div><footer><div class="ap-setup-draft-status">${step === 5 ? '<span class="ap-setup-draft-cloud" aria-hidden="true"></span>' : ''}<span data-save-status role="status">${e(draftSaveStatus(record.id))}</span></div><button type="button" data-close-editor>Done</button></footer></div>`;
     }
@@ -27701,7 +27726,10 @@ See you soon!
         const firstIssue=missing(record)[0];
         state.openId=record.id;
         state.step=firstIssue?.step||0;
-        if(firstIssue?.day!==undefined)state.activeDay[record.id]=firstIssue.day;
+        if (firstIssue?.step === 2) {
+          state.datesSelfTape[record.id] = firstIssue.key === 'deadline';
+          if (firstIssue.day !== undefined) state.activeDay[record.id] = firstIssue.day;
+        }
         render();
       });
     }
@@ -27824,11 +27852,14 @@ See you soon!
           updateMissing(root.closest('.aud-session-card'),record);
         }
       }));
-      root.querySelectorAll('[data-multi]').forEach(input=>input.addEventListener('change',()=>{const key=input.dataset.multi;record[key]=[...root.querySelectorAll(`[data-multi="${key}"]:checked`)].map(item=>item.value);save(record);render();}));
+      root.querySelectorAll('[data-multi]').forEach(input=>input.addEventListener('change',()=>{const key=input.dataset.multi;record[key]=[...root.querySelectorAll(`[data-multi="${key}"]:checked`)].map(item=>item.value);if(key==='methods'&&!record.methods.includes('self_tape'))delete state.datesSelfTape[record.id];save(record);render();}));
       root.querySelectorAll('[data-day-tab]').forEach(button => button.onclick = () => {
         flushDraft(record);
-        state.activeDay[record.id] = Number(button.dataset.dayTab);
+        const tab = button.dataset.dayTab;
+        state.datesSelfTape[record.id] = tab === 'self-tape';
+        if (tab !== 'self-tape') state.activeDay[record.id] = Number(tab);
         render();
+        document.querySelector(`.aud-session-card[data-session-id="${CSS.escape(record.id)}"] [data-day-tab="${tab}"]`)?.focus();
       });
       root.querySelectorAll('[data-day-field]').forEach(input => {
         const index = Number(input.dataset.day);
@@ -27894,6 +27925,7 @@ See you soon!
         if(previous.date){const date=new Date(previous.date+'T12:00:00');date.setDate(date.getDate()+1);nextDate=[date.getFullYear(),String(date.getMonth()+1).padStart(2,'0'),String(date.getDate()).padStart(2,'0')].join('-');}
         const newDay={...structuredClone(first),id:'day-'+crypto.randomUUID(),date:nextDate,breaks:[],slotOverrides:{}};
         record.days.push(newDay);
+        state.datesSelfTape[record.id] = false;
         state.activeDay[record.id]=index;state.step=2;save(record);render();
       });
       root.querySelectorAll('[data-remove-day]').forEach(button=>button.onclick=()=>{
@@ -28083,7 +28115,7 @@ See you soon!
         }
         state.records = state.records.filter(item => item.id !== record.id);
         delete state.revisions[record.id]; delete state.timers[record.id]; delete state.queues?.[record.id];
-        delete state.saving[record.id]; delete state.saveAttempts[record.id]; delete state.saveErrors[record.id]; delete state.activeDay[record.id];
+        delete state.saving[record.id]; delete state.saveAttempts[record.id]; delete state.saveErrors[record.id]; delete state.activeDay[record.id]; delete state.datesSelfTape[record.id];
         if (state.openId === record.id) state.openId = null;
         audSessions = audSessions.filter(item => String(item.id) !== String(record.id));
         delete audSlots[record.id]; delete audBlocks[record.id];
