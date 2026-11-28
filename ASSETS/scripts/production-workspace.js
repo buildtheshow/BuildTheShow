@@ -27706,6 +27706,23 @@ See you soon!
       });
     }
 
+    function renderHeaderDates(card, record) {
+      const chips = card?.querySelector('.aud-card-chips');
+      if (!chips) return;
+      const days = ensureDays(record);
+      const scheduledDays = days.filter(day => day.date || day.start || day.end);
+      chips.innerHTML = (scheduledDays.length ? scheduledDays : days.slice(0, 1)).map(day => {
+        const timeRange = compactTimeRange(day.start, day.end);
+        const weekday = _getAudDow(day.date);
+        const dateChip = weekday ? `
+          <div class="ap-setup-card-icon-label">
+            <div aria-hidden="true">${_makeAudDateBadge(day.date, 'sm')}</div>
+            <time datetime="${e(day.date)}"><span aria-hidden="true">${e(weekday)}</span><span class="sr-only">${e(niceDate(day.date))}</span></time>
+          </div>` : cardIconLabel('Dates to come');
+        return `<div class="ap-setup-header-day">${dateChip}${timeRange ? cardIconLabel(timeRange, 'time.svg?v=35935c7b6b5f') : ''}</div>`;
+      }).join('');
+    }
+
     function render() {
       const host = document.getElementById('aud-sessions-list');
       if (!host || !state.loaded) return;
@@ -27747,18 +27764,7 @@ See you soon!
         const titleRow=document.createElement('div');titleRow.className='ap-setup-title-row';
         nameNode.replaceWith(titleRow);titleRow.append(nameNode);
         const headerStatus=document.createElement('div');headerStatus.className='ap-setup-header-status';headerStatus.innerHTML=completion(record);titleRow.append(headerStatus);bindNeedsAction(headerStatus,record);
-        const chips=card.querySelector('.aud-card-chips');
-        const firstDay=ensureDays(record)[0];
-        if (chips) {
-          const timeRange = compactTimeRange(firstDay.start, firstDay.end);
-          const weekday = _getAudDow(firstDay.date);
-          const dateChip = weekday ? `
-            <div class="ap-setup-card-icon-label">
-              <div aria-hidden="true">${_makeAudDateBadge(firstDay.date, 'sm')}</div>
-              <time datetime="${e(firstDay.date)}"><span aria-hidden="true">${e(weekday)}</span><span class="sr-only">${e(niceDate(firstDay.date))}</span></time>
-            </div>` : cardIconLabel('Dates to come');
-          chips.innerHTML = dateChip + (timeRange ? cardIconLabel(timeRange, 'time.svg?v=35935c7b6b5f') : '');
-        }
+        renderHeaderDates(card, record);
         const img = card.querySelector('.aud-card-type-pill img');
         if (img) { img.src = '/ASSETS/Images/Icons/' + (types.find(type=>type.value===record.type)?.icon || 'Auditions.svg'); img.style.filter = 'brightness(0) invert(1)'; }
         const deleteButton = card.querySelector('.aud-action-btn.danger');
@@ -27850,7 +27856,9 @@ See you soon!
           }
           day[key] = value;
           save(record);
-          updateMissing(root.closest('.aud-session-card'), record);
+          const card = root.closest('.aud-session-card');
+          if (isTime || key === 'date') renderHeaderDates(card, record);
+          updateMissing(card, record);
         });
         if (isTime) input.addEventListener('keydown', event => {
           if (event.key === 'Enter' && !event.isComposing) {
