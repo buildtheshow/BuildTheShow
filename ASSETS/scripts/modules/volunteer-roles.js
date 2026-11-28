@@ -89,7 +89,7 @@
       function shiftChipHtml(row) {
         const st = row.status || 'pending';
         const timeStr = fmtTime(row.shift_start_time) && fmtTime(row.shift_end_time)
-          ? fmtTime(row.shift_start_time) + '-' + fmtTime(row.shift_end_time)
+          ? BTSFormatTimeRange(row.shift_start_time, row.shift_end_time)
           : fmtTime(row.shift_start_time) || '';
         if (!row.shift_date) {
           const rd = Array.isArray(row.required_dates) ? row.required_dates.filter(Boolean) : [];

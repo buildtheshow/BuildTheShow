@@ -7,7 +7,7 @@ const active=v=>!['cancelled','canceled','declined','rejected','withdrawn','arch
 const plain=value=>{const t=document.createElement('template');t.innerHTML=String(value||'');return t.content.textContent.trim();};
 const date=value=>{const d=new Date(String(value).length===10?value+'T12:00:00':value);return Number.isFinite(d.getTime())?d:null;};
 const day=value=>date(value)?.toLocaleDateString('en-CA',{weekday:'short',month:'short',day:'numeric'})||'Date to be arranged';
-const time=e=>e.time_tbd?'Time to be arranged':e.all_day?'All day':BTSFormatTime(date(e.start_time))+(e.end_time?' - '+BTSFormatTime(date(e.end_time)):'');
+const time=e=>e.time_tbd?'Time to be arranged':e.all_day?'All day':e.end_time?BTSFormatTimeRange(date(e.start_time),date(e.end_time)):BTSFormatTime(date(e.start_time));
 export function mountMemberProduction(client,root){
  let generation=0,currentKey='',saved,refreshAt=0;
  function clear(){generation++;currentKey='';root.hidden=true;root.replaceChildren();}

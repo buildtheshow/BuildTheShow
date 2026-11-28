@@ -1002,10 +1002,27 @@ async function page(context, asset) {
     response=await context.env.ASSETS.fetch(next);
   }
   if(response.status>=300 && response.status<400) return new Response('Page unavailable',{status:502});
-  const result = new Response(response.body,response);
+  const result = await withSiteTimeFormatter(response, context.request.method);
   result.headers.set('Cache-Control','no-store');
   result.headers.set('Referrer-Policy','no-referrer');
   return result;
+}
+const SITE_TIME_FORMATTER = '<script src="/ASSETS/scripts/time-format.js?v=20261128-root-time-format"></script>';
+async function withSiteTimeFormatter(response, method='GET') {
+  if(method==='HEAD' || !response.headers.get('content-type')?.toLowerCase().includes('text/html')) return response;
+  const html = await response.clone().text();
+  if(html.includes('/ASSETS/scripts/time-format.js')) return response;
+  const head = /<head\b[^>]*>/i;
+  const body = /<body\b[^>]*>/i;
+  const rewritten = head.test(html)
+    ? html.replace(head, match => `${match}${SITE_TIME_FORMATTER}`)
+    : body.test(html)
+      ? html.replace(body, match => `${SITE_TIME_FORMATTER}${match}`)
+      : `${SITE_TIME_FORMATTER}${html}`;
+  const headers = new Headers(response.headers);
+  headers.delete('content-length');
+  headers.delete('content-encoding');
+  return new Response(rewritten,{status:response.status,statusText:response.statusText,headers});
 }
 export async function onRequest(context) {
   const url = new URL(context.request.url);
@@ -1065,5 +1082,5 @@ export async function onRequest(context) {
       return page(context,assets[canonical]);
     }
   }
-  return context.next();
+  return withSiteTimeFormatter(await context.next(), context.request.method);
 }

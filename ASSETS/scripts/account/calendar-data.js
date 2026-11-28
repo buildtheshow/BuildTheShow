@@ -6,7 +6,7 @@ export function eventColour(type){return EVENT_COLOURS[type]||EVENT_COLOURS.even
 export function formatCalendarRange(event){
  if(event.time_tbd)return 'Time to be arranged';if(event.all_day)return 'All day';
  const format=value=>BTSFormatTime(new Date(value));
- const start=format(event.start_time);return start+(event.end_time?' - '+format(event.end_time):' · End time to be arranged');
+ const start=format(event.start_time);return event.end_time?BTSFormatTimeRange(new Date(event.start_time),new Date(event.end_time)):start+' · End time to be arranged';
 }
 export function normaliseCalendarRows(rows,members,productions){
  const people=new Map(members.map(p=>[p.id,p])),allowed=new Set(productions.map(p=>p.id)),events=new Map();

@@ -899,7 +899,7 @@
       <div class="tix-row">
         <div style="flex:1;">
           <div style="font-size:0.82rem;font-weight:800;color:#000000;">${esc(ev.title || 'Performance')}</div>
-          <div style="font-size:0.72rem;color:rgba(0,0,0,0.5);">${fmtDate(ev.start_time)} ${fmtTime(ev.start_time)} - ${fmtTime(ev.end_time)}</div>
+          <div style="font-size:0.72rem;color:rgba(0,0,0,0.5);">${fmtDate(ev.start_time)} ${BTSFormatTimeRange(ev.start_time, ev.end_time)}</div>
         </div>
         <div style="font-size:0.68rem;font-weight:800;color:#769e7b;text-transform:uppercase;">Ticketed</div>
       </div>`).join('');
@@ -917,7 +917,7 @@
           <div class="tix-row" style="background:rgba(239,171,69,0.06);">
             <div style="flex:1;">
               <div style="font-size:0.82rem;font-weight:800;color:#000000;">${esc(ev.title || 'Dress Rehearsal')}</div>
-              <div style="font-size:0.72rem;color:rgba(0,0,0,0.5);">${fmtDate(ev.start_time)} ${fmtTime(ev.start_time)} - ${fmtTime(ev.end_time)}</div>
+              <div style="font-size:0.72rem;color:rgba(0,0,0,0.5);">${fmtDate(ev.start_time)} ${BTSFormatTimeRange(ev.start_time, ev.end_time)}</div>
             </div>
             <div style="font-size:0.68rem;font-weight:800;color:#efab45;text-transform:uppercase;">Dress</div>
           </div>`).join('') : ''}
