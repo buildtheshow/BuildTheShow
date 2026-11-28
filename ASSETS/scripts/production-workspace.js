@@ -27513,10 +27513,7 @@ See you soon!
             ${slots.length ? '' : `<p class="ap-setup-schedule-empty">${emptyMessage}</p>`}
             ${slots.length || breakWindows.length ? `<div class="aud-block-calendar">${buildAuditionSchedulerBlockSlotsHtml(record.id, slots, index, breakWindows)}</div>` : ''}
             <section class="ap-setup-schedule-breaks">
-              <div class="ap-setup-scheduled-breaks-row">
-                <h4>Scheduled breaks</h4>
-                <ul>${breaks || '<li class="ap-setup-schedule-no-breaks">No breaks added</li>'}</ul>
-              </div>
+              ${breaks ? `<ul class="ap-setup-break-list" aria-label="Scheduled breaks">${breaks}</ul>` : ''}
               <div class="ap-setup-schedule-break-adder" id="${breakEditorId}" data-break-editor="${index}" hidden>
                 <label>Start <input type="text" data-break-start placeholder="12:00pm" autocomplete="off"></label>
                 <label>End <input type="text" data-break-end placeholder="12:30pm" autocomplete="off"></label>
@@ -27880,9 +27877,12 @@ See you soon!
         const card = button.closest('.ap-setup-schedule-day');
         const editor = card.querySelector('[data-break-editor]');
         const fromHeader = button.closest('header');
-        const anchor = fromHeader || card.querySelector('.ap-setup-scheduled-breaks-row');
-        const opening = editor.hidden || editor.previousElementSibling !== anchor;
-        if (opening) anchor.after(editor);
+        const atTrigger = fromHeader ? editor.previousElementSibling === fromHeader : editor.nextElementSibling === button;
+        const opening = editor.hidden || !atTrigger;
+        if (opening) {
+          if (fromHeader) fromHeader.after(editor);
+          else button.before(editor);
+        }
         editor.hidden = !opening;
         card.querySelectorAll('[data-add-break]').forEach(trigger => {
           trigger.setAttribute('aria-expanded', String(opening && trigger === button));
