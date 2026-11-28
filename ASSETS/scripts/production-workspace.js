@@ -26013,8 +26013,8 @@ See you soon!
     return `<div class="aud-block-calendar-grid">${entries.map(slot => {
       if (slot.breakEnd) {
         return `<div class="aud-block-slot-cell state-break ap-setup-break-cell">
-          <div class="aud-block-slot-time">${esc(BTSFormatTimeRange(slot.slot_time, slot.breakEnd))}</div>
-          <div class="aud-block-slot-state state-break">Break</div>
+          <div class="aud-block-slot-time"><span>${esc(BTSFormatTimeRange(slot.slot_time, slot.breakEnd))}</span></div>
+          <div class="aud-block-slot-bottom"><span class="aud-block-slot-state state-break">Break</span></div>
         </div>`;
       }
       const state    = getAudSlotState(slot);
@@ -26023,13 +26023,14 @@ See you soon!
       const booked   = slotApps.length;
       const capLabel = `${booked}/${cap}`;
       const draft = draftDayIndex !== undefined;
+      const timeLabel = formatSlotTime(slot.slot_time || slot.start_time || '');
       const toggle = draft
         ? `data-draft-slot-day="${draftDayIndex}" data-draft-slot-time="${esc(slot.slot_time)}" aria-pressed="${state === 'block'}" aria-label="${esc(formatSlotTime(slot.slot_time))} blocked"`
         : 'tabindex="-1"';
 
       return `
       <div class="aud-block-slot-cell state-${esc(state)}"${draft ? '' : ` onclick="cycleAudSlotLabel('${slot.id}','${sessionId}')" title="Click to ${state === 'open' ? 'block' : 'open'} this slot"`}>
-        <div class="aud-block-slot-time">${buildAuditionSchedulePlaceholderTimeLabelHtml(formatSlotTime(slot.slot_time || slot.start_time || ''))}</div>
+        <div class="aud-block-slot-time">${draft ? esc(timeLabel) : buildAuditionSchedulePlaceholderTimeLabelHtml(timeLabel)}</div>
         <div class="aud-block-slot-bottom">
           <button class="aud-block-slot-state state-${esc(state)}" type="button" ${toggle}>${esc(getAudSlotLabel(slot))}</button>
           <div class="aud-block-slot-cap">${esc(capLabel)}</div>
