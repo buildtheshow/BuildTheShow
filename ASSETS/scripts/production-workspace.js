@@ -27538,14 +27538,14 @@ See you soon!
           </header>
           <div class="ap-setup-schedule-guide">
             <div class="ap-setup-schedule-guide-card">
-              <div class="ap-setup-schedule-art"><img src="/ASSETS/Images/Icons/break-block.svg?v=a201957dfa78" alt=""></div>
+              <div class="ap-setup-schedule-art" aria-hidden="true"><span style="--ap-schedule-art:url('/ASSETS/Images/Icons/break-block.svg?v=a201957dfa78')"></span></div>
               <div class="ap-setup-schedule-guide-copy">
                 <h4>Block a time slot</h4>
                 <p>Click or tap a time slot to block it from public booking. Click or tap it again to reopen it. Great for catch-up time or keeping slots in reserve.</p>
               </div>
             </div>
             <div class="ap-setup-schedule-guide-card">
-              <div class="ap-setup-schedule-art"><img src="/ASSETS/Images/Icons/break-break.svg?v=85346cadea33" alt=""></div>
+              <div class="ap-setup-schedule-art" aria-hidden="true"><span style="--ap-schedule-art:url('/ASSETS/Images/Icons/break-break.svg?v=85346cadea33')"></span></div>
               <div class="ap-setup-schedule-guide-copy">
                 <h4>Add a scheduled break</h4>
                 <p>Choose a start and end time and we'll adjust your audition slots around it. Ideal for lunch and longer breaks.</p>
@@ -27553,7 +27553,7 @@ See you soon!
             </div>
           </div>
           <aside class="ap-setup-schedule-reminder">
-            <div class="ap-setup-schedule-art"><img src="/ASSETS/Images/Icons/coffee.svg" alt=""></div>
+            <div class="ap-setup-schedule-art" aria-hidden="true"><span style="--ap-schedule-art:url('/ASSETS/Images/Icons/coffee.svg')"></span></div>
             <p><strong>Don't forget about yourself!</strong> Audition days can be long. Make time for coffee, lunch, bathroom breaks, catching up and chatting with your team.</p>
           </aside>
           ${cards}
