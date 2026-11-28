@@ -1011,7 +1011,14 @@ const SITE_TIME_FORMATTER = '<script src="/ASSETS/scripts/time-format.js?v=20261
 async function withSiteTimeFormatter(response, method='GET') {
   if(method==='HEAD' || !response.headers.get('content-type')?.toLowerCase().includes('text/html')) return response;
   const html = await response.clone().text();
-  if(html.includes('/ASSETS/scripts/time-format.js')) return response;
+  const existingFormatter = /<script\b[^>]*\bsrc=(['"])[^'"]*\/ASSETS\/scripts\/time-format\.js(?:\?[^'"]*)?\1[^>]*>\s*<\/script>/i;
+  if(existingFormatter.test(html)) {
+    const rewritten = html.replace(existingFormatter, SITE_TIME_FORMATTER);
+    const headers = new Headers(response.headers);
+    headers.delete('content-length');
+    headers.delete('content-encoding');
+    return new Response(rewritten,{status:response.status,statusText:response.statusText,headers});
+  }
   const head = /<head\b[^>]*>/i;
   const body = /<body\b[^>]*>/i;
   const rewritten = head.test(html)

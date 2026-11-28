@@ -45,10 +45,10 @@
   ];
 
   const MAIN_TIMING_OPTIONS = [
-    { value: 'booked', label: 'They choose a time', desc: 'You set times or blocks and performers book one. A time can be for one performer or a small group. Example: 4:00, 4:10, 4:20, or 5 people all booked into the 4:00 group.' },
+    { value: 'booked', label: 'They choose a time', desc: 'You set times or blocks and performers book one. A time can be for one performer or a small group. Example: 4:00pm, 4:10pm, 4:20pm, or 5 people all booked into the 4:00pm group.' },
     { value: 'assigned', label: 'You assign auditions', desc: 'You place performers into specific times yourself. A time can be for one performer or a group. Example: You build the full schedule ahead of time.' },
-    { value: 'window', label: 'Group arrival', desc: 'You set one arrival time for a group of performers, and call them in one by one. Example: 5 performers all arrive at 4:00, then wait to be called.' },
-    { value: 'drop_in', label: 'They drop in', desc: 'No booking. Performers arrive and wait their turn. Example: Open call from 3:00–7:00.' },
+    { value: 'window', label: 'Group arrival', desc: 'You set one arrival time for a group of performers, and call them in one by one. Example: 5 performers all arrive at 4:00pm, then wait to be called.' },
+    { value: 'drop_in', label: 'They drop in', desc: 'No booking. Performers arrive and wait their turn. Example: Open call from 3:00pm - 7:00pm.' },
   ];
 
   const DANCE_FORMAT_OPTIONS = [
@@ -70,10 +70,10 @@
   ];
 
   const DANCE_TIMING_OPTIONS = [
-    { value: 'booked', label: 'They choose a time', desc: 'You set times or group blocks and performers book one. Example: 4:00 to 4:30, 4:30 to 5:00, with several performers in each block.' },
+    { value: 'booked', label: 'They choose a time', desc: 'You set times or group blocks and performers book one. Example: 4:00pm - 4:30pm, 4:30pm - 5:00pm, with several performers in each block.' },
     { value: 'assigned', label: 'You assign times', desc: 'You place performers into specific times yourself. Those times can hold individuals or groups. Example: You build your groups ahead of time.' },
-    { value: 'window', label: 'Group arrival', desc: 'You set one arrival time for a group, and bring performers in as you are ready. Example: 5 performers all arrive at 4:00, then join in when called.' },
-    { value: 'drop_in', label: 'They just drop in', desc: 'No booking. Performers arrive during the set time and join in. Example: Dance call runs 4:00 to 6:00.' },
+    { value: 'window', label: 'Group arrival', desc: 'You set one arrival time for a group, and bring performers in as you are ready. Example: 5 performers all arrive at 4:00pm, then join in when called.' },
+    { value: 'drop_in', label: 'They just drop in', desc: 'No booking. Performers arrive during the set time and join in. Example: Dance call runs 4:00pm - 6:00pm.' },
   ];
 
   const OTHER_SEEN_OPTIONS = [
@@ -97,16 +97,16 @@
   ];
 
   const CALLBACK_TIMING_OPTIONS = [
-    { value: 'booking', label: 'They choose a time', desc: 'You set callback times or blocks and invited performers book one. A callback time can be for one performer, a pair, or a small group. Example: 5:00, 5:10, 5:20, or one 6:00 block for a grouped callback. If needed, one of those callback slots can happen live over video.' },
+    { value: 'booking', label: 'They choose a time', desc: 'You set callback times or blocks and invited performers book one. A callback time can be for one performer, a pair, or a small group. Example: 5:00pm, 5:10pm, 5:20pm, or one 6:00pm block for a grouped callback. If needed, one of those callback slots can happen live over video.' },
     { value: 'assigned', label: 'You assign callbacks', desc: 'You invite performers and assign their callback times yourself. A callback time can be for one performer or a group. Example: You build the callback schedule ahead of time.' },
-    { value: 'window', label: 'Group arrival', desc: 'You set one callback arrival time for the invited performers, then call them in from there. Example: 8 performers all arrive at 5:00, then wait to be called.' },
+    { value: 'window', label: 'Group arrival', desc: 'You set one callback arrival time for the invited performers, then call them in from there. Example: 8 performers all arrive at 5:00pm, then wait to be called.' },
   ];
 
   const OTHER_TIMING_OPTIONS = [
-    { value: 'booked', label: 'They choose a time', desc: 'You set times or blocks and performers book one. A time can be for one performer or a small group. Example: 4:00, 4:10, 4:20, or 5 people all booked into the 4:00 group.' },
+    { value: 'booked', label: 'They choose a time', desc: 'You set times or blocks and performers book one. A time can be for one performer or a small group. Example: 4:00pm, 4:10pm, 4:20pm, or 5 people all booked into the 4:00pm group.' },
     { value: 'assigned', label: 'You assign auditions', desc: 'You place performers into specific times yourself. A time can be for one performer or a group. Example: You build the full schedule ahead of time.' },
-    { value: 'window', label: 'Group arrival', desc: 'You set one arrival time for a group of performers, and call them in one by one. Example: 5 performers all arrive at 4:00, then wait to be called.' },
-    { value: 'drop_in', label: 'They just drop in', desc: 'No booking. Performers arrive and wait. Example: Open call from 3:00–7:00.' },
+    { value: 'window', label: 'Group arrival', desc: 'You set one arrival time for a group of performers, and call them in one by one. Example: 5 performers all arrive at 4:00pm, then wait to be called.' },
+    { value: 'drop_in', label: 'They just drop in', desc: 'No booking. Performers arrive and wait. Example: Open call from 3:00pm - 7:00pm.' },
   ];
 
   const CALLBACK_SEEN_OPTIONS = [
@@ -287,25 +287,25 @@
     const mode = timingAudienceMode(seeing);
     if (mode === 'group') {
       return [
-        timingOption('booked', 'They choose a time', 'You set group times or blocks and groups book one. Example: a 4:00 group, a 4:30 group, or a 5:00 workshop block.'),
+        timingOption('booked', 'They choose a time', 'You set group times or blocks and groups book one. Example: a 4:00pm group, a 4:30pm group, or a 5:00pm workshop block.'),
         timingOption('assigned', 'You assign auditions', 'You place groups into specific times yourself. Example: You build the group schedule ahead of time.'),
-        timingOption('window', 'Group arrival', 'You set one arrival time for a group, then call them in from there. Example: everyone arrives at 4:00, then you bring groups in as ready.'),
-        timingOption('drop_in', 'They drop in', 'No booking. Groups arrive and wait to be seen. Example: Open call from 3:00–7:00, with groups formed through the day.'),
+        timingOption('window', 'Group arrival', 'You set one arrival time for a group, then call them in from there. Example: everyone arrives at 4:00pm, then you bring groups in as ready.'),
+        timingOption('drop_in', 'They drop in', 'No booking. Groups arrive and wait to be seen. Example: Open call from 3:00pm - 7:00pm, with groups formed through the day.'),
       ];
     }
     if (mode === 'both') {
       return [
-        timingOption('booked', 'They choose a time', 'You set times or blocks and people book one. A time can be for one performer or a group. Example: 4:00 solo, 4:20 pair, 5:00 group.'),
+        timingOption('booked', 'They choose a time', 'You set times or blocks and people book one. A time can be for one performer or a group. Example: 4:00pm solo, 4:20pm pair, 5:00pm group.'),
         timingOption('assigned', 'You assign auditions', 'You place people into specific times yourself. A time can be for one performer or a group. Example: You build the full schedule ahead of time.'),
-        timingOption('window', 'Group arrival', 'You set one arrival time, then run the round from there. Example: everyone arrives at 4:00, then you move between solo and group work as needed.'),
+        timingOption('window', 'Group arrival', 'You set one arrival time, then run the round from there. Example: everyone arrives at 4:00pm, then you move between solo and group work as needed.'),
         timingOption('drop_in', 'They drop in', 'No booking. People arrive and are folded into the flow as needed. Example: open call through the day with solo and group work happening inside it.'),
       ];
     }
     return [
-      timingOption('booked', 'They choose a time', 'You set time slots and performers book one. Example: 4:00, 4:10, 4:20.'),
+      timingOption('booked', 'They choose a time', 'You set time slots and performers book one. Example: 4:00pm, 4:10pm, 4:20pm.'),
       timingOption('assigned', 'You assign auditions', 'You place performers into specific times yourself. Example: You build the full schedule ahead of time.'),
-      timingOption('window', 'Group arrival', 'You set one arrival time for a small group of performers, then call them in one by one. Example: 5 performers all arrive at 4:00, then wait to be called.'),
-      timingOption('drop_in', 'They drop in', 'No booking. Performers arrive and wait their turn. Example: Open call from 3:00–7:00.'),
+      timingOption('window', 'Group arrival', 'You set one arrival time for a small group of performers, then call them in one by one. Example: 5 performers all arrive at 4:00pm, then wait to be called.'),
+      timingOption('drop_in', 'They drop in', 'No booking. Performers arrive and wait their turn. Example: Open call from 3:00pm - 7:00pm.'),
     ];
   }
 
@@ -313,17 +313,17 @@
     const mode = timingAudienceMode(seeing);
     if (mode === 'individual') {
       return [
-        timingOption('booked', 'They choose a time', 'You set times, and performers book one. Example: 4:00, 4:10, 4:20.'),
+        timingOption('booked', 'They choose a time', 'You set times, and performers book one. Example: 4:00pm, 4:10pm, 4:20pm.'),
         timingOption('assigned', 'You assign times', 'You place performers into specific times yourself. Example: You build the dance schedule ahead of time.'),
-        timingOption('window', 'Group arrival', 'You set one arrival time for a small set of performers, then see them one by one. Example: 5 performers all arrive at 4:00, then wait to be called.'),
-        timingOption('drop_in', 'They just drop in', 'No booking. Performers arrive during the set time and wait their turn. Example: dance call runs 4:00 to 6:00, and you see people one at a time as they arrive.'),
+        timingOption('window', 'Group arrival', 'You set one arrival time for a small set of performers, then see them one by one. Example: 5 performers all arrive at 4:00pm, then wait to be called.'),
+        timingOption('drop_in', 'They just drop in', 'No booking. Performers arrive during the set time and wait their turn. Example: dance call runs 4:00pm - 6:00pm, and you see people one at a time as they arrive.'),
       ];
     }
     return [
-      timingOption('booked', 'They choose a time', 'You set times or group blocks and groups book one. Example: 4:00 to 4:30, 4:30 to 5:00, with several performers in each block.'),
+      timingOption('booked', 'They choose a time', 'You set times or group blocks and groups book one. Example: 4:00pm - 4:30pm, 4:30pm - 5:00pm, with several performers in each block.'),
       timingOption('assigned', 'You assign times', 'You place groups into specific times yourself. Example: You build your groups ahead of time.'),
-      timingOption('window', 'Group arrival', 'You set one arrival time for a group, then bring performers in as you are ready. Example: 5 performers all arrive at 4:00, then join in when called.'),
-      timingOption('drop_in', 'They just drop in', 'No booking. Groups arrive during the set time and join in. Example: dance call runs 4:00 to 6:00, and people join the next group as they arrive.'),
+      timingOption('window', 'Group arrival', 'You set one arrival time for a group, then bring performers in as you are ready. Example: 5 performers all arrive at 4:00pm, then join in when called.'),
+      timingOption('drop_in', 'They just drop in', 'No booking. Groups arrive during the set time and join in. Example: dance call runs 4:00pm - 6:00pm, and people join the next group as they arrive.'),
     ];
   }
 
@@ -331,22 +331,22 @@
     const mode = timingAudienceMode(seeing);
     if (mode === 'group') {
       return [
-        timingOption('booking', 'They choose a time', 'You set callback times or blocks and invited groups book one. Example: a 5:00 scene group, a 5:30 pairing, or a 6:00 full-group callback.'),
+        timingOption('booking', 'They choose a time', 'You set callback times or blocks and invited groups book one. Example: a 5:00pm scene group, a 5:30pm pairing, or a 6:00pm full-group callback.'),
         timingOption('assigned', 'You assign callbacks', 'You invite people and place groups into callback times yourself. Example: You build the grouped callback schedule ahead of time.'),
-        timingOption('window', 'Group arrival', 'You set one callback arrival time for a group, then call people in from there. Example: everyone arrives at 5:00, then you bring them in by pairing or scene group.'),
+        timingOption('window', 'Group arrival', 'You set one callback arrival time for a group, then call people in from there. Example: everyone arrives at 5:00pm, then you bring them in by pairing or scene group.'),
       ];
     }
     if (mode === 'both') {
       return [
-        timingOption('booking', 'They choose a time', 'You set callback times or blocks and invited people book one. A time can be for one performer or a group. Example: 5:00 solo, 5:20 pair, 6:00 group.'),
+        timingOption('booking', 'They choose a time', 'You set callback times or blocks and invited people book one. A time can be for one performer or a group. Example: 5:00pm solo, 5:20pm pair, 6:00pm group.'),
         timingOption('assigned', 'You assign callbacks', 'You invite performers and place them into specific callback times yourself. A time can be for one performer or a group. Example: You build the callback schedule ahead of time.'),
-        timingOption('window', 'Group arrival', 'You set one callback arrival time, then run the round from there. Example: everyone arrives at 5:00, then you move between solo, pair, and group work.'),
+        timingOption('window', 'Group arrival', 'You set one callback arrival time, then run the round from there. Example: everyone arrives at 5:00pm, then you move between solo, pair, and group work.'),
       ];
     }
     return [
-      timingOption('booking', 'They choose a time', 'You set callback time slots and invited performers book one. Example: 5:00, 5:10, 5:20. If needed, one of those callback slots can happen live over video.'),
+      timingOption('booking', 'They choose a time', 'You set callback time slots and invited performers book one. Example: 5:00pm, 5:10pm, 5:20pm. If needed, one of those callback slots can happen live over video.'),
       timingOption('assigned', 'You assign callbacks', 'You invite performers and assign their callback times yourself. Example: You build the callback schedule ahead of time.'),
-      timingOption('window', 'Group arrival', 'You set one callback arrival time for the invited performers, then call them in from there. Example: 8 performers all arrive at 5:00, then wait to be called.'),
+      timingOption('window', 'Group arrival', 'You set one callback arrival time for the invited performers, then call them in from there. Example: 8 performers all arrive at 5:00pm, then wait to be called.'),
     ];
   }
 
@@ -354,25 +354,25 @@
     const mode = timingAudienceMode(seeing);
     if (mode === 'group') {
       return [
-        timingOption('booked', 'They choose a time', 'You set times or blocks and groups book one. Example: a 4:00 pair, a 4:30 small-group block, or a 5:00 workshop group.'),
+        timingOption('booked', 'They choose a time', 'You set times or blocks and groups book one. Example: a 4:00pm pair, a 4:30pm small-group block, or a 5:00pm workshop group.'),
         timingOption('assigned', 'You assign auditions', 'You place groups into specific times yourself. Example: You build the grouped schedule ahead of time.'),
-        timingOption('window', 'Group arrival', 'You set one arrival time for a group, then call them in from there. Example: everyone arrives at 4:00, then you bring groups in as needed.'),
+        timingOption('window', 'Group arrival', 'You set one arrival time for a group, then call them in from there. Example: everyone arrives at 4:00pm, then you bring groups in as needed.'),
         timingOption('drop_in', 'They just drop in', 'No booking. Groups arrive and wait to be seen. Example: people arrive during the window and you form groups on the fly.'),
       ];
     }
     if (mode === 'both') {
       return [
-        timingOption('booked', 'They choose a time', 'You set times or blocks and people book one. A time can be for one performer or a group. Example: 4:00 solo, 4:20 pair, 5:00 group.'),
+        timingOption('booked', 'They choose a time', 'You set times or blocks and people book one. A time can be for one performer or a group. Example: 4:00pm solo, 4:20pm pair, 5:00pm group.'),
         timingOption('assigned', 'You assign auditions', 'You place people into specific times yourself. A time can be for one performer or a group. Example: You build the full schedule ahead of time.'),
-        timingOption('window', 'Group arrival', 'You set one arrival time, then run the round from there. Example: everyone arrives at 4:00, then you mix solo and group work as needed.'),
+        timingOption('window', 'Group arrival', 'You set one arrival time, then run the round from there. Example: everyone arrives at 4:00pm, then you mix solo and group work as needed.'),
         timingOption('drop_in', 'They just drop in', 'No booking. Performers arrive and are folded into the flow as needed. Example: open call through the day with different formats happening inside it.'),
       ];
     }
     return [
-      timingOption('booked', 'They choose a time', 'You set time slots and performers book one. Example: 4:00, 4:10, 4:20.'),
+      timingOption('booked', 'They choose a time', 'You set time slots and performers book one. Example: 4:00pm, 4:10pm, 4:20pm.'),
       timingOption('assigned', 'You assign auditions', 'You place performers into specific times yourself. Example: You build the full schedule ahead of time.'),
-      timingOption('window', 'Group arrival', 'You set one arrival time for a small group of performers, then call them in one by one. Example: 5 performers all arrive at 4:00, then wait to be called.'),
-      timingOption('drop_in', 'They just drop in', 'No booking. Performers arrive and wait. Example: Open call from 3:00–7:00.'),
+      timingOption('window', 'Group arrival', 'You set one arrival time for a small group of performers, then call them in one by one. Example: 5 performers all arrive at 4:00pm, then wait to be called.'),
+      timingOption('drop_in', 'They just drop in', 'No booking. Performers arrive and wait. Example: Open call from 3:00pm - 7:00pm.'),
     ];
   }
 
