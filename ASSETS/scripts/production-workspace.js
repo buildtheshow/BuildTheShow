@@ -27466,7 +27466,18 @@ See you soon!
               : `<p class="ap-setup-schedule-empty">${emptyMessage}</p>`}
             ${slots.length || breakWindows.length ? `<div class="aud-block-calendar">${buildAuditionSchedulerBlockSlotsHtml(record.id, slots, index, breakWindows)}</div>` : ''}
             <section class="ap-setup-schedule-breaks">
-              <div><strong>Breaks</strong><span>Time slots restart at the end of each break.</span></div>
+              <div class="ap-setup-break-guidance">
+                <h4>Breaks &amp; Catch-up Time</h4>
+                <p>Audition days can be long! Give yourself and your audition team time to recharge throughout the day.</p>
+                <p>A few things to keep in mind:</p>
+                <ul>
+                  <li><strong>Catch-up time:</strong> Auditions don't always run on schedule. Leave some breathing room in case you fall behind.</li>
+                  <li><strong>Coffee and bathroom breaks:</strong> Give your team a chance to step away, stretch and grab a drink.</li>
+                  <li><strong>Lunch:</strong> Don't forget to eat! Make sure everyone has enough time to enjoy a proper meal.</li>
+                  <li><strong>Team discussions:</strong> Leave time to compare notes, discuss performers and check in with your audition team.</li>
+                </ul>
+                <p>When you add a break, we'll automatically adjust your audition time slots around it.</p>
+              </div>
               <ul>${breaks || '<li class="ap-setup-schedule-no-breaks">No breaks added</li>'}</ul>
               <div class="ap-setup-schedule-break-adder" data-break-editor="${index}" style="display:none">
                 <label>Start <input type="text" data-break-start placeholder="12:00pm" autocomplete="off"></label>
@@ -27478,7 +27489,13 @@ See you soon!
             </section>
           </article>`;
       }).join('');
-      return `<section class="ap-setup-schedule-builder"><h3>Time slots for ${e(record.name || 'this audition')}</h3><p>Slots are generated from your dates, times, booking length and breaks. Update those details and this schedule will stay in sync.</p>${cards}</section>`;
+      return `
+        <section class="ap-setup-schedule-builder">
+          <h3>Time slots for ${e(record.name || 'this audition')}</h3>
+          <p>Here's what your audition day looks like! We've worked out your time slots based on your audition hours, the length of each audition and any breaks you've added.</p>
+          <p>Take a moment to look through your day. You can block individual time slots or add breaks before making your auditions available for booking.</p>
+          ${cards}
+        </section>`;
     }
 
     function editor(record) {
