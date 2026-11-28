@@ -27727,7 +27727,7 @@ See you soon!
               <div aria-hidden="true">${_makeAudDateBadge(firstDay.date, 'sm')}</div>
               <time datetime="${e(firstDay.date)}"><span aria-hidden="true">${e(weekday)}</span><span class="sr-only">${e(niceDate(firstDay.date))}</span></time>
             </div>` : cardIconLabel('Dates to come');
-          chips.innerHTML = dateChip + (timeRange ? cardIconLabel(timeRange, 'time.svg') : '') + methodChips;
+          chips.innerHTML = dateChip + (timeRange ? cardIconLabel(timeRange, 'time.svg?v=35935c7b6b5f') : '') + methodChips;
         }
         const img = card.querySelector('.aud-card-type-pill img');
         if (img) { img.src = '/ASSETS/Images/Icons/' + (types.find(type=>type.value===record.type)?.icon || 'Auditions.svg'); img.style.filter = 'brightness(0) invert(1)'; }
