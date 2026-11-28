@@ -14,3 +14,7 @@
 - Keep icons used together consistent in apparent size, alignment, and visual weight. Start with a shared stroke weight for outline icons at the same display size.
 - Check icons next to one another at the sizes they actually render. Small outline icons may need thicker strokes for legibility. Solid or visually dense icons may need a slightly smaller drawing within the same icon box.
 - Preserve each icon's proportions and recognizable shape. Keep larger icons visually proportional to their role and verify the balance at both desktop and mobile sizes when the layout changes.
+
+## Slash spacing
+
+- In user-facing copy, write slashes with no spaces on either side, as in `before/after`.

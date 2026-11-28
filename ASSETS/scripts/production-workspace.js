@@ -27266,9 +27266,9 @@ See you soon!
       assigned: "Performers sign up for an audition, but instead of choosing their own time, you decide when each person will audition. This is a great option if you want more control over who you see, when you see them and in what order.",
     };
     const activities = [
-      ['singing', 'Singing', 'script-music-songs.svg'],
-      ['acting', 'Acting / scene reading', 'script-scene.svg'],
-      ['movement', 'Dance / movement', 'Choreography.svg'],
+      ['singing', 'Singing', 'type-musical.svg'],
+      ['acting', 'Acting/scene reading', 'type-play.svg'],
+      ['movement', 'Dance/movement', 'Choreography.svg'],
       ['workshop', 'Workshop activities', 'type-workshops.svg'],
       ['specialist', 'Other skills', 'Star.svg'],
     ];
@@ -27745,7 +27745,7 @@ See you soon!
         const edit = document.createElement('button'); edit.type='button'; edit.className='ap-setup-edit'; edit.innerHTML=editing ? 'Done' : `${cardIcon('edit-pencil.svg')}Edit`; edit.setAttribute('aria-expanded',String(editing)); edit.onclick=event=>{event.stopPropagation();toggleEditor(record);}; actions.append(edit);
         const remove = document.createElement('button'); remove.type='button'; remove.className='ap-setup-delete'; remove.innerHTML=cardIcon('Bin.svg'); remove.setAttribute('aria-label',`Delete ${record.name || sessionTypeLabel(record.type)}`); remove.title='Delete audition'; remove.onclick=event=>{event.stopPropagation();deleteAudition(record);}; actions.append(remove);
         head?.append(actions);
-        const audienceHeading = `<strong>${cardIconLabel('Who attends?', 'Performer.svg')}</strong>`;
+        const audienceHeading = `<strong>${cardIconLabel('Who attends?', 'performer2.svg')}</strong>`;
         const attendance = document.createElement('div'); attendance.className='ap-setup-attendance'; attendance.style.setProperty('--ap-accent',colour(record)); attendance.innerHTML=audienceHeading+(record.type==='callback'?`<label><input type="radio" name="audience-${e(record.id)}" value="invited" checked disabled>People we invite</label><small>Your team chooses who gets a callback.</small>`:`<label><input type="radio" name="audience-${e(record.id)}" value="open" ${record.audience!=='invited'?'checked':''}>Anyone who meets the requirements</label><label><input type="radio" name="audience-${e(record.id)}" value="invited" ${record.audience==='invited'?'checked':''}>People we invite</label>${record.audience==='invited'?'<small>Attending another audition does not add anyone here.</small>':''}`);
         card.append(attendance);
         attendance.querySelectorAll('input').forEach(input=>input.onchange=()=>{record.audience=input.value;save(record);render();});
