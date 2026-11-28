@@ -27665,7 +27665,7 @@ See you soon!
               </label>
             </section>` : dayHTML(record, days[dayIndex], dayIndex)}
           </div>
-          ${tapeOnly ? '' : `<aside class="ap-setup-more-dates">
+          ${showSelfTape ? '' : `<aside class="ap-setup-more-dates">
               <button type="button" data-add-day>+ Add another day</button>
               <div class="ap-setup-more-dates-copy">
                 <strong>Need more time to see everyone?</strong>
