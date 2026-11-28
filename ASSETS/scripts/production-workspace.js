@@ -27447,6 +27447,7 @@ See you soon!
       const cards = ensureDays(record).map((day, index) => {
         const slots = draftDaySlots(record, day);
         const openCount = slots.filter(slot => getAudSlotState(slot) === 'open').length;
+        const weekday = _getAudDow(day.date);
         const start = timeToMins(day.start);
         const end = timeToMins(day.end);
         const hasWindow = day.date && day.start && day.end && end > start;
@@ -27458,7 +27459,15 @@ See you soon!
         return `
           <article class="ap-setup-schedule-day" style="${buildAuditionScheduleCalendarThemeStyle(colour(record))}">
             <header>
-              <div><strong>${e(niceDate(day.date))}</strong><span>${e(niceTimeRange(day.start, day.end))}</span></div>
+              <div class="ap-setup-schedule-date">
+                ${weekday ? `<div aria-hidden="true">${_makeAudDateBadge(day.date)}</div>` : ''}
+                <div class="ap-setup-schedule-date-details">
+                  <strong>${weekday
+                    ? `<time datetime="${e(day.date)}"><span aria-hidden="true">${e(weekday)}</span><span class="sr-only">${e(niceDate(day.date))}</span></time>`
+                    : e(niceDate(day.date))}</strong>
+                  <span class="ap-setup-schedule-time">${e(niceTimeRange(day.start, day.end))}</span>
+                </div>
+              </div>
               <span class="ap-setup-schedule-count">${openCount} open · ${slots.length - openCount} blocked · ${slots.length} total${breakWindows.length ? ` · ${breakWindows.length} ${breakWindows.length === 1 ? 'break' : 'breaks'}` : ''}</span>
             </header>
             ${slots.length ? '' : `<p class="ap-setup-schedule-empty">${emptyMessage}</p>`}
