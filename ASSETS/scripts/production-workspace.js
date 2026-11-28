@@ -27714,12 +27714,15 @@ See you soon!
       chips.innerHTML = (scheduledDays.length ? scheduledDays : days.slice(0, 1)).map(day => {
         const timeRange = compactTimeRange(day.start, day.end);
         const weekday = _getAudDow(day.date);
-        const dateChip = weekday ? `
-          <div class="ap-setup-card-icon-label">
-            <div aria-hidden="true">${_makeAudDateBadge(day.date, 'sm')}</div>
-            <time datetime="${e(day.date)}"><span aria-hidden="true">${e(weekday)}</span><span class="sr-only">${e(niceDate(day.date))}</span></time>
-          </div>` : cardIconLabel('Dates to come');
-        return `<div class="ap-setup-header-day">${dateChip}${timeRange ? cardIconLabel(timeRange, 'time.svg?v=35935c7b6b5f') : ''}</div>`;
+        return `<div class="ap-setup-header-day">
+          ${weekday ? `<div aria-hidden="true">${_makeAudDateBadge(day.date, 'sm')}</div>` : ''}
+          <div class="ap-setup-header-day-details">
+            <strong>${weekday
+              ? `<time datetime="${e(day.date)}"><span aria-hidden="true">${e(weekday)}</span><span class="sr-only">${e(niceDate(day.date))}</span></time>`
+              : 'Dates to come'}</strong>
+            ${timeRange ? cardIconLabel(timeRange, 'time.svg?v=35935c7b6b5f') : ''}
+          </div>
+        </div>`;
       }).join('');
     }
 
