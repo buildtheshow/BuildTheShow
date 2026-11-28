@@ -27661,7 +27661,7 @@ See you soon!
       const issues = missing(record);
       return issues.length
         ? `<button type="button" class="ap-setup-needs" data-needs="${e(record.id)}">${cardIcon('Alert.svg')}Needs details (${issues.length})</button>`
-        : `<span class="ap-setup-ready">${cardIcon('Checklist.svg')}Draft · Ready to review</span>`;
+        : '';
     }
 
     function bindNeedsAction(container, record) {
@@ -27724,8 +27724,13 @@ See you soon!
             const method = methods.find(([id]) => id === key);
             return method ? cardIconLabel(method[1], key === 'in_person' ? 'Location1.svg' : method[2]) : '';
           }).join('');
-          chips.innerHTML = cardIconLabel(firstDay.date ? niceDate(firstDay.date) : 'Dates to come', 'navproductioncalendar.svg')
-            + (timeRange ? cardIconLabel(timeRange, 'time.svg') : '') + methodChips;
+          const weekday = _getAudDow(firstDay.date);
+          const dateChip = weekday ? `
+            <div class="ap-setup-card-icon-label">
+              <div aria-hidden="true">${_makeAudDateBadge(firstDay.date, 'sm')}</div>
+              <time datetime="${e(firstDay.date)}"><span aria-hidden="true">${e(weekday)}</span><span class="sr-only">${e(niceDate(firstDay.date))}</span></time>
+            </div>` : cardIconLabel('Dates to come');
+          chips.innerHTML = dateChip + (timeRange ? cardIconLabel(timeRange, 'time.svg') : '') + methodChips;
         }
         const img = card.querySelector('.aud-card-type-pill img');
         if (img) { img.src = '/ASSETS/Images/Icons/' + (types.find(type=>type.value===record.type)?.icon || 'Auditions.svg'); img.style.filter = 'brightness(0) invert(1)'; }
@@ -27733,7 +27738,7 @@ See you soon!
         deleteButton?.remove();
         const actions = document.createElement('div'); actions.className='ap-setup-actions';
         const editing = state.openId === record.id;
-        const edit = document.createElement('button'); edit.type='button'; edit.className='ap-setup-edit'; edit.innerHTML=editing ? `${cardIcon('Checklist.svg')}Done` : `${cardIcon('edit-pencil.svg')}Edit`; edit.setAttribute('aria-expanded',String(editing)); edit.onclick=event=>{event.stopPropagation();toggleEditor(record);}; actions.append(edit);
+        const edit = document.createElement('button'); edit.type='button'; edit.className='ap-setup-edit'; edit.innerHTML=editing ? 'Done' : `${cardIcon('edit-pencil.svg')}Edit`; edit.setAttribute('aria-expanded',String(editing)); edit.onclick=event=>{event.stopPropagation();toggleEditor(record);}; actions.append(edit);
         const remove = document.createElement('button'); remove.type='button'; remove.className='ap-setup-delete'; remove.innerHTML=cardIcon('Bin.svg'); remove.setAttribute('aria-label',`Delete ${record.name || sessionTypeLabel(record.type)}`); remove.title='Delete audition'; remove.onclick=event=>{event.stopPropagation();deleteAudition(record);}; actions.append(remove);
         head?.append(actions);
         const audienceHeading = `<strong>${cardIconLabel('Who attends?', 'Performer.svg')}</strong>`;
