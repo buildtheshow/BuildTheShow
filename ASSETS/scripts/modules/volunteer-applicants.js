@@ -81,10 +81,7 @@
         return map[status] || 'Pending';
       }
       function fmtTime(t) {
-        if (!t) return '';
-        const [h, m] = String(t).slice(0, 5).split(':').map(Number);
-        const ap = h >= 12 ? 'pm' : 'am';
-        return (h % 12 || 12) + (m ? ':' + String(m).padStart(2, '0') : '') + ap;
+        return BTSFormatTime(t);
       }
       function dateLabel(req) {
         if (req.shift_date) {
@@ -147,8 +144,7 @@
 
         const shiftRows = shifts.map(s => {
           const isPending = (s.status || 'pending') === 'pending';
-          const startFmt = fmtTime(s.shift_start_time), endFmt = fmtTime(s.shift_end_time);
-          const timeStr = startFmt && endFmt ? startFmt + ' - ' + endFmt : startFmt || '';
+          const timeStr = BTSFormatTimeRange(s.shift_start_time, s.shift_end_time);
           const hrs = shiftHrs(s);
           return '<div class="vol-req-shift-row" style="border-left:3px solid #572e88;padding-left:0.75rem;padding-top:0.6rem;padding-bottom:0.6rem;">'
             + '<div style="flex:1;min-width:0;">'

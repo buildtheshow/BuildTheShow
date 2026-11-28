@@ -160,7 +160,7 @@ serve(async (req) => {
       // Your Booking (uses general session as stand-in)
       '{{audition_session}}':      primarySess ? String(primarySess.name || '') : '',
       '{{audition_date}}':         primarySess?.date        ? fmtDate(String(primarySess.date))        : '',
-      '{{audition_time}}':         primarySess?.start_time  ? fmtTime(String(primarySess.start_time))  : '10:00 AM',
+      '{{audition_time}}':         primarySess?.start_time  ? fmtTime(String(primarySess.start_time))  : '10:00am',
       '{{audition_venue}}':        String(primarySess?.location || p.venue || ''),
       '{{audition_instructions}}': primarySess?.instructions ? String(primarySess.instructions) : '',
       '{{what_to_prepare}}':       'Please prepare 16 bars of a song in the style of the show.',
@@ -1103,7 +1103,7 @@ function fmtTime(timeStr: string): string {
     const m = Number(parts[1] || 0);
     const ampm = h >= 12 ? 'pm' : 'am';
     const h12  = h % 12 || 12;
-    return m === 0 ? `${h12}${ampm}` : `${h12}:${String(m).padStart(2, '0')}${ampm}`;
+    return `${h12}:${String(m).padStart(2, '0')}${ampm}`;
   } catch { return timeStr; }
 }
 

@@ -203,7 +203,7 @@
             </div>
             <div class="form-group">
               <label class="form-label">Date, shift, or time commitment <span class="opt">(optional)</span></label>
-              <input class="form-input" id="voc-vol-time" type="text" placeholder="e.g. Performance nights, June 3 at 6 PM, or flexible" />
+              <input class="form-input" id="voc-vol-time" type="text" placeholder="e.g. Performance nights, June 3 at 6:00pm, or flexible" />
             </div>
           </div>
           <div class="form-row">

@@ -1007,7 +1007,7 @@ async function page(context, asset) {
   result.headers.set('Referrer-Policy','no-referrer');
   return result;
 }
-const SITE_TIME_FORMATTER = '<script src="/ASSETS/scripts/time-format.js?v=20261128-root-time-format"></script>';
+const SITE_TIME_FORMATTER = '<script src="/ASSETS/scripts/time-format.js?v=20261128-root-time-format-v2"></script>';
 async function withSiteTimeFormatter(response, method='GET') {
   if(method==='HEAD' || !response.headers.get('content-type')?.toLowerCase().includes('text/html')) return response;
   const html = await response.clone().text();

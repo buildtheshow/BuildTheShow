@@ -124,10 +124,7 @@
   }
 
   function fmtTimeRange(start, end) {
-    const a = fmtTime(start);
-    const b = fmtTime(end);
-    if (a && b) return a + ' - ' + b;
-    return a || b || '';
+    return BTSFormatTimeRange(start, end);
   }
 
   function fmtEventDate(value) {

@@ -44,10 +44,7 @@
       }
 
       function fmtTime(t) {
-        if (!t) return '';
-        const [h, m] = String(t).slice(0, 5).split(':').map(Number);
-        const ap = h >= 12 ? 'pm' : 'am';
-        return (h % 12 || 12) + (m ? ':' + String(m).padStart(2, '0') : '') + ap;
+        return BTSFormatTime(t);
       }
       function badgeClass(status) {
         const map = { pending: 'opp-status-draft', approved: 'opp-status-published', declined: 'opp-status-closed' };

@@ -15,29 +15,29 @@
     return { hour: normalizedHour, minute };
   }
 
-  function format(value) {
+  function format(value, options = {}) {
     if (value == null || value === '') return '';
     let hour, minute;
     if (value instanceof Date) {
       if (Number.isNaN(value.getTime())) return '';
-      hour = value.getHours();
-      minute = value.getMinutes();
+      hour = options.timeZone === 'UTC' ? value.getUTCHours() : value.getHours();
+      minute = options.timeZone === 'UTC' ? value.getUTCMinutes() : value.getMinutes();
     } else {
       const clock = fromClock(value);
       if (clock) ({ hour, minute } = clock);
       else {
         const date = new Date(value);
         if (Number.isNaN(date.getTime())) return '';
-        hour = date.getHours();
-        minute = date.getMinutes();
+        hour = options.timeZone === 'UTC' ? date.getUTCHours() : date.getHours();
+        minute = options.timeZone === 'UTC' ? date.getUTCMinutes() : date.getMinutes();
       }
     }
     return `${hour % 12 || 12}:${String(minute).padStart(2, '0')}${hour >= 12 ? 'pm' : 'am'}`;
   }
 
-  function range(start, end) {
-    const first = format(start);
-    const last = format(end);
+  function range(start, end, options = {}) {
+    const first = format(start, options);
+    const last = format(end, options);
     return first && last ? `${first} - ${last}` : first || last;
   }
 
