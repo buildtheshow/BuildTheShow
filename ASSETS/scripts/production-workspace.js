@@ -27410,7 +27410,7 @@ See you soon!
         const errorId = `ap-setup-time-error-${uid}-${key}`;
         return `<label class="ap-setup-field">
           <span class="ap-setup-field-title${icon ? ' ap-setup-field-title--icon' : ''}">
-            ${icon ? `<span class="ap-setup-day-field-icon" style="--ap-day-field-icon: url('/ASSETS/Images/Icons/${icon}.svg')" aria-hidden="true"></span>` : ''}${label}
+            ${icon ? `<span class="ap-setup-day-field-icon" style="--ap-day-field-icon: url('/ASSETS/Images/Icons/${icon}')" aria-hidden="true"></span>` : ''}${label}
           </span>
           <input type="${type}" data-day="${index}" data-day-field="${key}" value="${e(isTime ? BTSFormatTime(value) : value || '')}"${isTime ? ` data-day-time placeholder="${key === 'start' ? '9:00am' : '6:00pm'}" autocomplete="off" spellcheck="false" aria-describedby="${errorId}"` : ''}>
           ${isTime ? `<small class="ap-setup-time-error" id="${errorId}" role="status"></small>` : ''}
@@ -27445,7 +27445,7 @@ See you soon!
             </label>
           </div>
         </details>` : '';
-      return `<section class="ap-setup-daypanel"><section class="ap-setup-date-time"><div class="ap-setup-date-row">${dayField('Date', 'date', day.date, 'date', 'navproductioncalendar')}${dayField('Start time', 'start', day.start, 'text', 'time-start')}${dayField('Finish time', 'end', day.end, 'text', 'time-end')}</div></section>${inPersonDetails}${videoCallDetails}</section>`;
+      return `<section class="ap-setup-daypanel"><section class="ap-setup-date-time"><div class="ap-setup-date-row">${dayField('Date', 'date', day.date, 'date', 'navproductioncalendar.svg')}${dayField('Start time', 'start', day.start, 'text', 'time-start.svg?v=36eec9f6eb48')}${dayField('Finish time', 'end', day.end, 'text', 'time-end.svg?v=687490467c6f')}</div></section>${inPersonDetails}${videoCallDetails}</section>`;
     }
     function usesTimeSlots(record) {
       return record.mode !== 'walkin' && !(record.methods.length === 1 && record.methods[0] === 'self_tape');
