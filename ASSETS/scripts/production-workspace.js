@@ -27720,7 +27720,7 @@ See you soon!
             <strong>${weekday
               ? `<time datetime="${e(day.date)}"><span aria-hidden="true">${e(weekday)}</span><span class="sr-only">${e(niceDate(day.date))}</span></time>`
               : 'Dates to come'}</strong>
-            ${timeRange ? cardIconLabel(timeRange, 'time.svg?v=35935c7b6b5f') : ''}
+            ${timeRange ? `<span>${e(timeRange)}</span>` : ''}
           </div>
         </div>`;
       }).join('');
