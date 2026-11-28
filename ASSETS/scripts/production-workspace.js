@@ -27561,7 +27561,6 @@ See you soon!
             <header>
               ${dayTabs ? '' : dateLabel(day, index)}
               <div class="ap-setup-schedule-day-actions">
-                ${addBreakButton}
                 ${copyBreaksButton}
                 <span class="ap-setup-schedule-count">${openCount} open · ${slots.length - openCount} blocked · ${slots.length} total${breaks.length ? ` · ${breaks.length} ${breaks.length === 1 ? 'break' : 'breaks'}` : ''}</span>
               </div>
@@ -27998,7 +27997,7 @@ See you soon!
         day.breaks = [...(day.breaks || []), ...structuredClone(breaks)];
         save(record);
         render();
-        document.getElementById(scheduleId)?.querySelector('header [data-add-break]')?.focus();
+        document.getElementById(scheduleId)?.querySelector('[data-add-break]')?.focus();
       });
       root.querySelectorAll('[data-draft-slot-day]').forEach(button => button.onclick = () => {
         const day = ensureDays(record)[Number(button.dataset.draftSlotDay)];
@@ -28009,21 +28008,12 @@ See you soon!
         render();
         document.querySelector(`[data-draft-slot-day="${button.dataset.draftSlotDay}"][data-draft-slot-time="${button.dataset.draftSlotTime}"]`)?.focus();
       });
-      root.querySelectorAll('[data-add-break]').forEach(button => button.onclick = () => {
-        const card = button.closest('.ap-setup-schedule-day');
-        const editor = card.querySelector('[data-break-editor]');
-        const fromHeader = button.closest('header');
-        const atTrigger = fromHeader ? editor.previousElementSibling === fromHeader : editor.nextElementSibling === button;
-        const opening = editor.hidden || !atTrigger;
-        if (opening) {
-          if (fromHeader) fromHeader.after(editor);
-          else button.before(editor);
-        }
-        editor.hidden = !opening;
-        card.querySelectorAll('[data-add-break]').forEach(trigger => {
-          trigger.setAttribute('aria-expanded', String(opening && trigger === button));
-        });
-        if (opening) editor.querySelector('[data-break-start]').focus();
+      root.querySelector('[data-add-break]')?.addEventListener('click', event => {
+        const button = event.currentTarget;
+        const editor = document.getElementById(button.getAttribute('aria-controls'));
+        editor.hidden = !editor.hidden;
+        button.setAttribute('aria-expanded', String(!editor.hidden));
+        if (!editor.hidden) editor.querySelector('[data-break-start]').focus();
       });
       root.querySelectorAll('[data-confirm-break]').forEach(button => button.onclick = () => {
         const day = ensureDays(record)[Number(button.dataset.confirmBreak)];
@@ -28047,7 +28037,7 @@ See you soon!
         render();
         const schedule = document.getElementById(scheduleId);
         const nextButton = schedule?.querySelector(`[data-remove-break][data-break-index="${breakIndex}"]`)
-          || schedule?.querySelector('header [data-add-break]');
+          || schedule?.querySelector('[data-add-break]');
         nextButton?.focus();
       });
     }
