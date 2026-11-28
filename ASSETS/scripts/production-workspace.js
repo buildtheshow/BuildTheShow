@@ -27265,8 +27265,16 @@ See you soon!
       walkin: "Let's say you're holding auditions from 9:00am - 3:00pm. Performers can turn up anytime during those hours, check in and wait their turn on a first come, first served basis. This is a great option if you don't know how many performers to expect.",
       assigned: "Performers sign up for an audition, but instead of choosing their own time, you decide when each person will audition. This is a great option if you want more control over who you see, when you see them and in what order.",
     };
-    const activities = [['singing', 'Singing'], ['acting', 'Acting / scene reading'], ['movement', 'Dance / movement'], ['workshop', 'Workshop activities'], ['specialist', 'Other skills']];
+    const activities = [
+      ['singing', 'Singing', 'script-music-songs.svg'],
+      ['acting', 'Acting / scene reading', 'script-scene.svg'],
+      ['movement', 'Dance / movement', 'Choreography.svg'],
+      ['workshop', 'Workshop activities', 'type-workshops.svg'],
+      ['specialist', 'Other skills', 'Star.svg'],
+    ];
     const e = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const cardIcon = file => `<img class="ap-setup-card-icon" src="/ASSETS/Images/Icons/${e(file)}" alt="">`;
+    const cardIconLabel = (label, file) => `<span class="ap-setup-card-icon-label">${file ? cardIcon(file) : ''}${e(label)}</span>`;
     const escapeId = value => String(value).replace(/[^a-zA-Z0-9_-]/g, '-');
     const colour = record => types.find(item => item.value === record.type)?.colour || '#476aaa';
     const niceDate = value => { if (!value) return 'Date to be added'; const date = new Date(value + 'T12:00:00'); return Number.isNaN(date.getTime()) ? 'Date to be added' : date.toLocaleDateString('en-CA', { weekday: 'long', day: 'numeric', month: 'long' }); };
@@ -27651,7 +27659,9 @@ See you soon!
 
     function completion(record) {
       const issues = missing(record);
-      return issues.length ? `<button type="button" class="ap-setup-needs" data-needs="${e(record.id)}"><span>✱</span>Needs details (${issues.length})</button>` : '<span class="ap-setup-ready">Draft · Ready to review</span>';
+      return issues.length
+        ? `<button type="button" class="ap-setup-needs" data-needs="${e(record.id)}">${cardIcon('Alert.svg')}Needs details (${issues.length})</button>`
+        : `<span class="ap-setup-ready">${cardIcon('Checklist.svg')}Draft · Ready to review</span>`;
     }
 
     function bindNeedsAction(container, record) {
@@ -27708,19 +27718,35 @@ See you soon!
         const headerStatus=document.createElement('div');headerStatus.className='ap-setup-header-status';headerStatus.innerHTML=completion(record);titleRow.append(headerStatus);bindNeedsAction(headerStatus,record);
         const chips=card.querySelector('.aud-card-chips');
         const firstDay=ensureDays(record)[0];
-        if(chips) chips.innerHTML=`<span>${e(firstDay.date?niceDate(firstDay.date):'Dates to come')}${firstDay.start||firstDay.end?' · '+e(compactTimeRange(firstDay.start,firstDay.end)):''}</span><span>${e(record.methods.map(key=>({in_person:'In person',video_call:'Video call',self_tape:'Self-tape'})[key]).join(' · '))}</span>`;
+        if (chips) {
+          const timeRange = compactTimeRange(firstDay.start, firstDay.end);
+          const methodChips = record.methods.map(key => {
+            const method = methods.find(([id]) => id === key);
+            return method ? cardIconLabel(method[1], key === 'in_person' ? 'Location1.svg' : method[2]) : '';
+          }).join('');
+          chips.innerHTML = cardIconLabel(firstDay.date ? niceDate(firstDay.date) : 'Dates to come', 'navproductioncalendar.svg')
+            + (timeRange ? cardIconLabel(timeRange, 'time.svg') : '') + methodChips;
+        }
         const img = card.querySelector('.aud-card-type-pill img');
         if (img) { img.src = '/ASSETS/Images/Icons/' + (types.find(type=>type.value===record.type)?.icon || 'Auditions.svg'); img.style.filter = 'brightness(0) invert(1)'; }
         const deleteButton = card.querySelector('.aud-action-btn.danger');
         deleteButton?.remove();
         const actions = document.createElement('div'); actions.className='ap-setup-actions';
-        const edit = document.createElement('button'); edit.type='button'; edit.className='ap-setup-edit'; edit.textContent=state.openId===record.id?'Done':'Edit'; edit.setAttribute('aria-expanded',String(state.openId===record.id)); edit.onclick=event=>{event.stopPropagation();toggleEditor(record);}; actions.append(edit);
-        const remove = document.createElement('button'); remove.type='button'; remove.className='ap-setup-delete'; remove.textContent='×'; remove.setAttribute('aria-label',`Delete ${record.name || sessionTypeLabel(record.type)}`); remove.title='Delete audition'; remove.onclick=event=>{event.stopPropagation();deleteAudition(record);}; actions.append(remove);
+        const editing = state.openId === record.id;
+        const edit = document.createElement('button'); edit.type='button'; edit.className='ap-setup-edit'; edit.innerHTML=editing ? `${cardIcon('Checklist.svg')}Done` : `${cardIcon('edit-pencil.svg')}Edit`; edit.setAttribute('aria-expanded',String(editing)); edit.onclick=event=>{event.stopPropagation();toggleEditor(record);}; actions.append(edit);
+        const remove = document.createElement('button'); remove.type='button'; remove.className='ap-setup-delete'; remove.innerHTML=cardIcon('Bin.svg'); remove.setAttribute('aria-label',`Delete ${record.name || sessionTypeLabel(record.type)}`); remove.title='Delete audition'; remove.onclick=event=>{event.stopPropagation();deleteAudition(record);}; actions.append(remove);
         head?.append(actions);
-        const attendance = document.createElement('div'); attendance.className='ap-setup-attendance'; attendance.style.setProperty('--ap-accent',colour(record)); attendance.innerHTML=record.type==='callback'?`<strong>Who attends?</strong><label><input type="radio" name="audience-${e(record.id)}" value="invited" checked disabled>People we invite</label><small>Your team chooses who gets a callback.</small>`:`<strong>Who attends?</strong><label><input type="radio" name="audience-${e(record.id)}" value="open" ${record.audience!=='invited'?'checked':''}>Anyone who meets the requirements</label><label><input type="radio" name="audience-${e(record.id)}" value="invited" ${record.audience==='invited'?'checked':''}>People we invite</label>${record.audience==='invited'?'<small>Attending another audition does not add anyone here.</small>':''}`;
+        const audienceHeading = `<strong>${cardIconLabel('Who attends?', 'Performer.svg')}</strong>`;
+        const attendance = document.createElement('div'); attendance.className='ap-setup-attendance'; attendance.style.setProperty('--ap-accent',colour(record)); attendance.innerHTML=audienceHeading+(record.type==='callback'?`<label><input type="radio" name="audience-${e(record.id)}" value="invited" checked disabled>People we invite</label><small>Your team chooses who gets a callback.</small>`:`<label><input type="radio" name="audience-${e(record.id)}" value="open" ${record.audience!=='invited'?'checked':''}>Anyone who meets the requirements</label><label><input type="radio" name="audience-${e(record.id)}" value="invited" ${record.audience==='invited'?'checked':''}>People we invite</label>${record.audience==='invited'?'<small>Attending another audition does not add anyone here.</small>':''}`);
         card.append(attendance);
         attendance.querySelectorAll('input').forEach(input=>input.onchange=()=>{record.audience=input.value;save(record);render();});
-        const caption=document.createElement('div');caption.className='ap-setup-caption';const chosenActivities=record.activities.map(key=>activities.find(item=>item[0]===key)?.[1]||key).join(' · ');caption.innerHTML=chosenActivities?`<span>${e(chosenActivities)}</span>`:'';card.append(caption);
+        const caption = document.createElement('div');
+        caption.className = 'ap-setup-caption';
+        caption.innerHTML = record.activities.map(key => {
+          const activity = activities.find(([id]) => id === key);
+          return activity ? cardIconLabel(activity[1], activity[2]) : cardIconLabel(key);
+        }).join('');
+        card.append(caption);
         if(state.openId===record.id) card.insertAdjacentHTML('beforeend',editor(record));
         host.append(card);
         if(state.openId===record.id) bind(card.querySelector('.ap-setup-editor'),record);
@@ -27883,7 +27909,6 @@ See you soon!
       if(!card)return;
       card.querySelectorAll('.ap-setup-missing-note').forEach(node=>node.remove());
       const issues=missing(record);
-      const badge=card.querySelector('[data-needs]');if(badge){badge.innerHTML=`<span>✱</span>Needs details (${issues.length})`;}
       const headerStatus=card.querySelector('.ap-setup-header-status');if(headerStatus){headerStatus.innerHTML=completion(record);bindNeedsAction(headerStatus,record);}
       const editorRoot=card.querySelector('.ap-setup-editor');if(!editorRoot)return;
       const visibleIssues=issues.filter(issue=>issue.step===state.step);
