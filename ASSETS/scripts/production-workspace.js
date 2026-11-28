@@ -27243,7 +27243,7 @@ See you soon!
 
   function _createAudSetupController() {
     const state = { loaded: false, loading: false, records: [], revisions: {}, openId: null, step: 0, activeDay: {}, reviewTab: 'audition', timers: {}, saving: {}, saveErrors: {}, saveAttempts: {}, queues: {}, error: '' };
-    const sections = ['Booking type', 'Details', 'Dates & location', 'Schedule', 'Activities', 'Preparation', 'Review'];
+    const sections = ['Audition type', 'Booking type', 'Dates & location', 'Schedule', 'Activities', 'Preparation', 'Review'];
     const types = [
       { value: 'audition', label: 'General audition', name: 'General audition', colour: '#476aaa', icon: 'Auditions.svg' },
       { value: 'dance_call', label: 'Dance call', name: 'Dance call', colour: '#dd8233', icon: 'Choreography.svg' },
@@ -27336,8 +27336,8 @@ See you soon!
 
     function missing(record) {
       const out = [];
-      if (!record.name?.trim()) out.push({ step: 1, key: 'name', text: 'Add an audition name.' });
-      if (!record.methods?.length) out.push({ step: 0, key: 'methods', text: 'Choose at least one way people can take part.' });
+      if (!record.name?.trim()) out.push({ step: 0, key: 'name', text: 'Add an audition name.' });
+      if (!record.methods?.length) out.push({ step: 1, key: 'methods', text: 'Choose at least one way people can take part.' });
       const tape = record.methods?.length === 1 && record.methods.includes('self_tape');
       if (record.methods?.includes('self_tape') && !record.deadline) out.push({ step: 5, key: 'deadline', text: 'Add a self-tape submission deadline.' });
       if (!tape) {
@@ -27348,8 +27348,8 @@ See you soon!
           if (record.methods.includes('in_person') && (!day.venue?.name || !day.venue?.address)) out.push({ step: 2, key: 'venue', day: index, text: 'Choose a venue with its full address.' });
           if (day.date && ensureDays(record).some((other, otherIndex) => otherIndex < index && other.date === day.date)) out.push({ step: 2, key: 'date', day: index, text: 'This date is already listed. Change it or remove this day.' });
         });
-        if (['group', 'arrival'].includes(record.mode) && Number(record.capacity) < 1) out.push({ step: 0, key: 'capacity', text: 'Add the number of places.' });
-        if (record.mode !== 'walkin' && Number(record.slot) < 1) out.push({ step: 0, key: 'slot', text: record.mode === 'group' ? 'Add the minutes per group session.' : 'Add the minutes per person.' });
+        if (['group', 'arrival'].includes(record.mode) && Number(record.capacity) < 1) out.push({ step: 1, key: 'capacity', text: 'Add the number of places.' });
+        if (record.mode !== 'walkin' && Number(record.slot) < 1) out.push({ step: 1, key: 'slot', text: record.mode === 'group' ? 'Add the minutes per group session.' : 'Add the minutes per person.' });
       }
       if (!record.activities?.length) out.push({ step: 4, key: 'activities', text: 'Choose at least one audition activity.' });
       return out;
@@ -27558,7 +27558,7 @@ See you soon!
     }
 
     function editor(record) {
-      const step = [1, 0, 2, 5, 3, 4, 6][state.step] ?? state.step;
+      const step = [0, 1, 2, 5, 3, 4, 6][state.step] ?? state.step;
       const accent = colour(record);
       let body = '';
       if (step === 0) body = `<div class="ap-setup-grid">${field('Audition name', 'name', record.name)}<fieldset class="ap-setup-full"><legend>Audition type</legend><div class="ap-setup-types">${types.map(type => `<label class="ap-setup-type ${record.type === type.value ? 'selected' : ''}" style="--type-colour:${type.colour}"><input type="radio" data-field="type" name="type-${e(record.id)}" value="${type.value}" ${record.type === type.value ? 'checked' : ''}><span><img src="/ASSETS/Images/Icons/${type.icon}" alt=""><strong>${type.label}</strong></span></label>`).join('')}</div></fieldset></div>`;
@@ -27783,7 +27783,6 @@ See you soon!
         else if(key==='name'){record.name=input.value;record.customName=true;}
         else record[key]=input.value;
         if(key==='type'||key==='mode') {
-          state.step=key==='type'?1:0;
           save(record);
           render();
         } else {
