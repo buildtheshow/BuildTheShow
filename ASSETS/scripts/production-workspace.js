@@ -27367,6 +27367,33 @@ See you soon!
       return `${String(hour).padStart(2, '0')}:${minutes || '00'}`;
     }
 
+    function breakTimeOptions(value) {
+      const clock = value.trim();
+      if (/^(?:[1-9]|1[0-2])(?::[0-5]\d)?$/.test(clock)) {
+        return ['am', 'pm'].map(period => parseDayTime(clock + period));
+      }
+      const time = parseDayTime(/^\d{1,2}$/.test(clock) ? clock + ':00' : clock);
+      return time ? [time] : [];
+    }
+
+    function resolveBreakTimes(startValue, endValue, day) {
+      const starts = breakTimeOptions(startValue);
+      const ends = breakTimeOptions(endValue);
+      if (starts.length === 1 && ends.length === 1) {
+        return starts[0] < ends[0] ? { start: starts[0], end: ends[0] } : null;
+      }
+      if (!day.start || !day.end) return null;
+
+      const dayStart = timeToMins(day.start);
+      const dayEnd = timeToMins(day.end);
+      return starts.flatMap(start => ends.map(end => ({ start, end })))
+        .filter(({ start, end }) => start < end && timeToMins(start) >= dayStart && timeToMins(end) <= dayEnd)
+        .sort((first, second) =>
+          (timeToMins(first.end) - timeToMins(first.start)) - (timeToMins(second.end) - timeToMins(second.start))
+          || first.start.localeCompare(second.start)
+        )[0] || null;
+    }
+
     function dayHTML(record, day, index) {
       const uid = escapeId(record.id + '-' + index);
       const venueIcon = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.3"/></svg>`;
@@ -27801,14 +27828,13 @@ See you soon!
       root.querySelectorAll('[data-confirm-break]').forEach(button => button.onclick = () => {
         const day = ensureDays(record)[Number(button.dataset.confirmBreak)];
         const editor = button.closest('[data-break-editor]');
-        const start = parseDayTime(editor.querySelector('[data-break-start]').value);
-        const end = parseDayTime(editor.querySelector('[data-break-end]').value);
-        if (!start || !end || end <= start) {
-          editor.querySelector('[data-break-error]').textContent = 'Enter a start and a later end, for example 12:00pm - 12:30pm.';
+        const breakTimes = resolveBreakTimes(editor.querySelector('[data-break-start]').value, editor.querySelector('[data-break-end]').value, day);
+        if (!breakTimes) {
+          editor.querySelector('[data-break-error]').textContent = 'Enter a start and a later end within the audition hours. If needed, add am or pm to specify the time.';
           return;
         }
         day.breaks ||= [];
-        day.breaks.push({ start, end });
+        day.breaks.push(breakTimes);
         save(record);
         render();
       });
